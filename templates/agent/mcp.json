@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "reflex-devtools": {
+      "command": "npx",
+      "args": [
+        "--yes",
+        "--package=@flexsurfer/reflex-devtools-mcp",
+        "reflex-devtools-mcp",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "4000"
+      ]
+    }
+  }
+}

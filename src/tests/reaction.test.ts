@@ -246,15 +246,18 @@ describe('Reaction', () => {
       reaction.unwatch(callback);
     });
 
-    it('should propagate dirty state to dependents', () => {
-      const dep = Reaction.create(() => 'dep');
+    it('should derive dependent staleness from source identity', () => {
+      let depValue = 'dep';
+      const dep = Reaction.create(() => depValue);
       const computed = Reaction.create((val) => `computed: ${val}`, [dep]);
       
       // Need to establish the dependency relationship first
       const callback = jest.fn();
       computed.watch(callback);
+      expect(computed.computeValue()).toBe('computed: dep');
 
       expect(computed.isDirty).toBe(false);
+      depValue = 'changed';
       dep.markDirty();
       expect(computed.isDirty).toBe(true);
       
@@ -501,15 +504,20 @@ describe('Reaction', () => {
       // Should handle disposal if no longer alive
     });
 
-    it('should track dirty state correctly', () => {
-      const reaction = Reaction.create(() => 'test');
+    it('should derive dirty state from the cached source identity', () => {
+      let value = 'test';
+      const reaction = Reaction.create(() => value);
 
+      // A never-evaluated reaction has no freshness proof yet.
+      expect(reaction.isDirty).toBe(true);
+      expect(reaction.computeValue()).toBe('test');
       expect(reaction.isDirty).toBe(false);
-      
+
+      value = 'changed';
       reaction.markDirty();
       expect(reaction.isDirty).toBe(true);
 
-      expect(reaction.computeValue()).toBe('test');
+      expect(reaction.computeValue()).toBe('changed');
       expect(reaction.isDirty).toBe(false);
     });
 
@@ -554,7 +562,7 @@ describe('Reaction', () => {
       top.unwatch(callback);
     });
 
-    it('should stay dirty without recomputing until watched', async () => {
+    it('should stay lazy while unwatched and derive freshness on demand', async () => {
       let baseValue = 1;
       let baseCallCount = 0;
       let dependentCallCount = 0;
@@ -569,18 +577,19 @@ describe('Reaction', () => {
         return val * 2;
       }, [base]);
 
-      // Mark base as dirty - should not recompute since no watchers
+      // Signals do not eagerly evaluate unwatched reactions. With no cached
+      // value yet, both nodes report that freshness is unknown/stale.
       base.markDirty();
       expect(base.isDirty).toBe(true);
       expect(baseCallCount).toBe(0);
 
-      expect(dependent.isDirty).toBe(false);
+      expect(dependent.isDirty).toBe(true);
       expect(dependentCallCount).toBe(0);
 
       // Now watch the dependent reaction
       const callback = jest.fn();
       dependent.watch(callback);
-      expect(dependent.isDirty).toBe(false);
+      expect(dependent.isDirty).toBe(true);
       expect(dependentCallCount).toBe(0);
 
       // Change value and mark base as dirty again
@@ -1474,4 +1483,4 @@ describe('Snapshot semantics (useSyncExternalStore contract)', () => {
     root.markDirty();
     expect(child.getSnapshot()).toBe(20);
   });
-}); 
+});

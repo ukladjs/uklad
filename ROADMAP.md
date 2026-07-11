@@ -22,8 +22,8 @@ A full worked scenario — one task walked through the agent's loop (orient → 
 
 ### P0 — Correctness (React binding & memory)
 
-- [ ] **Collapse `invalidated` into the version/probe model (known, deferred).**
-  After the P1 cache rework, staleness is effectively version/identity-based and the `invalidated` flag survives mostly as the microtask gate plus bridge-writes in `refreshIfStale` (set right before `recomputeIfNeeded` just to pass its gate). It also hides one narrow hazard: if an alive, flush-marked reaction is pulled through `refreshIfStale` (notify=false) before its scheduled microtask runs — e.g. a watcher callback reading a shared sub during the flush — the recompute clears the flag and the later microtask no-ops, swallowing that watcher notification. Fix belongs to the same refactor: staleness pull-only (probe/versions), `markDirty` reduced to schedule+notify, and a `lastNotifiedVersion` so pending notifications survive whoever recomputes first. Touches the raw `Reaction` contract (`isDirty`, stay-dirty-until-watched tests) — do deliberately, not in passing.
+- [x] **Collapse `invalidated` into the version/probe model.**
+  Staleness is now derived only from root identity probes and dependency versions; `markDirty` propagates scheduling to watcher-bearing reactions without storing a parallel dirty bit. Notification delivery is tracked independently with `lastNotifiedVersion`, so an early silent pull cannot consume a pending watcher callback. Scheduled work is lifecycle-tokened and canceled when a notifying pull already satisfied it. `isDirty` now reports derived/unknown freshness (a never-evaluated reaction is dirty) rather than exposing an invalidation flag. Regression coverage includes early shared-sub pulls, duplicate-task suppression, dispose/revive, re-entrant updates, and synchronous diamond walks.
 
 ### P1 — Dev-mode strictness & navigation
 

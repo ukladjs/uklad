@@ -12,8 +12,10 @@ const expectedFunctions = [
   'regEffect', 'regCoeffect',
   // Global interceptor functions
   'regGlobalInterceptor', 'getGlobalInterceptors', 'clearGlobalInterceptors',
+  // Read-only subscription diagnostics
+  'getSubscriptionDiagnostics',
   // Handler management
-  'getHandler', 'clearHandlers', 'clearReactions', 'clearSubs',
+  'getHandler', 'clearHandlers', 'clearSubscriptionCache', 'clearSubs',
   // Debounce/throttle
   'debounceAndDispatch', 'throttleAndDispatch',
   // React hooks
@@ -28,6 +30,11 @@ const expectedFunctions = [
 ];
 
 const expectedConstants = ['DISPATCH_LATER', 'DISPATCH', 'NOW', 'RANDOM'];
+const removedLegacyExports = [
+  'Reaction', 'ReactionEngine', 'getReactions', 'getReactionEngine',
+  'setReactionEngine', 'createReactionEngine', 'selectReactionEngine',
+  'resetReactionEngine', 'clearReactions'
+];
 
 describe('Package Consumption Tests', () => {
   test('Built package files exist', () => {
@@ -85,6 +92,11 @@ describe('Package Consumption Tests', () => {
     expectedConstants.forEach(constant => {
       expect(cjsFile).toContain(constant);
     });
+
+    const api = require(path.join(distDir, 'index.cjs'));
+    removedLegacyExports.forEach(name => {
+      expect(api).not.toHaveProperty(name);
+    });
   });
 
   test('TypeScript definitions exist', () => {
@@ -119,6 +131,10 @@ describe('Package Consumption Tests', () => {
 
     expectedFunctionsForTypes.concat(expectedConstants).forEach(item => {
       expect(exportedItems).toContain(item);
+    });
+    expect(dtsFile).toContain('interface SubscriptionDiagnostic');
+    removedLegacyExports.forEach(name => {
+      expect(exportedItems).not.toContain(name);
     });
   });
 });

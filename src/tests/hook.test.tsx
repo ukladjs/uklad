@@ -7,8 +7,8 @@ import { initAppDb } from '../db';
 import { useSubscription } from '../hook';
 import { regEvent } from '../events';
 import { dispatch } from '../router';
-import { hasReaction } from '../registrar';
-import { waitForAnimationFrame, waitForEventAndReaction } from './test-utils';
+import { hasHandler, hasCachedSubscription } from '../registrar';
+import { waitForAnimationFrame, waitForEventAndSubscription } from './test-utils';
 
 describe('React Hooks', () => {
   // Register test subscriptions
@@ -95,8 +95,9 @@ describe('React Hooks', () => {
 
       expectLogCall(
         'error',
-        "[reflex] Subscription with id 'user-email-str-duplicate' will be overridden. Root key 'userEmail' is already used by subscription 'user-email-str'."
+        "[reflex] Subscription 'user-email-str-duplicate' was not registered. Root key 'userEmail' is already used by subscription 'user-email-str'."
       );
+      expect(hasHandler('sub', 'user-email-str-duplicate')).toBe(false);
     });
 
     it('should handle subscription with parameters', () => {
@@ -208,8 +209,8 @@ describe('React Hooks', () => {
         dispatch(['add-todo', 'Learn Simple Reactive System']);
       });
 
-      // Wait for event processing and reaction recomputation
-      await waitForEventAndReaction();
+      // Wait for event processing and subscription recomputation
+      await waitForEventAndSubscription();
 
       // Wait for the hook to automatically re-render due to subscription changes
       await waitFor(() => {
@@ -223,8 +224,8 @@ describe('React Hooks', () => {
         dispatch(['update-user-name', 'Jane Smith']);
       });
 
-      // Wait for event processing and reaction recomputation
-      await waitForEventAndReaction();
+      // Wait for event processing and subscription recomputation
+      await waitForEventAndSubscription();
 
       // Wait for the hook to automatically re-render due to subscription changes
       await waitFor(() => {
@@ -265,8 +266,8 @@ describe('React Hooks', () => {
         dispatch(['increment-counter']);
       });
 
-      // Wait for event processing and reaction recomputation
-      await waitForEventAndReaction();
+      // Wait for event processing and subscription recomputation
+      await waitForEventAndSubscription();
 
       // Wait for the hook to automatically re-render due to subscription changes
       await waitFor(() => {
@@ -278,8 +279,8 @@ describe('React Hooks', () => {
         dispatch(['set-counter', 10]);
       });
 
-      // Wait for event processing and reaction recomputation
-      await waitForEventAndReaction();
+      // Wait for event processing and subscription recomputation
+      await waitForEventAndSubscription();
 
       // Wait for the hook to automatically re-render due to subscription changes
       await waitFor(() => {
@@ -292,8 +293,8 @@ describe('React Hooks', () => {
         dispatch(['increment-counter']);
       });
 
-      // Wait for event processing and reaction recomputation
-      await waitForEventAndReaction();
+      // Wait for event processing and subscription recomputation
+      await waitForEventAndSubscription();
 
       // Wait for the hook to automatically re-render due to subscription changes
       await waitFor(() => {
@@ -320,13 +321,13 @@ describe('React Hooks', () => {
 
       expect(result.current).toBe('First todo');
 
-      // Changing the parameter must switch to the new reaction,
+      // Changing the parameter must switch to the new subscription,
       // not keep returning data for the id captured on first mount
       rerender({ id: 2 });
 
       expect(result.current).toBe('Second todo');
 
-      // Updates must flow through the re-subscribed reaction
+      // Updates must flow through the re-subscribed subscription
       regEvent('rename-todo-2', ({ draftDb }) => {
         draftDb.todos[1].text = 'Renamed todo';
       });
@@ -340,31 +341,32 @@ describe('React Hooks', () => {
       });
     });
 
-    it('should prune reactions from the registry after the last watcher unsubscribes', () => {
+    it('should prune cached subscriptions after the last watcher unsubscribes', () => {
       const { unmount } = renderHook(() => useSubscription(['todos-count']));
 
-      expect(hasReaction(JSON.stringify(['todos-count']))).toBe(true);
-      expect(hasReaction(JSON.stringify(['todos']))).toBe(true);
+      expect(hasCachedSubscription(JSON.stringify(['todos-count']))).toBe(true);
+      expect(hasCachedSubscription(JSON.stringify(['todos']))).toBe(true);
 
       unmount();
 
-      // Both the computed reaction and its now-unused root dependency
-      // should be removed so parameterized subs cannot leak memory
-      expect(hasReaction(JSON.stringify(['todos-count']))).toBe(false);
-      expect(hasReaction(JSON.stringify(['todos']))).toBe(false);
+      // The computed subscription and its now-unused root dependency diverge:
+      // Computed cells are terminal and evicted. The lightweight root source
+      // cell stays registered so dormant graphs cannot miss DB publications.
+      expect(hasCachedSubscription(JSON.stringify(['todos-count']))).toBe(false);
+      expect(hasCachedSubscription(JSON.stringify(['todos']))).toBe(true);
     });
 
-    it('should keep shared reactions registered while another watcher remains', () => {
+    it('should keep shared subscriptions cached while another watcher remains', () => {
       const first = renderHook(() => useSubscription(['todos-count']));
       const second = renderHook(() => useSubscription(['todos-count']));
 
       first.unmount();
 
-      expect(hasReaction(JSON.stringify(['todos-count']))).toBe(true);
+      expect(hasCachedSubscription(JSON.stringify(['todos-count']))).toBe(true);
 
       second.unmount();
 
-      expect(hasReaction(JSON.stringify(['todos-count']))).toBe(false);
+      expect(hasCachedSubscription(JSON.stringify(['todos-count']))).toBe(false);
     });
 
     it('should render consistent values across subscriptions sharing a dependency', async () => {
@@ -414,7 +416,7 @@ describe('React Hooks', () => {
       const first = renderHook(() => useSubscription<number>(['todos-count']));
       expect(first.result.current).toBe(1);
       first.unmount();
-      expect(hasReaction(key)).toBe(false);
+      expect(hasCachedSubscription(key)).toBe(false);
 
       // Data changes while nothing is mounted
       regEvent('clear-todos', ({ draftDb }) => {
@@ -423,13 +425,13 @@ describe('React Hooks', () => {
       act(() => {
         dispatch(['clear-todos']);
       });
-      await waitForEventAndReaction();
+      await waitForEventAndSubscription();
       // Subscriptions serve the last flushed db generation; wait for the
       // animation-frame flush so the change is visible to new subscribers
       await waitForAnimationFrame();
-      await waitForEventAndReaction();
+      await waitForEventAndSubscription();
 
-      // Remount creates a fresh reaction and sees the flushed data
+      // Remount creates a fresh subscription and sees the flushed data
       const second = renderHook(() => useSubscription<number>(['todos-count']));
       expect(second.result.current).toBe(0);
       second.unmount();

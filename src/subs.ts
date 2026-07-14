@@ -1,20 +1,28 @@
-import { Reaction } from './reaction'
+import {
+    createSubscription,
+    readSubscription,
+    type SubscriptionKind,
+    type SubscriptionNode,
+} from './subscription-runtime'
 import { consoleLog } from './loggers';
 import type { SubVector, Id, SubHandler, SubDepsHandler, SubConfig, SubPayloads, SubParams, SubResult, SubscribeVector } from './types';
 import {
-    getReaction,
-    setReaction,
-    hasReaction,
-    clearReactions,
-    markProvisionalReaction,
-    unmarkProvisionalReaction,
+    getCachedSubscription,
+    cacheSubscription,
+    evictCachedSubscription,
+    hasCachedSubscriptionForId,
+    markProvisionalSubscription,
+    unmarkProvisionalSubscription,
+    renewProvisionalSubscriptionTree,
     getHandler,
     registerHandler,
     hasHandler,
     setSubConfig,
     getSubConfig,
     setRootSubSource,
-    getRootSubIdBySource
+    getRootSubIdBySource,
+    getRootSubSourceById,
+    clearRootSubSource
 } from './registrar';
 import { getRenderDb } from './db';
 import { mergeTrace, withTrace } from './trace';
@@ -24,10 +32,11 @@ import { IS_DEV } from './env';
 const KIND = 'sub';
 const KIND_DEPS = 'subDeps';
 
-function registerRootSub (id: Id, sourceKey: string) {
+function registerRootSub (id: Id, sourceKey: string): boolean {
     const conflictingSubId = getRootSubIdBySource(sourceKey)
-    if (conflictingSubId && conflictingSubId !== id) {
-        consoleLog('error', `[reflex] Subscription with id '${id}' will be overridden. Root key '${sourceKey}' is already used by subscription '${conflictingSubId}'.`)
+    if (conflictingSubId !== undefined && conflictingSubId !== id) {
+        consoleLog('error', `[reflex] Subscription '${id}' was not registered. Root key '${sourceKey}' is already used by subscription '${conflictingSubId}'.`)
+        return false
     }
 
     setRootSubSource(id, sourceKey)
@@ -38,6 +47,7 @@ function registerRootSub (id: Id, sourceKey: string) {
     // must serve the same generation.
     registerHandler(KIND, id, () => getRenderDb<Record<string, any>>()[sourceKey])
     registerHandler(KIND_DEPS, id, () => [])
+    return true
 }
 
 // When the app augments SubPayloads, the computeFn return value is checked
@@ -45,20 +55,26 @@ function registerRootSub (id: Id, sourceKey: string) {
 // infers a literal when R isn't passed explicitly; `regSub<Todo[]>(id, ...)`
 // keeps its current behavior.
 export function regSub<R = any, K extends Id = Id>(id: K, computeFn?: ((...values: any[]) => SubResult<K, R>) | string, depsFn?: (...params: any[]) => SubVector[], config?: SubConfig): void {
+    if (hasCachedSubscriptionForId(id)) {
+        const message = `[reflex] Cannot register subscription '${id}' while a cached query for that id exists. Clear unused subscriptions before re-registering it.`
+        consoleLog('error', message)
+        throw new Error(message)
+    }
     if (hasHandler(KIND, id)) {
         consoleLog('warn', `[reflex] Overriding. Subscription '${id}' already registered.`)
     }
 
     if (!computeFn) {
-        registerRootSub(id, id)
+        if (!registerRootSub(id, id)) return
     } else if (typeof computeFn === 'string') {
-        registerRootSub(id, computeFn as string)
+        if (!registerRootSub(id, computeFn as string)) return
     } else {
         // Computed subscriptions require depsFn
         if (!depsFn) {
             consoleLog('error', `[reflex] Subscription '${id}' has computeFn but missing depsFn. Computed subscriptions must specify their dependencies.`);
             return;
         }
+        clearRootSubSource(id)
         // Store computeFn and depsFn separately
         registerHandler(KIND, id, computeFn)
         registerHandler(KIND_DEPS, id, depsFn)
@@ -111,7 +127,7 @@ const warnedNonSerializableSubIds = new Set<Id>();
  * JSON.stringify, so unserializable params (BigInt, circular structures)
  * warn with an actionable message before the native throw, and colliding
  * keys (two different Maps both stringifying to "{}") warn before the
- * registry lookup can return another vector's reaction.
+ * registry lookup can return another vector's cached subscription.
  */
 export function getSubVectorKey(subVector: SubVector): string {
     if (IS_DEV && subVector.length > 1) {
@@ -124,78 +140,133 @@ export function getSubVectorKey(subVector: SubVector): string {
     return JSON.stringify(subVector)
 }
 
-export function getOrCreateReaction(subVector: SubVector): Reaction<any> {
-    const subId = subVector[0]
+interface SubscriptionBuildFrame {
+    subVector: SubVector
+    key: string
+    subId: Id
+    computeFn: SubHandler
+    params: any[]
+    kind: SubscriptionKind
+    equalityCheck: (left: any, right: any) => boolean
+    dependencyVectors: SubVector[]
+    dependencies: SubscriptionNode<any>[]
+    dependencyKeys: string[]
+    nextDependency: number
+}
 
-    if (!hasHandler(KIND, subId)) {
-        consoleLog('error', `[reflex] no sub handler registered for: ${subId}`);
-        return null as any;
-    }
+/**
+ * Return the canonical opaque subscription for a query vector. Computed
+ * subscriptions have one terminal lifetime: after their last live consumer
+ * releases them, a later lookup builds a fresh graph from the registry.
+ */
+export function getOrCreateSubscription(subVector: SubVector): SubscriptionNode<any> | null {
+    const frames: SubscriptionBuildFrame[] = []
+    const buildingKeys = new Set<string>()
 
-    const computeFn = getHandler(KIND, subId) as SubHandler
-    // Check if we already have this specific parameterized reaction
-    const subVectorKey = getSubVectorKey(subVector)
-    const existingReaction = getReaction(subVectorKey)
-    if (existingReaction) {
-        mergeTrace({ tags: { 'cached?': true, reaction: existingReaction.getId() } });
-        return existingReaction
-    }
+    const resolve = (query: SubVector): SubscriptionNode<any> | undefined => {
+        const subId = query[0]
+        if (!hasHandler(KIND, subId)) {
+            consoleLog('error', `[reflex] no sub handler registered for: ${subId}`)
+            return undefined
+        }
 
-    withTrace({ operation: subVector[0], opType: 'sub/create', tags: { queryV: subVector } }, () => { });
+        const rootSource = getRootSubSourceById(subId)
+        if (rootSource !== undefined && query.length !== 1) {
+            throw new Error(`[reflex] Root subscription '${subId}' does not accept parameters.`)
+        }
 
-    const params = subVector.length > 1 ? subVector.slice(1) : []
-    // Check if this is a computed subscription (has dependencies)
-    const depsFn = getHandler(KIND_DEPS, subId) as SubDepsHandler
-    // Handle computed subscriptions
-    const depsVectors = depsFn(...params as any[])
-    const depsReactions = depsVectors.map((depVector: SubVector) => {
-        // Recursively resolve dependencies
-        return getOrCreateReaction(depVector)
-    })
+        const key = getSubVectorKey(query)
+        const existing = getCachedSubscription(key)
+        if (existing) {
+            renewProvisionalSubscriptionTree(key)
+            mergeTrace({ tags: { 'cached?': true, subscriptionKey: key } })
+            return existing
+        }
+        if (buildingKeys.has(key)) {
+            throw new Error(`[reflex] Circular subscription dependency detected at ${key}.`)
+        }
 
-    // Determine equality check: per-subscription config takes precedence over global
-    const subConfig = getSubConfig(subId)
-    const equalityCheck = subConfig?.equalityCheck || getGlobalEqualityCheck()
-
-    const reaction = Reaction.create(
-        (...depValues) => {
-            if (params.length > 0) {
-                return computeFn(...depValues, ...params)
-            } else {
-                return computeFn(...depValues)
+        const params = query.length > 1 ? query.slice(1) : []
+        const depsFn = getHandler(KIND_DEPS, subId) as SubDepsHandler
+        if (typeof depsFn !== 'function') {
+            throw new Error(`[reflex] Subscription '${subId}' has no dependency handler.`)
+        }
+        const dependencyVectors = depsFn(...params as any[])
+        if (!Array.isArray(dependencyVectors)) {
+            throw new Error(`[reflex] Subscription '${subId}' dependency handler must return an array.`)
+        }
+        for (const dependencyVector of dependencyVectors) {
+            if (!Array.isArray(dependencyVector) || typeof dependencyVector[0] !== 'string') {
+                throw new Error(`[reflex] Subscription '${subId}' returned an invalid dependency vector.`)
             }
-        },
-        depsReactions,
-        equalityCheck
-    )
-    reaction.setId(subVectorKey)
-    reaction.setSubVector(subVector)
-    // Store the reaction by its full vector key. Until it goes live it is
-    // provisional: renders that never commit would otherwise leak it.
-    setReaction(subVectorKey, reaction)
-    markProvisionalReaction(subVectorKey)
-    // Prune from the registry once nothing watches or depends on it, so
-    // parameterized subs over unbounded id spaces don't grow memory forever.
-    // Guard against evicting a newer reaction registered under the same key
-    // (e.g. after hot reload recreated the registry while this one was alive).
-    reaction.setOnDispose(() => {
-        if (getReaction(subVectorKey) === reaction) {
-            clearReactions(subVectorKey)
         }
-    })
-    // When the reaction comes (back) to life, re-resolve its dependencies
-    // through the registry: cached dep instances may have been pruned and
-    // replaced, and only registered instances receive db wake-ups.
-    reaction.setDepsResolver(() => {
-        return depsFn(...params as any[]).map((depVector: SubVector) => getOrCreateReaction(depVector))
-    })
-    reaction.setOnRevive(() => {
-        unmarkProvisionalReaction(subVectorKey)
-        if (!hasReaction(subVectorKey)) {
-            setReaction(subVectorKey, reaction)
+
+        withTrace({ operation: subId, opType: 'sub/create', tags: { queryV: query } }, () => {})
+        buildingKeys.add(key)
+        frames.push({
+            subVector: query,
+            key,
+            subId,
+            computeFn: getHandler(KIND, subId) as SubHandler,
+            params,
+            kind: rootSource === undefined ? 'computed' : 'root',
+            equalityCheck: getSubConfig(subId)?.equalityCheck || getGlobalEqualityCheck(),
+            dependencyVectors,
+            dependencies: [],
+            dependencyKeys: [],
+            nextDependency: 0,
+        })
+        return undefined
+    }
+
+    const initial = resolve(subVector)
+    if (initial) return initial
+    if (frames.length === 0) return null
+
+    while (frames.length > 0) {
+        const frame = frames[frames.length - 1]
+        if (frame.nextDependency < frame.dependencyVectors.length) {
+            const dependencyVector = frame.dependencyVectors[frame.nextDependency++]
+            const depth = frames.length
+            const dependency = resolve(dependencyVector)
+            if (dependency) {
+                frame.dependencies.push(dependency)
+                frame.dependencyKeys.push(getSubVectorKey(dependencyVector))
+            } else if (frames.length === depth) {
+                throw new Error(`[reflex] Subscription '${frame.subId}' depends on missing subscription '${dependencyVector[0]}'.`)
+            }
+            continue
         }
-    })
-    return reaction
+
+        const {
+            key, subVector: query, kind, computeFn, params,
+            equalityCheck, dependencies, dependencyKeys, subId,
+        } = frame
+        let subscription: SubscriptionNode<any>
+        subscription = createSubscription({
+            key,
+            query,
+            kind,
+            compute: (...dependencyValues) => params.length > 0
+                ? computeFn(...dependencyValues, ...params)
+                : computeFn(...dependencyValues),
+            dependencies,
+            equalityCheck,
+            onActive: () => unmarkProvisionalSubscription(key, subscription),
+            onUnused: () => evictCachedSubscription(key, subscription),
+        })
+        cacheSubscription(key, subscription, subId, dependencyKeys)
+        if (kind === 'computed') markProvisionalSubscription(key, subscription)
+
+        frames.pop()
+        buildingKeys.delete(key)
+        const parent = frames[frames.length - 1]
+        if (!parent) return subscription
+        parent.dependencies.push(subscription)
+        parent.dependencyKeys.push(key)
+    }
+
+    throw new Error('[reflex] Invariant violation: subscription graph construction ended without producing a subscription.')
 }
 
 // Same typing contract as useSubscription: untyped until SubPayloads is
@@ -203,6 +274,6 @@ export function getOrCreateReaction(subVector: SubVector): Reaction<any> {
 export function getSubscriptionValue<K extends keyof SubPayloads & Id>(subVector: [K, ...SubParams<K>]): SubResult<K>;
 export function getSubscriptionValue<T>(subVector: SubscribeVector): T;
 export function getSubscriptionValue<T>(subVector: SubVector): T {
-    const reaction = getOrCreateReaction(subVector)
-    return reaction ? reaction.computeValue() : undefined as T
+    const subscription = getOrCreateSubscription(subVector)
+    return subscription ? readSubscription(subscription) : undefined as T
 }

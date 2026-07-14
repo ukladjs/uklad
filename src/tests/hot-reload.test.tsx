@@ -10,12 +10,12 @@ import {
   useHotReloadKey, 
   setupSubsHotReload 
 } from '../hot-reload';
-import { clearSubs } from '../registrar';
+import { clearSubsForHotReload } from '../registrar';
 
-// Mock clearSubs since it's now called internally
+// Mock the explicit HMR-only reset since it is called internally.
 jest.mock('../registrar', () => ({
   ...jest.requireActual('../registrar'),
-  clearSubs: jest.fn()
+  clearSubsForHotReload: jest.fn()
 }));
 
 describe('Hot Reload System', () => {
@@ -186,7 +186,7 @@ describe('Hot Reload System', () => {
 
       // Test dispose function
       dispose();
-      expect(clearSubs).toHaveBeenCalledTimes(1);
+      expect(clearSubsForHotReload).toHaveBeenCalledTimes(1);
 
       // Test accept function with new module
       const mockCallback = jest.fn();
@@ -229,7 +229,7 @@ describe('Hot Reload System', () => {
 
       // Simulate HMR dispose
       dispose();
-      expect(clearSubs).toHaveBeenCalledTimes(1);
+      expect(clearSubsForHotReload).toHaveBeenCalledTimes(1);
 
       // Simulate HMR accept with new module
       accept({ newModule: true });
@@ -240,4 +240,4 @@ describe('Hot Reload System', () => {
       expect(mockCallback).toHaveBeenCalledTimes(2);
     });
   });
-}); 
+});

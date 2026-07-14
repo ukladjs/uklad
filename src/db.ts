@@ -1,13 +1,16 @@
 import type { Db, DefaultAppDb } from './types';
-import { getReaction, getRootSubIdBySource } from './registrar';
-import { consoleLog } from './loggers';
+import { getCachedSubscription, getRootSubIdBySource } from './registrar';
 import { scheduleAfterRender } from './schedule';
-import type { Reaction } from './reaction';
+import {
+  assertPublicationAllowed,
+  publishSubscriptions,
+  type SubscriptionNode,
+} from './subscription-runtime';
 
 // The live db: events read it (via produce) and commit new generations to it.
 let appDb: any = {};
 // The last flushed generation: everything render-facing (root subscription
-// handlers, and therefore the whole reaction graph) reads this one. It only
+// handlers, and therefore the whole subscription graph) reads this one. It only
 // advances in flushSubscriptions, so between an event's commit and the next
 // flush all subscriptions — alive caches and newly mounting components alike —
 // serve one consistent db generation instead of a mixed-version window.
@@ -20,10 +23,14 @@ let flushScheduled = false;
 type NoInfer<T> = [T][T extends any ? 0 : never];
 
 export function initAppDb<T = DefaultAppDb>(value: Db<NoInfer<T>>): void {
+  assertPublicationAllowed();
+  const oldDb = renderDb;
   appDb = value;
-  // A fresh init is a new baseline, not a change to react to: any pending
-  // flush sees renderDb === appDb and no-ops.
   renderDb = value;
+  // Usually init runs before subscriptions exist. If it is deliberately used
+  // to replace the DB while a graph survives (tests, app reset), publish the
+  // changed roots now so active snapshots cannot retain the previous DB.
+  publishSubscriptions(collectChangedRoots(oldDb, value));
 }
 
 export function getAppDb<T = DefaultAppDb>(): Db<T> {
@@ -59,52 +66,45 @@ export function updateAppDb<T = Record<string, any>>(newDb: Db<T>): void {
 }
 
 /**
- * Promote the live db to the render generation and wake the root reactions
+ * Promote the live db to the render generation and wake the root subscriptions
  * whose top-level key actually changed, found with a shallow reference diff
- * (`old[k] !== new[k]`). Consecutive events between two flushes coalesce into
+ * (`!Object.is(old[k], new[k])`). Consecutive events between two flushes coalesce into
  * a single diff against the previously flushed generation.
  *
- * With `sync = true` (dispatchSync) the affected subgraphs are recomputed and
- * watchers notified before returning, instead of on the microtask queue.
+ * Publication itself is synchronous. Ordinary dispatch reaches this function
+ * from its scheduled DB flush; dispatchSync calls it inline.
  */
-export function flushSubscriptions(sync: boolean = false): void {
+export function flushSubscriptions(): void {
   if (renderDb === appDb) {
     return;
   }
+  assertPublicationAllowed();
   const oldDb = renderDb;
   const newDb = appDb;
   renderDb = newDb;
 
-  const dirtyRoots: Reaction<any>[] = [];
+  publishSubscriptions(collectChangedRoots(oldDb, newDb));
+}
+
+function collectChangedRoots(oldDb: any, newDb: any): SubscriptionNode<any>[] {
+  const dirtyRoots: SubscriptionNode<any>[] = [];
   const keys = new Set([...Object.keys(oldDb), ...Object.keys(newDb)]);
   for (const key of keys) {
-    if (oldDb[key] === newDb[key]) {
+    if (Object.is(oldDb[key], newDb[key])) {
       continue;
     }
 
     const subId = getRootSubIdBySource(key);
-    if (!subId) {
+    if (subId === undefined) {
       continue;
     }
 
-    const reaction = getReaction(JSON.stringify([subId]));
-    if (!reaction) {
+    const subscription = getCachedSubscription(JSON.stringify([subId]));
+    if (!subscription) {
       continue;
     }
-    if (!reaction.isRoot) {
-      consoleLog('error', `[reflex] flushSubscriptions: root reaction id ${subId} registered with a computed function. This is not allowed.`);
-      continue;
-    }
-
-    reaction.markDirty();
-    dirtyRoots.push(reaction);
+    dirtyRoots.push(subscription);
   }
 
-  if (sync) {
-    // Mark-all-then-recompute keeps reactions depending on several roots from
-    // recomputing (and notifying) once per root.
-    for (const reaction of dirtyRoots) {
-      reaction.recomputeTreeSync();
-    }
-  }
+  return dirtyRoots;
 }

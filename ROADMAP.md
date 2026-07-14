@@ -20,11 +20,6 @@ A full worked scenario — one task walked through the agent's loop (orient → 
 
 ## Reflex (lib)
 
-### P0 — Correctness (React binding & memory)
-
-- [x] **Collapse `invalidated` into the version/probe model.**
-  Staleness is now derived only from root identity probes and dependency versions; `markDirty` propagates scheduling to watcher-bearing reactions without storing a parallel dirty bit. Notification delivery is tracked independently with `lastNotifiedVersion`, so an early silent pull cannot consume a pending watcher callback. Scheduled work is lifecycle-tokened and canceled when a notifying pull already satisfied it. `isDirty` now reports derived/unknown freshness (a never-evaluated reaction is dirty) rather than exposing an invalidation flag. Regression coverage includes early shared-sub pulls, duplicate-task suppression, dispose/revive, re-entrant updates, and synchronous diamond walks.
-
 ### P1 — Dev-mode strictness & navigation
 
 - [ ] **Capture registration source location in dev mode.** *(pairs with devtools P2: handler locations)*
@@ -41,6 +36,7 @@ A full worked scenario — one task walked through the agent's loop (orient → 
 
 - [ ] **Headless-friendly runtime primitives.** *(pairs with devtools P1: headless runtime support)*
   Support a browserless agent loop without making devtools depend on private internals. Provide the minimal dev-only primitives needed by the headless MCP runtime: safe app-db restore for snapshots/scenarios, subscription evaluation that does not require a mounted React component, optional non-React subscription watching for services/headless checks, and clear behavior around flush timing after restore/dispatch. Keep the production API small; these primitives should either be explicitly dev-only or exposed through a narrow testing/devtools surface. This pairs with the devtools headless entry, `eval_sub`, state fixtures/scenarios, and the agent eval harness.
+  Partially delivered: `getSubscriptionValue` and devtools `eval_sub` cover one-shot headless evaluation, while `getSubscriptionDiagnostics()` provides cache-only inspection. Safe restore, public non-React watching, and an explicit restore/dispatch flush contract remain open.
 
 ### P2
 
@@ -88,7 +84,7 @@ Legend: ✅ has it · ⚠️ partial / community · ❌ missing.
 | Dev-mode invariant checks | ✅ serializability/immutability middleware, typo errors | ⚠️ | ⚠️ console warnings only, non-fatal | **P1** — fail-loud dev mode |
 | Async data fetching & caching | ✅ RTK Query (dedup, invalidation, cache) | ❌ pair with TanStack Query | ❌ hand-rolled effects | **P1** standard `http` effect (retry/dedup); document TanStack Query pairing — a full RTK-Query-alike is not worth building yet |
 | Per-call-site selector equality | ✅ `useSelector(sel, equalityFn)` | ✅ `shallow` / custom | ⚠️ per-sub config only (`shallowEqual` now exported) | **P2** — options arg on `useSubscription` |
-| Non-React (vanilla) subscriptions | ✅ `store.subscribe` | ✅ vanilla store | ⚠️ `Reaction.watch` internal only | **P2** — export a public `watchSubscription` for non-React consumers (services, headless logic) |
+| Non-React (vanilla) subscriptions | ✅ `store.subscribe` | ✅ vanilla store | ❌ no public watch API | **P2** — export a public `watchSubscription` for non-React consumers (services, headless logic) |
 | Entity/normalization helpers | ✅ `createEntityAdapter` | ❌ | ❌ | **P2** — small helper package for id-keyed CRUD in `draftDb` |
 | SSR / per-request stores | ✅ | ✅ | ❌ module-level singletons | **Decide** — either explicit non-goal (SPA/RN focus, document it) or a long-term instance-scoped rework |
 | Code-split / lazy registration | ✅ `injectSlice` | ⚠️ manual | ✅ side-effect imports are naturally lazy | — already good |

@@ -7,9 +7,10 @@
 import { regEvent } from '../events';
 import { dispatch } from '../router';
 import { initAppDb } from '../db';
-import { regSub, getOrCreateReaction } from '../subs';
-import { clearReactions } from '../registrar';
-import { waitForScheduled, waitForAnimationFrame, waitForReaction } from './test-utils';
+import { regSub, getOrCreateSubscription } from '../subs';
+import { clearSubscriptionCache } from '../registrar';
+import { getSubscriptionSnapshot, subscribeToSubscription } from '../subscription-runtime';
+import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('Mount recompute cascades', () => {
   const ROWS = 50;
@@ -26,7 +27,7 @@ describe('Mount recompute cascades', () => {
   }, () => [['mc-sorted']]);
 
   beforeEach(() => {
-    clearReactions();
+    clearSubscriptionCache();
     sortCount = 0;
     initAppDb({
       'mc-items': Array.from({ length: ROWS }, (_, i) => ({ id: i, order: ROWS - i }))
@@ -35,19 +36,21 @@ describe('Mount recompute cascades', () => {
 
   it('should run a shared parent sub once while many by-id subscribers mount', () => {
     const cleanups: Array<() => void> = [];
+    const callbacks: jest.Mock[] = [];
 
     // Mimic what useSubscription does per row: read a snapshot during render,
     // then subscribe on commit
     for (let id = 0; id < ROWS; id++) {
-      const reaction = getOrCreateReaction(['mc-by-id', id]);
-      expect(reaction.getSnapshot()).toEqual({ id, order: ROWS - id });
-      const callback = () => { };
-      reaction.watch(callback);
-      cleanups.push(() => reaction.unwatch(callback));
+      const subscription = getOrCreateSubscription(['mc-by-id', id])!;
+      expect(getSubscriptionSnapshot(subscription)).toEqual({ id, order: ROWS - id });
+      const callback = jest.fn();
+      callbacks.push(callback);
+      cleanups.push(subscribeToSubscription(subscription, callback));
     }
 
     // The sorted list was computed once, not once per mounting row
     expect(sortCount).toBe(1);
+    expect(callbacks.every(callback => callback.mock.calls.length === 0)).toBe(true);
 
     for (const cleanup of cleanups) cleanup();
   });
@@ -58,22 +61,25 @@ describe('Mount recompute cascades', () => {
     });
 
     const cleanups: Array<() => void> = [];
+    const callbacks: jest.Mock[] = [];
     for (let id = 0; id < ROWS; id++) {
-      const reaction = getOrCreateReaction(['mc-by-id', id]);
-      reaction.getSnapshot();
-      const callback = () => { };
-      reaction.watch(callback);
-      cleanups.push(() => reaction.unwatch(callback));
+      const subscription = getOrCreateSubscription(['mc-by-id', id])!;
+      getSubscriptionSnapshot(subscription);
+      const callback = jest.fn();
+      callbacks.push(callback);
+      cleanups.push(subscribeToSubscription(subscription, callback));
     }
     expect(sortCount).toBe(1);
 
     dispatch(['mc-reorder']);
     await waitForScheduled();
     await waitForAnimationFrame();
-    await waitForReaction();
+    await waitForSubscription();
 
     // One re-sort for the whole flush, regardless of subscriber count
     expect(sortCount).toBe(2);
+    expect(callbacks[0]).toHaveBeenCalledTimes(1);
+    expect(callbacks.slice(1).every(callback => callback.mock.calls.length === 0)).toBe(true);
 
     for (const cleanup of cleanups) cleanup();
   });

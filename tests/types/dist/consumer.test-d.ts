@@ -10,6 +10,7 @@
  * wired into prepublishOnly after the build step.
  */
 import { dispatch, dispatchSync, regEvent, useSubscription, getAppDb } from '@flexsurfer/reflex';
+import type { SubscriptionDiagnostic } from '@flexsurfer/reflex';
 
 interface Todo { id: number; title: string; done: boolean }
 
@@ -76,3 +77,14 @@ useSubscription(['todos/nope']);
 const db = getAppDb();
 const _all: Todo[] = db.todos;
 void _all;
+
+const diagnostic: SubscriptionDiagnostic = {
+  key: '["todos/all"]',
+  query: ['todos/all'],
+  kind: 'computed',
+  active: true,
+  version: 1,
+  status: 'value',
+  value: todos,
+};
+void diagnostic;

@@ -6,6 +6,7 @@
 import type { DispatchVector, EventVector } from './types';
 import { getHandlingEventId, getRunningHandlerEventId, handle } from './events';
 import { flushSubscriptions } from './db';
+import { assertPublicationAllowed } from './subscription-runtime';
 import { consoleLog } from './loggers';
 import { scheduleAfterRender, scheduleNextTick } from './schedule';
 import { IS_DEV } from './env';
@@ -230,6 +231,10 @@ export function dispatchSync(event: DispatchVector): void {
         consoleLog('error', message);
         throw new Error(message);
     }
+    // Check before the event handler can commit a new app-db generation. A
+    // synchronous publication nested inside subscription computation or
+    // listener delivery cannot honor its before-return timing contract.
+    assertPublicationAllowed();
     handle(event);
-    flushSubscriptions(true);
+    flushSubscriptions();
 }

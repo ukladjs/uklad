@@ -1,7 +1,8 @@
 import { shallowEqual } from '../equality';
-import { regSub, getOrCreateReaction } from '../subs';
-import { initAppDb } from '../db';
-import { clearReactions } from '../registrar';
+import { regSub, getOrCreateSubscription } from '../subs';
+import { flushSubscriptions, initAppDb, updateAppDb } from '../db';
+import { clearSubscriptionCache } from '../registrar';
+import { getSubscriptionSnapshot, subscribeToSubscription } from '../subscription-runtime';
 
 describe('shallowEqual', () => {
   it('should compare primitives with Object.is semantics', () => {
@@ -43,30 +44,44 @@ describe('shallowEqual', () => {
 describe('per-sub equalityCheck config with shallowEqual', () => {
   regSub('se-items');
   regSub('se-mapped', (items: number[]) => items.map((n) => n), () => [['se-items']], { equalityCheck: shallowEqual });
+  regSub('se-always-changed', (items: number[]) => items.length, () => [['se-items']], { equalityCheck: () => false });
 
   beforeEach(() => {
-    clearReactions();
+    clearSubscriptionCache();
     initAppDb({ 'se-items': [1, 2, 3] });
   });
 
   it('should gate recompute propagation with the configured check', () => {
-    const reaction = getOrCreateReaction(['se-mapped']);
+    const subscription = getOrCreateSubscription(['se-mapped'])!;
     const callback = jest.fn();
-    reaction.watch(callback);
+    const unsubscribe = subscribeToSubscription(subscription, callback);
 
-    const first = reaction.getSnapshot();
+    const first = getSubscriptionSnapshot(subscription);
     expect(first).toEqual([1, 2, 3]);
 
-    // Force a recompute of the mapped sub with unchanged content: the fresh
-    // array is a different reference, but shallowEqual sees equal elements,
-    // so the version must not bump
-    const versionBefore = reaction.getVersion();
-    reaction.markDirty();
-    reaction.computeValue();
-    expect(reaction.getVersion()).toBe(versionBefore);
-    // The cached value keeps its identity for downstream consumers
-    expect(reaction.getSnapshot()).toBe(first);
+    // Publish a fresh root identity with unchanged elements. The mapped sub
+    // creates a different array, but shallowEqual gates observable propagation.
+    updateAppDb({ 'se-items': [1, 2, 3] });
+    flushSubscriptions();
 
-    reaction.unwatch(callback);
+    expect(callback).not.toHaveBeenCalled();
+    // The cached value keeps its identity for downstream consumers
+    expect(getSubscriptionSnapshot(subscription)).toBe(first);
+
+    unsubscribe();
+  });
+
+  it('should not apply a hidden identity gate over a configured comparator', () => {
+    const subscription = getOrCreateSubscription(['se-always-changed'])!;
+    const callback = jest.fn();
+    const unsubscribe = subscribeToSubscription(subscription, callback);
+    expect(getSubscriptionSnapshot(subscription)).toBe(3);
+
+    updateAppDb({ 'se-items': [1, 2, 3] });
+    flushSubscriptions();
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(getSubscriptionSnapshot(subscription)).toBe(3);
+    unsubscribe();
   });
 });

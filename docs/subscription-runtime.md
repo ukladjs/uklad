@@ -1,0 +1,213 @@
+# Subscription runtime
+
+Reflex has one subscription runtime built around an opaque `SubscriptionNode`.
+React, the DB, the registry, and devtools never receive mutable runtime nodes.
+They use narrow operations for reads, subscriptions, DB publication, lifecycle,
+and cache-only diagnostics.
+
+## Execution model
+
+The runtime has two evaluation paths:
+
+- A live graph is pushed once from all changed DB roots in topological-rank
+  order. Every cache settles before the first listener runs.
+- A dormant read uses an iterative post-order pull. A publication epoch makes
+  repeated reads between DB waves constant-time cache hits.
+
+The DB's coalesced flush is the only publication boundary. There is no
+per-subscription task queue, dirty propagation, notification debt, dependency
+resolver, or node revival.
+
+## Per-publication budgets
+
+For one DB publication:
+
+- Each changed root is read exactly once.
+- Each affected computed node runs at most once.
+- Equality runs at most once after a successful recomputation.
+- Descendants behind an equality-stable result receive zero work.
+- Multi-root and unequal-depth fan-in runs only after every changed input has
+  settled.
+- Each listener runs at most once and reads a coherent cache-only snapshot.
+- Rank scheduling is proportional to queued ranks rather than maximum graph
+  depth.
+
+The contract suite makes these budgets executable with wide fan-out,
+diamonds, equality cutoffs, duplicate edges, sparse unequal-depth fan-in,
+active/dormant boundaries, and deep registered graphs.
+
+## Lifecycle and correctness rules
+
+- Root cells are persistent DB anchors and never accept query parameters.
+- Computed dependencies are static for one serialized subscription key.
+- Computed nodes have a terminal live lifecycle. Their last consumer evicts
+  them; a later key lookup creates a fresh graph.
+- Evicting or explicitly clearing a cached dependency also invalidates every
+  dormant cached parent through iterative reverse registry edges. Canonical
+  cache entries therefore never retain a terminal dependency node.
+- Hook closures retain serialized query keys, not runtime nodes.
+- Provisional graphs created by aborted renders receive a short graph-wide
+  lease and are swept if they never become active.
+- Activation is transactional. A failing lifecycle hook rolls back every new
+  edge; release-hook and listener failures cannot interrupt other cleanup or
+  delivery.
+- Direct publication and `dispatchSync` are rejected during computation or
+  listener delivery before `appDb` or `renderDb` can advance. Ordinary async
+  `dispatch` remains safe because its flush runs later while the runtime is
+  idle.
+- Computation errors are retained. A dependency publication or subsequent
+  snapshot request retries them, including Suspense-style transient throws.
+  The first successful result never compares against a missing previous value.
+- `regSub` cannot replace a handler while cached queries for that id exist.
+- Registry and subscription-handler clearing is rejected while a graph is
+  active and cascades through cached dependents. HMR uses an internal reset
+  followed by a keyed remount.
+
+## React and DB timing
+
+`renderDb` is the published generation. Async events may advance `appDb`, but
+all subscriptions continue to expose `renderDb` until the scheduled flush:
+
+1. `renderDb` advances.
+2. Changed top-level keys identify persistent root cells with `Object.is`.
+3. All changed roots update and the live DAG settles in rank order.
+4. Listener lists are frozen.
+5. Listeners run and read the settled generation.
+
+If publication occurs between render and subscribe, activation silently
+validates the cached render snapshot. `useSyncExternalStore` then performs its
+normal post-subscribe comparison; subscribe itself emits no initial callback.
+
+## Contract changes from the previous runtime
+
+Async `dispatch` remains batched and scheduled. Once its flush task begins,
+the graph settles and listeners run synchronously before that task returns;
+the previous runtime delivered listeners from per-node microtasks.
+`dispatchSync` is unchanged: it settles the graph and notifies listeners before
+returning.
+
+Terminology is now consistent across the public API, runtime, and tracing:
+
+- `clearReactions` was replaced by `clearSubscriptionCache`; there is no
+  compatibility alias.
+- The trace tag `tags.reaction` was replaced by `tags.subscriptionKey`.
+
+## Worked examples
+
+All examples share one registered graph. `todos` and `filter` are top-level
+db keys. Each cell's rank is fixed at construction: roots are rank 0, a
+computed cell is `1 + max(rank of its dependencies)`. A publication wave
+processes rank buckets in ascending order, so every dependency settles
+before any cell that reads it.
+
+```
+[todos] (root, 0)      [filter] (root, 0)
+   |         \                   |
+   v          v                  |
+[count] (1)  [visible] (1) <-----+
+    \           /
+     v         v
+     [stats] (2)
+```
+
+`[count]` is `todos.length`, `[visible]` filters todos by the current
+filter, `[stats]` combines both.
+
+### One coalesced publication
+
+Components watch `[visible]` and `[stats]`. Two events dispatch within one
+frame:
+
+```
+dispatch(['add-todo'])     appDb = G1    renderDb = G0
+dispatch(['set-filter'])   appDb = G2    renderDb = G0
+     every subscription read in this window still serves G0,
+     including subscriptions created by components mounting now
+
+scheduled flush (one task):
+  renderDb = G2; keys changed since G0: todos, filter
+  rank 0: [todos] and [filter] each refresh exactly once
+  rank 1: [count] runs once; [visible] runs once and sees the new
+          todos AND the new filter together - no torn input
+  rank 2: [stats] was enqueued by both parents, deduplicated by its
+          wave id, runs once against two settled inputs
+  listener lists frozen; listeners of [visible] and [stats] fire once
+  each; every snapshot they read is G2
+```
+
+The intermediate generation G1 is never observable anywhere.
+`dispatchSync` runs the same wave inline instead of from the scheduled
+task; the wave itself is always synchronous.
+
+### Equality cutoff
+
+An event edits the text of a todo that the current filter hides:
+
+```
+flush: changed key: todos (new object identity)
+  rank 0: [todos] refreshes, output stamp advances
+  rank 1: [count]   recomputes: 5 -> 5, equality-stable,
+                    stamp unchanged
+          [visible] recomputes: same visible items, deep-equal,
+                    stamp unchanged
+  rank 2: [stats] is never enqueued - zero work
+  changed set is empty: no listener fires, React renders nothing
+```
+
+The whole wave cost one root read and two rank-1 recomputations.
+Equality-stable results keep their previous object identity, so memoized
+children relying on reference equality also stay quiet.
+
+### Screen switch: dormant pull, activation, terminal release
+
+A new screen renders while the old one is still mounted:
+
+```
+render (new screen):
+  getSnapshot(['stats']) -> cache miss -> cells built from the registry
+  dormant pull settles post-order:
+    [todos] [filter] [count] [visible] [stats]
+  values cached, nothing is active yet; if this render aborts, the
+  provisional lease sweeps the unused cells
+
+commit:
+  old screen cleanup runs first:
+    the release cascade deactivates its exclusive computed cells
+    (terminal - evicted from the registry) and stops at any cell that
+    still has dependents or listeners; root cells always stay
+    registered, warm and inactive
+  new screen effects subscribe:
+    activation links dependency edges bottom-up and transactionally;
+    the first-listener catch-up pull short-circuits at the
+    already-validated cell when nothing was published since render
+
+between publications:
+  repeated reads of any dormant cached cell are constant-time until
+  the next publication epoch
+```
+
+### Error retention and recovery
+
+```
+flush 1: [visible] throws during recomputation
+  the error becomes the cell's state, its stamp advances
+  [stats] sees a failed dependency and adopts the same error
+  listeners fire once; getSnapshot throws the retained error into the
+  component / error boundary
+
+re-render: getSnapshot on the failed cell retries only the failing
+  path; re-throwing the identical error object does not advance stamps,
+  so descendants are not woken again
+
+flush 2: the underlying data is fixed
+  [visible] recovers - recovery is always an observable change, stamps
+  advance through [stats], listeners fire, snapshots serve values again
+```
+
+## Devtools diagnostics
+
+`getSubscriptionDiagnostics()` returns fresh, read-only DTOs containing a
+subscription key/query, root-or-computed kind, active state, version, and
+cached value/error status. It never pulls, recomputes, subscribes, or exposes
+listeners/dependencies. Devtools can diff versions and detect disappeared keys
+without coupling to runtime internals.

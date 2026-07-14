@@ -1,13 +1,14 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import type { Id, SubVector, SubPayloads, SubParams, SubResult, SubscribeVector } from './types';
-import { getOrCreateReaction, getSubVectorKey } from './subs';
+import { getOrCreateSubscription, getSubVectorKey } from './subs';
+import { getSubscriptionSnapshot, subscribeToSubscription } from './subscription-runtime';
 
 /**
  * Subscribe a React component to a reflex subscription.
  *
  * Contract:
  * - `subVector` params must be JSON-serializable plain values (ids, strings,
- *   numbers, plain objects/arrays). Reactions are cached and re-subscribed by
+ *   numbers, plain objects/arrays). Subscription nodes are cached and bindings are refreshed by
  *   `JSON.stringify(subVector)`: object key order matters, and `undefined`,
  *   functions, Symbols, BigInt, `Map`/`Set`/`RegExp`, non-finite numbers or
  *   circular references (at any depth) collide, go stale, or throw during
@@ -25,23 +26,21 @@ export function useSubscription<K extends keyof SubPayloads & Id>(subVector: [K,
 export function useSubscription<T>(subVector: SubscribeVector, componentName?: string): T;
 export function useSubscription<T>(subVector: SubVector, componentName: string = 'react component'): T {
   // Key the store bindings on the serialized vector so changing subscription
-  // parameters re-subscribes to the new reaction instead of silently keeping
+  // parameters re-subscribes to the new subscription instead of silently keeping
   // the one captured on first mount. getSubVectorKey validates params in dev
   // before serializing, so unserializable params warn before any throw.
   const subVectorKey = getSubVectorKey(subVector)
 
   const store = useMemo(() => ({
     subscribe: (onStoreChange: () => void) => {
-      const reaction = getOrCreateReaction(subVector)
-      if (!reaction) return () => { }
-      reaction.watch(onStoreChange, componentName)
-      return () => {
-        reaction.unwatch(onStoreChange)
-      }
+      const subscription = getOrCreateSubscription(subVector)
+      return subscription
+        ? subscribeToSubscription(subscription, onStoreChange, componentName)
+        : () => { }
     },
     getSnapshot: (): T => {
-      const reaction = getOrCreateReaction(subVector)
-      return reaction ? reaction.getSnapshot() : undefined as T
+      const subscription = getOrCreateSubscription(subVector)
+      return subscription ? getSubscriptionSnapshot(subscription) : undefined as T
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [subVectorKey])

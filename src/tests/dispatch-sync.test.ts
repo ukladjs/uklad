@@ -2,9 +2,10 @@ import { regEvent, regEventErrorHandler, defaultErrorHandler } from '../events';
 import { regEffect } from '../fx';
 import { dispatch, dispatchSync } from '../router';
 import { initAppDb, getAppDb } from '../db';
-import { regSub, getOrCreateReaction, getSubscriptionValue } from '../subs';
-import { clearReactions } from '../registrar';
-import { waitForScheduled, waitForAnimationFrame, waitForReaction } from './test-utils';
+import { regSub, getOrCreateSubscription, getSubscriptionValue } from '../subs';
+import { clearSubscriptionCache } from '../registrar';
+import { getSubscriptionSnapshot, subscribeToSubscription } from '../subscription-runtime';
+import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('dispatchSync', () => {
   regSub('ds-counter');
@@ -15,7 +16,7 @@ describe('dispatchSync', () => {
   });
 
   beforeEach(() => {
-    clearReactions();
+    clearSubscriptionCache();
     initAppDb({ 'ds-counter': 0 });
   });
 
@@ -27,18 +28,18 @@ describe('dispatchSync', () => {
   });
 
   it('should notify subscription watchers before returning', () => {
-    const reaction = getOrCreateReaction(['ds-double']);
+    const subscription = getOrCreateSubscription(['ds-double'])!;
     const callback = jest.fn();
-    reaction.watch(callback);
-    expect(reaction.getSnapshot()).toBe(0);
+    const unsubscribe = subscribeToSubscription(subscription, callback);
+    expect(getSubscriptionSnapshot(subscription)).toBe(0);
 
     dispatchSync(['ds-inc']);
 
     // No queue tick, no animation frame: the watcher already ran
-    expect(callback).toHaveBeenCalledWith(2);
-    expect(reaction.getSnapshot()).toBe(2);
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(getSubscriptionSnapshot(subscription)).toBe(2);
 
-    reaction.unwatch(callback);
+    unsubscribe();
   });
 
   it('should run effects synchronously', () => {
@@ -56,10 +57,10 @@ describe('dispatchSync', () => {
   });
 
   it('should flush changes committed by earlier async dispatches too', async () => {
-    const reaction = getOrCreateReaction(['ds-double']);
+    const subscription = getOrCreateSubscription(['ds-double'])!;
     const callback = jest.fn();
-    reaction.watch(callback);
-    reaction.getSnapshot();
+    const unsubscribe = subscribeToSubscription(subscription, callback);
+    getSubscriptionSnapshot(subscription);
 
     // Async event commits but its animation-frame flush is still pending
     dispatch(['ds-inc']);
@@ -69,14 +70,14 @@ describe('dispatchSync', () => {
     // The sync flush promotes everything committed so far, in one shot
     dispatchSync(['ds-inc']);
     expect(callback).toHaveBeenCalledTimes(1);
-    expect(callback).toHaveBeenCalledWith(4);
+    expect(getSubscriptionSnapshot(subscription)).toBe(4);
 
     // The still-pending scheduled flush finds nothing left to do
     await waitForAnimationFrame();
-    await waitForReaction();
+    await waitForSubscription();
     expect(callback).toHaveBeenCalledTimes(1);
 
-    reaction.unwatch(callback);
+    unsubscribe();
   });
 
   it('should throw when called from within an event handler', () => {
@@ -113,6 +114,26 @@ describe('dispatchSync', () => {
     expect(String(effectError?.message)).toMatch(/dispatchSync/);
     // The outer event committed; the reentrant one never ran
     expect(getAppDb()['ds-counter']).toBe(10);
+  });
+
+  it('should reject dispatchSync from a subscription listener before mutation', () => {
+    const subscription = getOrCreateSubscription(['ds-counter'])!;
+    let nestedError: Error | undefined;
+    const unsubscribe = subscribeToSubscription(subscription, () => {
+      try {
+        dispatchSync(['ds-inc']);
+      } catch (error: any) {
+        nestedError = error;
+      }
+    });
+    expect(getSubscriptionSnapshot(subscription)).toBe(0);
+
+    dispatchSync(['ds-inc']);
+
+    expect(nestedError?.message).toMatch(/publication is not allowed/);
+    expect(getAppDb()['ds-counter']).toBe(1);
+    expect(getSubscriptionSnapshot(subscription)).toBe(1);
+    unsubscribe();
   });
 
   it('should propagate handler errors to the caller', () => {

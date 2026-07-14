@@ -62,7 +62,7 @@ export function clearGlobalInterceptors(id?: string): void {
 }
 
 /**
- * Set the global equality check function used for reaction value comparisons
+ * Set the global equality check function used for subscription value comparisons
  */
 export function setGlobalEqualityCheck(equalityCheck: EqualityCheckFn): void {
   store.globalEqualityCheck = equalityCheck;
@@ -74,4 +74,3 @@ export function setGlobalEqualityCheck(equalityCheck: EqualityCheckFn): void {
 export function getGlobalEqualityCheck(): EqualityCheckFn {
   return store.globalEqualityCheck;
 }
-

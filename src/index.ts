@@ -9,7 +9,7 @@ export { regEffect, DISPATCH_LATER, DISPATCH } from './fx';
 export { regCoeffect, NOW, RANDOM } from './cofx';
 export { regGlobalInterceptor, getGlobalInterceptors, clearGlobalInterceptors, setGlobalEqualityCheck, getGlobalEqualityCheck } from './settings';
 export { shallowEqual } from './equality';
-export { getHandler, getHandlers, clearHandlers, clearReactions, clearSubs, getReactions } from './registrar';
+export { getHandler, getHandlers, clearHandlers, clearSubscriptionCache, clearSubs, getSubscriptionDiagnostics } from './registrar';
 
 export { dispatch, dispatchSync } from './router';
 export { debounceAndDispatch, throttleAndDispatch } from './debounce'
@@ -58,3 +58,4 @@ export type {
   SubscribeVector,
   TraceErrorTag
 } from './types';
+export type { SubscriptionDiagnostic } from './subscription-runtime';

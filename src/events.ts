@@ -91,8 +91,13 @@ function registerInterceptors<T = Record<string, any>>(id: Id, cofxOrInterceptor
   }
 }
 
-// Enable the patches plugin for Immer
-enablePatches();
+let patchesPluginEnabled = false;
+
+function ensurePatchesEnabled(): void {
+  if (patchesPluginEnabled) return;
+  enablePatches();
+  patchesPluginEnabled = true;
+}
 
 // -- Interceptor Factories -------------------------------------------
 
@@ -123,6 +128,7 @@ function eventHandlerInterceptor(handler: EventHandler<any>): Interceptor {
       // detection and the root wake-up rely on Immer's structural sharing
       // instead (see updateAppDb/flushSubscriptions in db.ts).
       if (isTraceEnabled()) {
+        ensurePatchesEnabled();
         const [newDb, patches, reversePatches] = produceWithPatches(getAppDb<Db>(), recipe);
         context.newDb = newDb;
         mergeTrace({ tags: { 'patches': patches, 'reversePatches': reversePatches, 'effects': effects } });

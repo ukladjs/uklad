@@ -47,7 +47,7 @@ Rules:
 - Return effect tuples for side effects.
 - When sending mutated draft data to effects, always use `current(...)`.
 - Prefer deterministic coeffects (time/id/random/env) instead of direct globals for testability.
-- `dispatch` is async (queued; subscriptions update on the next animation-frame flush). `dispatchSync` commits and notifies subscribers before returning — use it only where that timing is load-bearing (controlled inputs bound to db state). Never call `dispatchSync` from inside an event handler (it throws) — return a `['dispatch', ...]` effect instead. Calling plain `dispatch` from inside a handler warns in dev for the same reason: emit follow-up events through the `['dispatch', ...]` effect.
+- `dispatch` is async (queued; on the next animation-frame flush the subscription graph settles and listeners run synchronously inside that scheduled flush task). `dispatchSync` commits and notifies subscribers before returning — use it only where that timing is load-bearing (controlled inputs bound to db state). Never call `dispatchSync` from inside an event handler (it throws) — return a `['dispatch', ...]` effect instead. Calling plain `dispatch` from inside a handler warns in dev for the same reason: emit follow-up events through the `['dispatch', ...]` effect.
 
 Event naming:
 - Keep exported constant keys in `UPPER_SNAKE_CASE`.

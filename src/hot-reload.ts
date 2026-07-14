@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { consoleLog } from './loggers';
-import { clearSubs } from './registrar';
+import { clearSubsForHotReload } from './registrar';
 
 // Hot reload callback management
 type HotReloadCallback = () => void;
@@ -99,7 +99,7 @@ export function setupSubsHotReload(): {
   accept: (newModule?: any) => void;
 } {
   const dispose = () => {
-    clearSubs();
+    clearSubsForHotReload();
   };
 
   const accept = (newModule?: any) => {
@@ -119,4 +119,4 @@ export function setupSubsHotReload(): {
 export function HotReloadWrapper({ children }: { children: React.ReactNode }) {
   const key = useHotReloadKey();
   return React.createElement(React.Fragment, { key }, children);
-} 
+}

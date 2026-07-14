@@ -1,103 +1,182 @@
-import { regSub, getOrCreateReaction, getSubscriptionValue, hasNonSerializableSubParam } from '../subs';
+import { regSub, getOrCreateSubscription, getSubscriptionValue, hasNonSerializableSubParam } from '../subs';
 import { initAppDb } from '../db';
-import { hasReaction, clearReactions, sweepProvisionalReactions } from '../registrar';
-import { waitForAnimationFrame, waitForReaction } from './test-utils';
+import { hasCachedSubscription, clearSubscriptionCache, sweepProvisionalSubscriptions } from '../registrar';
+import { subscribeToSubscription } from '../subscription-runtime';
+import { waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('Subscription registry lifecycle', () => {
   regSub('sweep-todos');
   regSub('sweep-count', (todos) => (todos || []).length, () => [['sweep-todos']]);
+  regSub('sweep-cycle-a', (value) => value, () => [['sweep-cycle-b']]);
+  regSub('sweep-cycle-b', (value) => value, () => [['sweep-cycle-a']]);
+  regSub('sweep-missing-parent', (value) => value, () => [['sweep-missing-child']]);
+  regSub('sweep-invalid-deps', () => 1, (() => undefined) as any);
+  regSub('sweep-lease-a', (todos) => todos.length, () => [['sweep-todos']]);
+  regSub('sweep-lease-b', (value) => value + 1, () => [['sweep-lease-a']]);
+  regSub('sweep-lease-c', (value) => value + 1, () => [['sweep-lease-b']]);
+  regSub('sweep-override', () => 1, () => []);
 
   const countKey = JSON.stringify(['sweep-count']);
   const rootKey = JSON.stringify(['sweep-todos']);
 
   beforeEach(() => {
     initAppDb({ 'sweep-todos': [1, 2, 3] });
-    clearReactions();
+    clearSubscriptionCache();
   });
 
-  describe('provisional reaction sweep (aborted renders)', () => {
-    it('should sweep reactions that never went live after one full grace cycle', () => {
-      // Simulates a render that never commits: the reaction (and its root
-      // dependency) are created but subscribe() never runs
+  describe('provisional subscription sweep (aborted renders)', () => {
+    it('should sweep subscriptions that never went live after one full grace cycle', () => {
+      // Simulates a render that never commits: the computed subscription and
+      // its persistent root are created but subscribe() never runs.
       expect(getSubscriptionValue(['sweep-count'])).toBe(3);
-      expect(hasReaction(countKey)).toBe(true);
-      expect(hasReaction(rootKey)).toBe(true);
+      expect(hasCachedSubscription(countKey)).toBe(true);
+      expect(hasCachedSubscription(rootKey)).toBe(true);
 
       // First flush cycle: still within the grace period
-      sweepProvisionalReactions();
-      expect(hasReaction(countKey)).toBe(true);
-      expect(hasReaction(rootKey)).toBe(true);
+      sweepProvisionalSubscriptions();
+      expect(hasCachedSubscription(countKey)).toBe(true);
+      expect(hasCachedSubscription(rootKey)).toBe(true);
 
-      // Second flush cycle: never went live, swept
-      sweepProvisionalReactions();
-      expect(hasReaction(countKey)).toBe(false);
-      expect(hasReaction(rootKey)).toBe(false);
+      // Second flush cycle: the computed cell is swept. Canonical roots are
+      // persistent db wake-up anchors and remain registered while dormant.
+      sweepProvisionalSubscriptions();
+      expect(hasCachedSubscription(countKey)).toBe(false);
+      expect(hasCachedSubscription(rootKey)).toBe(true);
     });
 
-    it('should keep reactions that go live during the grace period', () => {
-      const reaction = getOrCreateReaction(['sweep-count']);
-      sweepProvisionalReactions();
+    it('should keep subscriptions that go live during the grace period', () => {
+      const subscription = getOrCreateSubscription(['sweep-count'])!;
+      sweepProvisionalSubscriptions();
 
       // Late subscribe (e.g. a slow-committing render) inside the grace cycle
       const callback = () => { };
-      reaction.watch(callback);
+      const unsubscribe = subscribeToSubscription(subscription, callback);
 
-      sweepProvisionalReactions();
-      sweepProvisionalReactions();
-      expect(hasReaction(countKey)).toBe(true);
-      expect(hasReaction(rootKey)).toBe(true);
+      sweepProvisionalSubscriptions();
+      sweepProvisionalSubscriptions();
+      expect(hasCachedSubscription(countKey)).toBe(true);
+      expect(hasCachedSubscription(rootKey)).toBe(true);
 
-      // Normal dispose path still prunes immediately once unwatched
-      reaction.unwatch(callback);
-      expect(hasReaction(countKey)).toBe(false);
-      expect(hasReaction(rootKey)).toBe(false);
+      // Terminal computed cells prune immediately once unused; roots persist.
+      unsubscribe();
+      expect(hasCachedSubscription(countKey)).toBe(false);
+      expect(hasCachedSubscription(rootKey)).toBe(true);
     });
 
-    it('should recreate swept reactions transparently on the next read', () => {
+    it('should recreate swept subscriptions transparently on the next read', () => {
       getSubscriptionValue(['sweep-count']);
-      sweepProvisionalReactions();
-      sweepProvisionalReactions();
-      expect(hasReaction(countKey)).toBe(false);
+      sweepProvisionalSubscriptions();
+      sweepProvisionalSubscriptions();
+      expect(hasCachedSubscription(countKey)).toBe(false);
+      expect(hasCachedSubscription(rootKey)).toBe(true);
 
       // Sweeping is safe: a later read (or subscribe) recreates and recomputes
       expect(getSubscriptionValue(['sweep-count'])).toBe(3);
-      expect(hasReaction(countKey)).toBe(true);
+      expect(hasCachedSubscription(countKey)).toBe(true);
     });
 
     it('should sweep via the runtime scheduler without manual sweeps or db updates', async () => {
       // A render-like read on an app that never dispatches afterwards
       getSubscriptionValue(['sweep-count']);
-      expect(hasReaction(countKey)).toBe(true);
-      expect(hasReaction(rootKey)).toBe(true);
+      expect(hasCachedSubscription(countKey)).toBe(true);
+      expect(hasCachedSubscription(rootKey)).toBe(true);
 
       // Let the self-scheduled sweep run its grace cycle and deletion cycle
       for (let i = 0; i < 3; i++) {
         await waitForAnimationFrame();
-        await waitForReaction();
+        await waitForSubscription();
       }
 
-      expect(hasReaction(countKey)).toBe(false);
-      expect(hasReaction(rootKey)).toBe(false);
+      expect(hasCachedSubscription(countKey)).toBe(false);
+      expect(hasCachedSubscription(rootKey)).toBe(true);
     });
 
-    it('should not sweep reactions that went live, via the runtime scheduler', async () => {
-      const reaction = getOrCreateReaction(['sweep-count']);
+    it('should not sweep subscriptions that went live, via the runtime scheduler', async () => {
+      const subscription = getOrCreateSubscription(['sweep-count'])!;
       const callback = () => { };
-      reaction.watch(callback);
+      const unsubscribe = subscribeToSubscription(subscription, callback);
 
       for (let i = 0; i < 3; i++) {
         await waitForAnimationFrame();
-        await waitForReaction();
+        await waitForSubscription();
       }
 
-      expect(hasReaction(countKey)).toBe(true);
-      expect(hasReaction(rootKey)).toBe(true);
+      expect(hasCachedSubscription(countKey)).toBe(true);
+      expect(hasCachedSubscription(rootKey)).toBe(true);
 
-      reaction.unwatch(callback);
+      unsubscribe();
+      expect(hasCachedSubscription(countKey)).toBe(false);
+      expect(hasCachedSubscription(rootKey)).toBe(true);
+    });
+
+    it('should renew the complete provisional dependency tree on a cache hit', () => {
+      expect(getSubscriptionValue(['sweep-lease-b'])).toBe(4);
+      sweepProvisionalSubscriptions();
+
+      // C reuses B while B and A are in their previous grace generation.
+      // Renewing only B would let the next sweep dispose A underneath it.
+      expect(getSubscriptionValue(['sweep-lease-c'])).toBe(5);
+      sweepProvisionalSubscriptions();
+
+      expect(hasCachedSubscription(JSON.stringify(['sweep-lease-a']))).toBe(true);
+      expect(hasCachedSubscription(JSON.stringify(['sweep-lease-b']))).toBe(true);
+      expect(hasCachedSubscription(JSON.stringify(['sweep-lease-c']))).toBe(true);
+
+      const subscription = getOrCreateSubscription(['sweep-lease-c'])!;
+      const unsubscribe = subscribeToSubscription(subscription, () => {});
+      expect(() => unsubscribe()).not.toThrow();
+      expect(hasCachedSubscription(JSON.stringify(['sweep-lease-a']))).toBe(false);
+      expect(hasCachedSubscription(JSON.stringify(['sweep-lease-b']))).toBe(false);
+      expect(hasCachedSubscription(JSON.stringify(['sweep-lease-c']))).toBe(false);
     });
   });
 
   describe('subscription key contract', () => {
+    it('should return null when the top-level handler is missing', () => {
+      expect(getOrCreateSubscription(['sweep-missing-top-level'])).toBeNull()
+    })
+
+    it('should reject handler overrides after a subscription was created', () => {
+      expect(getSubscriptionValue(['sweep-override'])).toBe(1)
+      expect(() => regSub('sweep-override', () => 2, () => [])).toThrow("Cannot register subscription 'sweep-override' while a cached query for that id exists")
+      expect(getSubscriptionValue(['sweep-override'])).toBe(1)
+    });
+
+    it('should construct a deep registered graph iteratively', () => {
+      const depth = 3000
+      regSub('sweep-deep-0', (value) => value, () => [['sweep-todos']])
+      for (let index = 1; index <= depth; index++) {
+        const previous = `sweep-deep-${index - 1}`
+        regSub(`sweep-deep-${index}`, (value) => value, () => [[previous]])
+      }
+
+      const tailKey = JSON.stringify([`sweep-deep-${depth}`])
+      expect(getSubscriptionValue([`sweep-deep-${depth}`])).toEqual([1, 2, 3])
+
+      // Targeted invalidation walks all cached parents iteratively.
+      expect(() => clearSubscriptionCache(rootKey)).not.toThrow()
+      expect(hasCachedSubscription(tailKey)).toBe(false)
+
+      const rebuiltTail = getOrCreateSubscription([`sweep-deep-${depth}`])!
+      const unsubscribe = subscribeToSubscription(rebuiltTail, () => {})
+      expect(() => unsubscribe()).not.toThrow()
+      expect(hasCachedSubscription(tailKey)).toBe(false)
+      clearSubscriptionCache()
+    });
+
+    it('should reject parameters on root subscriptions', () => {
+      expect(() => getOrCreateSubscription(['sweep-todos', 1])).toThrow("Root subscription 'sweep-todos' does not accept parameters")
+    });
+
+    it('should report circular and missing dependency graphs explicitly', () => {
+      expect(() => getOrCreateSubscription(['sweep-cycle-a'])).toThrow('Circular subscription dependency')
+      expect(() => getOrCreateSubscription(['sweep-missing-parent'])).toThrow("depends on missing subscription 'sweep-missing-child'")
+    });
+
+    it('should validate dependency handler output at runtime', () => {
+      expect(() => getOrCreateSubscription(['sweep-invalid-deps'])).toThrow('dependency handler must return an array')
+    });
+
     it('should flag params that do not survive JSON serialization', () => {
       expect(hasNonSerializableSubParam([new Map()])).toBe(true);
       expect(hasNonSerializableSubParam([new Set([1])])).toBe(true);

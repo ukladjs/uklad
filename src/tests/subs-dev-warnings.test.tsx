@@ -7,10 +7,10 @@
 jest.mock('../env', () => ({ IS_DEV: true }));
 
 import { renderHook } from '@testing-library/react';
-import { regSub, getOrCreateReaction } from '../subs';
+import { regSub, getOrCreateSubscription } from '../subs';
 import { useSubscription } from '../hook';
 import { initAppDb } from '../db';
-import { clearReactions } from '../registrar';
+import { clearSubscriptionCache } from '../registrar';
 
 describe('Dev warnings for non-serializable subscription params', () => {
   regSub('warn-items');
@@ -24,24 +24,24 @@ describe('Dev warnings for non-serializable subscription params', () => {
 
   beforeEach(() => {
     initAppDb({ 'warn-items': [] });
-    clearReactions();
+    clearSubscriptionCache();
     clearTestLogCalls();
   });
 
   it('should warn on first use of a non-serializable param', () => {
-    getOrCreateReaction(['warn-by-query', new Set([1])]);
+    getOrCreateSubscription(['warn-by-query', new Set([1])]);
 
     expect(warnCallsContaining("subscription 'warn-by-query'")).toHaveLength(1);
   });
 
-  it('should warn even when the serialized key collides with a cached reaction', () => {
+  it('should warn even when the serialized key collides with a cached subscription', () => {
     // A safe param caches the key '["warn-by-filter",{}]'
-    const cached = getOrCreateReaction(['warn-by-filter', {}]);
+    const cached = getOrCreateSubscription(['warn-by-filter', {}]);
     expect(warnCallsContaining("subscription 'warn-by-filter'")).toHaveLength(0);
 
-    // A Map also serializes to {} -> cache hit returns the wrong reaction;
+    // A Map also serializes to {} -> cache hit returns the wrong subscription;
     // validation must run before the lookup so this still warns
-    const colliding = getOrCreateReaction(['warn-by-filter', new Map([['a', 1]])]);
+    const colliding = getOrCreateSubscription(['warn-by-filter', new Map([['a', 1]])]);
 
     expect(colliding).toBe(cached); // documents the collision behavior
     expect(warnCallsContaining("subscription 'warn-by-filter'")).toHaveLength(1);

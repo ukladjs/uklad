@@ -1,6 +1,6 @@
 {
   "name": "@flexsurfer/reflex",
-  "version": "0.1.25",
+  "version": "0.1.26",
   "description": "Reflex (Reflex.js) — re-frame-style reactive state management for React and React Native. Pure event handlers over one central app-db, derived subscriptions, isolated side effects. Built for AI agentic development.",
   "license": "MIT",
   "repository": {
@@ -23,6 +23,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "README.md",
     "LICENSE",
     "llms.txt",
@@ -37,7 +38,7 @@
     "test:ci": "jest --passWithNoTests --coverage --silent",
     "test:types": "tsc --noEmit -p tests/types/tsconfig.json",
     "test:types:dist": "tsc --noEmit -p tests/types/dist/tsconfig.json",
-    "prepublishOnly": "npm run test:ci && npm run test:types && npm run build && npm run test:types:dist"
+    "prepublishOnly": "npm run build && npm run test:ci && npm run test:types && npm run test:types:dist"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.0",

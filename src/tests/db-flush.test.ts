@@ -6,14 +6,15 @@
 import { regEvent } from '../events';
 import { dispatch } from '../router';
 import { initAppDb, getAppDb, updateAppDb, flushSubscriptions, getRenderDb } from '../db';
-import { regSub, getOrCreateReaction, getSubscriptionValue } from '../subs';
-import { clearReactions } from '../registrar';
-import { waitForScheduled, waitForAnimationFrame, waitForReaction } from './test-utils';
+import { regSub, getOrCreateSubscription, getSubscriptionValue } from '../subs';
+import { clearHandlers, clearSubscriptionCache, clearSubs } from '../registrar';
+import { getSubscriptionSnapshot, subscribeToSubscription } from '../subscription-runtime';
+import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './test-utils';
 import { produce } from 'immer';
 
 const waitForFlush = async () => {
   await waitForAnimationFrame();
-  await waitForReaction();
+  await waitForSubscription();
 };
 
 describe('Subscription flush', () => {
@@ -30,16 +31,46 @@ describe('Subscription flush', () => {
   });
 
   beforeEach(() => {
-    clearReactions();
+    clearSubscriptionCache();
     initAppDb({ 'flush-counter': 0, 'flush-other': 'unchanged' });
   });
 
   describe('db generation reads', () => {
-    it('should serve the last flushed generation between commit and flush', async () => {
-      const reaction = getOrCreateReaction(['flush-counter']);
+    it('should reject registry clearing while a mounted graph is active', () => {
+      const subscription = getOrCreateSubscription(['flush-counter'])!;
       const callback = jest.fn();
-      reaction.watch(callback);
-      expect(reaction.getSnapshot()).toBe(0);
+      const unsubscribe = subscribeToSubscription(subscription, callback);
+      expect(getSubscriptionSnapshot(subscription)).toBe(0);
+
+      expect(() => clearSubscriptionCache()).toThrow('Cannot clear subscriptions while a subscription graph is active');
+      expect(() => clearHandlers('sub')).toThrow('Cannot clear subscriptions while a subscription graph is active');
+      expect(() => clearSubs()).toThrow('Cannot clear subscriptions while a subscription graph is active');
+      initAppDb({ 'flush-counter': 2, 'flush-other': 'replacement' });
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(getSubscriptionSnapshot(subscription)).toBe(2);
+
+      unsubscribe();
+      expect(() => clearSubscriptionCache()).not.toThrow();
+    });
+
+    it('publishes a replaced app-db baseline to an already-active graph', () => {
+      const subscription = getOrCreateSubscription(['flush-double'])!;
+      const callback = jest.fn();
+      const unsubscribe = subscribeToSubscription(subscription, callback);
+      expect(getSubscriptionSnapshot(subscription)).toBe(0);
+
+      initAppDb({ 'flush-counter': 7, 'flush-other': 'replacement' });
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(getSubscriptionSnapshot(subscription)).toBe(14);
+      unsubscribe();
+    });
+
+    it('should serve the last flushed generation between commit and flush', async () => {
+      const subscription = getOrCreateSubscription(['flush-counter'])!;
+      const callback = jest.fn();
+      const unsubscribe = subscribeToSubscription(subscription, callback);
+      expect(getSubscriptionSnapshot(subscription)).toBe(0);
 
       dispatch(['flush-inc']);
       await waitForScheduled();
@@ -50,7 +81,7 @@ describe('Subscription flush', () => {
 
       // Every subscription read — cached or fresh — serves the flushed
       // generation, so nothing on screen can mix db versions
-      expect(reaction.getSnapshot()).toBe(0);
+      expect(getSubscriptionSnapshot(subscription)).toBe(0);
       expect(getSubscriptionValue(['flush-counter'])).toBe(0);
       expect(getSubscriptionValue(['flush-double'])).toBe(0);
       expect(callback).not.toHaveBeenCalled();
@@ -58,14 +89,14 @@ describe('Subscription flush', () => {
       await waitForFlush();
 
       expect(getRenderDb()['flush-counter']).toBe(1);
-      expect(reaction.getSnapshot()).toBe(1);
+      expect(getSubscriptionSnapshot(subscription)).toBe(1);
       expect(getSubscriptionValue(['flush-double'])).toBe(2);
-      expect(callback).toHaveBeenCalledWith(1);
+      expect(callback).toHaveBeenCalledTimes(1);
 
-      reaction.unwatch(callback);
+      unsubscribe();
     });
 
-    it('should serve current data to reactions created after the flush', async () => {
+    it('should serve current data to subscriptions created after the flush', async () => {
       dispatch(['flush-inc']);
       await waitForScheduled();
       await waitForFlush();
@@ -76,10 +107,10 @@ describe('Subscription flush', () => {
 
   describe('event coalescing', () => {
     it('should coalesce several events into a single flush and notification', async () => {
-      const reaction = getOrCreateReaction(['flush-double']);
+      const subscription = getOrCreateSubscription(['flush-double'])!;
       const callback = jest.fn();
-      reaction.watch(callback);
-      expect(reaction.getSnapshot()).toBe(0);
+      const unsubscribe = subscribeToSubscription(subscription, callback);
+      expect(getSubscriptionSnapshot(subscription)).toBe(0);
 
       dispatch(['flush-inc']);
       dispatch(['flush-inc']);
@@ -89,32 +120,34 @@ describe('Subscription flush', () => {
 
       // One notification with the final value, not one per event
       expect(callback).toHaveBeenCalledTimes(1);
-      expect(callback).toHaveBeenCalledWith(6);
+      expect(getSubscriptionSnapshot(subscription)).toBe(6);
 
-      reaction.unwatch(callback);
+      unsubscribe();
     });
   });
 
   describe('shallow top-level diff wake-up', () => {
     it('should not wake subscriptions whose root key kept its reference', async () => {
-      const counterReaction = getOrCreateReaction(['flush-counter']);
-      const otherReaction = getOrCreateReaction(['flush-other']);
+      const counterSubscription = getOrCreateSubscription(['flush-counter'])!;
+      const otherSubscription = getOrCreateSubscription(['flush-other'])!;
       const counterCallback = jest.fn();
       const otherCallback = jest.fn();
-      counterReaction.watch(counterCallback);
-      otherReaction.watch(otherCallback);
-      counterReaction.getSnapshot();
-      otherReaction.getSnapshot();
+      const unsubscribeCounter = subscribeToSubscription(counterSubscription, counterCallback);
+      const unsubscribeOther = subscribeToSubscription(otherSubscription, otherCallback);
+      getSubscriptionSnapshot(counterSubscription);
+      getSubscriptionSnapshot(otherSubscription);
 
       dispatch(['flush-inc']);
       await waitForScheduled();
       await waitForFlush();
 
-      expect(counterCallback).toHaveBeenCalledWith(1);
+      expect(counterCallback).toHaveBeenCalledTimes(1);
       expect(otherCallback).not.toHaveBeenCalled();
+      expect(getSubscriptionSnapshot(counterSubscription)).toBe(1);
+      expect(getSubscriptionSnapshot(otherSubscription)).toBe('unchanged');
 
-      counterReaction.unwatch(counterCallback);
-      otherReaction.unwatch(otherCallback);
+      unsubscribeCounter();
+      unsubscribeOther();
     });
 
     it('should not schedule anything when the handler leaves the db untouched', async () => {
@@ -129,49 +162,83 @@ describe('Subscription flush', () => {
     });
 
     it('should wake subscriptions when a top-level key is deleted', async () => {
-      const reaction = getOrCreateReaction(['flush-other']);
+      const subscription = getOrCreateSubscription(['flush-other'])!;
       const callback = jest.fn();
-      reaction.watch(callback);
-      expect(reaction.getSnapshot()).toBe('unchanged');
+      const unsubscribe = subscribeToSubscription(subscription, callback);
+      expect(getSubscriptionSnapshot(subscription)).toBe('unchanged');
 
       dispatch(['flush-del-other']);
       await waitForScheduled();
       await waitForFlush();
 
-      expect(callback).toHaveBeenCalledWith(undefined);
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(getSubscriptionSnapshot(subscription)).toBeUndefined();
 
-      reaction.unwatch(callback);
+      unsubscribe();
     });
   });
 
   describe('flushSubscriptions', () => {
     it('should be a no-op when nothing was committed since the last flush', () => {
-      const reaction = getOrCreateReaction(['flush-counter']);
+      const subscription = getOrCreateSubscription(['flush-counter'])!;
       const callback = jest.fn();
-      reaction.watch(callback);
-      reaction.getSnapshot();
+      const unsubscribe = subscribeToSubscription(subscription, callback);
+      getSubscriptionSnapshot(subscription);
 
-      flushSubscriptions(true);
+      flushSubscriptions();
 
       expect(callback).not.toHaveBeenCalled();
-      reaction.unwatch(callback);
+      unsubscribe();
     });
 
-    it('should recompute and notify synchronously when called with sync=true', () => {
-      const reaction = getOrCreateReaction(['flush-double']);
+    it('should recompute and notify synchronously when flushed directly', () => {
+      const subscription = getOrCreateSubscription(['flush-double'])!;
       const callback = jest.fn();
-      reaction.watch(callback);
-      expect(reaction.getSnapshot()).toBe(0);
+      const unsubscribe = subscribeToSubscription(subscription, callback);
+      expect(getSubscriptionSnapshot(subscription)).toBe(0);
 
       updateAppDb(produce(getAppDb(), (draft: any) => {
         draft['flush-counter'] = 5;
       }));
-      flushSubscriptions(true);
+      flushSubscriptions();
 
-      expect(callback).toHaveBeenCalledWith(10);
-      expect(reaction.getSnapshot()).toBe(10);
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(getSubscriptionSnapshot(subscription)).toBe(10);
 
-      reaction.unwatch(callback);
+      unsubscribe();
+    });
+
+    it('should guard renderDb before a reentrant direct flush can promote it', () => {
+      const subscription = getOrCreateSubscription(['flush-counter'])!;
+      let nestedError: Error | undefined;
+      let attempted = false;
+      const unsubscribe = subscribeToSubscription(subscription, () => {
+        if (attempted) return;
+        attempted = true;
+        updateAppDb(produce(getAppDb(), (draft: any) => {
+          draft['flush-counter'] = 5;
+        }));
+        try {
+          flushSubscriptions();
+        } catch (error: any) {
+          nestedError = error;
+        }
+      });
+      expect(getSubscriptionSnapshot(subscription)).toBe(0);
+
+      updateAppDb(produce(getAppDb(), (draft: any) => {
+        draft['flush-counter'] = 1;
+      }));
+      flushSubscriptions();
+
+      expect(nestedError?.message).toMatch(/publication is not allowed/);
+      expect(getRenderDb()['flush-counter']).toBe(1);
+      expect(getSubscriptionSnapshot(subscription)).toBe(1);
+
+      flushSubscriptions();
+      expect(getRenderDb()['flush-counter']).toBe(5);
+      expect(getSubscriptionSnapshot(subscription)).toBe(5);
+      unsubscribe();
     });
   });
 });

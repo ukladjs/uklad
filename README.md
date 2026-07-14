@@ -106,6 +106,10 @@ function Counter() {
 }
 ```
 
+### Subscription runtime
+
+Reflex settles changed subscription graphs in one DB-driven topological wave before notifying React. Active snapshots are cache-only, dormant reads are memoized pulls, equality cuts off downstream work, and computed nodes are evicted when their last consumer leaves. The runtime invariants and work budgets are documented in [`docs/subscription-runtime.md`](./docs/subscription-runtime.md).
+
 Side effects (HTTP, storage, timers, navigation) live in **effects/coeffects**, registered by id and emitted from event handlers as data — which is what keeps handlers pure, apps portable across web/mobile/desktop, and behavior verifiable by tools.
 
 ## 🎯 Why Reflex?

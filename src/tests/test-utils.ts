@@ -44,19 +44,19 @@ export const waitForAnimationFrame = async () => {
 };
 
 /**
- * Wait for reaction recomputation (which uses queueMicrotask)
+ * Wait for subscription recomputation (which uses queueMicrotask)
  */
-export const waitForReaction = async () => {
+export const waitForSubscription = async () => {
   await new Promise(resolve => queueMicrotask(() => resolve(undefined)));
 };
 
 /**
- * Wait for both event processing and reaction recomputation.
- * Use this when you need to ensure both the event queue and reactions have settled.
+ * Wait for both event processing and subscription recomputation.
+ * Use this when you need to ensure both the event queue and subscriptions have settled.
  */
-export const waitForEventAndReaction = async () => {
+export const waitForEventAndSubscription = async () => {
   await waitForScheduled();
-  await waitForReaction();
+  await waitForSubscription();
 };
 
 /**
@@ -67,4 +67,3 @@ export const createEventWithMeta = (eventId: string, meta: Record<string, any>):
   (event as any).meta = meta;
   return event;
 };
-

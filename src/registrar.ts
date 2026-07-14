@@ -1,6 +1,11 @@
 import type { Id, EventHandler, EffectHandler, CoEffectHandler, Interceptor, ErrorHandler, SubHandler, SubDepsHandler, SubConfig } from './types';
 import { consoleLog } from './loggers';
-import { Reaction } from './reaction';
+import {
+    assertSubscriptionsCanBeCleared,
+    inspectSubscription,
+    type SubscriptionDiagnostic,
+    type SubscriptionNode,
+} from './subscription-runtime';
 import { scheduleAfterRender } from './schedule';
 
 type Kind = 'event' | 'fx' | 'cofx' | 'sub' | 'subDeps' | 'error';
@@ -39,11 +44,17 @@ export function clearHandlers(): void;
 export function clearHandlers(kind: Kind): void;
 export function clearHandlers(kind: Kind, id: string): void;
 export function clearHandlers(kind?: Kind, id?: string): void {
+    if (kind == null || kind === 'sub' || kind === 'subDeps') assertSubscriptionsCanBeCleared();
+    clearHandlerEntries(kind, id);
+}
+
+function clearHandlerEntries(kind?: Kind, id?: string): void {
     if (kind == null) {
         for (const k in kindToIdToHandler) {
             kindToIdToHandler[k as Kind] = {};
         }
         clearRootSubSources();
+        clearSubscriptionCacheEntries();
     } else if (id == null) {
         if (!(kind in kindToIdToHandler)) {
             consoleLog('error', `[reflex] Unknown kind: ${kind}`);
@@ -53,12 +64,21 @@ export function clearHandlers(kind?: Kind, id?: string): void {
         if (kind === 'sub') {
             clearRootSubSources();
         }
+        if (kind === 'sub' || kind === 'subDeps') {
+            clearSubscriptionCacheEntries();
+        }
     } else {
+        if (!(kind in kindToIdToHandler)) {
+            consoleLog('error', `[reflex] Unknown kind: ${kind}`);
+            return;
+        }
         if (kindToIdToHandler[kind][id]) {
             delete kindToIdToHandler[kind][id];
         } else {
             consoleLog('warn', `[reflex] can't clear ${kind} handler for ${id}. Handler not found.`);
         }
+        if (kind === 'sub') clearRootSubSource(id);
+        if (kind === 'sub' || kind === 'subDeps') clearSubscriptionCacheEntriesForId(id);
     }
 }
 
@@ -66,51 +86,176 @@ export function hasHandler(kind: Kind, id: string): boolean {
     return !!kindToIdToHandler[kind][id];
 }
 
-// === Reactions Registry Functions ===
-const reactionsRegistry = new Map<string, Reaction<any>>();
+// === Root Subscription Source Registry Functions ===
+// Keep both directions so subscription creation can distinguish a root cell
+// without asking the engine-owned node for implementation details.
+const rootSubIdBySource = new Map<string, Id>();
+const rootSubSourceById = new Map<Id, string>();
+const rootSubscriptionKeys = new Set<string>();
 
-export function getReaction(key: string): Reaction<any> | undefined {
-    return reactionsRegistry.get(key);
+export function setRootSubSource(subId: Id, sourceKey: string): void {
+    const previousSource = rootSubSourceById.get(subId);
+    if (previousSource !== undefined && previousSource !== sourceKey
+        && rootSubIdBySource.get(previousSource) === subId) {
+        rootSubIdBySource.delete(previousSource);
+    }
+
+    const previousSubId = rootSubIdBySource.get(sourceKey);
+    if (previousSubId !== undefined && previousSubId !== subId) {
+        rootSubSourceById.delete(previousSubId);
+        rootSubscriptionKeys.delete(JSON.stringify([previousSubId]));
+    }
+
+    rootSubIdBySource.set(sourceKey, subId);
+    rootSubSourceById.set(subId, sourceKey);
+    rootSubscriptionKeys.add(JSON.stringify([subId]));
 }
 
-export function getReactions(): Map<string, Reaction<any>> | undefined {
-    return reactionsRegistry;
+export function getRootSubIdBySource(sourceKey: string): Id | undefined {
+    return rootSubIdBySource.get(sourceKey);
 }
 
-export function setReaction(key: string, reaction: Reaction<any>): void {
-    reactionsRegistry.set(key, reaction);
+export function getRootSubSourceById(subId: Id): string | undefined {
+    return rootSubSourceById.get(subId);
 }
 
-export function hasReaction(key: string): boolean {
-    return reactionsRegistry.has(key);
-}
-
-export function clearReactions(): void
-export function clearReactions(id: string): void
-export function clearReactions(id?: string): void {
-    if (id == null) {
-        reactionsRegistry.clear();
-        provisionalCurrent.clear();
-        provisionalPrevious.clear();
-    } else {
-        reactionsRegistry.delete(id);
-        provisionalCurrent.delete(id);
-        provisionalPrevious.delete(id);
+export function clearRootSubSource(subId: Id): void {
+    const sourceKey = rootSubSourceById.get(subId);
+    rootSubSourceById.delete(subId);
+    rootSubscriptionKeys.delete(JSON.stringify([subId]));
+    if (sourceKey !== undefined && rootSubIdBySource.get(sourceKey) === subId) {
+        rootSubIdBySource.delete(sourceKey);
     }
 }
 
-// === Provisional Reactions ===
-// Reactions are created lazily during render (getSnapshot), but a render may
+export function clearRootSubSources(): void {
+    rootSubIdBySource.clear();
+    rootSubSourceById.clear();
+    rootSubscriptionKeys.clear();
+}
+
+// === Subscription Cache Functions ===
+interface SubscriptionEntry {
+    node: SubscriptionNode<any>;
+    subId: Id;
+    dependencyKeys: string[];
+}
+
+const subscriptionCache = new Map<string, SubscriptionEntry>();
+// Reverse cache edges make invalidation proportional to the removed subgraph.
+// They are registry metadata only; the runtime still owns all live DAG edges.
+const dependentSubscriptionKeys = new Map<string, Set<string>>();
+
+export function getCachedSubscription(key: string): SubscriptionNode<any> | undefined {
+    return subscriptionCache.get(key)?.node;
+}
+
+export function cacheSubscription(key: string, subscription: SubscriptionNode<any>, subId: Id, dependencyKeys: string[]): void {
+    if (subscriptionCache.has(key)) {
+        throw new Error(`[reflex] Subscription cache invariant violated: duplicate canonical key ${key}.`);
+    }
+    subscriptionCache.set(key, { node: subscription, subId, dependencyKeys });
+    for (const dependencyKey of new Set(dependencyKeys)) {
+        let dependents = dependentSubscriptionKeys.get(dependencyKey);
+        if (!dependents) {
+            dependents = new Set();
+            dependentSubscriptionKeys.set(dependencyKey, dependents);
+        }
+        dependents.add(key);
+    }
+}
+
+export function hasCachedSubscription(key: string): boolean {
+    return subscriptionCache.has(key);
+}
+
+/** Public, cache-only diagnostics for devtools. Runtime nodes stay opaque. */
+export function getSubscriptionDiagnostics(): readonly SubscriptionDiagnostic[] {
+    return Array.from(subscriptionCache.values(), entry => inspectSubscription(entry.node));
+}
+
+export function hasCachedSubscriptionForId(subId: Id): boolean {
+    for (const entry of subscriptionCache.values()) {
+        if (entry.subId === subId) return true;
+    }
+    return false;
+}
+
+export function clearSubscriptionCache(): void
+export function clearSubscriptionCache(key: string): void
+export function clearSubscriptionCache(key?: string): void {
+    assertSubscriptionsCanBeCleared();
+    clearSubscriptionCacheEntries(key);
+}
+
+function clearSubscriptionCacheEntries(key?: string): void {
+    if (key == null) {
+        subscriptionCache.clear();
+        dependentSubscriptionKeys.clear();
+        provisionalCurrent.clear();
+        provisionalPrevious.clear();
+    } else {
+        removeSubscriptionCacheClosure([key]);
+    }
+}
+
+function clearSubscriptionCacheEntriesForId(subId: Id): void {
+    const keys: string[] = [];
+    for (const [key, entry] of subscriptionCache) {
+        if (entry.subId === subId) keys.push(key);
+    }
+    removeSubscriptionCacheClosure(keys);
+}
+
+/** Remove keys and every cached parent that transitively depends on them. */
+function removeSubscriptionCacheClosure(initialKeys: Iterable<string>): void {
+    const keysToRemove = new Set<string>();
+    const stack = Array.from(initialKeys);
+    while (stack.length > 0) {
+        const key = stack.pop()!;
+        if (keysToRemove.has(key)) continue;
+        keysToRemove.add(key);
+        for (const dependentKey of dependentSubscriptionKeys.get(key) ?? []) {
+            stack.push(dependentKey);
+        }
+    }
+
+    for (const key of keysToRemove) {
+        const entry = subscriptionCache.get(key);
+        if (entry) {
+            subscriptionCache.delete(key);
+            for (const dependencyKey of new Set(entry.dependencyKeys)) {
+                const dependents = dependentSubscriptionKeys.get(dependencyKey);
+                dependents?.delete(key);
+                if (dependents?.size === 0) dependentSubscriptionKeys.delete(dependencyKey);
+            }
+        }
+        dependentSubscriptionKeys.delete(key);
+        provisionalCurrent.delete(key);
+        provisionalPrevious.delete(key);
+    }
+}
+
+/** Remove an unused computed cell without evicting persistent root cells. */
+export function evictCachedSubscription(key: string, subscription: SubscriptionNode<any>): void {
+    if (rootSubscriptionKeys.has(key) || subscriptionCache.get(key)?.node !== subscription) {
+        return;
+    }
+    removeSubscriptionCacheClosure([key]);
+}
+
+// === Provisional Subscriptions ===
+// Subscription nodes are created lazily during render (getSnapshot), but a render may
 // never commit (concurrent rendering, StrictMode, Suspense). Entries that
 // were never watched or depended on cannot be disposed through the normal
 // unwatch path, so they are tracked here and swept after surviving one full
 // sweep cycle without going live. The sweep schedules itself from
-// markProvisionalReaction, independent of db updates, so entries created by
+// markProvisionalSubscription, independent of db updates, so entries created by
 // an aborted render on an otherwise idle app are still cleaned up. Sweeping
-// is always safe: a late subscriber re-creates the reaction through
-// getOrCreateReaction at the cost of a recompute.
-let provisionalCurrent = new Set<string>();
-let provisionalPrevious = new Set<string>();
+// is always safe: a late subscriber re-creates the subscription through
+// getOrCreateSubscription at the cost of a recompute.
+let provisionalCurrent = new Map<string, SubscriptionNode<any>>();
+let provisionalPrevious = new Map<string, SubscriptionNode<any>>();
 let sweepScheduled = false;
 
 function scheduleProvisionalSweep(): void {
@@ -118,54 +263,75 @@ function scheduleProvisionalSweep(): void {
     sweepScheduled = true;
     scheduleAfterRender(() => {
         sweepScheduled = false;
-        sweepProvisionalReactions();
+        sweepProvisionalSubscriptions();
     });
 }
 
-export function markProvisionalReaction(key: string): void {
-    provisionalCurrent.add(key);
+export function markProvisionalSubscription(key: string, subscription: SubscriptionNode<any>): void {
+    // Canonical root cells are the db wake-up anchors and remain registered
+    // even while nothing currently observes them.
+    if (rootSubscriptionKeys.has(key)) return;
+    provisionalCurrent.set(key, subscription);
     scheduleProvisionalSweep();
 }
 
-export function unmarkProvisionalReaction(key: string): void {
-    provisionalCurrent.delete(key);
-    provisionalPrevious.delete(key);
+export function unmarkProvisionalSubscription(key: string, subscription: SubscriptionNode<any>): void {
+    if (provisionalCurrent.get(key) === subscription) provisionalCurrent.delete(key);
+    if (provisionalPrevious.get(key) === subscription) provisionalPrevious.delete(key);
 }
 
-export function sweepProvisionalReactions(): void {
-    for (const key of provisionalPrevious) {
-        const reaction = reactionsRegistry.get(key);
-        if (reaction && !reaction.isAlive) {
-            reactionsRegistry.delete(key);
+/** Renew the complete dormant dependency component reached from a cache hit. */
+export function renewProvisionalSubscriptionTree(rootKey: string): void {
+    const stack = [rootKey];
+    const visited = new Set<string>();
+    let renewed = false;
+    while (stack.length > 0) {
+        const key = stack.pop()!;
+        if (visited.has(key)) continue;
+        visited.add(key);
+        const entry = subscriptionCache.get(key);
+        if (!entry) continue;
+        const isCurrent = provisionalCurrent.get(key) === entry.node;
+        const isPrevious = provisionalPrevious.get(key) === entry.node;
+        if (!isCurrent && !isPrevious) continue;
+        if (isPrevious) {
+            provisionalPrevious.delete(key);
+            provisionalCurrent.set(key, entry.node);
+            renewed = true;
+        }
+        for (const dependencyKey of entry.dependencyKeys) stack.push(dependencyKey);
+    }
+    if (renewed) scheduleProvisionalSweep();
+}
+
+export function sweepProvisionalSubscriptions(): void {
+    const expiredKeys: string[] = [];
+    for (const [key, subscription] of provisionalPrevious) {
+        if (subscriptionCache.get(key)?.node === subscription) {
+            expiredKeys.push(key);
         }
     }
+    removeSubscriptionCacheClosure(expiredKeys);
     provisionalPrevious = provisionalCurrent;
-    provisionalCurrent = new Set();
+    provisionalCurrent = new Map();
     // Freshly promoted entries need one more cycle to be deleted
     if (provisionalPrevious.size > 0) {
         scheduleProvisionalSweep();
     }
 }
 
-// === Root Subscription Source Registry Functions ===
-const rootSubIdBySource = new Map<string, Id>();
-
-export function setRootSubSource(subId: Id, sourceKey: string): void {
-    rootSubIdBySource.set(sourceKey, subId);
-}
-
-export function getRootSubIdBySource(sourceKey: string): Id | undefined {
-    return rootSubIdBySource.get(sourceKey);
-}
-
-export function clearRootSubSources(): void {
-    rootSubIdBySource.clear();
-}
-
 export function clearSubs(): void {
-    clearReactions();
-    clearHandlers('sub');
-    clearHandlers('subDeps');
+    clearSubscriptionCache();
+    clearHandlerEntries('sub');
+    clearHandlerEntries('subDeps');
+    clearSubConfigs();
+}
+
+/** @internal HMR immediately remounts the owning React tree after disposal. */
+export function clearSubsForHotReload(): void {
+    clearSubscriptionCacheEntries();
+    clearHandlerEntries('sub');
+    clearHandlerEntries('subDeps');
     clearSubConfigs();
 }
 
@@ -221,7 +387,7 @@ export function clearSubConfigs(subId?: Id): void {
 
 export function clearAllRegistries(): void {
     clearHandlers();
-    clearReactions();
+    clearSubscriptionCache();
     clearInterceptors();
     clearSubConfigs();
 }

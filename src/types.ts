@@ -4,7 +4,22 @@ export type Db<T = Record<string, any>> = T;
 
 export type Id = string;
 export type EventVector = [Id, ...any[]];
-export type EventHandler<T = DefaultAppDb, P extends readonly any[] = any[]> = (coeffects: CoEffects<T>, ...params: P) => Effects | void;
+export type EventHandler<T = DefaultAppDb, P extends readonly any[] = any[]> = (
+  coeffects: CoEffects<T>,
+  ...params: P
+) => Effects | void;
+
+/**
+ * Explicit event-registration metadata.
+ *
+ * Prefer this options object when an event needs coeffects or interceptors.
+ * The positional array overloads remain available for backward compatibility,
+ * but an empty positional array cannot describe its intent on its own.
+ */
+export interface EventRegistrationOptions<T = DefaultAppDb> {
+  coeffects?: ReadonlyArray<readonly [id: Id] | readonly [id: Id, value: unknown]>;
+  interceptors?: ReadonlyArray<Interceptor<T>>;
+}
 
 /**
  * Opt-in typed app db shape. Empty by default — augment it from app code so
@@ -70,7 +85,9 @@ export interface SubPayloads {}
 
 /** Params tuple declared for event id K, or `any[]` when K isn't declared. */
 export type EventParams<K extends Id> = K extends keyof EventPayloads
-  ? (EventPayloads[K] extends readonly any[] ? EventPayloads[K] : never)
+  ? EventPayloads[K] extends readonly any[]
+    ? EventPayloads[K]
+    : never
   : any[];
 
 /**
@@ -79,7 +96,11 @@ export type EventParams<K extends Id> = K extends keyof EventPayloads
  */
 export type DispatchVector = [keyof EventPayloads] extends [never]
   ? EventVector
-  : { [K in keyof EventPayloads]: EventPayloads[K] extends readonly any[] ? [K, ...EventPayloads[K]] : never }[keyof EventPayloads];
+  : {
+      [K in keyof EventPayloads]: EventPayloads[K] extends readonly any[]
+        ? [K, ...EventPayloads[K]]
+        : never;
+    }[keyof EventPayloads];
 
 /**
  * Opt-in typed payload map for effects. Empty by default — augment it from
@@ -105,25 +126,31 @@ export type DispatchVector = [keyof EventPayloads] extends [never]
 export interface EffectPayloads {}
 
 type BuiltinEffectPayloads = {
-  'dispatch': DispatchVector;
+  dispatch: DispatchVector;
   'dispatch-later': DispatchLaterEffect;
 };
 
 type AllEffectPayloads = Omit<EffectPayloads, keyof BuiltinEffectPayloads> & BuiltinEffectPayloads;
 
 /** Payload declared for effect id K (built-ins included), or `any`. */
-export type EffectParams<K extends Id> = K extends keyof AllEffectPayloads ? AllEffectPayloads[K] : any;
+export type EffectParams<K extends Id> = K extends keyof AllEffectPayloads
+  ? AllEffectPayloads[K]
+  : any;
 
 type EffectTupleFor<K, P> = [P] extends [void] ? [K] : undefined extends P ? [K, P?] : [K, P];
 
 /** Params tuple declared for sub id K, or `any[]` when K isn't declared. */
 export type SubParams<K extends Id> = K extends keyof SubPayloads
-  ? (SubPayloads[K] extends { params: infer P extends readonly any[] } ? P : [])
+  ? SubPayloads[K] extends { params: infer P extends readonly any[] }
+    ? P
+    : []
   : any[];
 
 /** Result type declared for sub id K, or `Fallback` when K isn't declared. */
 export type SubResult<K extends Id, Fallback = any> = K extends keyof SubPayloads
-  ? (SubPayloads[K] extends { result: infer R } ? R : Fallback)
+  ? SubPayloads[K] extends { result: infer R }
+    ? R
+    : Fallback
   : Fallback;
 
 /**
@@ -156,9 +183,24 @@ export interface TraceErrorTag {
 
 export type EffectHandler<V = any> = (value: V) => void;
 
-export type CoEffectHandler<T = DefaultAppDb> = (coeffects: CoEffects<T>, value?: any) => CoEffects<T>;
+export type CoEffectHandler<T = DefaultAppDb> = (
+  coeffects: CoEffects<T>,
+  value?: any,
+) => CoEffects<T>;
 
-export type ErrorHandler = (originalError: Error, reflexError: Error & { data: any }) => void;
+export interface InterceptorErrorData {
+  direction: InterceptorDirection;
+  interceptor: string;
+  originalError: Error;
+  eventV?: EventVector;
+}
+
+export interface ReflexError extends Error {
+  data: InterceptorErrorData;
+  cause: Error;
+}
+
+export type ErrorHandler = (originalError: Error, reflexError: ReflexError) => void;
 
 export type SubVector = [Id, ...any[]];
 
@@ -177,7 +219,9 @@ export interface SubConfig {
  */
 export type Effects = ([keyof EffectPayloads] extends [never]
   ? [Id, any?]
-  : { [K in keyof AllEffectPayloads]: EffectTupleFor<K, AllEffectPayloads[K]> }[keyof AllEffectPayloads])[];
+  : {
+      [K in keyof AllEffectPayloads]: EffectTupleFor<K, AllEffectPayloads[K]>;
+    }[keyof AllEffectPayloads])[];
 
 export interface DispatchLaterEffect {
   ms: number;

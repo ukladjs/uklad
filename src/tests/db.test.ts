@@ -38,7 +38,7 @@ describe('Immer integration', () => {
     initAppDb({
       counter: 0,
       todos: [],
-      user: { name: 'John', email: 'john@example.com' }
+      user: { name: 'John', email: 'john@example.com' },
     });
   });
 
@@ -116,12 +116,12 @@ describe('Type-safe AppDB', () => {
         counter: 42,
         todos: [
           { id: 1, text: 'Learn TypeScript', completed: false },
-          { id: 2, text: 'Write tests', completed: true }
+          { id: 2, text: 'Write tests', completed: true },
         ],
         user: {
           name: 'Alice',
-          email: 'alice@example.com'
-        }
+          email: 'alice@example.com',
+        },
       };
 
       initAppDb<TestAppState>(initialState);
@@ -129,7 +129,7 @@ describe('Type-safe AppDB', () => {
 
       expect(db.counter).toBe(42);
       expect(db.todos).toHaveLength(2);
-      expect(db.todos[0].text).toBe('Learn TypeScript');
+      expect(db.todos[0]!.text).toBe('Learn TypeScript');
       expect(db.user.name).toBe('Alice');
       expect(db.user.email).toBe('alice@example.com');
     });
@@ -137,7 +137,7 @@ describe('Type-safe AppDB', () => {
     test('should work with simple state interface', () => {
       const simpleState: SimpleState = {
         count: 100,
-        message: 'Hello World'
+        message: 'Hello World',
       };
 
       initAppDb<SimpleState>(simpleState);
@@ -155,8 +155,8 @@ describe('Type-safe AppDB', () => {
         todos: [],
         user: {
           name: 'Bob',
-          email: 'bob@example.com'
-        }
+          email: 'bob@example.com',
+        },
       };
       initAppDb<TestAppState>(initialState);
     });
@@ -175,23 +175,23 @@ describe('Type-safe AppDB', () => {
         draft.todos.push({
           id: 1,
           text: 'First todo',
-          completed: false
+          completed: false,
         });
       });
 
       updateAppDb<TestAppState>((draft) => {
-        draft.todos[0].completed = true;
+        draft.todos[0]!.completed = true;
         draft.todos.push({
           id: 2,
           text: 'Second todo',
-          completed: false
+          completed: false,
         });
       });
 
       const db = getAppDb<TestAppState>();
       expect(db.todos).toHaveLength(2);
-      expect(db.todos[0].completed).toBe(true);
-      expect(db.todos[1].text).toBe('Second todo');
+      expect(db.todos[0]!.completed).toBe(true);
+      expect(db.todos[1]!.text).toBe('Second todo');
     });
 
     test('should handle type-safe nested object updates', () => {
@@ -199,11 +199,11 @@ describe('Type-safe AppDB', () => {
         draft.user.name = 'Charlie';
         draft.user.profile = {
           age: 25,
-          location: 'New York'
+          location: 'New York',
         };
         draft.user.preferences = {
           theme: 'dark',
-          notifications: true
+          notifications: true,
         };
       });
 
@@ -245,7 +245,7 @@ describe('Type-safe AppDB', () => {
       const testState: TestAppState = {
         counter: 1,
         todos: [],
-        user: { name: 'Test', email: 'test@example.com' }
+        user: { name: 'Test', email: 'test@example.com' },
       };
       initAppDb<TestAppState>(testState);
       const db1 = getAppDb<TestAppState>();
@@ -254,7 +254,7 @@ describe('Type-safe AppDB', () => {
       // Then switch to SimpleState
       const simpleState: SimpleState = {
         count: 200,
-        message: 'New state'
+        message: 'New state',
       };
       initAppDb<SimpleState>(simpleState);
       const db2 = getAppDb<SimpleState>();
@@ -267,7 +267,7 @@ describe('Type-safe AppDB', () => {
       initAppDb<TestAppState>({
         counter: 5,
         todos: [],
-        user: { name: 'Minimal', email: 'min@example.com' }
+        user: { name: 'Minimal', email: 'min@example.com' },
       });
 
       const db = getAppDb<TestAppState>();
@@ -281,10 +281,10 @@ describe('Type-safe AppDB', () => {
   describe('Backward compatibility', () => {
     test('should maintain backward compatibility without type parameters', () => {
       // This should work exactly as before
-      initAppDb({ 
-        anything: 'goes', 
-        counter: 123, 
-        nested: { prop: 'value' } 
+      initAppDb({
+        anything: 'goes',
+        counter: 123,
+        nested: { prop: 'value' },
       });
 
       const db = getAppDb();
@@ -320,4 +320,4 @@ describe('Type-safe AppDB', () => {
       expect(db.typed).toBe(true);
     });
   });
-}); 
+});

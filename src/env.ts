@@ -3,11 +3,13 @@
  */
 
 // Type declarations for cross-platform environments
-declare const process: {
-  env?: {
-    NODE_ENV?: string;
-  };
-} | undefined;
+declare const process:
+  | {
+      env?: {
+        NODE_ENV?: string;
+      };
+    }
+  | undefined;
 
 declare const __DEV__: boolean | undefined;
 
@@ -19,4 +21,4 @@ export const IS_DEV: boolean =
   // Node.js check
   (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') ||
   // React Native / bundler check
-  (typeof __DEV__ !== 'undefined' && __DEV__)
+  (typeof __DEV__ !== 'undefined' && __DEV__);

@@ -9,10 +9,13 @@ declare global {
     group: any[][];
     groupEnd: any[][];
   };
-  
+
   function clearTestLogCalls(): void;
-  
-  function expectLogCall(level: 'log' | 'warn' | 'error' | 'debug' | 'group' | 'groupEnd', ...expectedArgs: any[]): boolean;
+
+  function expectLogCall(
+    level: 'log' | 'warn' | 'error' | 'debug' | 'group' | 'groupEnd',
+    ...expectedArgs: any[]
+  ): boolean;
 }
 
-export {}; 
+export {};

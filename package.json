@@ -3,6 +3,16 @@
   "version": "0.1.26",
   "description": "Reflex (Reflex.js) — re-frame-style reactive state management for React and React Native. Pure event handlers over one central app-db, derived subscriptions, isolated side effects. Built for AI agentic development.",
   "license": "MIT",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^22.18.0 || >=24.11.0",
+      "onFail": "error"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/flexsurfer/reflex.git"
@@ -10,14 +20,14 @@
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
+  "types": "dist/index.d.mts",
   "exports": {
     "import": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
     },
     "require": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/index.d.cts",
       "default": "./dist/index.cjs"
     }
   },
@@ -30,33 +40,55 @@
     "templates"
   ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:compat": "tsc6 --noEmit -p tsconfig.json",
+    "typecheck:test": "tsc --noEmit -p tsconfig.jest.json",
+    "lint": "eslint --max-warnings=0 src tests jest.config.mjs jest.setup.js tsdown.config.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run typecheck:compat && npm run typecheck:test && npm run build && npm run test:clean && npm run test:types && npm run test:types:dist && npm run test:types:package && npm run test:types:compat",
+    "dev": "tsdown --watch",
     "test": "jest --passWithNoTests",
     "test:clean": "jest --passWithNoTests --silent",
     "test:watch": "jest --passWithNoTests --watch",
     "test:ci": "jest --passWithNoTests --coverage --silent",
     "test:types": "tsc --noEmit -p tests/types/tsconfig.json",
     "test:types:dist": "tsc --noEmit -p tests/types/dist/tsconfig.json",
-    "prepublishOnly": "npm run build && npm run test:ci && npm run test:types && npm run test:types:dist"
+    "test:types:package": "tsc --noEmit -p tests/types/package/tsconfig.json",
+    "test:types:compat": "tsc6 --noEmit -p tests/types/package/tsconfig.json",
+    "test:types:legacy": "node tests/legacy-consumer/run.js",
+    "prepublishOnly": "npm run check && npm run test:ci"
   },
   "devDependencies": {
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/react": "^16.3.0",
-    "@types/jest": "^29.5.14",
-    "@types/react": "^18.0.0",
-    "jest": "^30.0.0",
-    "jest-environment-jsdom": "^30.0.2",
-    "ts-jest": "^29.4.0",
-    "tsup": "^7.2.0",
-    "typescript": "^5.3.0"
+    "@arethetypeswrong/core": "0.18.5",
+    "@eslint/js": "10.0.1",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.2",
+    "@types/jest": "30.0.0",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "eslint": "10.7.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.7.0",
+    "jest": "30.4.2",
+    "jest-environment-jsdom": "30.4.1",
+    "prettier": "3.9.5",
+    "publint": "0.3.21",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "ts-jest": "29.4.11",
+    "tsdown": "0.22.7",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "8.64.0"
   },
   "dependencies": {
     "fast-deep-equal": "^3.1.3",
-    "immer": "^10.1.1"
+    "immer": "^11.1.11"
   },
   "peerDependencies": {
-    "react": ">=18.0.0"
+    "react": "^18.0.0 || ^19.0.0"
   },
   "keywords": [
     "reflex",

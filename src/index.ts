@@ -7,25 +7,46 @@ export { regEvent, regEventErrorHandler, defaultErrorHandler } from './events';
 export { regSub, getSubscriptionValue } from './subs';
 export { regEffect, DISPATCH_LATER, DISPATCH } from './fx';
 export { regCoeffect, NOW, RANDOM } from './cofx';
-export { regGlobalInterceptor, getGlobalInterceptors, clearGlobalInterceptors, setGlobalEqualityCheck, getGlobalEqualityCheck } from './settings';
+export {
+  regGlobalInterceptor,
+  getGlobalInterceptors,
+  clearGlobalInterceptors,
+  setGlobalEqualityCheck,
+  getGlobalEqualityCheck,
+} from './settings';
 export { shallowEqual } from './equality';
-export { getHandler, getHandlers, clearHandlers, clearSubscriptionCache, clearSubs, getSubscriptionDiagnostics } from './registrar';
+export {
+  getHandler,
+  getHandlers,
+  clearHandlers,
+  clearSubscriptionCache,
+  clearSubs,
+  getSubscriptionDiagnostics,
+} from './registrar';
 
 export { dispatch, dispatchSync } from './router';
-export { debounceAndDispatch, throttleAndDispatch } from './debounce'
+export { debounceAndDispatch, throttleAndDispatch } from './debounce';
 export { useSubscription } from './hook';
-export { 
-  registerHotReloadCallback, 
-  triggerHotReload, 
-  clearHotReloadCallbacks, 
-  useHotReload, 
-  useHotReloadKey, 
-  setupSubsHotReload, 
-  HotReloadWrapper 
+export {
+  registerHotReloadCallback,
+  triggerHotReload,
+  clearHotReloadCallbacks,
+  useHotReload,
+  useHotReloadKey,
+  setupSubsHotReload,
+  HotReloadWrapper,
 } from './hot-reload';
 
 // Trace
-export { enableTracing, disableTracing, registerTraceCb, removeTraceCb, enableTracePrint } from './trace';
+export {
+  enableTracing,
+  disableTracing,
+  registerTraceCallback,
+  registerTraceCb,
+  removeTraceCallback,
+  removeTraceCb,
+  enableTracePrint,
+} from './trace';
 
 // Re-export types for external use
 export type {
@@ -42,6 +63,8 @@ export type {
   Context,
   DispatchLaterEffect,
   ErrorHandler,
+  InterceptorErrorData,
+  ReflexError,
   SubConfig,
   EqualityCheckFn,
   // Opt-in typed payload maps (augment EventPayloads/SubPayloads/EffectPayloads/AppDb from app code)
@@ -56,6 +79,9 @@ export type {
   SubParams,
   SubResult,
   SubscribeVector,
-  TraceErrorTag
+  TraceErrorTag,
+  EventRegistrationOptions,
 } from './types';
 export type { SubscriptionDiagnostic } from './subscription-runtime';
+export type { Trace, TraceCallback, TraceId, TraceOptions, TraceTags } from './trace';
+export type { HandlerByKind, HandlerKind, HandlerRegistry, RegistryHandler } from './registrar';

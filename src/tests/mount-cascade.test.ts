@@ -18,19 +18,27 @@ describe('Mount recompute cascades', () => {
   let sortCount = 0;
 
   regSub('mc-items');
-  regSub('mc-sorted', (items: any[]) => {
-    sortCount++;
-    return [...(items || [])].sort((a, b) => a.order - b.order);
-  }, () => [['mc-items']]);
-  regSub('mc-by-id', (sorted: any[], id: number) => {
-    return sorted.find((item) => item.id === id);
-  }, () => [['mc-sorted']]);
+  regSub(
+    'mc-sorted',
+    (items: any[]) => {
+      sortCount++;
+      return [...(items || [])].sort((a, b) => a.order - b.order);
+    },
+    () => [['mc-items']],
+  );
+  regSub(
+    'mc-by-id',
+    (sorted: any[], id: number) => {
+      return sorted.find((item) => item.id === id);
+    },
+    () => [['mc-sorted']],
+  );
 
   beforeEach(() => {
     clearSubscriptionCache();
     sortCount = 0;
     initAppDb({
-      'mc-items': Array.from({ length: ROWS }, (_, i) => ({ id: i, order: ROWS - i }))
+      'mc-items': Array.from({ length: ROWS }, (_, i) => ({ id: i, order: ROWS - i })),
     });
   });
 
@@ -50,7 +58,7 @@ describe('Mount recompute cascades', () => {
 
     // The sorted list was computed once, not once per mounting row
     expect(sortCount).toBe(1);
-    expect(callbacks.every(callback => callback.mock.calls.length === 0)).toBe(true);
+    expect(callbacks.every((callback) => callback.mock.calls.length === 0)).toBe(true);
 
     for (const cleanup of cleanups) cleanup();
   });
@@ -79,7 +87,7 @@ describe('Mount recompute cascades', () => {
     // One re-sort for the whole flush, regardless of subscriber count
     expect(sortCount).toBe(2);
     expect(callbacks[0]).toHaveBeenCalledTimes(1);
-    expect(callbacks.slice(1).every(callback => callback.mock.calls.length === 0)).toBe(true);
+    expect(callbacks.slice(1).every((callback) => callback.mock.calls.length === 0)).toBe(true);
 
     for (const cleanup of cleanups) cleanup();
   });

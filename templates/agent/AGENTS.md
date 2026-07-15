@@ -5,6 +5,7 @@ This project uses `@flexsurfer/reflex`. In this project, "Reflex" always means `
 Preferred setup: install the Reflex Agent Toolkit plugin. It owns the Reflex skill, MCP configuration, and context-efficient workflows. This file is only a small fallback router for agents that read `AGENTS.md`.
 
 For Reflex state-management work:
+
 - Use the Reflex skill from the Reflex Agent Toolkit plugin if it is available.
 - Start source orientation with `APP_MAP.md` when present, then `*-ids.ts`, `db.ts`, and payload maps; use exact-match `rg` for one handler, subscription, or call site.
 - When MCP tools are available, call `app_status` after a cold start or reload. Then use only advertised tools: typed `get_handlers`, path-scoped `get_app_state`, filtered `get_active_subs` for mounted subscriptions, `dispatch_event`, and filtered `get_traces`/one `get_trace`.

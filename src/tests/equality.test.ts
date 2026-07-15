@@ -43,8 +43,18 @@ describe('shallowEqual', () => {
 
 describe('per-sub equalityCheck config with shallowEqual', () => {
   regSub('se-items');
-  regSub('se-mapped', (items: number[]) => items.map((n) => n), () => [['se-items']], { equalityCheck: shallowEqual });
-  regSub('se-always-changed', (items: number[]) => items.length, () => [['se-items']], { equalityCheck: () => false });
+  regSub(
+    'se-mapped',
+    (items: number[]) => items.map((n) => n),
+    () => [['se-items']],
+    { equalityCheck: shallowEqual },
+  );
+  regSub(
+    'se-always-changed',
+    (items: number[]) => items.length,
+    () => [['se-items']],
+    { equalityCheck: () => false },
+  );
 
   beforeEach(() => {
     clearSubscriptionCache();

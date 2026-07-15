@@ -1,20 +1,62 @@
-import { regSub, getOrCreateSubscription, getSubscriptionValue, hasNonSerializableSubParam } from '../subs';
+import {
+  regSub,
+  getOrCreateSubscription,
+  getSubscriptionValue,
+  hasNonSerializableSubParam,
+} from '../subs';
 import { initAppDb } from '../db';
-import { hasCachedSubscription, clearSubscriptionCache, sweepProvisionalSubscriptions } from '../registrar';
+import {
+  hasCachedSubscription,
+  clearSubscriptionCache,
+  getSubConfig,
+  sweepProvisionalSubscriptions,
+} from '../registrar';
 import { subscribeToSubscription } from '../subscription-runtime';
 import { waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('Subscription registry lifecycle', () => {
   regSub('sweep-todos');
-  regSub('sweep-count', (todos) => (todos || []).length, () => [['sweep-todos']]);
-  regSub('sweep-cycle-a', (value) => value, () => [['sweep-cycle-b']]);
-  regSub('sweep-cycle-b', (value) => value, () => [['sweep-cycle-a']]);
-  regSub('sweep-missing-parent', (value) => value, () => [['sweep-missing-child']]);
+  regSub(
+    'sweep-count',
+    (todos) => (todos || []).length,
+    () => [['sweep-todos']],
+  );
+  regSub(
+    'sweep-cycle-a',
+    (value) => value,
+    () => [['sweep-cycle-b']],
+  );
+  regSub(
+    'sweep-cycle-b',
+    (value) => value,
+    () => [['sweep-cycle-a']],
+  );
+  regSub(
+    'sweep-missing-parent',
+    (value) => value,
+    () => [['sweep-missing-child']],
+  );
   regSub('sweep-invalid-deps', () => 1, (() => undefined) as any);
-  regSub('sweep-lease-a', (todos) => todos.length, () => [['sweep-todos']]);
-  regSub('sweep-lease-b', (value) => value + 1, () => [['sweep-lease-a']]);
-  regSub('sweep-lease-c', (value) => value + 1, () => [['sweep-lease-b']]);
-  regSub('sweep-override', () => 1, () => []);
+  regSub(
+    'sweep-lease-a',
+    (todos) => todos.length,
+    () => [['sweep-todos']],
+  );
+  regSub(
+    'sweep-lease-b',
+    (value) => value + 1,
+    () => [['sweep-lease-a']],
+  );
+  regSub(
+    'sweep-lease-c',
+    (value) => value + 1,
+    () => [['sweep-lease-b']],
+  );
+  regSub(
+    'sweep-override',
+    () => 1,
+    () => [],
+  );
 
   const countKey = JSON.stringify(['sweep-count']);
   const rootKey = JSON.stringify(['sweep-todos']);
@@ -49,7 +91,7 @@ describe('Subscription registry lifecycle', () => {
       sweepProvisionalSubscriptions();
 
       // Late subscribe (e.g. a slow-committing render) inside the grace cycle
-      const callback = () => { };
+      const callback = () => {};
       const unsubscribe = subscribeToSubscription(subscription, callback);
 
       sweepProvisionalSubscriptions();
@@ -93,7 +135,7 @@ describe('Subscription registry lifecycle', () => {
 
     it('should not sweep subscriptions that went live, via the runtime scheduler', async () => {
       const subscription = getOrCreateSubscription(['sweep-count'])!;
-      const callback = () => { };
+      const callback = () => {};
       const unsubscribe = subscribeToSubscription(subscription, callback);
 
       for (let i = 0; i < 3; i++) {
@@ -132,49 +174,99 @@ describe('Subscription registry lifecycle', () => {
   });
 
   describe('subscription key contract', () => {
+    it('replaces an omitted config instead of retaining stale registration metadata', () => {
+      regSub(
+        'sweep-config-reset',
+        () => 1,
+        () => [],
+        { equalityCheck: Object.is },
+      );
+      expect(getSubConfig('sweep-config-reset')?.equalityCheck).toBe(Object.is);
+
+      regSub(
+        'sweep-config-reset',
+        () => 2,
+        () => [],
+      );
+
+      expect(getSubConfig('sweep-config-reset')).toBeUndefined();
+      expect(getSubscriptionValue(['sweep-config-reset'])).toBe(2);
+    });
+
+    it('supports an empty string as an explicit root source key', () => {
+      regSub('sweep-empty-source', '');
+      initAppDb({ '': 'empty-key-value' });
+
+      expect(getSubscriptionValue(['sweep-empty-source'])).toBe('empty-key-value');
+    });
+
     it('should return null when the top-level handler is missing', () => {
-      expect(getOrCreateSubscription(['sweep-missing-top-level'])).toBeNull()
-    })
+      expect(getOrCreateSubscription(['sweep-missing-top-level'])).toBeNull();
+    });
 
     it('should reject handler overrides after a subscription was created', () => {
-      expect(getSubscriptionValue(['sweep-override'])).toBe(1)
-      expect(() => regSub('sweep-override', () => 2, () => [])).toThrow("Cannot register subscription 'sweep-override' while a cached query for that id exists")
-      expect(getSubscriptionValue(['sweep-override'])).toBe(1)
+      expect(getSubscriptionValue(['sweep-override'])).toBe(1);
+      expect(() =>
+        regSub(
+          'sweep-override',
+          () => 2,
+          () => [],
+        ),
+      ).toThrow(
+        "Cannot register subscription 'sweep-override' while a cached query for that id exists",
+      );
+      expect(getSubscriptionValue(['sweep-override'])).toBe(1);
     });
 
     it('should construct a deep registered graph iteratively', () => {
-      const depth = 3000
-      regSub('sweep-deep-0', (value) => value, () => [['sweep-todos']])
+      const depth = 3000;
+      regSub(
+        'sweep-deep-0',
+        (value) => value,
+        () => [['sweep-todos']],
+      );
       for (let index = 1; index <= depth; index++) {
-        const previous = `sweep-deep-${index - 1}`
-        regSub(`sweep-deep-${index}`, (value) => value, () => [[previous]])
+        const previous = `sweep-deep-${index - 1}`;
+        regSub(
+          `sweep-deep-${index}`,
+          (value) => value,
+          () => [[previous]],
+        );
       }
 
-      const tailKey = JSON.stringify([`sweep-deep-${depth}`])
-      expect(getSubscriptionValue([`sweep-deep-${depth}`])).toEqual([1, 2, 3])
+      const tailKey = JSON.stringify([`sweep-deep-${depth}`]);
+      expect(getSubscriptionValue([`sweep-deep-${depth}`])).toEqual([1, 2, 3]);
 
       // Targeted invalidation walks all cached parents iteratively.
-      expect(() => clearSubscriptionCache(rootKey)).not.toThrow()
-      expect(hasCachedSubscription(tailKey)).toBe(false)
+      expect(() => clearSubscriptionCache(rootKey)).not.toThrow();
+      expect(hasCachedSubscription(tailKey)).toBe(false);
 
-      const rebuiltTail = getOrCreateSubscription([`sweep-deep-${depth}`])!
-      const unsubscribe = subscribeToSubscription(rebuiltTail, () => {})
-      expect(() => unsubscribe()).not.toThrow()
-      expect(hasCachedSubscription(tailKey)).toBe(false)
-      clearSubscriptionCache()
+      const rebuiltTail = getOrCreateSubscription([`sweep-deep-${depth}`])!;
+      const unsubscribe = subscribeToSubscription(rebuiltTail, () => {});
+      expect(() => unsubscribe()).not.toThrow();
+      expect(hasCachedSubscription(tailKey)).toBe(false);
+      clearSubscriptionCache();
     });
 
     it('should reject parameters on root subscriptions', () => {
-      expect(() => getOrCreateSubscription(['sweep-todos', 1])).toThrow("Root subscription 'sweep-todos' does not accept parameters")
+      expect(() => getOrCreateSubscription(['sweep-todos', 1])).toThrow(
+        "Root subscription 'sweep-todos' does not accept parameters",
+      );
     });
 
     it('should report circular and missing dependency graphs explicitly', () => {
-      expect(() => getOrCreateSubscription(['sweep-cycle-a'])).toThrow('Circular subscription dependency')
-      expect(() => getOrCreateSubscription(['sweep-missing-parent'])).toThrow("depends on missing subscription 'sweep-missing-child'")
+      expect(() => getOrCreateSubscription(['sweep-cycle-a'])).toThrow(
+        'Circular subscription dependency',
+      );
+      expect(() => getOrCreateSubscription(['sweep-missing-parent'])).toThrow(
+        "depends on missing subscription 'sweep-missing-child'",
+      );
     });
 
     it('should validate dependency handler output at runtime', () => {
-      expect(() => getOrCreateSubscription(['sweep-invalid-deps'])).toThrow('dependency handler must return an array')
+      expect(() => getOrCreateSubscription(['sweep-invalid-deps'])).toThrow(
+        'dependency handler must return an array',
+      );
     });
 
     it('should flag params that do not survive JSON serialization', () => {

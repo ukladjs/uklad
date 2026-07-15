@@ -7,27 +7,27 @@ const testLogCalls = {
   error: [],
   debug: [],
   group: [],
-  groupEnd: []
+  groupEnd: [],
 };
 
 // Mock the loggers module before any imports
 jest.doMock('./src/loggers', () => {
   const originalModule = jest.requireActual('./src/loggers');
-  
+
   return {
     ...originalModule,
     consoleLog: (level, ...args) => {
       testLogCalls[level].push(args);
     },
     setLoggers: originalModule.setLoggers,
-    getLoggers: originalModule.getLoggers
+    getLoggers: originalModule.getLoggers,
   };
 });
 
 // Make test log calls available globally for test assertions
 global.getTestLogCalls = () => ({ ...testLogCalls });
 global.clearTestLogCalls = () => {
-  Object.keys(testLogCalls).forEach(level => {
+  Object.keys(testLogCalls).forEach((level) => {
     testLogCalls[level].length = 0;
   });
 };
@@ -35,28 +35,34 @@ global.clearTestLogCalls = () => {
 // Helper function for tests to assert log calls
 global.expectLogCall = (level, ...expectedArgs) => {
   const calls = testLogCalls[level];
-  const matchingCall = calls.find(call => {
+  const matchingCall = calls.find((call) => {
     if (call.length !== expectedArgs.length) {
       return false;
     }
-    
+
     return call.every((arg, index) => {
-      if (typeof expectedArgs[index] === 'object' && expectedArgs[index] && expectedArgs[index].asymmetricMatch) {
+      if (
+        typeof expectedArgs[index] === 'object' &&
+        expectedArgs[index] &&
+        expectedArgs[index].asymmetricMatch
+      ) {
         // Handle jest matchers like expect.any(Error)
         return expectedArgs[index].asymmetricMatch(arg);
       }
-      
+
       // Deep equality check for arrays and objects
       if (Array.isArray(expectedArgs[index]) && Array.isArray(arg)) {
         return JSON.stringify(arg) === JSON.stringify(expectedArgs[index]);
       }
-      
+
       return arg === expectedArgs[index];
     });
   });
-  
+
   if (!matchingCall) {
-    throw new Error(`Expected ${level} call with args: ${JSON.stringify(expectedArgs)}\nActual calls: ${JSON.stringify(calls)}`);
+    throw new Error(
+      `Expected ${level} call with args: ${JSON.stringify(expectedArgs)}\nActual calls: ${JSON.stringify(calls)}`,
+    );
   }
   return true;
 };
@@ -67,4 +73,4 @@ beforeEach(() => {
 });
 
 // Global test timeout
-jest.setTimeout(10000); 
+jest.setTimeout(10000);

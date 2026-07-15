@@ -18,11 +18,15 @@ import {
   debounceAndDispatch,
   throttleAndDispatch,
   getAppDb,
-  initAppDb
+  initAppDb,
 } from '../../src/index';
-import type { CoEffects } from '../../src/index';
+import type { CoEffects, EventRegistrationOptions } from '../../src/index';
 
-interface Todo { id: number; title: string; done: boolean }
+interface Todo {
+  id: number;
+  title: string;
+  done: boolean;
+}
 
 declare module '../../src/types' {
   interface EventPayloads {
@@ -39,7 +43,7 @@ declare module '../../src/types' {
     'ui/scroll-top': void;
     // Accidental built-in declarations are ignored: built-ins keep their
     // reserved payload contracts.
-    'dispatch': number;
+    dispatch: number;
     'dispatch-later': string;
   }
   interface AppDb {
@@ -83,41 +87,61 @@ dispatchSync(['todos/add', 42]);
 regEvent('todos/add', ({ draftDb }, title) => {
   const _title: string = title;
   const _first: string | undefined = draftDb.todos[0]?.title;
-  void _title; void _first;
+  void _title;
+  void _first;
 });
 
-// @ts-expect-error unknown db key is rejected once AppDb is augmented
-regEvent('app/init', ({ draftDb }) => { draftDb.nope = 1; });
+const registrationOptions: EventRegistrationOptions = {
+  coeffects: [['now']],
+  interceptors: [{ id: 'typed-options', before: (context) => context }],
+};
+regEvent('app/init', () => undefined, registrationOptions);
+
+regEvent('app/init', ({ draftDb }) => {
+  // @ts-expect-error unknown db key is rejected once AppDb is augmented
+  draftDb.nope = 1;
+});
 
 // @ts-expect-error handler params must match the declared payload
-regEvent('todos/add', (_cofx, title: number) => { void title; });
+regEvent('todos/add', (_cofx, title: number) => {
+  void title;
+});
 
 // undeclared ids stay permissive, so internal/bridge events keep working
-regEvent('not-in-map', (_cofx, anything: number) => { void anything; });
+regEvent('not-in-map', (_cofx, anything: number) => {
+  void anything;
+});
 
 // a custom db type via inline coeffects annotation still combines with
 // payload inference
-interface LegacyDb { anything: string }
+interface LegacyDb {
+  anything: string;
+}
 regEvent('todos/toggle', ({ draftDb }: CoEffects<LegacyDb>, id) => {
   const _id: number = id;
   const _s: string = draftDb.anything;
-  void _id; void _s;
+  void _id;
+  void _s;
 });
 
 // legacy explicit-db-generic call keeps compiling (params become untyped)
-regEvent<LegacyDb>('todos/add', ({ draftDb }, whatever) => { void draftDb; void whatever; });
+regEvent<LegacyDb>('todos/add', ({ draftDb }, whatever) => {
+  void draftDb;
+  void whatever;
+});
 
 // ---- effects returned from handlers ----------------------------------
 
 // declared effect ids with matching payloads, including the built-in
 // dispatch effects whose event vectors are checked against EventPayloads
 regEvent('todos/add', ({ draftDb }, title) => {
-  void draftDb; void title;
+  void draftDb;
+  void title;
   return [
     ['storage/set-todos', []],
     ['ui/scroll-top'],
     ['dispatch', ['todos/toggle', 1]],
-    ['dispatch-later', { ms: 100, dispatch: ['app/init'] }]
+    ['dispatch-later', { ms: 100, dispatch: ['app/init'] }],
   ];
 });
 
@@ -146,9 +170,13 @@ regEffect('storage/set-todos', (todos) => {
   void _t;
 });
 // @ts-expect-error handler param must match the declared payload
-regEffect('storage/set-todos', (n: number) => { void n; });
+regEffect('storage/set-todos', (n: number) => {
+  void n;
+});
 // undeclared ids stay permissive
-regEffect('undeclared-effect', (anything: number) => { void anything; });
+regEffect('undeclared-effect', (anything: number) => {
+  void anything;
+});
 
 // ---- getAppDb / initAppDb --------------------------------------------
 
@@ -196,10 +224,22 @@ getSubscriptionValue(['subs/typo']);
 // ---- regSub ----------------------------------------------------------
 
 // computeFn result is checked against the declared sub result
-regSub('todos/all', (): Todo[] => [], () => []);
-// @ts-expect-error computeFn result must match the declared sub result
-regSub('todos/all', (): number => 42, () => []);
+regSub(
+  'todos/all',
+  (): Todo[] => [],
+  () => [],
+);
+regSub(
+  'todos/all',
+  // @ts-expect-error computeFn result must match the declared sub result
+  (): number => 42,
+  () => [],
+);
 
 // root subs and undeclared ids keep working
 regSub('some-root');
-regSub<Todo[]>('legacy-sorted', () => [] as Todo[], () => []);
+regSub<Todo[]>(
+  'legacy-sorted',
+  () => [] as Todo[],
+  () => [],
+);

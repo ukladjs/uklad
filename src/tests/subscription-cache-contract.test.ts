@@ -3,7 +3,11 @@ import { dispatch } from '../router';
 import { initAppDb } from '../db';
 import { clearHandlers, clearSubscriptionCache, clearSubsForHotReload } from '../registrar';
 import { getOrCreateSubscription, getSubscriptionValue, regSub } from '../subs';
-import { getSubscriptionSnapshot, readSubscription, subscribeToSubscription } from '../subscription-runtime';
+import {
+  getSubscriptionSnapshot,
+  readSubscription,
+  subscribeToSubscription,
+} from '../subscription-runtime';
 import { waitForAnimationFrame, waitForSubscription, waitForScheduled } from './test-utils';
 
 const waitForFlush = async () => {
@@ -17,32 +21,78 @@ let selectedRuns = 0;
 
 describe('Subscription cache contract', () => {
   regSub('cache-items');
-  regSub('cache-count', (items: number[]) => (items || []).length, () => [['cache-items']]);
-  regSub('cache-even-items', (items: number[]) => (items || []).filter((item) => item % 2 === 0), () => [['cache-items']]);
-  regSub('cache-even-count', (items: number[]) => items.length, () => [['cache-even-items']]);
+  regSub(
+    'cache-count',
+    (items: number[]) => (items || []).length,
+    () => [['cache-items']],
+  );
+  regSub(
+    'cache-even-items',
+    (items: number[]) => (items || []).filter((item) => item % 2 === 0),
+    () => [['cache-items']],
+  );
+  regSub(
+    'cache-even-count',
+    (items: number[]) => items.length,
+    () => [['cache-even-items']],
+  );
   regSub('cache-revive-source');
-  regSub('cache-revive-double', (value: number) => value * 2, () => [['cache-revive-source']]);
-  regSub('cache-default-mapped', (items: number[]) => {
-    mappedRuns++;
-    return items.map(item => item);
-  }, () => [['cache-items']]);
-  regSub('cache-default-length', (items: number[]) => {
-    lengthRuns++;
-    return items.length;
-  }, () => [['cache-default-mapped']]);
+  regSub(
+    'cache-revive-double',
+    (value: number) => value * 2,
+    () => [['cache-revive-source']],
+  );
+  regSub(
+    'cache-default-mapped',
+    (items: number[]) => {
+      mappedRuns++;
+      return items.map((item) => item);
+    },
+    () => [['cache-items']],
+  );
+  regSub(
+    'cache-default-length',
+    (items: number[]) => {
+      lengthRuns++;
+      return items.length;
+    },
+    () => [['cache-default-mapped']],
+  );
   regSub('cache-selected');
-  regSub('cache-selected-value', (selected: string | undefined) => {
-    selectedRuns++;
-    return selected;
-  }, () => [['cache-selected']]);
+  regSub(
+    'cache-selected-value',
+    (selected: string | undefined) => {
+      selectedRuns++;
+      return selected;
+    },
+    () => [['cache-selected']],
+  );
   regSub('cache-shared-source');
-  regSub('cache-shared-dependency', (value: number) => value * 2, () => [['cache-shared-source']]);
-  regSub('cache-dormant-parent', (value: number) => value + 1, () => [['cache-shared-dependency']]);
-  regSub('cache-live-sibling', (value: number) => value + 10, () => [['cache-shared-dependency']]);
-  regSub('cache-param-select', (value: number, offset: number) => value + offset,
-    () => [['cache-shared-source']]);
-  regSub('cache-param-parent', (value: number, offset: number) => value * 10,
-    (offset: number) => [['cache-param-select', offset]]);
+  regSub(
+    'cache-shared-dependency',
+    (value: number) => value * 2,
+    () => [['cache-shared-source']],
+  );
+  regSub(
+    'cache-dormant-parent',
+    (value: number) => value + 1,
+    () => [['cache-shared-dependency']],
+  );
+  regSub(
+    'cache-live-sibling',
+    (value: number) => value + 10,
+    () => [['cache-shared-dependency']],
+  );
+  regSub(
+    'cache-param-select',
+    (value: number, offset: number) => value + offset,
+    () => [['cache-shared-source']],
+  );
+  regSub(
+    'cache-param-parent',
+    (value: number) => value * 10,
+    (offset: number) => [['cache-param-select', offset]],
+  );
 
   regEvent('cache-add-item', ({ draftDb }, item: number) => {
     draftDb['cache-items'].push(item);
@@ -225,21 +275,31 @@ describe('Subscription cache contract', () => {
     const sourceId = 'cache-clear-handler-source';
     const derivedId = 'cache-clear-handler-derived';
     regSub(sourceId);
-    regSub(derivedId, (value: number) => value * 2, () => [[sourceId]]);
+    regSub(
+      derivedId,
+      (value: number) => value * 2,
+      () => [[sourceId]],
+    );
     initAppDb({ [sourceId]: 2 });
     expect(getSubscriptionValue([derivedId])).toBe(4);
 
     clearHandlers('sub', sourceId);
     initAppDb({ [sourceId]: 3 });
 
-    expect(() => getSubscriptionValue([derivedId])).toThrow(`depends on missing subscription '${sourceId}'`);
+    expect(() => getSubscriptionValue([derivedId])).toThrow(
+      `depends on missing subscription '${sourceId}'`,
+    );
   });
 
   it('does not let an old HMR cleanup evict a replacement graph', () => {
     const sourceId = 'cache-hmr-source';
     const derivedId = 'cache-hmr-derived';
     regSub(sourceId);
-    regSub(derivedId, (value: number) => value * 2, () => [[sourceId]]);
+    regSub(
+      derivedId,
+      (value: number) => value * 2,
+      () => [[sourceId]],
+    );
     initAppDb({ [sourceId]: 1 });
 
     const oldSubscription = getOrCreateSubscription([derivedId])!;
@@ -248,7 +308,11 @@ describe('Subscription cache contract', () => {
 
     clearSubsForHotReload();
     regSub(sourceId);
-    regSub(derivedId, (value: number) => value * 3, () => [[sourceId]]);
+    regSub(
+      derivedId,
+      (value: number) => value * 3,
+      () => [[sourceId]],
+    );
     const replacement = getOrCreateSubscription([derivedId])!;
     const unsubscribeReplacement = subscribeToSubscription(replacement, () => {});
     expect(getSubscriptionSnapshot(replacement)).toBe(3);

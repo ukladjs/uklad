@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": false,
+    "noEmit": true,
+    "types": []
+  },
+  "include": ["./consumer-node10.ts"]
+}

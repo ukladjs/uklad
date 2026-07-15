@@ -3,7 +3,14 @@
  * These check if the value is actually a draft before calling the immer functions
  */
 
-import { isDraft, original as immerOriginal, current as immerCurrent, enableMapSet as immerEnableMapSet } from 'immer';
+import {
+  isDraft,
+  original as immerOriginal,
+  current as immerCurrent,
+  enableMapSet as immerEnableMapSet,
+  enablePatches as immerEnablePatches,
+} from 'immer';
+import type { Draft } from 'immer';
 import { setGlobalEqualityCheck, getGlobalEqualityCheck } from './settings';
 import isEqual from 'fast-deep-equal';
 import isEqualEs6 from 'fast-deep-equal/es6/index.js';
@@ -14,7 +21,7 @@ import isEqualEs6 from 'fast-deep-equal/es6/index.js';
  * otherwise returns the value as-is
  */
 export function original<T>(value: T): T {
-  return isDraft(value) ? immerOriginal(value)! : value;
+  return isDraft(value) ? (immerOriginal(value as Draft<T>)! as T) : value;
 }
 
 /**
@@ -23,7 +30,7 @@ export function original<T>(value: T): T {
  * otherwise returns the value as-is
  */
 export function current<T>(value: T): T {
-  return isDraft(value) ? immerCurrent(value) : value;
+  return isDraft(value) ? (immerCurrent(value as Draft<T>) as T) : value;
 }
 
 /**
@@ -39,4 +46,12 @@ export function enableMapSet(): void {
   if (getGlobalEqualityCheck() === isEqual) {
     setGlobalEqualityCheck(isEqualEs6);
   }
+}
+
+let patchesPluginEnabled = false;
+
+export function ensurePatchesEnabled(): void {
+  if (patchesPluginEnabled) return;
+  immerEnablePatches();
+  patchesPluginEnabled = true;
 }

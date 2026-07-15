@@ -1,16 +1,15 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Node",
+    "target": "ES2022",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
     "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": false,
     "noEmit": true,
     "types": [],
-    "baseUrl": ".",
     "paths": {
-      "@flexsurfer/reflex": ["../../../dist/index.d.ts"]
+      "@flexsurfer/reflex": ["../../../dist/index.d.mts"]
     }
   },
   "include": ["./*.ts"]

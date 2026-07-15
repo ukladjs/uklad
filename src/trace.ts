@@ -1,135 +1,137 @@
 import { consoleLog } from './loggers';
 
-type TraceID = number;
+export type TraceId = number;
+export type TraceTags = Record<string, unknown>;
 
-interface TraceOpts {
-    operation?: string;
-    opType?: string;
-    tags?: Record<string, any>;
-    childOf?: TraceID;
+export interface TraceOptions {
+  operation?: string;
+  opType?: string;
+  tags?: TraceTags;
+  childOf?: TraceId;
 }
 
-interface Trace extends TraceOpts {
-    id: TraceID;
-    start: number;
-    end?: number;
-    duration?: number;
+export interface Trace extends TraceOptions {
+  id: TraceId;
+  start: number;
+  end?: number;
+  duration?: number;
 }
 
-type TraceCallback = (traces: Trace[]) => void;
+export type TraceCallback = (traces: Trace[]) => void;
 
 let nextId = 1;
 let traces: Trace[] = [];
 let currentTrace: Trace | null = null;
 let traceEnabled = false;
-const traceCbs = new Map<string, TraceCallback>();
+const traceCallbacks = new Map<string, TraceCallback>();
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 const DEBOUNCE_TIME = 50;
 
-export function enableTracing() {
-    traceEnabled = true;
+export function enableTracing(): void {
+  traceEnabled = true;
 }
 
-export function disableTracing() {
-    traceEnabled = false;
-    resetTracing();
+export function disableTracing(): void {
+  traceEnabled = false;
+  resetTracing();
 }
 
-export function resetTracing() {
-    nextId = 1;
-    traces = [];
-    currentTrace = null;
-    if (debounceTimer) {
-        clearTimeout(debounceTimer);
-        debounceTimer = null;
-    }
+export function resetTracing(): void {
+  nextId = 1;
+  traces = [];
+  currentTrace = null;
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
 }
 
 export function isTraceEnabled(): boolean {
-    return traceEnabled;
+  return traceEnabled;
 }
 
-export function registerTraceCb(key: string, cb: TraceCallback): void {
-    if (!traceEnabled) {
-        consoleLog('warn', '[reflex] [trace] Tracing is not enabled; call enableTracing() before registering callbacks');
-        return;
+export function registerTraceCallback(key: string, callback: TraceCallback): void {
+  if (!traceEnabled) {
+    consoleLog(
+      'warn',
+      '[reflex] [trace] Tracing is not enabled; call enableTracing() before registering callbacks',
+    );
+    return;
+  }
+  traceCallbacks.set(key, callback);
+}
+
+export function removeTraceCallback(key: string): void {
+  traceCallbacks.delete(key);
+}
+
+/** @deprecated Use `registerTraceCallback`. */
+export const registerTraceCb: typeof registerTraceCallback = registerTraceCallback;
+
+/** @deprecated Use `removeTraceCallback`. */
+export const removeTraceCb: typeof removeTraceCallback = removeTraceCallback;
+
+function scheduleFlush(): void {
+  if (debounceTimer) return;
+  debounceTimer = setTimeout(() => {
+    const batch = traces.slice();
+    traces = [];
+    debounceTimer = null;
+    for (const callback of traceCallbacks.values()) {
+      try {
+        callback(batch);
+      } catch (e) {
+        consoleLog('warn', 'Error in trace callback', e);
+      }
     }
-    traceCbs.set(key, cb);
+  }, DEBOUNCE_TIME);
 }
 
-export function removeTraceCb(key: string): void {
-    traceCbs.delete(key);
-}
-
-function scheduleFlush() {
-    if (debounceTimer) return;
-    debounceTimer = setTimeout(() => {
-        const batch = traces.slice();
-        traces = [];
-        debounceTimer = null;
-        for (const cb of traceCbs.values()) {
-            try {
-                cb(batch);
-            } catch (e) {
-                consoleLog('warn', 'Error in trace callback', e);
-            }
-        }
-    }, DEBOUNCE_TIME);
-}
-
-export function startTrace(opts: TraceOpts): Trace {
-    const parentId = opts.childOf ?? currentTrace?.id ?? null;
-    const trace: Trace = {
-        id: nextId++,
-        operation: opts.operation,
-        opType: opts.opType,
-        tags: opts.tags ?? {},
-        childOf: parentId ?? undefined,
-        start: Date.now(),
-    };
-    return trace;
+export function startTrace(options: TraceOptions): Trace {
+  const parentId = options.childOf ?? currentTrace?.id;
+  const trace: Trace = {
+    id: nextId++,
+    ...(options.operation === undefined ? {} : { operation: options.operation }),
+    ...(options.opType === undefined ? {} : { opType: options.opType }),
+    tags: options.tags ?? {},
+    ...(parentId === undefined ? {} : { childOf: parentId }),
+    start: Date.now(),
+  };
+  return trace;
 }
 
 export function finishTrace(trace: Trace): void {
-    if (!traceEnabled) return;
-    trace.end = Date.now();
-    trace.duration = trace.end - trace.start;
-    traces.push(trace);
-    scheduleFlush();
+  if (!traceEnabled) return;
+  trace.end = Date.now();
+  trace.duration = trace.end - trace.start;
+  traces.push(trace);
+  scheduleFlush();
 }
 
-export function withTrace<T>(opts: TraceOpts, fn: () => T): T {
-    if (!traceEnabled) {
-        return fn();
-    }
-    const parent = currentTrace;
-    currentTrace = startTrace(opts);
-    try {
-        return fn();
-    } finally {
-        finishTrace(currentTrace);
-        currentTrace = parent;
-    }
+export function withTrace<T>(options: TraceOptions, fn: () => T): T {
+  if (!traceEnabled) {
+    return fn();
+  }
+  const parent = currentTrace;
+  currentTrace = startTrace(options);
+  try {
+    return fn();
+  } finally {
+    finishTrace(currentTrace);
+    currentTrace = parent;
+  }
 }
 
-export function mergeTrace(update: { tags?: Record<string, any>;[key: string]: any; }): void {
-    if (!traceEnabled || !currentTrace) {
-        return;
-    }
-    if (update.tags) {
-        currentTrace.tags = { ...currentTrace.tags, ...update.tags };
-    }
-
-    for (const k of Object.keys(update)) {
-        if (k !== 'tags') {
-            (currentTrace as any)[k] = update[k];
-        }
-    }
+export function mergeTrace(update: { tags: TraceTags }): void {
+  if (!traceEnabled || !currentTrace) {
+    return;
+  }
+  currentTrace.tags = { ...currentTrace.tags, ...update.tags };
 }
 
-export function enableTracePrint() {
-    registerTraceCb('reflex-default-tracer', (traces) => {
-        console.log('%c[reflex] [trace] ', 'font-weight: bold; color: blue;', traces)
-    })
+export function enableTracePrint(): void {
+  registerTraceCallback('reflex-default-tracer', (traces) => {
+    consoleLog('log', '%c[reflex] [trace] ', 'font-weight: bold; color: blue;', traces);
+  });
 }

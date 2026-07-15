@@ -1,4 +1,9 @@
-import { enableTracing, disableTracing, registerTraceCb, removeTraceCb } from '../trace';
+import {
+  enableTracing,
+  disableTracing,
+  registerTraceCallback,
+  removeTraceCallback,
+} from '../trace';
 import { regEvent, regEventErrorHandler, defaultErrorHandler } from '../events';
 import { regEffect } from '../fx';
 import { dispatch } from '../router';
@@ -15,13 +20,13 @@ describe('Error tracing', () => {
   beforeAll(() => {
     initAppDb({});
     enableTracing();
-    registerTraceCb('trace-errors-test', (traces) => {
+    registerTraceCallback('trace-errors-test', (traces) => {
       collected.push(...traces);
     });
   });
 
   afterAll(() => {
-    removeTraceCb('trace-errors-test');
+    removeTraceCallback('trace-errors-test');
     disableTracing();
     regEventErrorHandler(defaultErrorHandler);
   });
@@ -31,7 +36,7 @@ describe('Error tracing', () => {
   });
 
   it('attaches handler exceptions to the event trace', async () => {
-    regEventErrorHandler(() => { }); // silent: keep the queue alive for other assertions
+    regEventErrorHandler(() => {}); // silent: keep the queue alive for other assertions
 
     regEvent('trace-boom', () => {
       throw new Error('boom!');
@@ -47,7 +52,7 @@ describe('Error tracing', () => {
       phase: 'handler',
       message: 'boom!',
       interceptor: 'fx-handler',
-      direction: 'before'
+      direction: 'before',
     });
     expect(trace.tags.error.eventV).toEqual(['trace-boom', 1, 2]);
     expect(typeof trace.tags.error.stack).toBe('string');
@@ -56,14 +61,16 @@ describe('Error tracing', () => {
   });
 
   it('attaches interceptor exceptions with the failing interceptor id', async () => {
-    regEventErrorHandler(() => { });
+    regEventErrorHandler(() => {});
 
-    regEvent('trace-interceptor-boom', () => { }, [{
-      id: 'exploding-interceptor',
-      after: () => {
-        throw new Error('interceptor failed');
-      }
-    }]);
+    regEvent('trace-interceptor-boom', () => {}, [
+      {
+        id: 'exploding-interceptor',
+        after: () => {
+          throw new Error('interceptor failed');
+        },
+      },
+    ]);
 
     dispatch(['trace-interceptor-boom']);
     await waitForScheduled();
@@ -74,7 +81,7 @@ describe('Error tracing', () => {
       phase: 'handler',
       message: 'interceptor failed',
       interceptor: 'exploding-interceptor',
-      direction: 'after'
+      direction: 'after',
     });
   });
 
@@ -92,7 +99,7 @@ describe('Error tracing', () => {
   });
 
   it('attaches failed effects to the event trace', async () => {
-    regEventErrorHandler(() => { });
+    regEventErrorHandler(() => {});
 
     regEffect('exploding-effect', () => {
       throw new Error('effect failed');
@@ -105,7 +112,11 @@ describe('Error tracing', () => {
 
     const trace = collected.find((t) => t.operation === 'with-bad-effect');
     expect(trace.tags.effectErrors).toEqual([
-      expect.objectContaining({ phase: 'effect', effect: 'exploding-effect', message: 'effect failed' })
+      expect.objectContaining({
+        phase: 'effect',
+        effect: 'exploding-effect',
+        message: 'effect failed',
+      }),
     ]);
     // The event itself did not throw, so there is no handler error tag
     expect(trace.tags.error).toBeUndefined();
@@ -143,7 +154,7 @@ describe('Queue purge reporting', () => {
     regEvent('purge-boom', () => {
       throw new Error('kaboom');
     });
-    regEvent('innocent', () => { });
+    regEvent('innocent', () => {});
 
     dispatch(['purge-boom']);
     dispatch(['innocent', 1]);
@@ -151,7 +162,7 @@ describe('Queue purge reporting', () => {
     await waitForScheduled();
 
     const purgeLog = getTestLogCalls().error.find(
-      (call) => typeof call[0] === 'string' && call[0].includes('event queue purged')
+      (call) => typeof call[0] === 'string' && call[0].includes('event queue purged'),
     );
     expect(purgeLog).toBeDefined();
     expect(purgeLog![0]).toContain("2 pending event(s) dropped because 'purge-boom' threw");

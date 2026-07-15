@@ -7,13 +7,13 @@ import type {
   Id,
   Interceptor,
   EventVector,
-  TraceErrorTag
+  TraceErrorTag,
 } from './types';
-import { dispatch } from './router';
 import { updateAppDb } from './db';
-import { getHandler, registerHandler } from './registrar';
+import { getHandler, registerHandler, registerSystemHandler } from './registrar';
 import { consoleLog } from './loggers';
 import { mergeTrace } from './trace';
+import { isEventVector } from './validation';
 
 // -- Registration -------------------------------------------------------
 
@@ -30,7 +30,6 @@ export function regEffect<K extends Id = Id>(id: K, handler: EffectHandler<Effec
 export const doFxInterceptor: Interceptor = {
   id: 'do-fx',
   after: (context: Context): Context => {
-    
     // newDb is only set once the event handler interceptor ran; committing an
     // unchanged db is a no-op inside updateAppDb (same reference).
     if (context.newDb !== undefined) {
@@ -38,43 +37,52 @@ export const doFxInterceptor: Interceptor = {
     }
 
     const effects = context.effects;
-    
+
     if (!Array.isArray(effects)) {
       consoleLog('warn', `[reflex] effects expects a vector, but was given ${typeof effects}`);
       return context;
     }
-  
+
     const effectErrors: TraceErrorTag[] = [];
 
-    effects.forEach((effect: unknown) => {
-
+    for (const effect of effects as unknown[]) {
       if (!effect) {
-        return;
+        continue;
       }
 
-      if (!Array.isArray(effect) || effect.length === 0 || effect.length > 2) {
+      if (
+        !Array.isArray(effect) ||
+        effect.length === 0 ||
+        effect.length > 2 ||
+        typeof effect[0] !== 'string'
+      ) {
         consoleLog('warn', `[reflex] invalid effect in effects:`, effect);
-        return;
+        continue;
       }
-      const [key, val] = effect;
+      const [key, value] = effect;
 
       const effectFn = getHandler(KIND, key) as EffectHandler | undefined;
       if (effectFn) {
         try {
-          effectFn(val);
-        } catch (error: any) {
+          effectFn(value);
+        } catch (error: unknown) {
           consoleLog('error', `[reflex] error in effects for ${key}:`, error);
           effectErrors.push({
             phase: 'effect',
             effect: key,
-            message: String(error?.message ?? error),
-            stack: typeof error?.stack === 'string' ? error.stack : undefined
+            message: error instanceof Error ? error.message : String(error),
+            ...(error instanceof Error && typeof error.stack === 'string'
+              ? { stack: error.stack }
+              : {}),
           });
         }
       } else {
-        consoleLog('warn', `[reflex] in 'effects' found ${key} which has no associated handler. Ignoring.`);
+        consoleLog(
+          'warn',
+          `[reflex] in 'effects' found ${key} which has no associated handler. Ignoring.`,
+        );
       }
-    });
+    }
 
     // Runs inside the event's withTrace scope, so failed effects land on the
     // event's own trace for devtools/MCP.
@@ -83,7 +91,7 @@ export const doFxInterceptor: Interceptor = {
     }
 
     return context;
-  }
+  },
 };
 
 // -- Constants ---------------------------------------------------------
@@ -93,10 +101,14 @@ export const DISPATCH = 'dispatch';
 
 // -- Built-in Effect Handlers ------------------------------------------
 
-function dispatchLater(effect: DispatchLaterEffect): void {
-  const { ms, dispatch: eventToDispatch } = effect;
+function dispatchLater(effect: unknown, dispatchEvent: (event: DispatchVector) => void): void {
+  if (typeof effect !== 'object' || effect === null) {
+    consoleLog('error', '[reflex] ignoring bad dispatch-later value:', effect);
+    return;
+  }
 
-  if (!Array.isArray(eventToDispatch) || typeof ms !== 'number') {
+  const { ms, dispatch: eventToDispatch } = effect as Partial<DispatchLaterEffect>;
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || !isEventVector(eventToDispatch)) {
     consoleLog('error', '[reflex] ignoring bad dispatch-later value:', effect);
     return;
   }
@@ -106,17 +118,28 @@ function dispatchLater(effect: DispatchLaterEffect): void {
   }
   // Cast: effect payloads are untyped at runtime; DispatchVector only narrows
   // for app code that augments EventPayloads.
-  setTimeout(() => dispatch(eventToDispatch as DispatchVector), Math.max(0, ms));
+  setTimeout(() => dispatchEvent(eventToDispatch as DispatchVector), Math.max(0, ms));
 }
 
-regEffect(DISPATCH_LATER, (value: DispatchLaterEffect) => {
-  dispatchLater(value);
-});
+/**
+ * Register the built-in dispatch effects against the router's dispatch
+ * function. Dependency injection here keeps the event pipeline acyclic:
+ * events -> effects, while the router composes both after it is initialized.
+ */
+export function registerBuiltInEffects(dispatchEvent: (event: DispatchVector) => void): void {
+  registerSystemHandler(KIND, DISPATCH_LATER, (value: DispatchLaterEffect) => {
+    dispatchLater(value, dispatchEvent);
+  });
 
-regEffect(DISPATCH, (value: EventVector) => {
-  if (!Array.isArray(value)) {
-    consoleLog('error', '[reflex] ignoring bad dispatch value. Expected a vector, but got:', value);
-    return;
-  }
-  dispatch(value as DispatchVector);
-})
+  registerSystemHandler(KIND, DISPATCH, (value: EventVector) => {
+    if (!isEventVector(value)) {
+      consoleLog(
+        'error',
+        '[reflex] ignoring bad dispatch value. Expected a vector, but got:',
+        value,
+      );
+      return;
+    }
+    dispatchEvent(value as DispatchVector);
+  });
+}

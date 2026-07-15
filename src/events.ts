@@ -1,17 +1,34 @@
-import type { Id, EventVector, EventHandler, EventParams, DefaultAppDb, Interceptor, Context, Db, Effects, ErrorHandler, TraceErrorTag } from './types';
+import type {
+  Id,
+  EventVector,
+  EventHandler,
+  EventParams,
+  EventRegistrationOptions,
+  DefaultAppDb,
+  Interceptor,
+  Context,
+  Db,
+  Effects,
+  ErrorHandler,
+  ReflexError,
+  TraceErrorTag,
+} from './types';
 import { getHandler, registerHandler, getInterceptors, setInterceptors } from './registrar';
 import { consoleLog } from './loggers';
 import * as interceptor from './interceptor';
 import { getInjectCofxInterceptor } from './cofx';
 import { doFxInterceptor } from './fx';
 import type { Draft } from 'immer';
-import { enablePatches, produce, produceWithPatches } from 'immer';
+import { produce, produceWithPatches } from 'immer';
+import { ensurePatchesEnabled } from './immer-utils';
 import { getAppDb } from './db';
 import { getGlobalInterceptors } from './settings';
 import { isTraceEnabled, mergeTrace, withTrace } from './trace';
 import { IS_DEV } from './env';
 
 const KIND = 'event';
+
+export type { EventRegistrationOptions } from './types';
 
 // When the app augments EventPayloads, handler params are checked against the
 // declared payload tuple for K (undeclared ids stay `any[]`). When the app
@@ -20,45 +37,105 @@ const KIND = 'event';
 // suppresses payload inference — prefer augmenting AppDb, or annotate the
 // coeffects param inline (`({ draftDb }: CoEffects<MyDb>, ...)`) instead.
 /** Register an event handler with only a handler function (db event) */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(id: K, handler: EventHandler<T, EventParams<K>>): void;
+export function regEvent<T = DefaultAppDb, K extends Id = Id>(
+  id: K,
+  handler: EventHandler<T, EventParams<K>>,
+): void;
+/** Register an event handler with explicit coeffects and interceptors */
+export function regEvent<T = DefaultAppDb, K extends Id = Id>(
+  id: K,
+  handler: EventHandler<T, EventParams<K>>,
+  options: EventRegistrationOptions<T>,
+): void;
 /** Register an event handler with interceptors and handler function (backward compatibility) */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(id: K, handler: EventHandler<T, EventParams<K>>, interceptors: Interceptor<T>[]): void;
+export function regEvent<T = DefaultAppDb, K extends Id = Id>(
+  id: K,
+  handler: EventHandler<T, EventParams<K>>,
+  interceptors: Interceptor<T>[],
+): void;
 /** Register an event handler with cofx and handler function */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(id: K, handler: EventHandler<T, EventParams<K>>, cofx: [Id, ...any[]][]): void;
+export function regEvent<T = DefaultAppDb, K extends Id = Id>(
+  id: K,
+  handler: EventHandler<T, EventParams<K>>,
+  cofx: [Id, ...any[]][],
+): void;
 /** Register an event handler with cofx, interceptors and handler function */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(id: K, handler: EventHandler<T, EventParams<K>>, cofx: [Id, ...any[]][], interceptors: Interceptor<T>[]): void;
-export function regEvent<T = Record<string, any>>(id: Id, handler: EventHandler<T>, cofxOrInterceptors?: [Id, ...any[]][] | Interceptor<T>[], interceptors?: Interceptor<T>[]): void {
-
+export function regEvent<T = DefaultAppDb, K extends Id = Id>(
+  id: K,
+  handler: EventHandler<T, EventParams<K>>,
+  cofx: [Id, ...any[]][],
+  interceptors: Interceptor<T>[],
+): void;
+export function regEvent<T = Record<string, any>>(
+  id: Id,
+  handler: EventHandler<T>,
+  registration?: unknown,
+  legacyInterceptors?: Interceptor<T>[],
+): void {
   registerHandler(KIND, id, handler);
 
-  registerInterceptors(id, cofxOrInterceptors, interceptors);
+  registerInterceptors(id, registration, legacyInterceptors);
 }
 
 // Utility function to check if an array looks like cofx (array of arrays) vs interceptors (array of objects)
-function isCofxArray(arr: any[]): arr is [Id, ...any[]][] {
+function isCofxArray(arr: readonly unknown[]): boolean {
   return arr.length > 0 && Array.isArray(arr[0]);
 }
 
-function registerInterceptors<T = Record<string, any>>(id: Id, cofxOrInterceptors?: [Id, ...any[]][] | Interceptor<T>[], interceptors?: Interceptor<T>[]): void {
-  let cofx: string[][] | undefined;
-  let finalInterceptors: Interceptor<T>[] | undefined;
+interface UnknownEventRegistrationOptions {
+  coeffects?: unknown;
+  interceptors?: unknown;
+}
 
-  if (cofxOrInterceptors) {
-    if (isCofxArray(cofxOrInterceptors)) {
-      // cofxOrInterceptors is cofx
-      cofx = cofxOrInterceptors;
-      finalInterceptors = interceptors;
-    } else {
-      // cofxOrInterceptors is interceptors (backward compatibility)
-      cofx = undefined;
-      finalInterceptors = cofxOrInterceptors as Interceptor<T>[];
-    }
+function isEventRegistrationOptions(value: unknown): value is UnknownEventRegistrationOptions {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+interface NormalizedEventRegistration {
+  coeffects: readonly unknown[];
+  interceptors: readonly unknown[];
+}
+
+function normalizeEventRegistration(
+  registration: unknown,
+  legacyInterceptors?: readonly unknown[],
+): NormalizedEventRegistration {
+  if (isEventRegistrationOptions(registration)) {
+    return {
+      coeffects: Array.isArray(registration.coeffects) ? registration.coeffects : [],
+      interceptors: Array.isArray(registration.interceptors) ? registration.interceptors : [],
+    };
   }
+
+  // Supplying the fourth positional argument makes the third argument cofx,
+  // even when it is empty. Looking only at its first element loses that intent.
+  if (legacyInterceptors !== undefined) {
+    return {
+      coeffects: Array.isArray(registration) ? registration : [],
+      interceptors: legacyInterceptors,
+    };
+  }
+
+  if (!Array.isArray(registration)) {
+    return { coeffects: [], interceptors: [] };
+  }
+
+  return isCofxArray(registration)
+    ? { coeffects: registration, interceptors: [] }
+    : { coeffects: [], interceptors: registration };
+}
+
+function registerInterceptors<T = Record<string, any>>(
+  id: Id,
+  registration: unknown,
+  legacyInterceptors?: readonly Interceptor<T>[],
+): void {
+  const { coeffects, interceptors } = normalizeEventRegistration(registration, legacyInterceptors);
 
   // Create interceptors from cofx specifications
   const cofxInterceptors: Interceptor[] = [];
-  if (cofx) {
-    for (const cofxSpec of cofx) {
+  for (const cofxSpec of coeffects) {
+    if (Array.isArray(cofxSpec) && typeof cofxSpec[0] === 'string') {
       if (cofxSpec.length === 1) {
         // Simple cofx like ['now']
         cofxInterceptors.push(getInjectCofxInterceptor(cofxSpec[0]));
@@ -68,35 +145,33 @@ function registerInterceptors<T = Record<string, any>>(id: Id, cofxOrInterceptor
       } else {
         consoleLog('warn', '[reflex] invalid cofx specification:', cofxSpec);
       }
+    } else {
+      consoleLog('warn', '[reflex] invalid cofx specification:', cofxSpec);
     }
   }
 
   // Validate provided interceptors
   const validatedInterceptors: Interceptor[] = [];
-  if (finalInterceptors) {
-    for (const interceptorCandidate of finalInterceptors) {
-      if (interceptor.isInterceptor(interceptorCandidate)) {
-        validatedInterceptors.push(interceptorCandidate);
-      } else {
-        consoleLog('error', '[reflex] invalid interceptor provided for event:', id, 'interceptor:', interceptorCandidate);
-      }
+  for (const interceptorCandidate of interceptors) {
+    if (interceptor.isInterceptor(interceptorCandidate)) {
+      validatedInterceptors.push(interceptorCandidate);
+    } else {
+      consoleLog(
+        'error',
+        '[reflex] invalid interceptor provided for event:',
+        id,
+        'interceptor:',
+        interceptorCandidate,
+      );
     }
   }
 
   // Merge cofx interceptors with valid provided interceptors
   const allInterceptors = [...cofxInterceptors, ...validatedInterceptors];
 
-  if (allInterceptors.length > 0) {
-    setInterceptors(id, allInterceptors as Interceptor[]);
-  }
-}
-
-let patchesPluginEnabled = false;
-
-function ensurePatchesEnabled(): void {
-  if (patchesPluginEnabled) return;
-  enablePatches();
-  patchesPluginEnabled = true;
+  // Registration is replacement, not accumulation. Writing an empty list is
+  // important when an existing event is re-registered without metadata.
+  setInterceptors(id, allInterceptors);
 }
 
 // -- Interceptor Factories -------------------------------------------
@@ -131,7 +206,9 @@ function eventHandlerInterceptor(handler: EventHandler<any>): Interceptor {
         ensurePatchesEnabled();
         const [newDb, patches, reversePatches] = produceWithPatches(getAppDb<Db>(), recipe);
         context.newDb = newDb;
-        mergeTrace({ tags: { 'patches': patches, 'reversePatches': reversePatches, 'effects': effects } });
+        mergeTrace({
+          tags: { patches: patches, reversePatches: reversePatches, effects: effects },
+        });
       } else {
         context.newDb = produce(getAppDb<Db>(), recipe);
       }
@@ -139,8 +216,11 @@ function eventHandlerInterceptor(handler: EventHandler<any>): Interceptor {
       if (IS_DEV) {
         try {
           JSON.stringify(effects);
-        } catch (e) {
-          consoleLog('warn', `[reflex] Effects ${effects} contain Proxy (probably an Immer draft). Use current() for draftDb values.`);
+        } catch {
+          consoleLog(
+            'warn',
+            `[reflex] Effects ${effects} contain Proxy (probably an Immer draft). Use current() for draftDb values.`,
+          );
         }
       }
 
@@ -151,8 +231,8 @@ function eventHandlerInterceptor(handler: EventHandler<any>): Interceptor {
       }
 
       return context;
-    }
-  }
+    },
+  };
 }
 
 export const injectGlobalInterceptors: Interceptor = {
@@ -161,7 +241,7 @@ export const injectGlobalInterceptors: Interceptor = {
     const globals = getGlobalInterceptors();
     context.queue = [...globals, ...context.queue];
     return context;
-  }
+  },
 };
 
 // Id of the event whose interceptor chain is currently executing, or null.
@@ -189,11 +269,12 @@ export function handle(eventV: EventVector): void {
     consoleLog('error', `[reflex] no event handler registered for:`, eventId);
     // Record the failed dispatch in the trace pipeline so devtools/MCP can
     // surface typo'd event ids, not just the console.
-    const error: TraceErrorTag = { phase: 'missing-handler', message: `no event handler registered for: ${eventId}`, eventV };
-    withTrace(
-      { operation: eventId, opType: KIND, tags: { event: eventV, error } },
-      () => { }
-    );
+    const error: TraceErrorTag = {
+      phase: 'missing-handler',
+      message: `no event handler registered for: ${eventId}`,
+      eventV,
+    };
+    withTrace({ operation: eventId, opType: KIND, tags: { event: eventV, error } }, () => {});
     return;
   }
 
@@ -203,17 +284,14 @@ export function handle(eventV: EventVector): void {
     doFxInterceptor,
     injectGlobalInterceptors,
     ...customInterceptors,
-    eventHandlerInterceptor(handler)
-  ]
+    eventHandlerInterceptor(handler),
+  ];
 
   handlingEventId = eventId;
   try {
-    withTrace(
-      { operation: eventId, opType: KIND, tags: { event: eventV } },
-      () => {
-        interceptor.execute(eventV, interceptors);
-      }
-    );
+    withTrace({ operation: eventId, opType: KIND, tags: { event: eventV } }, () => {
+      interceptor.execute(eventV, interceptors);
+    });
   } finally {
     handlingEventId = null;
   }
@@ -226,7 +304,7 @@ export function handle(eventV: EventVector): void {
  * Only one handler can be registered. Registering a new handler clears the existing handler.
  *
  * This handler function has the signature:
- * `(originalError: Error, reflexError: Error & { data: any }) => void`
+ * `(originalError: Error, reflexError: ReflexError) => void`
  *
  * - `originalError`: A platform-native Error object.
  *    Represents the original error thrown by user code.
@@ -249,13 +327,13 @@ export function regEventErrorHandler(handler: ErrorHandler): void {
 /**
  * Default error handler that logs errors to console
  */
-export function defaultErrorHandler(originalError: Error, reflexError: Error & { data: any }): void {
+export function defaultErrorHandler(originalError: Error, reflexError: ReflexError): void {
   consoleLog('error', '[reflex] Interceptor Exception:', {
     originalError,
     reflexError,
-    data: reflexError.data
+    data: reflexError.data,
   });
-  
+
   // Re-throw the original error to maintain normal error propagation
   throw originalError;
 }

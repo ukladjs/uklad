@@ -9,53 +9,53 @@
 const RAF_FALLBACK_MS = 100;
 
 export function scheduleAfterRender(f: () => void): void {
-    if (typeof requestAnimationFrame === 'undefined') {
-        // Fallback for non-browser environments
-        setTimeout(f, 16);
-        return;
-    }
+  if (typeof requestAnimationFrame === 'undefined') {
+    // Fallback for non-browser environments
+    setTimeout(f, 16);
+    return;
+  }
 
-    if (typeof document !== 'undefined' && document.hidden) {
-        // rAF won't fire at all; don't wait out the fallback margin
-        setTimeout(f, 16);
-        return;
-    }
+  if (typeof document !== 'undefined' && document.hidden) {
+    // rAF won't fire at all; don't wait out the fallback margin
+    setTimeout(f, 16);
+    return;
+  }
 
-    let done = false;
-    const run = () => {
-        if (done) return;
-        done = true;
-        f();
-    };
-    const rafId = requestAnimationFrame(() => {
-        clearTimeout(timeoutId);
-        Promise.resolve().then(run);
-    });
-    const timeoutId = setTimeout(() => {
-        // The tab went hidden (or rAF stalled) after scheduling
-        if (typeof cancelAnimationFrame !== 'undefined') {
-            cancelAnimationFrame(rafId);
-        }
-        run();
-    }, RAF_FALLBACK_MS);
-};
+  let done = false;
+  const run = () => {
+    if (done) return;
+    done = true;
+    f();
+  };
+  const rafId = requestAnimationFrame(() => {
+    clearTimeout(timeoutId);
+    Promise.resolve().then(run);
+  });
+  const timeoutId = setTimeout(() => {
+    // The tab went hidden (or rAF stalled) after scheduling
+    if (typeof cancelAnimationFrame !== 'undefined') {
+      cancelAnimationFrame(rafId);
+    }
+    run();
+  }, RAF_FALLBACK_MS);
+}
 
 // Next Tick is needed to split event processing into chunks
 export function scheduleNextTick(f: () => void): void {
-    //React Native
-    if (typeof (globalThis as any).setImmediate === 'function') {
-        (globalThis as any).setImmediate(f);
-        return;
-    }
+  //React Native
+  if (typeof (globalThis as any).setImmediate === 'function') {
+    (globalThis as any).setImmediate(f);
+    return;
+  }
 
-    //Web
-    if (typeof MessageChannel !== 'undefined') {
-        const { port1, port2 } = new MessageChannel();
-        port1.onmessage = () => f();
-        port2.postMessage(undefined);
-        return;
-    }
+  //Web
+  if (typeof MessageChannel !== 'undefined') {
+    const { port1, port2 } = new MessageChannel();
+    port1.onmessage = () => f();
+    port2.postMessage(undefined);
+    return;
+  }
 
-    // Fallback
-    setTimeout(f, 0);
+  // Fallback
+  setTimeout(f, 0);
 }

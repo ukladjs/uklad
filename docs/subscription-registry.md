@@ -33,22 +33,25 @@ Two architectural facts explain why the instance-side metadata exists at all:
 
 ## Store summary
 
-| Store | Shape | Purpose |
-| --- | --- | --- |
-| `kindToIdToHandler` | `Kind → id → handler` | All handler definitions |
-| `rootSubIdBySource` | `sourceKey → subId` | DB wake-up: changed db key → owning root |
-| `rootSubSourceById` | `subId → sourceKey` | Is this id a root; what key it reads |
-| `rootSubscriptionKeys` | `Set<serializedKey>` | Persistence guard for root cells |
-| `subscriptionCache` | `key → {node, subId, dependencyKeys}` | Canonical built instances |
-| `dependentSubscriptionKeys` | `key → Set<dependentKey>` | Reverse edges for cascade invalidation |
-| `provisionalCurrent` / `provisionalPrevious` | `key → node` | Two-generation sweep of aborted renders |
-| `interceptorsRegistry` | `eventId → Interceptor[]` | Per-event interceptor chains |
-| `subConfigRegistry` | `subId → SubConfig` | Per-subscription options (equality check) |
+| Store                                        | Shape                                 | Purpose                                   |
+| -------------------------------------------- | ------------------------------------- | ----------------------------------------- |
+| `kindToIdToHandler`                          | `HandlerKind → id → handler`          | All handler definitions                   |
+| `systemHandlers`                             | `HandlerKind → id → handler`          | Framework handlers restored after clears  |
+| `rootSubIdBySource`                          | `sourceKey → subId`                   | DB wake-up: changed db key → owning root  |
+| `rootSubSourceById`                          | `subId → sourceKey`                   | Is this id a root; what key it reads      |
+| `rootSubscriptionKeys`                       | `Set<serializedKey>`                  | Persistence guard for root cells          |
+| `subscriptionCache`                          | `key → {node, subId, dependencyKeys}` | Canonical built instances                 |
+| `dependentSubscriptionKeys`                  | `key → Set<dependentKey>`             | Reverse edges for cascade invalidation    |
+| `provisionalCurrent` / `provisionalPrevious` | `key → node`                          | Two-generation sweep of aborted renders   |
+| `interceptorsRegistry`                       | `eventId → Interceptor[]`             | Per-event interceptor chains              |
+| `subConfigRegistry`                          | `subId → SubConfig`                   | Per-subscription options (equality check) |
 
 ## Handler definitions — `kindToIdToHandler`
 
-One nested record keyed by `Kind` (`event`, `fx`, `cofx`, `sub`, `subDeps`,
-`error`) then by id. `regSub` writes two entries for a computed subscription:
+One typed nested record keyed by `HandlerKind` (`event`, `fx`, `cofx`, `sub`,
+`subDeps`, `error`) then by id. Each inner record has a null prototype, so
+valid string ids such as `constructor` and `__proto__` cannot collide with
+`Object.prototype`. `regSub` writes two entries for a computed subscription:
 the compute function under `sub` and the dependency function under `subDeps`.
 A root subscription registers a `sub` handler that reads one top-level db key
 and a `subDeps` handler returning `[]`.
@@ -57,6 +60,12 @@ This is the only registry devtools reads directly (`getHandlers`) to enumerate
 what the app declares. Overwriting an existing id warns; it is allowed for
 non-subscription kinds but rejected for subscriptions while cached instances of
 that id exist (see clearing rules).
+
+Framework-owned effects and coeffects are also recorded in `systemHandlers`.
+They may be overridden through the normal registration API, but clearing that
+override restores the framework implementation. A full `clearHandlers()` does
+the same, so reset/test helpers cannot silently remove `dispatch`,
+`dispatch-later`, `now`, or `random` for the rest of the process lifetime.
 
 ## Root source registry — three stores
 
@@ -123,7 +132,7 @@ Two properties matter:
   removal.
 - These are **registry metadata, not the live DAG**. The runtime keeps its own
   `dependents` sets on active cells for publication. The reverse edges here
-  additionally cover *dormant* cached graphs, which the runtime's live edges do
+  additionally cover _dormant_ cached graphs, which the runtime's live edges do
   not track. The invariant they enforce: a canonical cache entry never retains
   a terminal dependency node.
 
@@ -177,9 +186,13 @@ Clearing spans several stores, so the operations are centralized:
   subscription-affecting clear while a graph is active. Mounted stores must not
   be orphaned. It guards `clearHandlers` (for `sub`/`subDeps`) and
   `clearSubscriptionCache`.
-- **`clearHandlers('sub', id)`** removes the definition *and* cascades into the
+- **`clearHandlers('sub', id)`** removes the definition _and_ cascades into the
   instance cache via `clearSubscriptionCacheEntriesForId`, because leaving
-  instances of a removed handler would strand them.
+  instances of a removed handler would strand them. The paired `subDeps`
+  handler, root-source metadata, and subscription config are cleared in the
+  same operation.
+- **`clearHandlers('event', id)`** removes both the handler and its interceptor
+  metadata, so a later registration cannot inherit a stale chain.
 - **`clearSubs`** clears the instance cache, both handler kinds, and configs —
   the full public reset, subject to the active-graph guard.
 - **`clearSubsForHotReload`** is the internal HMR path. It bypasses the guard

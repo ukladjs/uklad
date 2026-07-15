@@ -12,7 +12,7 @@ Pure event handlers over one central app-db, derived subscriptions, isolated sid
 
 ## 🤖 AI Agentic Development
 
-Reflex is designed to be written *and driven* by coding agents. The whole setup is two steps.
+Reflex is designed to be written _and driven_ by coding agents. The whole setup is two steps.
 
 **1. Install the [Reflex Agent Toolkit](https://github.com/flexsurfer/reflex-agent-toolkit) plugin** — once, globally:
 
@@ -122,7 +122,7 @@ Side effects (HTTP, storage, timers, navigation) live in **effects/coeffects**, 
 🛠️ **Integrated DevTools** - [`@flexsurfer/reflex-devtools`](https://github.com/flexsurfer/reflex-devtools) provides deep visibility into your app's state, events, and subscriptions in real time — a dashboard for humans, an MCP API for agents  
 ⚡ **Interceptor Pattern** - Powerful middleware system for cross-cutting concerns  
 🛡️ **Type Safety** - Full TypeScript support with excellent IDE experience  
-🧪 **Testability** - Pure functions make testing straightforward and reliable  
+🧪 **Testability** - Pure functions make testing straightforward and reliable
 
 ## 📚 Learn More
 
@@ -154,4 +154,4 @@ MIT © [flexsurfer](https://github.com/flexsurfer)
 
 ---
 
-*Bringing the wisdom of ClojureScript's re-frame to the JavaScript world — now with an agent loop the original never had.*
+_Bringing the wisdom of ClojureScript's re-frame to the JavaScript world — now with an agent loop the original never had._

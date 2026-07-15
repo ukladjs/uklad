@@ -15,7 +15,9 @@ import { initAppDb, getAppDb } from '../db';
 import { waitForScheduled } from './test-utils';
 
 const purityWarnings = () =>
-  getTestLogCalls().warn.filter((call: any[]) => String(call[0]).includes('from inside the event handler'));
+  getTestLogCalls().warn.filter((call: any[]) =>
+    String(call[0]).includes('from inside the event handler'),
+  );
 
 describe('dev warning: dispatch called from an event handler', () => {
   beforeEach(() => {
@@ -35,9 +37,10 @@ describe('dev warning: dispatch called from an event handler', () => {
     await waitForScheduled();
     await waitForScheduled();
 
-    expect(purityWarnings()).toHaveLength(1);
-    expect(String(purityWarnings()[0][0])).toContain("'purity-inner'");
-    expect(String(purityWarnings()[0][0])).toContain("'purity-outer'");
+    const warnings = purityWarnings();
+    expect(warnings).toHaveLength(1);
+    expect(String(warnings[0]![0])).toContain("'purity-inner'");
+    expect(String(warnings[0]![0])).toContain("'purity-outer'");
 
     // Behavior is preserved: both events processed
     expect(getAppDb().outer).toBe(1);

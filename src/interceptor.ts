@@ -3,8 +3,11 @@ import type {
   Interceptor,
   Context,
   CoEffects,
+  ErrorHandler,
   InterceptorDirection,
-  TraceErrorTag
+  InterceptorErrorData,
+  ReflexError,
+  TraceErrorTag,
 } from './types';
 
 import { getHandler } from './registrar';
@@ -16,44 +19,72 @@ import { mergeTrace } from './trace';
  * failed. `e` may be the wrapped reflex error (with `.data`/`.cause`) or a
  * raw error from the no-error-handler path.
  */
-function traceError(e: any, eventV: EventVector): void {
-  const original = e?.cause ?? e;
+function normalizeError(value: unknown): Error {
+  if (value instanceof Error) return value;
+  try {
+    return new Error(String(value));
+  } catch {
+    return new Error('[Unprintable error]');
+  }
+}
+
+function isReflexError(value: unknown): value is ReflexError {
+  if (!(value instanceof Error) || typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<ReflexError>;
+  return candidate.cause instanceof Error && typeof candidate.data === 'object';
+}
+
+function traceError(value: unknown, eventV: EventVector): void {
+  const reflexError = isReflexError(value) ? value : undefined;
+  const original = reflexError?.cause ?? normalizeError(value);
   const error: TraceErrorTag = {
     phase: 'handler',
-    message: String(original?.message ?? original),
-    stack: typeof original?.stack === 'string' ? original.stack : undefined,
-    interceptor: e?.data?.interceptor,
-    direction: e?.data?.direction,
-    eventV
+    message: original.message,
+    ...(typeof original.stack === 'string' ? { stack: original.stack } : {}),
+    ...(reflexError ? { interceptor: reflexError.data.interceptor } : {}),
+    ...(reflexError ? { direction: reflexError.data.direction } : {}),
+    eventV,
   };
   mergeTrace({ tags: { error } });
 }
 
-export function isInterceptor(m: any): m is Interceptor {
-  if (typeof m !== 'object' || m === null) return false;
-  const keys = new Set(Object.keys(m));
-  // Must have 'id' field
-  if (!keys.has('id')) return false;
-  // Must have at least one of 'before' or 'after'
-  if (!keys.has('before') && !keys.has('after')) return false;
-  return true;
+export function isInterceptor(value: unknown): value is Interceptor {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  const hasBefore = typeof candidate.before === 'function';
+  const hasAfter = typeof candidate.after === 'function';
+  return (
+    typeof candidate.id === 'string' &&
+    (hasBefore || hasAfter) &&
+    (candidate.before === undefined || hasBefore) &&
+    (candidate.after === undefined || hasAfter)
+  );
 }
 
-function exceptionToExInfo(e: Error, interceptor: Interceptor, direction: InterceptorDirection): Error & { data: any } {
-  const ex = new Error(`Interceptor Exception: ${e.message}`);
-  (ex as any).data = { direction, interceptor: interceptor.id, originalError: e };
-  (ex as any).cause = e;
-  return ex as Error & { data: any };
+function toReflexError(
+  value: unknown,
+  interceptor: Interceptor,
+  direction: InterceptorDirection,
+): ReflexError {
+  const originalError = normalizeError(value);
+  return Object.assign(new Error(`Interceptor Exception: ${originalError.message}`), {
+    data: { direction, interceptor: interceptor.id, originalError },
+    cause: originalError,
+  });
 }
 
-function mergeExData(e: Error, ...ms: any[]): Error & { data: any } {
-  const ex = new Error(e.message);
-  (ex as any).data = Object.assign({}, (e as any).data, ...ms);
-  (ex as any).cause = (e as any).cause;
-  return ex as Error & { data: any };
+function mergeErrorData(error: ReflexError, data: Partial<InterceptorErrorData>): ReflexError {
+  return Object.assign(new Error(error.message), {
+    data: { ...error.data, ...data },
+    cause: error.cause,
+  });
 }
 
-function invokeInterceptorFn(context: Context, interceptor: Interceptor, direction: InterceptorDirection): Context {
+function invokeInterceptorFn(
+  context: Context,
+  interceptor: Interceptor,
+  direction: InterceptorDirection,
+): Context {
   const fn = interceptor[direction];
   if (!fn) return context;
 
@@ -63,8 +94,8 @@ function invokeInterceptorFn(context: Context, interceptor: Interceptor, directi
 
   try {
     return fn(context);
-  } catch (e: any) {
-    throw exceptionToExInfo(e, interceptor, direction);
+  } catch (error: unknown) {
+    throw toReflexError(error, interceptor, direction);
   }
 }
 
@@ -72,19 +103,20 @@ function invokeInterceptors(context: Context, direction: InterceptorDirection): 
   let ctx = { ...context };
 
   // For both before and after, we process from the queue
-  // Before: queue contains interceptors to process, stack is where we accumulate processed interceptors  
+  // Before: queue contains interceptors to process, stack is where we accumulate processed interceptors
   // After: queue contains reversed interceptors to process, stack is unused
   while (ctx.queue.length > 0) {
-    const [next, ...rest] = ctx.queue;
+    const next = ctx.queue[0]!;
+    const rest = ctx.queue.slice(1);
 
     ctx = invokeInterceptorFn(
       {
         ...ctx,
         queue: rest,
-        stack: direction === 'before' ? [...ctx.stack, next] : ctx.stack
+        stack: direction === 'before' ? [...ctx.stack, next] : ctx.stack,
       },
       next,
-      direction
+      direction,
     );
   }
 
@@ -95,7 +127,7 @@ function changeDirection(context: Context): Context {
   return {
     ...context,
     queue: [...context.stack].reverse(),
-    stack: []
+    stack: [],
   };
 }
 
@@ -104,7 +136,7 @@ function createContext(eventV: EventVector, interceptors: Interceptor[]): Contex
   // so this placeholder must not be typed against an augmented AppDb.
   const coeffects: CoEffects<Record<string, any>> = {
     event: eventV,
-    draftDb: {}
+    draftDb: {},
   };
 
   return {
@@ -112,7 +144,7 @@ function createContext(eventV: EventVector, interceptors: Interceptor[]): Contex
     effects: [],
     queue: [...interceptors],
     stack: [],
-    originalException: false
+    originalException: false,
   };
 }
 
@@ -127,21 +159,24 @@ function executeInterceptors(ctx: Context): Context {
  */
 export function execute(eventV: EventVector, interceptors: Interceptor[]): Context {
   const ctx = createContext(eventV, interceptors);
-  const errorHandler = getHandler('error', 'event-handler') as ((original: Error, reflex: Error & { data: any }) => void) | undefined;
+  const errorHandler: ErrorHandler | undefined = getHandler('error', 'event-handler');
   if (!errorHandler) {
     try {
       return executeInterceptors({ ...ctx, originalException: true });
-    } catch (e: any) {
-      traceError(e, eventV);
-      throw e;
+    } catch (error: unknown) {
+      traceError(error, eventV);
+      throw error;
     }
   }
   try {
     return executeInterceptors(ctx);
-  } catch (e: any) {
-    const reflexError = mergeExData(e, { eventV });
+  } catch (error: unknown) {
+    const reflexError = mergeErrorData(
+      isReflexError(error) ? error : toReflexError(error, { id: 'unknown-interceptor' }, 'before'),
+      { eventV },
+    );
     traceError(reflexError, eventV);
-    errorHandler((e as any).cause || e, reflexError);
+    errorHandler(reflexError.cause, reflexError);
     return ctx; // Return original context if error handler doesn't throw
   }
 }

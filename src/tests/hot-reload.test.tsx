@@ -2,20 +2,20 @@
  * @jest-environment jsdom
  */
 import { renderHook, cleanup, act } from '@testing-library/react';
-import { 
-  registerHotReloadCallback, 
-  triggerHotReload, 
-  clearHotReloadCallbacks, 
-  useHotReload, 
-  useHotReloadKey, 
-  setupSubsHotReload 
+import {
+  registerHotReloadCallback,
+  triggerHotReload,
+  clearHotReloadCallbacks,
+  useHotReload,
+  useHotReloadKey,
+  setupSubsHotReload,
 } from '../hot-reload';
 import { clearSubsForHotReload } from '../registrar';
 
 // Mock the explicit HMR-only reset since it is called internally.
 jest.mock('../registrar', () => ({
   ...jest.requireActual('../registrar'),
-  clearSubsForHotReload: jest.fn()
+  clearSubsForHotReload: jest.fn(),
 }));
 
 describe('Hot Reload System', () => {
@@ -114,7 +114,7 @@ describe('Hot Reload System', () => {
         return null;
       });
 
-      const { rerender } = renderHook(() => TestComponent());
+      renderHook(() => TestComponent());
 
       // Initial render
       expect(TestComponent).toHaveBeenCalledTimes(1);
@@ -222,7 +222,7 @@ describe('Hot Reload System', () => {
   describe('Integration Test', () => {
     it('should work with a complete hot reload workflow', () => {
       const mockCallback = jest.fn();
-      
+
       // Set up hot reload system
       const { dispose, accept } = setupSubsHotReload();
       registerHotReloadCallback(mockCallback);

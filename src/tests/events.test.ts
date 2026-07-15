@@ -1,10 +1,10 @@
-import { regEvent, regEventErrorHandler } from '../events';
+import { regEvent } from '../events';
 import { regCoeffect } from '../cofx';
-import { dispatch } from '../router';
+import { dispatch, dispatchSync } from '../router';
 import { initAppDb, getAppDb } from '../db';
-import { registerHandler, getHandler } from '../registrar';
+import { registerHandler } from '../registrar';
 import { regGlobalInterceptor, clearGlobalInterceptors } from '../settings';
-import type { Interceptor, Context } from '../types';
+import type { CoEffects, EventRegistrationOptions, Interceptor, Context } from '../types';
 import { waitForScheduled } from './test-utils';
 
 // Type definitions for testing type-safe event handlers
@@ -23,12 +23,9 @@ interface EventTestState {
 }
 
 describe('regEvent', () => {
-
   // Register a default error handler to suppress console errors in tests
   beforeAll(() => {
-    registerHandler('error', 'event-handler', ((original: Error, reflex: Error & { data: any }) => {
-      // Silent error handler for tests - just re-throw the original error
-    }) as any);
+    registerHandler('error', 'event-handler', () => undefined);
   });
 
   describe('Initialize db', () => {
@@ -141,21 +138,17 @@ describe('regEvent', () => {
       expect(updatedDb).not.toBe(initialDb);
     });
 
-    
-
     it('should allow effects through fx properly', async () => {
       // Register a test event handler to capture dispatched events
-      let capturedEvents: string[] = [];
-      regEvent('captureTestEvent', ({ draftDb }) => {
+      const capturedEvents: string[] = [];
+      regEvent('captureTestEvent', () => {
         capturedEvents.push('captured');
       });
 
       // Register an event that uses effects for other effects
       regEvent('effectsTest', ({ draftDb }) => {
         draftDb.fxTestValue = 'updated-via-fx';
-        return [
-          ['dispatch', ['captureTestEvent']]
-        ];
+        return [['dispatch', ['captureTestEvent']]];
       });
 
       // Dispatch the event
@@ -165,7 +158,7 @@ describe('regEvent', () => {
       await new Promise<void>((resolve) => {
         let resolved = false;
         const timeouts: ReturnType<typeof setTimeout>[] = [];
-        
+
         const checkForCompletion = () => {
           if (resolved) return;
           if (capturedEvents.length > 0 && getAppDb().fxTestValue === 'updated-via-fx') {
@@ -176,24 +169,26 @@ describe('regEvent', () => {
             timeouts.push(setTimeout(checkForCompletion, 10));
           }
         };
-        
+
         // Start checking immediately
         timeouts.push(setTimeout(checkForCompletion, 0));
         // But also set a timeout to avoid infinite waiting
-        timeouts.push(setTimeout(() => {
-          if (!resolved) {
-            resolved = true;
-            timeouts.forEach(clearTimeout);
-            resolve();
-          }
-        }, 1000));
+        timeouts.push(
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              timeouts.forEach(clearTimeout);
+              resolve();
+            }
+          }, 1000),
+        );
       });
 
       const updatedDb = getAppDb();
 
       // Verify dbUpdate worked
       expect(updatedDb.fxTestValue).toBe('updated-via-fx');
-      
+
       // Verify effects dispatch worked
       expect(capturedEvents).toContain('captured');
     });
@@ -263,12 +258,12 @@ describe('Type-safe Event Handlers', () => {
       user: {
         id: 1,
         name: 'Test User',
-        isActive: true
+        isActive: true,
       },
       settings: {
         theme: 'light',
-        notifications: true
-      }
+        notifications: true,
+      },
     };
     initAppDb<EventTestState>(initialState);
   });
@@ -383,7 +378,7 @@ describe('Type-safe Event Handlers', () => {
       dispatch(['multi-test-3']);
 
       // Wait for async processing
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       const db = getAppDb<EventTestState>();
       expect(db.counter).toBe(10);
@@ -405,15 +400,13 @@ describe('Type-safe Event Handlers', () => {
       // Register main event with effects
       regEvent<EventTestState>('main-with-effects', ({ draftDb }) => {
         draftDb.counter += 5;
-        return [
-          ['dispatch', ['fx-helper']]
-        ];
+        return [['dispatch', ['fx-helper']]];
       });
 
       dispatch(['main-with-effects']);
 
       // Wait for async processing
-      await new Promise(resolve => setTimeout(resolve, 20));
+      await new Promise((resolve) => setTimeout(resolve, 20));
 
       const db = getAppDb<EventTestState>();
       expect(db.counter).toBe(5);
@@ -438,7 +431,7 @@ describe('Type-safe Event Handlers', () => {
       dispatch(['typed-handler']);
       dispatch(['untyped-handler']);
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       const db = getAppDb<EventTestState>();
       expect(db.counter).toBe(11);
@@ -454,13 +447,17 @@ describe('regEvent with cofx', () => {
 
   describe('Basic cofx functionality', () => {
     it('should inject built-in cofx like now', async () => {
-      regEvent('test-now-cofx', ({ draftDb, now }) => {
-        expect(now).toBeDefined();
-        expect(typeof now).toBe('number');
-        expect(now).toBeGreaterThan(0);
-        
-        (draftDb as any).timestamp = now;
-      }, [['now']]);
+      regEvent(
+        'test-now-cofx',
+        ({ draftDb, now }) => {
+          expect(now).toBeDefined();
+          expect(typeof now).toBe('number');
+          expect(now).toBeGreaterThan(0);
+
+          (draftDb as any).timestamp = now;
+        },
+        [['now']],
+      );
 
       dispatch(['test-now-cofx']);
       await waitForScheduled();
@@ -470,14 +467,18 @@ describe('regEvent with cofx', () => {
     });
 
     it('should inject built-in cofx like random', async () => {
-      regEvent('test-random-cofx', ({ draftDb, random }) => {
-        expect(random).toBeDefined();
-        expect(typeof random).toBe('number');
-        expect(random).toBeGreaterThanOrEqual(0);
-        expect(random).toBeLessThan(1);
-        
-        (draftDb as any).randomValue = random;
-      }, [['random']]);
+      regEvent(
+        'test-random-cofx',
+        ({ draftDb, random }) => {
+          expect(random).toBeDefined();
+          expect(typeof random).toBe('number');
+          expect(random).toBeGreaterThanOrEqual(0);
+          expect(random).toBeLessThan(1);
+
+          (draftDb as any).randomValue = random;
+        },
+        [['random']],
+      );
 
       dispatch(['test-random-cofx']);
       await waitForScheduled();
@@ -489,11 +490,11 @@ describe('regEvent with cofx', () => {
 
     it('should inject db cofx', async () => {
       const initialDb = getAppDb();
-      
+
       regEvent('test-db-cofx', ({ draftDb }) => {
         expect(draftDb).toBeDefined();
         expect(draftDb).toEqual(initialDb);
-        
+
         (draftDb as any).counter = draftDb.counter + 5;
       });
 
@@ -507,15 +508,19 @@ describe('regEvent with cofx', () => {
 
   describe('Multiple cofx', () => {
     it('should inject multiple cofx in a single registration', async () => {
-      regEvent('test-multiple-cofx', ({ draftDb, now, random }) => {
-        expect(now).toBeDefined();
-        expect(random).toBeDefined();
-        expect(draftDb).toBeDefined();
-        
-        (draftDb as any).timestamp = now;
-        (draftDb as any).randomValue = random;
-        (draftDb as any).counter = draftDb.counter + 1;
-      }, [['now'], ['random']]);
+      regEvent(
+        'test-multiple-cofx',
+        ({ draftDb, now, random }) => {
+          expect(now).toBeDefined();
+          expect(random).toBeDefined();
+          expect(draftDb).toBeDefined();
+
+          (draftDb as any).timestamp = now;
+          (draftDb as any).randomValue = random;
+          (draftDb as any).counter = draftDb.counter + 1;
+        },
+        [['now'], ['random']],
+      );
 
       dispatch(['test-multiple-cofx']);
       await waitForScheduled();
@@ -528,6 +533,41 @@ describe('regEvent with cofx', () => {
   });
 
   describe('Cofx with custom interceptors', () => {
+    it('should support explicit registration options', async () => {
+      const executionOrder: string[] = [];
+      const options: EventRegistrationOptions = {
+        coeffects: [['now']],
+        interceptors: [
+          {
+            id: 'options-interceptor',
+            before: (context) => {
+              executionOrder.push('before');
+              return context;
+            },
+            after: (context) => {
+              executionOrder.push('after');
+              return context;
+            },
+          },
+        ],
+      };
+
+      regEvent(
+        'test-registration-options',
+        ({ draftDb, now }) => {
+          executionOrder.push('handler');
+          draftDb.timestamp = now;
+        },
+        options,
+      );
+
+      dispatch(['test-registration-options']);
+      await waitForScheduled();
+
+      expect(getAppDb().timestamp).toBeGreaterThan(0);
+      expect(executionOrder).toEqual(['before', 'handler', 'after']);
+    });
+
     it('should combine cofx with custom interceptors', async () => {
       let beforeCalled = false;
       let afterCalled = false;
@@ -537,7 +577,7 @@ describe('regEvent with cofx', () => {
         before: (ctx: any) => {
           beforeCalled = true;
           return ctx;
-        }
+        },
       };
 
       const afterInterceptor = {
@@ -545,16 +585,21 @@ describe('regEvent with cofx', () => {
         after: (ctx: any) => {
           afterCalled = true;
           return ctx;
-        }
+        },
       };
 
-      regEvent('test-cofx-with-interceptors', ({ draftDb, now }) => {
-        expect(now).toBeDefined();
-        expect(draftDb).toBeDefined();
-        
-        (draftDb as any).timestamp = now;
-        (draftDb as any).counter = draftDb.counter + 10;
-      }, [['now']], [beforeInterceptor, afterInterceptor]);
+      regEvent(
+        'test-cofx-with-interceptors',
+        ({ draftDb, now }) => {
+          expect(now).toBeDefined();
+          expect(draftDb).toBeDefined();
+
+          (draftDb as any).timestamp = now;
+          (draftDb as any).counter = draftDb.counter + 10;
+        },
+        [['now']],
+        [beforeInterceptor, afterInterceptor],
+      );
 
       dispatch(['test-cofx-with-interceptors']);
       await waitForScheduled();
@@ -568,6 +613,74 @@ describe('regEvent with cofx', () => {
   });
 
   describe('Backward compatibility', () => {
+    it('should honor fourth-argument interceptors after an empty cofx array', () => {
+      const interceptorCall = jest.fn();
+      const testInterceptor: Interceptor = {
+        id: 'empty-cofx-interceptor',
+        before: (context) => {
+          interceptorCall();
+          return context;
+        },
+      };
+
+      regEvent(
+        'test-empty-cofx-with-interceptors',
+        ({ draftDb }) => {
+          draftDb.counter += 1;
+        },
+        [],
+        [testInterceptor],
+      );
+
+      dispatchSync(['test-empty-cofx-with-interceptors']);
+
+      expect(getAppDb().counter).toBe(1);
+      expect(interceptorCall).toHaveBeenCalledTimes(1);
+    });
+
+    it('should replace and clear event interceptors when re-registering an id', () => {
+      const staleCall = jest.fn();
+      const replacementCall = jest.fn();
+      const handler = ({ draftDb }: CoEffects) => {
+        draftDb.counter += 1;
+      };
+
+      regEvent('test-reregister-interceptors', handler, {
+        interceptors: [
+          {
+            id: 'stale-interceptor',
+            before: (context) => {
+              staleCall();
+              return context;
+            },
+          },
+        ],
+      });
+      regEvent('test-reregister-interceptors', handler, {
+        interceptors: [
+          {
+            id: 'replacement-interceptor',
+            before: (context) => {
+              replacementCall();
+              return context;
+            },
+          },
+        ],
+      });
+
+      dispatchSync(['test-reregister-interceptors']);
+
+      expect(staleCall).not.toHaveBeenCalled();
+      expect(replacementCall).toHaveBeenCalledTimes(1);
+
+      regEvent('test-reregister-interceptors', handler);
+      dispatchSync(['test-reregister-interceptors']);
+
+      expect(staleCall).not.toHaveBeenCalled();
+      expect(replacementCall).toHaveBeenCalledTimes(1);
+      expect(getAppDb().counter).toBe(2);
+    });
+
     it('should maintain backward compatibility with interceptor-only registration', async () => {
       let interceptorCalled = false;
 
@@ -576,13 +689,17 @@ describe('regEvent with cofx', () => {
         before: (ctx: any) => {
           interceptorCalled = true;
           return ctx;
-        }
+        },
       };
 
       // Old way - interceptors only (should still work)
-      regEvent('test-backward-compat', ({ draftDb }) => {
-        (draftDb as any).counter += 1;
-      }, [testInterceptor]);
+      regEvent(
+        'test-backward-compat',
+        ({ draftDb }) => {
+          (draftDb as any).counter += 1;
+        },
+        [testInterceptor],
+      );
 
       dispatch(['test-backward-compat']);
       await waitForScheduled();
@@ -609,19 +726,19 @@ describe('regEvent with cofx', () => {
   describe('Error handling', () => {
     it('should warn about invalid cofx specifications', async () => {
       // Invalid cofx with too many elements
-      regEvent('test-invalid-cofx', ({ draftDb }) => {
-        (draftDb as any).counter += 1;
-      }, [['now', 'extra', 'invalid']]);
+      regEvent(
+        'test-invalid-cofx',
+        ({ draftDb }) => {
+          (draftDb as any).counter += 1;
+        },
+        [['now', 'extra', 'invalid']],
+      );
 
       dispatch(['test-invalid-cofx']);
       await waitForScheduled();
 
       // Verify warning was logged
-      expectLogCall(
-        'warn',
-        '[reflex] invalid cofx specification:',
-        ['now', 'extra', 'invalid']
-      );
+      expectLogCall('warn', '[reflex] invalid cofx specification:', ['now', 'extra', 'invalid']);
     });
   });
 
@@ -630,14 +747,18 @@ describe('regEvent with cofx', () => {
       // First register a custom cofx
       regCoeffect('custom-test', (coeffects: any, value: any) => ({
         ...coeffects,
-        customValue: value || 'default-custom-value'
+        customValue: value || 'default-custom-value',
       }));
 
-      regEvent('test-custom-cofx', ({ draftDb, customValue }) => {
-        expect(customValue).toBe('default-custom-value');
-        
-        (draftDb as any).messages.push(customValue);
-      }, [['custom-test']]);
+      regEvent(
+        'test-custom-cofx',
+        ({ draftDb, customValue }) => {
+          expect(customValue).toBe('default-custom-value');
+
+          (draftDb as any).messages.push(customValue);
+        },
+        [['custom-test']],
+      );
 
       dispatch(['test-custom-cofx']);
       await waitForScheduled();
@@ -650,14 +771,18 @@ describe('regEvent with cofx', () => {
       const cofxModule = await import('../cofx');
       cofxModule.regCoeffect('custom-with-value', (coeffects: any, value: any) => ({
         ...coeffects,
-        customValue: `processed-${value}`
+        customValue: `processed-${value}`,
       }));
 
-      regEvent('test-custom-cofx-with-value', ({ draftDb, customValue }) => {
-        expect(customValue).toBe('processed-test-input');
-        
-        (draftDb as any).messages.push(customValue);
-      }, [['custom-with-value', 'test-input']]);
+      regEvent(
+        'test-custom-cofx-with-value',
+        ({ draftDb, customValue }) => {
+          expect(customValue).toBe('processed-test-input');
+
+          (draftDb as any).messages.push(customValue);
+        },
+        [['custom-with-value', 'test-input']],
+      );
 
       dispatch(['test-custom-cofx-with-value']);
       await waitForScheduled();
@@ -685,7 +810,7 @@ describe('regEvent with cofx', () => {
           globalInterceptorCalled = true;
           context.coeffects.globalData = 'injected-by-global';
           return context;
-        }
+        },
       };
 
       regGlobalInterceptor(globalInterceptor);
@@ -716,7 +841,7 @@ describe('regEvent with cofx', () => {
         after: (context: Context) => {
           executionOrder.push('global-1-after');
           return context;
-        }
+        },
       };
 
       const globalInterceptor2: Interceptor = {
@@ -729,7 +854,7 @@ describe('regEvent with cofx', () => {
         after: (context: Context) => {
           executionOrder.push('global-2-after');
           return context;
-        }
+        },
       };
 
       regGlobalInterceptor(globalInterceptor1);
@@ -747,10 +872,10 @@ describe('regEvent with cofx', () => {
       // Expected order: global-1-before, global-2-before, handler, global-2-after, global-1-after
       expect(executionOrder).toEqual([
         'global-1-before',
-        'global-2-before', 
+        'global-2-before',
         'handler',
         'global-2-after',
-        'global-1-after'
+        'global-1-after',
       ]);
     });
 
@@ -766,7 +891,7 @@ describe('regEvent with cofx', () => {
         after: (context: Context) => {
           executionOrder.push('global-after');
           return context;
-        }
+        },
       };
 
       const customInterceptor: Interceptor = {
@@ -778,15 +903,19 @@ describe('regEvent with cofx', () => {
         after: (context: Context) => {
           executionOrder.push('custom-after');
           return context;
-        }
+        },
       };
 
       regGlobalInterceptor(globalInterceptor);
 
-      regEvent('test-execution-order', ({ draftDb }) => {
-        executionOrder.push('handler');
-        (draftDb as any).counter += 1;
-      }, [customInterceptor]);
+      regEvent(
+        'test-execution-order',
+        ({ draftDb }) => {
+          executionOrder.push('handler');
+          (draftDb as any).counter += 1;
+        },
+        [customInterceptor],
+      );
 
       dispatch(['test-execution-order']);
       await waitForScheduled();
@@ -797,7 +926,7 @@ describe('regEvent with cofx', () => {
         'custom-before',
         'handler',
         'custom-after',
-        'global-after'
+        'global-after',
       ]);
     });
 
@@ -808,7 +937,7 @@ describe('regEvent with cofx', () => {
           // Add an additional effect
           context.effects.push(['dispatch', ['secondary-event']]);
           return context;
-        }
+        },
       };
 
       let secondaryEventCalled = false;
@@ -846,19 +975,23 @@ describe('regEvent with cofx', () => {
         before: (context: Context) => {
           context.coeffects.globalValue = 'from-global';
           return context;
-        }
+        },
       };
 
       regGlobalInterceptor(globalInterceptor);
 
-      regEvent('test-global-with-cofx', ({ draftDb, now, globalValue }) => {
-        expect(now).toBeDefined();
-        expect(globalValue).toBe('from-global');
-        
-        (draftDb as any).timestamp = now;
-        (draftDb as any).globalValue = globalValue;
-        (draftDb as any).counter += 1;
-      }, [['now']]);
+      regEvent(
+        'test-global-with-cofx',
+        ({ draftDb, now, globalValue }) => {
+          expect(now).toBeDefined();
+          expect(globalValue).toBe('from-global');
+
+          (draftDb as any).timestamp = now;
+          (draftDb as any).globalValue = globalValue;
+          (draftDb as any).counter += 1;
+        },
+        [['now']],
+      );
 
       dispatch(['test-global-with-cofx']);
       await waitForScheduled();
@@ -877,7 +1010,7 @@ describe('regEvent with cofx', () => {
         before: (context: Context) => {
           globalInterceptorCalled = true;
           return context;
-        }
+        },
       };
 
       regGlobalInterceptor(globalInterceptor);
@@ -905,7 +1038,7 @@ describe('regEvent with cofx', () => {
           interceptor1Called = true;
           context.coeffects.from1 = 'interceptor1';
           return context;
-        }
+        },
       };
 
       const globalInterceptor2: Interceptor = {
@@ -914,7 +1047,7 @@ describe('regEvent with cofx', () => {
           interceptor2Called = true;
           context.coeffects.from2 = 'interceptor2';
           return context;
-        }
+        },
       };
 
       regGlobalInterceptor(globalInterceptor1);
@@ -942,9 +1075,9 @@ describe('regEvent with cofx', () => {
 
       const faultyGlobalInterceptor: Interceptor = {
         id: 'faulty-global',
-        before: (context: Context) => {
+        before: () => {
           throw new Error('Global interceptor error');
-        }
+        },
       };
 
       regGlobalInterceptor(faultyGlobalInterceptor);

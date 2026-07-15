@@ -16,9 +16,9 @@ export const EVENT_IDS = {
 } as const;
 
 // Type for all valid event IDs
-export type EventId = typeof EVENT_IDS[keyof typeof EVENT_IDS];
+export type EventId = (typeof EVENT_IDS)[keyof typeof EVENT_IDS];
 
 // Helper type to ensure event ID is valid
 export const isValidEventId = (id: string): id is EventId => {
   return Object.values(EVENT_IDS).includes(id as EventId);
-}; 
+};

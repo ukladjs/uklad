@@ -1,49 +1,94 @@
 name: CI
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
+
+permissions:
+  contents: read
 
 jobs:
-
-  typecheck:
+  quality:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        typescript: ['4.9', '5.0', '5.1', '5.2', '5.3', '5.4']
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Install specific TypeScript version
-        run: npm install --save-dev typescript@${{ matrix.typescript }}
+      - name: Run quality checks
+        run: npm run check
 
-      - name: Build with TypeScript ${{ matrix.typescript }}
+  typescript-compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build declarations
         run: npm run build
+
+      - name: Check with native TypeScript 7
+        run: npm run typecheck && npm run test:types:package
+
+      - name: Check with TypeScript 6 compatibility compiler
+        run: npm run typecheck:compat && npm run test:types:compat
+
+  legacy-consumers:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        typescript: ['4.9', '5.3']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build library
+        run: npm run build
+
+      - name: Verify packed tarball (runtime smoke + TypeScript ${{ matrix.typescript }})
+        run: npm run test:types:legacy -- ${{ matrix.typescript }}
 
   test-matrix:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        node: ['18', '20', '22']
-        react: ['18.3.1', '19.1.0']
+        node: ['22', '24', '26']
+        react: ['18.3.1', '19.2.7']
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
           cache: 'npm'
@@ -52,7 +97,12 @@ jobs:
         run: npm ci
 
       - name: Install React ${{ matrix.react }}
-        run: npm i -D react@${{ matrix.react }} react-dom@${{ matrix.react }}
+        run: |
+          if [ "${{ matrix.react }}" = "18.3.1" ]; then
+            npm i -D react@18.3.1 react-dom@18.3.1 @types/react@18.3.31 @types/react-dom@18.3.7
+          else
+            npm i -D react@19.2.7 react-dom@19.2.7 @types/react@19.2.17 @types/react-dom@19.2.3
+          fi
 
       - name: Build library
         run: npm run build
@@ -64,12 +114,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -101,13 +151,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            examples/todomvc/package-lock.json
 
       - name: Install root dependencies (for local lib alias)
         run: npm ci
@@ -120,6 +173,10 @@ jobs:
         working-directory: examples/todomvc
         run: npm run build
 
+      - name: Lint TodoMVC example
+        working-directory: examples/todomvc
+        run: npm run lint
+
       - name: Run TodoMVC tests
         working-directory: examples/todomvc
         run: npm run test
@@ -129,12 +186,12 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -163,12 +220,12 @@ jobs:
         bundler: [vite, webpack, rollup, esbuild]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies

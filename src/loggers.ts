@@ -13,8 +13,8 @@ const hasGroup = typeof console.group === 'function';
 const hasGroupEnd = typeof console.groupEnd === 'function';
 
 const defaultLoggers: Loggers = {
-  log:   console.log.bind(console),
-  warn:  console.warn.bind(console),
+  log: console.log.bind(console),
+  warn: console.warn.bind(console),
   error: console.error.bind(console),
   debug: console.debug.bind(console),
   group: hasGroup ? console.group.bind(console) : console.log.bind(console),
@@ -33,7 +33,7 @@ export function consoleLog(level: LogLevel, ...args: any[]): void {
 export function setLoggers(newLoggers: Partial<Loggers>): void {
   const keys = Object.keys(newLoggers);
   const allowed = Object.keys(defaultLoggers);
-  const invalid = keys.filter(k => !allowed.includes(k));
+  const invalid = keys.filter((k) => !allowed.includes(k));
   if (invalid.length > 0) {
     throw new Error(`reflex: Unknown keys in newLoggers: ${invalid.join(', ')}`);
   }

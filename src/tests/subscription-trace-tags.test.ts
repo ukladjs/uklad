@@ -6,12 +6,12 @@ import {
 import {
   disableTracing,
   enableTracing,
-  registerTraceCb,
-  removeTraceCb,
+  registerTraceCallback,
+  removeTraceCallback,
 } from '../trace';
 
 const TRACE_CALLBACK_KEY = 'subscription-trace-tags-test';
-const waitForTraceFlush = () => new Promise(resolve => setTimeout(resolve, 80));
+const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80));
 
 describe('subscription trace tags', () => {
   let collected: any[] = [];
@@ -20,7 +20,7 @@ describe('subscription trace tags', () => {
   beforeEach(() => {
     collected = [];
     enableTracing();
-    registerTraceCb(TRACE_CALLBACK_KEY, traces => {
+    registerTraceCallback(TRACE_CALLBACK_KEY, (traces) => {
       collected.push(...traces);
     });
   });
@@ -28,7 +28,7 @@ describe('subscription trace tags', () => {
   afterEach(() => {
     unsubscribe?.();
     unsubscribe = undefined;
-    removeTraceCb(TRACE_CALLBACK_KEY);
+    removeTraceCallback(TRACE_CALLBACK_KEY);
     disableTracing();
   });
 
@@ -51,8 +51,8 @@ describe('subscription trace tags', () => {
     publishSubscriptions([source]);
     await waitForTraceFlush();
 
-    const subscriptionRuns = collected.filter(trace => trace.opType === 'sub/run');
-    const renders = collected.filter(trace => trace.opType === 'render');
+    const subscriptionRuns = collected.filter((trace) => trace.opType === 'sub/run');
+    const renders = collected.filter((trace) => trace.opType === 'render');
 
     expect(subscriptionRuns.length).toBeGreaterThan(0);
     expect(renders).toHaveLength(1);

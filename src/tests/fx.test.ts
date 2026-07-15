@@ -53,7 +53,7 @@ describe('regFx - Custom Effects', () => {
       regEvent('test-multiple-effects', () => [
         ['log-message', 'First effect executed'],
         ['show-alert', { title: 'Alert', message: 'Second effect executed' }],
-        ['log-message', 'Third effect executed']
+        ['log-message', 'Third effect executed'],
       ]);
 
       // Dispatch the event
@@ -68,7 +68,10 @@ describe('regFx - Custom Effects', () => {
       expect(logEffectSpy).toHaveBeenNthCalledWith(2, 'Third effect executed');
 
       expect(alertEffectSpy).toHaveBeenCalledTimes(1);
-      expect(alertEffectSpy).toHaveBeenCalledWith({ title: 'Alert', message: 'Second effect executed' });
+      expect(alertEffectSpy).toHaveBeenCalledWith({
+        title: 'Alert',
+        message: 'Second effect executed',
+      });
     });
 
     it('should handle custom effects that modify external state', async () => {
@@ -87,7 +90,7 @@ describe('regFx - Custom Effects', () => {
       regEvent('test-external-state', () => [
         ['increment-count', 5],
         ['add-message', 'State modified'],
-        ['increment-count', 3]
+        ['increment-count', 3],
       ]);
 
       // Dispatch the event
@@ -115,7 +118,7 @@ describe('regFx - Custom Effects', () => {
         draftDb.status = 'processing';
         return [
           ['api-call', '/api/users'],
-          ['api-call', '/api/data']
+          ['api-call', '/api/data'],
         ];
       });
 
@@ -158,7 +161,7 @@ describe('regFx - Custom Effects', () => {
       regEvent('test-error-handling', () => [
         ['working-effect', 'Before error'],
         ['failing-effect', null],
-        ['working-effect', 'After error']
+        ['working-effect', 'After error'],
       ]);
 
       // Dispatch the event
@@ -177,9 +180,7 @@ describe('regFx - Custom Effects', () => {
 
     it('should warn about unregistered effects', async () => {
       // Register an event that uses an unregistered effect
-      regEvent('test-unregistered-effect', () => [
-        ['non-existent-effect', 'some data']
-      ]);
+      regEvent('test-unregistered-effect', () => [['non-existent-effect', 'some data']]);
 
       // Dispatch the event
       dispatch(['test-unregistered-effect']);
@@ -190,7 +191,7 @@ describe('regFx - Custom Effects', () => {
       // Verify warning was logged
       expectLogCall(
         'warn',
-        '[reflex] in \'effects\' found non-existent-effect which has no associated handler. Ignoring.'
+        "[reflex] in 'effects' found non-existent-effect which has no associated handler. Ignoring.",
       );
     });
 
@@ -205,10 +206,7 @@ describe('regFx - Custom Effects', () => {
       await waitForScheduled();
 
       // Verify warning was logged
-      expectLogCall(
-        'warn',
-        '[reflex] effects expects a vector, but was given string'
-      );
+      expectLogCall('warn', '[reflex] effects expects a vector, but was given string');
     });
   });
 
@@ -230,14 +228,14 @@ describe('regFx - Custom Effects', () => {
       regEvent('test-dispatch-integration', () => [
         ['custom-tracker', 'Before dispatch'],
         ['dispatch', ['target-event']],
-        ['custom-tracker', 'After dispatch']
+        ['custom-tracker', 'After dispatch'],
       ]);
 
       // Dispatch the event
       dispatch(['test-dispatch-integration']);
 
       // Wait for async processing (multiple cycles needed for chained dispatches)
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Verify custom effects were called
       expect(customEffectSpy).toHaveBeenCalledTimes(2);
@@ -268,7 +266,7 @@ describe('regFx - Custom Effects', () => {
         return [
           ['time-tracker', now],
           ['dispatch-later', { ms: 50, dispatch: ['delayed-event'] }],
-          ['time-tracker', now + 1]
+          ['time-tracker', now + 1],
         ];
       });
 
@@ -276,7 +274,7 @@ describe('regFx - Custom Effects', () => {
       dispatch(['test-dispatch-later-integration']);
 
       // Wait for immediate effects
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Verify immediate custom effects were called
       expect(customEffectSpy).toHaveBeenCalledTimes(2);
@@ -285,7 +283,7 @@ describe('regFx - Custom Effects', () => {
       expect(getAppDb().counter).toBe(0);
 
       // Wait for delayed dispatch
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Now the delayed event should have been processed
       expect(getAppDb().counter).toBe(5);
@@ -299,64 +297,66 @@ describe('regFx - Custom Effects', () => {
       // Register an async custom effect
       regEffect('async-operation', async (data: string) => {
         // Simulate async work
-        await new Promise(resolve => setTimeout(resolve, 20));
+        await new Promise((resolve) => setTimeout(resolve, 20));
         asyncResults.push(`Processed: ${data}`);
       });
 
       // Register an event that uses the async effect
       regEvent('test-async-effect', () => [
         ['async-operation', 'first'],
-        ['async-operation', 'second']
+        ['async-operation', 'second'],
       ]);
 
       // Dispatch the event
       dispatch(['test-async-effect']);
 
       // Wait for async processing
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Verify async effects completed
-      expect(asyncResults).toEqual([
-        'Processed: first',
-        'Processed: second'
-      ]);
+      expect(asyncResults).toEqual(['Processed: first', 'Processed: second']);
     });
 
     it('should handle effects with complex data structures', async () => {
       const processedData: any[] = [];
 
       // Register an effect that handles complex data
-      regEffect('process-complex-data', (data: {
-        id: number;
-        items: string[];
-        metadata: { created: number; tags: string[] };
-      }) => {
-        processedData.push({
-          ...data,
-          processed: true,
-          processedAt: Date.now()
-        });
-      });
+      regEffect(
+        'process-complex-data',
+        (data: { id: number; items: string[]; metadata: { created: number; tags: string[] } }) => {
+          processedData.push({
+            ...data,
+            processed: true,
+            processedAt: Date.now(),
+          });
+        },
+      );
 
       // Register an event with complex data
       regEvent('test-complex-data', () => [
-        ['process-complex-data', {
-          id: 1,
-          items: ['item1', 'item2'],
-          metadata: { created: 123456789, tags: ['urgent', 'important'] }
-        }],
-        ['process-complex-data', {
-          id: 2,
-          items: ['item3'],
-          metadata: { created: 123456790, tags: ['normal'] }
-        }]
+        [
+          'process-complex-data',
+          {
+            id: 1,
+            items: ['item1', 'item2'],
+            metadata: { created: 123456789, tags: ['urgent', 'important'] },
+          },
+        ],
+        [
+          'process-complex-data',
+          {
+            id: 2,
+            items: ['item3'],
+            metadata: { created: 123456790, tags: ['normal'] },
+          },
+        ],
       ]);
 
       // Dispatch the event
       dispatch(['test-complex-data']);
 
       // Wait for processing
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       // Verify complex data was processed correctly
       expect(processedData).toHaveLength(2);
@@ -364,7 +364,7 @@ describe('regFx - Custom Effects', () => {
         id: 1,
         items: ['item1', 'item2'],
         metadata: { created: 123456789, tags: ['urgent', 'important'] },
-        processed: true
+        processed: true,
       });
       expect(processedData[0].processedAt).toBeGreaterThan(0);
 
@@ -372,7 +372,7 @@ describe('regFx - Custom Effects', () => {
         id: 2,
         items: ['item3'],
         metadata: { created: 123456790, tags: ['normal'] },
-        processed: true
+        processed: true,
       });
     });
 
@@ -397,4 +397,4 @@ describe('regFx - Custom Effects', () => {
       expect(noParamSpy).toHaveBeenCalledTimes(1);
     });
   });
-}); 
+});

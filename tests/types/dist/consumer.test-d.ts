@@ -1,6 +1,6 @@
 /**
  * Compile-time regression test against the BUILT package types
- * (dist/index.d.ts), resolved as '@flexsurfer/reflex' via a paths mapping —
+ * (dist/index.d.mts), resolved as '@flexsurfer/reflex' via a paths mapping —
  * exactly how a consumer sees it. This guards the augmentation contract:
  * tsup's dts rollup must keep EventPayloads/SubPayloads/AppDb declared (not
  * just re-exported) in the entry module, or `declare module
@@ -10,7 +10,7 @@
  * wired into prepublishOnly after the build step.
  */
 import { dispatch, dispatchSync, regEvent, useSubscription, getAppDb } from '@flexsurfer/reflex';
-import type { SubscriptionDiagnostic } from '@flexsurfer/reflex';
+import type { EventRegistrationOptions, SubscriptionDiagnostic } from '@flexsurfer/reflex';
 
 interface Todo { id: number; title: string; done: boolean }
 
@@ -51,6 +51,11 @@ regEvent('todos/add', ({ draftDb }, title) => {
   const _first: string | undefined = draftDb.todos[0]?.title;
   void _title; void _first;
 });
+const registrationOptions: EventRegistrationOptions = {
+  coeffects: [['now']],
+  interceptors: [{ id: 'dist-options', before: (context) => context }],
+};
+regEvent('app/init', () => undefined, registrationOptions);
 // @ts-expect-error unknown db key
 regEvent('app/init', ({ draftDb }) => { draftDb.nope = 1; });
 

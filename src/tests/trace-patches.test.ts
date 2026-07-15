@@ -3,7 +3,12 @@
  * for the trace pipeline (devtools). With tracing off, events go through
  * plain produce and no patch tags exist anywhere.
  */
-import { enableTracing, disableTracing, registerTraceCb, removeTraceCb } from '../trace';
+import {
+  enableTracing,
+  disableTracing,
+  registerTraceCallback,
+  removeTraceCallback,
+} from '../trace';
 import { regEvent } from '../events';
 import { dispatch } from '../router';
 import { initAppDb, getAppDb } from '../db';
@@ -25,13 +30,13 @@ describe('Conditional patch generation', () => {
   });
 
   afterEach(() => {
-    removeTraceCb('trace-patches-test');
+    removeTraceCallback('trace-patches-test');
     disableTracing();
   });
 
   it('should attach patches, reversePatches and effects to event traces while tracing', async () => {
     enableTracing();
-    registerTraceCb('trace-patches-test', (traces) => {
+    registerTraceCallback('trace-patches-test', (traces) => {
       collected.push(...traces);
     });
 
@@ -43,12 +48,8 @@ describe('Conditional patch generation', () => {
 
     const trace = collected.find((t) => t.operation === 'tp-set-value' && t.opType === 'event');
     expect(trace).toBeDefined();
-    expect(trace.tags.patches).toEqual([
-      { op: 'replace', path: ['value'], value: 42 }
-    ]);
-    expect(trace.tags.reversePatches).toEqual([
-      { op: 'replace', path: ['value'], value: 0 }
-    ]);
+    expect(trace.tags.patches).toEqual([{ op: 'replace', path: ['value'], value: 42 }]);
+    expect(trace.tags.reversePatches).toEqual([{ op: 'replace', path: ['value'], value: 0 }]);
     expect(trace.tags.effects).toEqual([]);
   });
 

@@ -14,22 +14,22 @@ import type { EventVector } from '../types';
 export const waitForScheduled = async () => {
   // Wait for setImmediate (React Native priority)
   if (typeof (globalThis as any).setImmediate === 'function') {
-    await new Promise(resolve => (globalThis as any).setImmediate(resolve));
+    await new Promise((resolve) => (globalThis as any).setImmediate(resolve));
     return;
   }
-  
+
   // Wait for MessageChannel (Web priority)
   if (typeof MessageChannel !== 'undefined') {
-    await new Promise(resolve => {
+    await new Promise((resolve) => {
       const { port1, port2 } = new MessageChannel();
       port1.onmessage = () => resolve(undefined);
       port2.postMessage(undefined);
     });
     return;
   }
-  
+
   // Wait for setTimeout fallback
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
 /**
@@ -37,9 +37,9 @@ export const waitForScheduled = async () => {
  */
 export const waitForAnimationFrame = async () => {
   if (typeof requestAnimationFrame !== 'undefined') {
-    await new Promise(resolve => requestAnimationFrame(resolve));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
   } else {
-    await new Promise(resolve => setTimeout(resolve, 16));
+    await new Promise((resolve) => setTimeout(resolve, 16));
   }
 };
 
@@ -47,7 +47,7 @@ export const waitForAnimationFrame = async () => {
  * Wait for subscription recomputation (which uses queueMicrotask)
  */
 export const waitForSubscription = async () => {
-  await new Promise(resolve => queueMicrotask(() => resolve(undefined)));
+  await new Promise((resolve) => queueMicrotask(() => resolve(undefined)));
 };
 
 /**

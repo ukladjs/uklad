@@ -1,10 +1,5 @@
-import type {
-  Context,
-  Interceptor,
-  CoEffectHandler,
-  CoEffects
-} from './types';
-import { registerHandler, getHandler } from './registrar';
+import type { Context, Interceptor, CoEffectHandler, CoEffects } from './types';
+import { registerHandler, registerSystemHandler, getHandler } from './registrar';
 import { consoleLog } from './loggers';
 
 // -- Registration -----------------------------------------------------------
@@ -36,7 +31,7 @@ export function getInjectCofxInterceptor(id: string, value?: any): Interceptor {
         consoleLog('error', '[reflex] No cofx handler registered for', id);
       }
       return context;
-    }
+    },
   };
 }
 
@@ -48,13 +43,13 @@ export const RANDOM = 'random';
 // -- Builtin CoEffects Handlers ---------------------------------------------
 
 // Handler for now, injects current timestamp
-regCoeffect(NOW, (coeffects: CoEffects): CoEffects => ({
+registerSystemHandler(KIND, NOW, (coeffects: CoEffects): CoEffects => ({
   ...coeffects,
-  now: Date.now()
+  now: Date.now(),
 }));
 
 // Handler for random, injects a random number
-regCoeffect(RANDOM, (coeffects: CoEffects): CoEffects => ({
+registerSystemHandler(KIND, RANDOM, (coeffects: CoEffects): CoEffects => ({
   ...coeffects,
-  random: Math.random()
+  random: Math.random(),
 }));

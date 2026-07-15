@@ -14,10 +14,26 @@ import { clearSubscriptionCache } from '../registrar';
 
 describe('Dev warnings for non-serializable subscription params', () => {
   regSub('warn-items');
-  regSub('warn-by-filter', (items) => items, () => [['warn-items']]);
-  regSub('warn-by-query', (items) => items, () => [['warn-items']]);
-  regSub('warn-hook-circular', (items) => items, () => [['warn-items']]);
-  regSub('warn-hook-bigint', (items) => items, () => [['warn-items']]);
+  regSub(
+    'warn-by-filter',
+    (items) => items,
+    () => [['warn-items']],
+  );
+  regSub(
+    'warn-by-query',
+    (items) => items,
+    () => [['warn-items']],
+  );
+  regSub(
+    'warn-hook-circular',
+    (items) => items,
+    () => [['warn-items']],
+  );
+  regSub(
+    'warn-hook-bigint',
+    (items) => items,
+    () => [['warn-items']],
+  );
 
   const warnCallsContaining = (fragment: string) =>
     getTestLogCalls().warn.filter((call: any[]) => String(call[0]).includes(fragment));
@@ -49,7 +65,7 @@ describe('Dev warnings for non-serializable subscription params', () => {
 
   it('should warn through the React hook before a circular param throws', () => {
     // React also reports render errors via console.error; keep output clean
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => { });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     const circular: any = { a: 1 };
     circular.self = circular;
@@ -65,7 +81,7 @@ describe('Dev warnings for non-serializable subscription params', () => {
   });
 
   it('should warn through the React hook before a BigInt param throws', () => {
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => { });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(() => {
       renderHook(() => useSubscription(['warn-hook-bigint', BigInt(1) as any]));

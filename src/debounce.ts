@@ -2,16 +2,16 @@ import type { DispatchVector, Id } from './types';
 import { dispatch } from './router';
 
 // Storage for timeout IDs keyed by event keys
-const timeout = new Map<Id, ReturnType<typeof setTimeout>>();
+const debounceTimers = new Map<Id, ReturnType<typeof setTimeout>>();
 
 /**
  * Clears a specific timeout by event key
  */
 export function clear(eventKey: Id): void {
-  const eventTimeout = timeout.get(eventKey);
-  if (eventTimeout) {
+  const eventTimeout = debounceTimers.get(eventKey);
+  if (eventTimeout !== undefined) {
     clearTimeout(eventTimeout);
-    timeout.delete(eventKey);
+    debounceTimers.delete(eventKey);
   }
 }
 
@@ -19,10 +19,10 @@ export function clear(eventKey: Id): void {
  * Clears all active timeouts
  */
 export function clearAll(): void {
-  for (const [, timeoutId] of timeout) {
+  for (const timeoutId of debounceTimers.values()) {
     clearTimeout(timeoutId);
   }
-  timeout.clear();
+  debounceTimers.clear();
 }
 
 /**
@@ -32,17 +32,17 @@ export function clearAll(): void {
 export function debounceAndDispatch(event: DispatchVector, durationMs: number): void {
   const eventKey = event[0];
   clear(eventKey);
-  
+
   const timeoutId = setTimeout(() => {
-    timeout.delete(eventKey);
+    debounceTimers.delete(eventKey);
     dispatch(event);
   }, durationMs);
-  
-  timeout.set(eventKey, timeoutId);
+
+  debounceTimers.set(eventKey, timeoutId);
 }
 
 // Storage for throttle state keyed by event keys
-const throttle = new Map<Id, boolean>();
+const throttledEventIds = new Set<Id>();
 
 /**
  * Dispatches event and ignores subsequent calls for the duration of `durationMs`.
@@ -50,14 +50,13 @@ const throttle = new Map<Id, boolean>();
  */
 export function throttleAndDispatch(event: DispatchVector, durationMs: number): void {
   const eventKey = event[0];
-  
-  if (!throttle.get(eventKey)) {
-    throttle.set(eventKey, true);
-    
-    setTimeout(() => {
-      throttle.delete(eventKey);
-    }, durationMs);
-    
-    dispatch(event);
-  }
+
+  if (throttledEventIds.has(eventKey)) return;
+
+  throttledEventIds.add(eventKey);
+  setTimeout(() => {
+    throttledEventIds.delete(eventKey);
+  }, durationMs);
+
+  dispatch(event);
 }

@@ -13,22 +13,28 @@ import { waitForAnimationFrame, waitForEventAndSubscription } from './test-utils
 describe('React Hooks', () => {
   // Register test subscriptions
   regSub('user');
-  regSub('user-name', (user) => user?.name, () => [['user']]);
+  regSub(
+    'user-name',
+    (user) => user?.name,
+    () => [['user']],
+  );
   regSub('user-email-str', 'userEmail'); // Test string computeFn - simple field name
   regSub('todos');
-  regSub('todos-count', (todos) => (todos || []).length, () => [['todos']]);
+  regSub(
+    'todos-count',
+    (todos) => (todos || []).length,
+    () => [['todos']],
+  );
 
   beforeEach(() => {
     // Set up test data
     initAppDb({
       user: {
         name: 'John Doe',
-        email: 'john@example.com'
+        email: 'john@example.com',
       },
       userEmail: 'john@example.com', // For string-based subscription test
-      todos: [
-        { id: 1, text: 'Test todo', completed: false }
-      ]
+      todos: [{ id: 1, text: 'Test todo', completed: false }],
     });
   });
 
@@ -42,7 +48,7 @@ describe('React Hooks', () => {
 
       expect(result.current).toEqual({
         name: 'John Doe',
-        email: 'john@example.com'
+        email: 'john@example.com',
       });
     });
 
@@ -55,9 +61,7 @@ describe('React Hooks', () => {
     it('should return array subscription value', () => {
       const { result } = renderHook(() => useSubscription(['todos']));
 
-      expect(result.current).toEqual([
-        { id: 1, text: 'Test todo', completed: false }
-      ]);
+      expect(result.current).toEqual([{ id: 1, text: 'Test todo', completed: false }]);
     });
 
     it('should return computed subscription value', () => {
@@ -95,35 +99,42 @@ describe('React Hooks', () => {
 
       expectLogCall(
         'error',
-        "[reflex] Subscription 'user-email-str-duplicate' was not registered. Root key 'userEmail' is already used by subscription 'user-email-str'."
+        "[reflex] Subscription 'user-email-str-duplicate' was not registered. Root key 'userEmail' is already used by subscription 'user-email-str'.",
       );
       expect(hasHandler('sub', 'user-email-str-duplicate')).toBe(false);
     });
 
     it('should handle subscription with parameters', () => {
       // Register a parameterized subscription
-      regSub('todo-by-id', (todos, id) => {
-        return (todos || []).find((todo: any) => todo.id === id);
-      }, () => [['todos']]);
+      regSub(
+        'todo-by-id',
+        (todos, id) => {
+          return (todos || []).find((todo: any) => todo.id === id);
+        },
+        () => [['todos']],
+      );
 
       const { result } = renderHook(() => useSubscription(['todo-by-id', 1]));
 
       expect(result.current).toEqual({
         id: 1,
         text: 'Test todo',
-        completed: false
+        completed: false,
       });
     });
 
     it('should handle subscription with deps parameters', () => {
-
       // Register a subscription that uses parameters in deps function
-      regSub('todo-name-by-id', (todo) => {
-        return todo?.text || null;
-      }, (id) => {
-        // Use the id parameter to create dynamic dependencies
-        return [['todo-by-id', id]];
-      });
+      regSub(
+        'todo-name-by-id',
+        (todo) => {
+          return todo?.text || null;
+        },
+        (id) => {
+          // Use the id parameter to create dynamic dependencies
+          return [['todo-by-id', id]];
+        },
+      );
 
       const { result } = renderHook(() => useSubscription(['todo-name-by-id', 1]));
 
@@ -132,10 +143,10 @@ describe('React Hooks', () => {
 
     it('should handle non-existent subscription gracefully', () => {
       const { result } = renderHook(() => useSubscription(['non-existent-sub']));
-      
+
       // Should return undefined for non-existent subscription
       expect(result.current).toBeUndefined();
-      
+
       // Should have logged the error
       expectLogCall('error', '[reflex] no sub handler registered for: non-existent-sub');
     });
@@ -148,7 +159,7 @@ describe('React Hooks', () => {
       regEvent('set-todos', ({ draftDb }) => {
         draftDb.todos = [
           { id: 1, text: 'Test todo', completed: false },
-          { id: 2, text: 'Another todo', completed: true }
+          { id: 2, text: 'Another todo', completed: true },
         ];
       });
       // Update the database using updateAppDb for reactivity
@@ -164,9 +175,9 @@ describe('React Hooks', () => {
 
     it('should handle multiple subscriptions in same component', () => {
       const { result } = renderHook(() => ({
-        user: useSubscription<{ name: string, email: string }>(['user']),
+        user: useSubscription<{ name: string; email: string }>(['user']),
         userName: useSubscription<string>(['user-name']),
-        todosCount: useSubscription<number>(['todos-count'])
+        todosCount: useSubscription<number>(['todos-count']),
       }));
 
       expect(result.current.user?.name).toBe('John Doe');
@@ -177,12 +188,11 @@ describe('React Hooks', () => {
     it('should re-render when AppDB changes via event dispatch', async () => {
       // Register an event handler that updates AppDB
       regEvent('add-todo', ({ draftDb }, text) => {
-
         const currentTodos = draftDb.todos || [];
         const newTodo = {
           id: Date.now(),
           text,
-          completed: false
+          completed: false,
         };
         draftDb.todos = [...currentTodos, newTodo];
       });
@@ -196,7 +206,7 @@ describe('React Hooks', () => {
       const { result } = renderHook(() => ({
         todosCount: useSubscription<number>(['todos-count']),
         userName: useSubscription<string>(['user-name']),
-        todos: useSubscription<Array<{ id: number, text: string, completed: boolean }>>(['todos'])
+        todos: useSubscription<Array<{ id: number; text: string; completed: boolean }>>(['todos']),
       }));
 
       // Initial state
@@ -216,7 +226,7 @@ describe('React Hooks', () => {
       await waitFor(() => {
         expect(result.current.todosCount).toBe(2);
         expect(result.current.todos).toHaveLength(2);
-        expect(result.current.todos[1].text).toBe('Learn Simple Reactive System');
+        expect(result.current.todos[1]!.text).toBe('Learn Simple Reactive System');
       });
 
       // Dispatch event to update user name
@@ -241,7 +251,7 @@ describe('React Hooks', () => {
         draftDb.counter = (draftDb.counter || 0) + 1;
       });
 
-      regEvent('set-counter', ({ draftDb },value) => {
+      regEvent('set-counter', ({ draftDb }, value) => {
         draftDb.counter = value;
       });
 
@@ -250,11 +260,11 @@ describe('React Hooks', () => {
 
       // Set initial counter
       initAppDb({
-        counter: 0
+        counter: 0,
       });
 
       const { result } = renderHook(() => ({
-        counter: useSubscription(['counter'])
+        counter: useSubscription(['counter']),
       }));
 
       expect(result.current.counter).toBe(0);
@@ -303,20 +313,24 @@ describe('React Hooks', () => {
     });
 
     it('should re-subscribe when subscription parameters change', async () => {
-      regSub('todo-text-by-id', (todos, id) => {
-        return (todos || []).find((todo: any) => todo.id === id)?.text ?? null;
-      }, () => [['todos']]);
+      regSub(
+        'todo-text-by-id',
+        (todos, id) => {
+          return (todos || []).find((todo: any) => todo.id === id)?.text ?? null;
+        },
+        () => [['todos']],
+      );
 
       initAppDb({
         todos: [
           { id: 1, text: 'First todo', completed: false },
-          { id: 2, text: 'Second todo', completed: true }
-        ]
+          { id: 2, text: 'Second todo', completed: true },
+        ],
       });
 
       const { result, rerender } = renderHook(
         ({ id }: { id: number }) => useSubscription<string | null>(['todo-text-by-id', id]),
-        { initialProps: { id: 1 } }
+        { initialProps: { id: 1 } },
       );
 
       expect(result.current).toBe('First todo');
@@ -371,8 +385,16 @@ describe('React Hooks', () => {
 
     it('should render consistent values across subscriptions sharing a dependency', async () => {
       regSub('cons-base');
-      regSub('cons-x10', (v: number) => v * 10, () => [['cons-base']]);
-      regSub('cons-x100', (v: number) => v * 100, () => [['cons-base']]);
+      regSub(
+        'cons-x10',
+        (v: number) => v * 10,
+        () => [['cons-base']],
+      );
+      regSub(
+        'cons-x100',
+        (v: number) => v * 100,
+        () => [['cons-base']],
+      );
 
       initAppDb({ 'cons-base': 1 });
 

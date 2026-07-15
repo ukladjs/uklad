@@ -9,7 +9,11 @@ import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './
 
 describe('dispatchSync', () => {
   regSub('ds-counter');
-  regSub('ds-double', (counter) => counter * 2, () => [['ds-counter']]);
+  regSub(
+    'ds-double',
+    (counter) => counter * 2,
+    () => [['ds-counter']],
+  );
 
   regEvent('ds-inc', ({ draftDb }) => {
     draftDb['ds-counter'] += 1;

@@ -20,12 +20,16 @@ const waitForFlush = async () => {
 describe('Subscription flush', () => {
   regSub('flush-counter');
   regSub('flush-other');
-  regSub('flush-double', (counter) => counter * 2, () => [['flush-counter']]);
+  regSub(
+    'flush-double',
+    (counter) => counter * 2,
+    () => [['flush-counter']],
+  );
 
   regEvent('flush-inc', ({ draftDb }) => {
     draftDb['flush-counter'] += 1;
   });
-  regEvent('flush-noop', () => { });
+  regEvent('flush-noop', () => {});
   regEvent('flush-del-other', ({ draftDb }) => {
     delete draftDb['flush-other'];
   });
@@ -42,9 +46,15 @@ describe('Subscription flush', () => {
       const unsubscribe = subscribeToSubscription(subscription, callback);
       expect(getSubscriptionSnapshot(subscription)).toBe(0);
 
-      expect(() => clearSubscriptionCache()).toThrow('Cannot clear subscriptions while a subscription graph is active');
-      expect(() => clearHandlers('sub')).toThrow('Cannot clear subscriptions while a subscription graph is active');
-      expect(() => clearSubs()).toThrow('Cannot clear subscriptions while a subscription graph is active');
+      expect(() => clearSubscriptionCache()).toThrow(
+        'Cannot clear subscriptions while a subscription graph is active',
+      );
+      expect(() => clearHandlers('sub')).toThrow(
+        'Cannot clear subscriptions while a subscription graph is active',
+      );
+      expect(() => clearSubs()).toThrow(
+        'Cannot clear subscriptions while a subscription graph is active',
+      );
       initAppDb({ 'flush-counter': 2, 'flush-other': 'replacement' });
       expect(callback).toHaveBeenCalledTimes(1);
       expect(getSubscriptionSnapshot(subscription)).toBe(2);
@@ -197,9 +207,11 @@ describe('Subscription flush', () => {
       const unsubscribe = subscribeToSubscription(subscription, callback);
       expect(getSubscriptionSnapshot(subscription)).toBe(0);
 
-      updateAppDb(produce(getAppDb(), (draft: any) => {
-        draft['flush-counter'] = 5;
-      }));
+      updateAppDb(
+        produce(getAppDb(), (draft: any) => {
+          draft['flush-counter'] = 5;
+        }),
+      );
       flushSubscriptions();
 
       expect(callback).toHaveBeenCalledTimes(1);
@@ -215,9 +227,11 @@ describe('Subscription flush', () => {
       const unsubscribe = subscribeToSubscription(subscription, () => {
         if (attempted) return;
         attempted = true;
-        updateAppDb(produce(getAppDb(), (draft: any) => {
-          draft['flush-counter'] = 5;
-        }));
+        updateAppDb(
+          produce(getAppDb(), (draft: any) => {
+            draft['flush-counter'] = 5;
+          }),
+        );
         try {
           flushSubscriptions();
         } catch (error: any) {
@@ -226,9 +240,11 @@ describe('Subscription flush', () => {
       });
       expect(getSubscriptionSnapshot(subscription)).toBe(0);
 
-      updateAppDb(produce(getAppDb(), (draft: any) => {
-        draft['flush-counter'] = 1;
-      }));
+      updateAppDb(
+        produce(getAppDb(), (draft: any) => {
+          draft['flush-counter'] = 1;
+        }),
+      );
       flushSubscriptions();
 
       expect(nestedError?.message).toMatch(/publication is not allowed/);

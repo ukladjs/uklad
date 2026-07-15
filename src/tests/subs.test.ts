@@ -1,17 +1,14 @@
-import {
-  regSub,
-  getOrCreateSubscription,
-  getSubscriptionValue,
-  hasNonSerializableSubParam,
-} from '../subs';
-import { initAppDb } from '../db';
+import { regSub } from '../subscriptions/registration';
+import { getOrCreateSubscription, getSubscriptionValue } from '../subscriptions/queries';
+import { initAppDb } from '../runtime/app-db';
 import {
   hasCachedSubscription,
   clearSubscriptionCache,
   getSubConfig,
   sweepProvisionalSubscriptions,
-} from '../registrar';
-import { subscribeToSubscription } from '../subscription-runtime';
+} from '../runtime/subscriptions/cache';
+import { subscribeToSubscription } from '../runtime/subscriptions/engine';
+import { hasNonSerializableSubParam } from '../runtime/subscriptions/keys';
 import { waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('Subscription registry lifecycle', () => {
@@ -118,7 +115,6 @@ describe('Subscription registry lifecycle', () => {
     });
 
     it('should sweep via the runtime scheduler without manual sweeps or db updates', async () => {
-      // A render-like read on an app that never dispatches afterwards
       getSubscriptionValue(['sweep-count']);
       expect(hasCachedSubscription(countKey)).toBe(true);
       expect(hasCachedSubscription(rootKey)).toBe(true);

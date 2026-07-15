@@ -1,13 +1,12 @@
-import { regEvent } from '../events';
-import { regCoeffect } from '../cofx';
-import { dispatch, dispatchSync } from '../router';
-import { initAppDb, getAppDb } from '../db';
-import { registerHandler } from '../registrar';
-import { regGlobalInterceptor, clearGlobalInterceptors } from '../settings';
+import { regEvent } from '../events/registration';
+import { regCoeffect } from '../events/coeffects';
+import { dispatch, dispatchSync } from '../events/router';
+import { initAppDb, getAppDb } from '../runtime/app-db';
+import { registerHandler } from '../runtime/handlers';
+import { regGlobalInterceptor, clearGlobalInterceptors } from '../events/global-interceptors';
 import type { CoEffects, EventRegistrationOptions, Interceptor, Context } from '../types';
 import { waitForScheduled } from './test-utils';
 
-// Type definitions for testing type-safe event handlers
 interface EventTestState {
   counter: number;
   messages: string[];
@@ -23,7 +22,7 @@ interface EventTestState {
 }
 
 describe('regEvent', () => {
-  // Register a default error handler to suppress console errors in tests
+  // Prevent expected handler failures from reaching the console.
   beforeAll(() => {
     registerHandler('error', 'event-handler', () => undefined);
   });
@@ -40,21 +39,17 @@ describe('regEvent', () => {
       const initialDb = getAppDb();
       expect(initialDb.counter).toBe(0);
 
-      // Register an event that increments the counter
       regEvent('incrementCounter', ({ draftDb }) => {
         draftDb.counter += 1;
       });
 
-      // Dispatch the increment event asynchronously
       dispatch(['incrementCounter']);
 
-      // The database should still have the old value
+      // dispatch queues work; it must not commit synchronously.
       expect(getAppDb().counter).toBe(0);
 
-      // Wait for the async event to be processed
       await waitForScheduled();
 
-      // Now the database should be updated
       expect(getAppDb().counter).toBe(1);
     });
   });
@@ -64,69 +59,54 @@ describe('regEvent', () => {
       const initialDb = getAppDb();
       const initialCounter = initialDb.counter;
 
-      // Store reference to original db object to verify immutability
       const originalDbReference = initialDb;
 
-      // Register an event that uses Immer dbUpdate effect
       regEvent('incrementCounterImmer', ({ draftDb }) => {
         draftDb.counter += 1;
         draftDb.lastUpdated = Date.now();
       });
 
-      // Dispatch the increment event asynchronously
       dispatch(['incrementCounterImmer']);
 
-      // The database should still have the old value immediately
+      // The queued handler must not mutate the current snapshot.
       expect(getAppDb().counter).toBe(initialCounter);
 
-      // Wait for the async event to be processed
       await waitForScheduled();
 
       const updatedDb = getAppDb();
 
-      // Now the database should be updated
       expect(updatedDb.counter).toBe(initialCounter + 1);
       expect(updatedDb.lastUpdated).toBeDefined();
 
-      // Verify immutability - original db object should be unchanged
       expect(originalDbReference.counter).toBe(initialCounter);
       expect(originalDbReference.lastUpdated).toBeUndefined();
 
-      // Verify we have a new db object reference
       expect(updatedDb).not.toBe(originalDbReference);
     });
 
     it('should handle async event dispatch with complex Immer mutations', async () => {
       const initialDb = getAppDb();
 
-      // Register an event that performs complex mutations
       regEvent('complexImmerUpdate', ({ draftDb }) => {
-        // Increment counter
         draftDb.counter += 5;
 
-        // Add multiple items to arrays
         if (!draftDb.todos) draftDb.todos = [];
         draftDb.todos.push({ id: 1, text: 'Async todo 1', completed: false });
         draftDb.todos.push({ id: 2, text: 'Async todo 2', completed: true });
 
-        // Update nested objects
         if (!draftDb.user) draftDb.user = {};
         draftDb.user.lastAction = 'complex-update';
         draftDb.user.actionCount = (draftDb.user.actionCount || 0) + 1;
       });
 
-      // Dispatch the complex event asynchronously
       dispatch(['complexImmerUpdate']);
 
-      // Initial state should be unchanged
       expect(getAppDb().counter).toBe(initialDb.counter);
 
-      // Wait for async processing
       await waitForScheduled();
 
       const updatedDb = getAppDb();
 
-      // Verify all mutations were applied
       expect(updatedDb.counter).toBe(initialDb.counter + 5);
       expect(updatedDb.todos).toHaveLength(2);
       expect(updatedDb.todos[0]).toEqual({ id: 1, text: 'Async todo 1', completed: false });
@@ -134,27 +114,23 @@ describe('regEvent', () => {
       expect(updatedDb.user.lastAction).toBe('complex-update');
       expect(updatedDb.user.actionCount).toBe(1);
 
-      // Verify immutability
       expect(updatedDb).not.toBe(initialDb);
     });
 
     it('should allow effects through fx properly', async () => {
-      // Register a test event handler to capture dispatched events
       const capturedEvents: string[] = [];
       regEvent('captureTestEvent', () => {
         capturedEvents.push('captured');
       });
 
-      // Register an event that uses effects for other effects
       regEvent('effectsTest', ({ draftDb }) => {
         draftDb.fxTestValue = 'updated-via-fx';
         return [['dispatch', ['captureTestEvent']]];
       });
 
-      // Dispatch the event
       dispatch(['effectsTest']);
 
-      // Wait for async processing with longer timeout and multiple checks
+      // The dispatched effect runs in a later queue cycle, so poll both outcomes.
       await new Promise<void>((resolve) => {
         let resolved = false;
         const timeouts: ReturnType<typeof setTimeout>[] = [];
@@ -170,9 +146,8 @@ describe('regEvent', () => {
           }
         };
 
-        // Start checking immediately
         timeouts.push(setTimeout(checkForCompletion, 0));
-        // But also set a timeout to avoid infinite waiting
+        // Bound the poll so a failure cannot leave Jest waiting indefinitely.
         timeouts.push(
           setTimeout(() => {
             if (!resolved) {
@@ -186,68 +161,11 @@ describe('regEvent', () => {
 
       const updatedDb = getAppDb();
 
-      // Verify dbUpdate worked
       expect(updatedDb.fxTestValue).toBe('updated-via-fx');
 
-      // Verify effects dispatch worked
       expect(capturedEvents).toContain('captured');
     });
   });
-
-  /*describe('Error handling', () => {
-    it('should throw error for empty event id', () => {
-      expect(() => {
-        regEvent('', () => ({}));
-      }).toThrow('reflex: regEvent requires a non-empty event id');
-    });
-
-    it('should throw error for non-function handler', () => {
-      expect(() => {
-        regEvent('bad-event', 'not a function' as any);
-      }).toThrow('reflex: regEvent requires a handler function');
-    });
-
-    it('should throw error for non-function handler with interceptors', () => {
-      expect(() => {
-        regEvent('bad-event', [], 'not a function' as any);
-      }).toThrow('reflex: regEvent requires a handler function');
-    });
-  });*/
-
-  /*describe('Event dispatch and handling', () => {
-
-    it('should handle events with custom interceptors', () => {
-      let beforeCalled = false;
-      let afterCalled = false;
-
-      const beforeInterceptor = {
-        id: 'before-test',
-        before: (ctx: any) => {
-          beforeCalled = true;
-          return ctx;
-        }
-      };
-
-      const afterInterceptor = {
-        id: 'after-test',
-        after: (ctx: any) => {
-          afterCalled = true;
-          return ctx;
-        }
-      };
-
-      const handler = (coeffects: any, event: any) => {
-        return { db: { ...coeffects.db, handled: true } };
-      };
-
-      regEvent('test-interceptors', [beforeInterceptor, afterInterceptor], handler);
-      dispatchSync(['test-interceptors']);
-
-      expect(beforeCalled).toBe(true);
-      expect(afterCalled).toBe(true);
-      expect(appDb).toEqual(expect.objectContaining({ handled: true }));
-    });
-  });*/
 });
 
 describe('Type-safe Event Handlers', () => {
@@ -270,18 +188,14 @@ describe('Type-safe Event Handlers', () => {
 
   describe('Type-safe event registration and handling', () => {
     it('should handle type-safe counter increment', async () => {
-      // Register a type-safe event handler
       regEvent<EventTestState>('increment-counter', ({ draftDb }) => {
-        // draftDb is now typed as EventTestState
         const currentCounter = draftDb.counter;
         expect(typeof currentCounter).toBe('number');
         draftDb.counter += 1;
       });
 
-      // Dispatch the event
       dispatch(['increment-counter']);
 
-      // Wait for async processing
       await waitForScheduled();
 
       const db = getAppDb<EventTestState>();
@@ -315,7 +229,7 @@ describe('Type-safe Event Handlers', () => {
       const db = getAppDb<EventTestState>();
       expect(db.user.name).toBe('John Doe');
       expect(db.user.isActive).toBe(false);
-      expect(db.user.id).toBe(1); // unchanged
+      expect(db.user.id).toBe(1);
     });
 
     it('should handle type-safe union type fields', async () => {
@@ -323,14 +237,12 @@ describe('Type-safe Event Handlers', () => {
         draftDb.settings.theme = draftDb.settings.theme === 'light' ? 'dark' : 'light';
       });
 
-      // Toggle from light to dark
       dispatch(['toggle-theme']);
       await waitForScheduled();
 
       let db = getAppDb<EventTestState>();
       expect(db.settings.theme).toBe('dark');
 
-      // Toggle back to light
       dispatch(['toggle-theme']);
       await waitForScheduled();
 
@@ -372,18 +284,17 @@ describe('Type-safe Event Handlers', () => {
         draftDb.user.isActive = !draftDb.user.isActive;
       });
 
-      // Dispatch all events
       dispatch(['multi-test-1']);
       dispatch(['multi-test-2']);
       dispatch(['multi-test-3']);
 
-      // Wait for async processing
+      // All three queued events must drain before reading the database.
       await new Promise((resolve) => setTimeout(resolve, 10));
 
       const db = getAppDb<EventTestState>();
       expect(db.counter).toBe(10);
       expect(db.messages).toContain('From handler 2');
-      expect(db.user.isActive).toBe(false); // was true initially
+      expect(db.user.isActive).toBe(false);
     });
   });
 
@@ -391,13 +302,11 @@ describe('Type-safe Event Handlers', () => {
     it('should handle type-safe events with fx effects', async () => {
       let fxExecuted = false;
 
-      // Register a helper event to track fx execution
       regEvent<EventTestState>('fx-helper', ({ draftDb }) => {
         fxExecuted = true;
         draftDb.messages.push('FX executed');
       });
 
-      // Register main event with effects
       regEvent<EventTestState>('main-with-effects', ({ draftDb }) => {
         draftDb.counter += 5;
         return [['dispatch', ['fx-helper']]];
@@ -405,7 +314,7 @@ describe('Type-safe Event Handlers', () => {
 
       dispatch(['main-with-effects']);
 
-      // Wait for async processing
+      // The dispatch effect requires another queue cycle.
       await new Promise((resolve) => setTimeout(resolve, 20));
 
       const db = getAppDb<EventTestState>();
@@ -417,12 +326,10 @@ describe('Type-safe Event Handlers', () => {
 
   describe('Type-safe backward compatibility', () => {
     it('should allow mixing typed and untyped event handlers', async () => {
-      // Typed handler
       regEvent<EventTestState>('typed-handler', ({ draftDb }) => {
         draftDb.counter += 1;
       });
 
-      // Untyped handler (for backward compatibility)
       regEvent('untyped-handler', ({ draftDb }) => {
         (draftDb as any).counter += 10;
         (draftDb as any).untypedField = 'added';
@@ -613,6 +520,29 @@ describe('regEvent with cofx', () => {
   });
 
   describe('Backward compatibility', () => {
+    it('should commit DB changes when an untyped interceptor omits effects', () => {
+      initAppDb({ counter: 0 });
+      const legacyInterceptor: Interceptor = {
+        id: 'legacy-context-without-effects',
+        before: (context) => {
+          delete (context as Partial<Context>).effects;
+          return context;
+        },
+      };
+
+      regEvent(
+        'test-context-without-effects',
+        ({ draftDb }) => {
+          draftDb.counter += 1;
+        },
+        { interceptors: [legacyInterceptor] },
+      );
+
+      dispatchSync(['test-context-without-effects']);
+
+      expect(getAppDb().counter).toBe(1);
+    });
+
     it('should honor fourth-argument interceptors after an empty cofx array', () => {
       const interceptorCall = jest.fn();
       const testInterceptor: Interceptor = {
@@ -692,7 +622,6 @@ describe('regEvent with cofx', () => {
         },
       };
 
-      // Old way - interceptors only (should still work)
       regEvent(
         'test-backward-compat',
         ({ draftDb }) => {
@@ -710,7 +639,6 @@ describe('regEvent with cofx', () => {
     });
 
     it('should maintain backward compatibility with handler-only registration', async () => {
-      // Old way - handler only (should still work)
       regEvent('test-handler-only', ({ draftDb }) => {
         (draftDb as any).counter += 2;
       });
@@ -725,7 +653,6 @@ describe('regEvent with cofx', () => {
 
   describe('Error handling', () => {
     it('should warn about invalid cofx specifications', async () => {
-      // Invalid cofx with too many elements
       regEvent(
         'test-invalid-cofx',
         ({ draftDb }) => {
@@ -737,14 +664,12 @@ describe('regEvent with cofx', () => {
       dispatch(['test-invalid-cofx']);
       await waitForScheduled();
 
-      // Verify warning was logged
       expectLogCall('warn', '[reflex] invalid cofx specification:', ['now', 'extra', 'invalid']);
     });
   });
 
   describe('Custom cofx', () => {
     it('should work with custom registered cofx', async () => {
-      // First register a custom cofx
       regCoeffect('custom-test', (coeffects: any, value: any) => ({
         ...coeffects,
         customValue: value || 'default-custom-value',
@@ -768,7 +693,7 @@ describe('regEvent with cofx', () => {
     });
 
     it('should work with custom cofx with values', async () => {
-      const cofxModule = await import('../cofx');
+      const cofxModule = await import('../events/coeffects');
       cofxModule.regCoeffect('custom-with-value', (coeffects: any, value: any) => ({
         ...coeffects,
         customValue: `processed-${value}`,
@@ -869,7 +794,7 @@ describe('regEvent with cofx', () => {
       dispatch(['test-multiple-globals']);
       await waitForScheduled();
 
-      // Expected order: global-1-before, global-2-before, handler, global-2-after, global-1-after
+      // The after hooks unwind in reverse interceptor order.
       expect(executionOrder).toEqual([
         'global-1-before',
         'global-2-before',
@@ -920,7 +845,7 @@ describe('regEvent with cofx', () => {
       dispatch(['test-execution-order']);
       await waitForScheduled();
 
-      // Global interceptors should execute before custom ones
+      // Event interceptors nest inside the global interceptor chain.
       expect(executionOrder).toEqual([
         'global-before',
         'custom-before',
@@ -934,7 +859,6 @@ describe('regEvent with cofx', () => {
       const globalInterceptor: Interceptor = {
         id: 'global-fx-modifier',
         after: (context: Context) => {
-          // Add an additional effect
           context.effects.push(['dispatch', ['secondary-event']]);
           return context;
         },
@@ -959,7 +883,7 @@ describe('regEvent with cofx', () => {
 
       dispatch(['test-fx-modification']);
       await waitForScheduled();
-      // Wait for the dispatched effects to complete
+      // Both dispatch effects enqueue another event cycle.
       await waitForScheduled();
 
       const db = getAppDb();

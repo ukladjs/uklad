@@ -1,6 +1,3 @@
-// Global Jest setup using Jest module mocking for loggers
-
-// Track all log calls for test assertions
 const testLogCalls = {
   log: [],
   warn: [],
@@ -10,9 +7,8 @@ const testLogCalls = {
   groupEnd: [],
 };
 
-// Mock the loggers module before any imports
-jest.doMock('./src/loggers', () => {
-  const originalModule = jest.requireActual('./src/loggers');
+jest.doMock('./src/core/logging', () => {
+  const originalModule = jest.requireActual('./src/core/logging');
 
   return {
     ...originalModule,
@@ -24,7 +20,6 @@ jest.doMock('./src/loggers', () => {
   };
 });
 
-// Make test log calls available globally for test assertions
 global.getTestLogCalls = () => ({ ...testLogCalls });
 global.clearTestLogCalls = () => {
   Object.keys(testLogCalls).forEach((level) => {
@@ -32,7 +27,6 @@ global.clearTestLogCalls = () => {
   });
 };
 
-// Helper function for tests to assert log calls
 global.expectLogCall = (level, ...expectedArgs) => {
   const calls = testLogCalls[level];
   const matchingCall = calls.find((call) => {
@@ -46,11 +40,9 @@ global.expectLogCall = (level, ...expectedArgs) => {
         expectedArgs[index] &&
         expectedArgs[index].asymmetricMatch
       ) {
-        // Handle jest matchers like expect.any(Error)
         return expectedArgs[index].asymmetricMatch(arg);
       }
 
-      // Deep equality check for arrays and objects
       if (Array.isArray(expectedArgs[index]) && Array.isArray(arg)) {
         return JSON.stringify(arg) === JSON.stringify(expectedArgs[index]);
       }
@@ -67,10 +59,8 @@ global.expectLogCall = (level, ...expectedArgs) => {
   return true;
 };
 
-// Clear log calls before each test
 beforeEach(() => {
   global.clearTestLogCalls();
 });
 
-// Global test timeout
 jest.setTimeout(10000);

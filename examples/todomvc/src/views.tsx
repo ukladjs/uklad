@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useSubscription, dispatch } from '@lib/index';
+import React, { useEffect, useRef, useState } from 'react';
+
+import { dispatch, useSubscription } from '@lib/index';
+
+import type { Showing, Todo } from './db';
 import { EVENT_IDS } from './event-ids';
 import { SUB_IDS } from './sub-ids';
-import type { Todo, Showing } from './db';
 
 interface TodoInputProps {
   title?: string;

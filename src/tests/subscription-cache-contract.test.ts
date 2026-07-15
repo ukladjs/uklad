@@ -1,13 +1,15 @@
-import { regEvent } from '../events';
-import { dispatch } from '../router';
-import { initAppDb } from '../db';
-import { clearHandlers, clearSubscriptionCache, clearSubsForHotReload } from '../registrar';
-import { getOrCreateSubscription, getSubscriptionValue, regSub } from '../subs';
+import { regEvent } from '../events/registration';
+import { dispatch } from '../events/router';
+import { initAppDb } from '../runtime/app-db';
+import { clearHandlers } from '../runtime/reset';
+import { clearSubscriptionCache, clearSubsForHotReload } from '../runtime/subscriptions/cache';
+import { regSub } from '../subscriptions/registration';
+import { getOrCreateSubscription, getSubscriptionValue } from '../subscriptions/queries';
 import {
   getSubscriptionSnapshot,
   readSubscription,
   subscribeToSubscription,
-} from '../subscription-runtime';
+} from '../runtime/subscriptions/engine';
 import { waitForAnimationFrame, waitForSubscription, waitForScheduled } from './test-utils';
 
 const waitForFlush = async () => {

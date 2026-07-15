@@ -5,9 +5,9 @@
  * legacy shape local to the example while the library itself exposes only the
  * immutable subscription diagnostics contract.
  */
-export * from '../../../src/index';
-
 import { getSubscriptionDiagnostics } from '../../../src/index';
+
+export * from '../../../src/index';
 
 interface LegacyReactionDiagnostic {
   readonly isRoot: boolean;

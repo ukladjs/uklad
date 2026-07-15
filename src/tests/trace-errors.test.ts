@@ -3,15 +3,17 @@ import {
   disableTracing,
   registerTraceCallback,
   removeTraceCallback,
-} from '../trace';
-import { regEvent, regEventErrorHandler, defaultErrorHandler } from '../events';
-import { regEffect } from '../fx';
-import { dispatch } from '../router';
-import { initAppDb } from '../db';
-import { clearHandlers } from '../registrar';
+} from '../core/tracing';
+import { defaultErrorHandler, regEventErrorHandler } from '../events/pipeline';
+import { regEvent } from '../events/registration';
+import { regEffect } from '../events/effects';
+import { dispatch } from '../events/router';
+import { initAppDb } from '../runtime/app-db';
+import { getHandlers } from '../runtime/handlers';
+import { clearHandlers } from '../runtime/reset';
 import { waitForScheduled } from './test-utils';
 
-// Trace batches are flushed on a 50ms debounce (src/trace.ts)
+// Trace callbacks run after the 50 ms batching window.
 const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80));
 
 describe('Error tracing', () => {
@@ -122,8 +124,8 @@ describe('Error tracing', () => {
     expect(trace.tags.error).toBeUndefined();
   });
 
-  it('still traces the error when no error handler is registered', async () => {
-    clearHandlers('error');
+  it('still traces the error if the framework error handler is unexpectedly absent', async () => {
+    delete getHandlers().error['event-handler'];
     try {
       regEvent('trace-unhandled-boom', () => {
         throw new Error('unhandled');
@@ -138,7 +140,7 @@ describe('Error tracing', () => {
       expect(trace.tags.error.message).toBe('unhandled');
       expect(trace.tags.error.eventV).toEqual(['trace-unhandled-boom']);
     } finally {
-      regEventErrorHandler(defaultErrorHandler);
+      clearHandlers('error');
     }
   });
 });

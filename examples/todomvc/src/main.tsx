@@ -1,27 +1,26 @@
+import { enableMapSet } from 'immer';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import './index.css';
-import './db';
+
+import { dispatch, HotReloadWrapper } from '@lib/index';
+
+import { EVENT_IDS } from './event-ids';
 import TodoApp from './views';
+
+import './index.css';
+
+// These side-effect imports must finish before the startup event is dispatched.
+import './db';
 import './events';
 import './subs';
 import './storage';
-import { dispatch, enableTracing, enableTracePrint, HotReloadWrapper } from '@lib/index';
-import { enableMapSet } from 'immer';
-import { EVENT_IDS } from './event-ids';
-import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
-// todos field in appDb is a Map, so we need to enable it explicitly for immer
+// Immer requires an explicit plugin before it can draft the Map-backed todo collection.
 enableMapSet();
-// Enable tracing and trace printing in console for debugging
-//enableTracing();
-//enableTracePrint();
-//enableDevtools();
 
-// Initialize the app
 dispatch([EVENT_IDS.INIT_APP]);
 
-const useStrictMode = false;
+const USE_STRICT_MODE = false;
 const app = (
   // HotReloadWrapper forces a remount when subscriptions are hot reloaded.
   <HotReloadWrapper>
@@ -30,5 +29,5 @@ const app = (
 );
 
 createRoot(document.getElementById('root')!).render(
-  useStrictMode ? <StrictMode>{app}</StrictMode> : app,
+  USE_STRICT_MODE ? <StrictMode>{app}</StrictMode> : app,
 );

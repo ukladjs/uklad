@@ -2,23 +2,23 @@
  * @jest-environment jsdom
  */
 import { renderHook, cleanup, act, waitFor } from '@testing-library/react';
-import { regSub } from '../subs';
-import { initAppDb } from '../db';
-import { useSubscription } from '../hook';
-import { regEvent } from '../events';
-import { dispatch } from '../router';
-import { hasHandler, hasCachedSubscription } from '../registrar';
+import { regSub } from '../subscriptions/registration';
+import { initAppDb } from '../runtime/app-db';
+import { useSubscription } from '../react/use-subscription';
+import { regEvent } from '../events/registration';
+import { dispatch } from '../events/router';
+import { hasHandler } from '../runtime/handlers';
+import { hasCachedSubscription } from '../runtime/subscriptions/cache';
 import { waitForAnimationFrame, waitForEventAndSubscription } from './test-utils';
 
 describe('React Hooks', () => {
-  // Register test subscriptions
   regSub('user');
   regSub(
     'user-name',
     (user) => user?.name,
     () => [['user']],
   );
-  regSub('user-email-str', 'userEmail'); // Test string computeFn - simple field name
+  regSub('user-email-str', 'userEmail');
   regSub('todos');
   regSub(
     'todos-count',
@@ -27,13 +27,12 @@ describe('React Hooks', () => {
   );
 
   beforeEach(() => {
-    // Set up test data
     initAppDb({
       user: {
         name: 'John Doe',
         email: 'john@example.com',
       },
-      userEmail: 'john@example.com', // For string-based subscription test
+      userEmail: 'john@example.com',
       todos: [{ id: 1, text: 'Test todo', completed: false }],
     });
   });
@@ -105,7 +104,6 @@ describe('React Hooks', () => {
     });
 
     it('should handle subscription with parameters', () => {
-      // Register a parameterized subscription
       regSub(
         'todo-by-id',
         (todos, id) => {
@@ -124,14 +122,12 @@ describe('React Hooks', () => {
     });
 
     it('should handle subscription with deps parameters', () => {
-      // Register a subscription that uses parameters in deps function
       regSub(
         'todo-name-by-id',
         (todo) => {
           return todo?.text || null;
         },
         (id) => {
-          // Use the id parameter to create dynamic dependencies
           return [['todo-by-id', id]];
         },
       );
@@ -144,10 +140,8 @@ describe('React Hooks', () => {
     it('should handle non-existent subscription gracefully', () => {
       const { result } = renderHook(() => useSubscription(['non-existent-sub']));
 
-      // Should return undefined for non-existent subscription
       expect(result.current).toBeUndefined();
 
-      // Should have logged the error
       expectLogCall('error', '[reflex] no sub handler registered for: non-existent-sub');
     });
 
@@ -162,12 +156,10 @@ describe('React Hooks', () => {
           { id: 2, text: 'Another todo', completed: true },
         ];
       });
-      // Update the database using updateAppDb for reactivity
       act(() => {
         dispatch(['set-todos']);
       });
 
-      // Wait for the hook to automatically re-render due to subscription changes
       await waitFor(() => {
         expect(result.current).toBe(2);
       });
@@ -186,7 +178,6 @@ describe('React Hooks', () => {
     });
 
     it('should re-render when AppDB changes via event dispatch', async () => {
-      // Register an event handler that updates AppDB
       regEvent('add-todo', ({ draftDb }, text) => {
         const currentTodos = draftDb.todos || [];
         const newTodo = {
@@ -202,51 +193,41 @@ describe('React Hooks', () => {
         draftDb.user.name = newName;
       });
 
-      // Set up hook to watch todos count
       const { result } = renderHook(() => ({
         todosCount: useSubscription<number>(['todos-count']),
         userName: useSubscription<string>(['user-name']),
         todos: useSubscription<Array<{ id: number; text: string; completed: boolean }>>(['todos']),
       }));
 
-      // Initial state
       expect(result.current.todosCount).toBe(1);
       expect(result.current.userName).toBe('John Doe');
       expect(result.current.todos).toHaveLength(1);
 
-      // Dispatch event to add a todo
       act(() => {
         dispatch(['add-todo', 'Learn Simple Reactive System']);
       });
 
-      // Wait for event processing and subscription recomputation
       await waitForEventAndSubscription();
 
-      // Wait for the hook to automatically re-render due to subscription changes
       await waitFor(() => {
         expect(result.current.todosCount).toBe(2);
         expect(result.current.todos).toHaveLength(2);
         expect(result.current.todos[1]!.text).toBe('Learn Simple Reactive System');
       });
 
-      // Dispatch event to update user name
       act(() => {
         dispatch(['update-user-name', 'Jane Smith']);
       });
 
-      // Wait for event processing and subscription recomputation
       await waitForEventAndSubscription();
 
-      // Wait for the hook to automatically re-render due to subscription changes
       await waitFor(() => {
         expect(result.current.userName).toBe('Jane Smith');
-        // Todos count should remain the same
         expect(result.current.todosCount).toBe(2);
       });
     });
 
     it('should handle rapid event dispatches correctly', async () => {
-      // Register counter event
       regEvent('increment-counter', ({ draftDb }) => {
         draftDb.counter = (draftDb.counter || 0) + 1;
       });
@@ -255,10 +236,8 @@ describe('React Hooks', () => {
         draftDb.counter = value;
       });
 
-      // Register counter subscription
       regSub('counter');
 
-      // Set initial counter
       initAppDb({
         counter: 0,
       });
@@ -269,44 +248,35 @@ describe('React Hooks', () => {
 
       expect(result.current.counter).toBe(0);
 
-      // Dispatch multiple increments
       act(() => {
         dispatch(['increment-counter']);
         dispatch(['increment-counter']);
         dispatch(['increment-counter']);
       });
 
-      // Wait for event processing and subscription recomputation
       await waitForEventAndSubscription();
 
-      // Wait for the hook to automatically re-render due to subscription changes
       await waitFor(() => {
         expect(result.current.counter).toBe(3);
       });
 
-      // Set counter to specific value
       act(() => {
         dispatch(['set-counter', 10]);
       });
 
-      // Wait for event processing and subscription recomputation
       await waitForEventAndSubscription();
 
-      // Wait for the hook to automatically re-render due to subscription changes
       await waitFor(() => {
         expect(result.current.counter).toBe(10);
       });
 
-      // More increments
       act(() => {
         dispatch(['increment-counter']);
         dispatch(['increment-counter']);
       });
 
-      // Wait for event processing and subscription recomputation
       await waitForEventAndSubscription();
 
-      // Wait for the hook to automatically re-render due to subscription changes
       await waitFor(() => {
         expect(result.current.counter).toBe(12);
       });
@@ -402,7 +372,7 @@ describe('React Hooks', () => {
         draftDb['cons-base'] = v;
       });
 
-      // Record every committed render's pair of values
+      // Capture transient renders as well as the final pair.
       const observed: Array<{ a: number; b: number }> = [];
       const { result } = renderHook(() => {
         const a = useSubscription<number>(['cons-x10']);
@@ -440,7 +410,6 @@ describe('React Hooks', () => {
       first.unmount();
       expect(hasCachedSubscription(key)).toBe(false);
 
-      // Data changes while nothing is mounted
       regEvent('clear-todos', ({ draftDb }) => {
         draftDb.todos = [];
       });
@@ -448,12 +417,11 @@ describe('React Hooks', () => {
         dispatch(['clear-todos']);
       });
       await waitForEventAndSubscription();
-      // Subscriptions serve the last flushed db generation; wait for the
-      // animation-frame flush so the change is visible to new subscribers
+      // New subscribers read the last flushed generation, so wait for the
+      // animation-frame flush before remounting.
       await waitForAnimationFrame();
       await waitForEventAndSubscription();
 
-      // Remount creates a fresh subscription and sees the flushed data
       const second = renderHook(() => useSubscription<number>(['todos-count']));
       expect(second.result.current).toBe(0);
       second.unmount();

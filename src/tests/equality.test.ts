@@ -1,8 +1,9 @@
-import { shallowEqual } from '../equality';
-import { regSub, getOrCreateSubscription } from '../subs';
-import { flushSubscriptions, initAppDb, updateAppDb } from '../db';
-import { clearSubscriptionCache } from '../registrar';
-import { getSubscriptionSnapshot, subscribeToSubscription } from '../subscription-runtime';
+import { shallowEqual } from '../core/equality';
+import { regSub } from '../subscriptions/registration';
+import { getOrCreateSubscription } from '../subscriptions/queries';
+import { flushSubscriptions, initAppDb, updateAppDb } from '../runtime/app-db';
+import { clearSubscriptionCache } from '../runtime/subscriptions/cache';
+import { getSubscriptionSnapshot, subscribeToSubscription } from '../runtime/subscriptions/engine';
 
 describe('shallowEqual', () => {
   it('should compare primitives with Object.is semantics', () => {
@@ -92,6 +93,30 @@ describe('per-sub equalityCheck config with shallowEqual', () => {
 
     expect(callback).toHaveBeenCalledTimes(1);
     expect(getSubscriptionSnapshot(subscription)).toBe(3);
+    unsubscribe();
+  });
+
+  it('should warn and use the global comparator for an invalid JS equalityCheck', () => {
+    regSub(
+      'se-invalid-equality',
+      (items: number[]) => items.map((item) => item),
+      () => [['se-items']],
+      { equalityCheck: false } as any,
+    );
+    const subscription = getOrCreateSubscription(['se-invalid-equality'])!;
+    const callback = jest.fn();
+    const unsubscribe = subscribeToSubscription(subscription, callback);
+    const first = getSubscriptionSnapshot(subscription);
+
+    updateAppDb({ 'se-items': [1, 2, 3] });
+    flushSubscriptions();
+
+    expectLogCall(
+      'warn',
+      "[reflex] Subscription 'se-invalid-equality' equalityCheck must be a function. Using the global equality check.",
+    );
+    expect(callback).not.toHaveBeenCalled();
+    expect(getSubscriptionSnapshot(subscription)).toBe(first);
     unsubscribe();
   });
 });

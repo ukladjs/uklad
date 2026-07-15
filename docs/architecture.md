@@ -9,46 +9,52 @@ derived from the db. React reads subscriptions through `useSyncExternalStore`.
 ```
 dispatch(['todos/add', 'milk'])
   │
-  ├─ router.ts        EventQueue (FSM) queues and runs a snapshot on the next tick
-  ├─ events.ts        handle(): builds interceptor chain for this event id
-  ├─ interceptor.ts   execute(): before phase (queue→stack), after phase (unwind)
+  ├─ events/router.ts         EventQueue (FSM) queues and runs a snapshot on the next tick
+  ├─ events/pipeline.ts       handle(): builds the interceptor chain for this event id
+  ├─ events/interceptors.ts   execute(): before phase (queue→stack), after phase (unwind)
   │     cofx inject → global interceptors → custom → event handler
-  ├─ events.ts        handler(coeffects, ...params) runs inside immer produce
+  ├─ events/pipeline.ts       handler(coeffects, ...params) runs inside Immer produce
   │                   → context.newDb   (pure, no side effects)
   │                   → context.effects  [['http', {...}]]  (data, not calls)
-  ├─ fx.ts            doFx (after phase): updateAppDb(newDb), then run effect handlers
-  ├─ db.ts            appDb advances; flush scheduled (coalesced, rAF)
+  ├─ events/effects.ts        doFx (after phase): updateAppDb(newDb), then run effects
+  ├─ runtime/app-db.ts        appDb advances; flush scheduled (coalesced, rAF)
   │        ~~~~~~~~~~ window: appDb ahead, renderDb behind; ALL subs still read renderDb
-  ├─ db.ts            flushSubscriptions(): renderDb advances, diff top-level keys
-  ├─ runtime          publishWave(): roots refresh → rank-ordered settle → freeze → notify
-  └─ hook.ts          listeners fire → React re-renders → getSnapshot (cache-only)
+  ├─ runtime/app-db.ts        flushSubscriptions(): renderDb advances, diff top-level keys
+  ├─ runtime/subscriptions/engine.ts
+  │                           roots refresh → rank-ordered settle → freeze → notify
+  └─ react/use-subscription.ts
+                              listeners fire → React re-renders → cache-only snapshot
 ```
 
 `dispatchSync` runs the same path inline (handler + flush) instead of queueing.
 
 ## Module map
 
-| File                                                                               | Responsibility                                                   |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `router.ts`                                                                        | Event queue (FSM), `dispatch` / `dispatchSync`                   |
-| `events.ts`                                                                        | `regEvent`, chain assembly, pure handler inside immer            |
-| `interceptor.ts`                                                                   | Generic before/after interceptor machine                         |
-| `fx.ts`                                                                            | `regEffect`, `doFx` — commits db, executes effects               |
-| `cofx.ts`                                                                          | `regCoeffect` — injects inputs (now, random) into handlers       |
-| `db.ts`                                                                            | `appDb` (write head), `renderDb` (read head), flush + root diff  |
-| `subscription-runtime.ts`                                                          | The reactive graph: push waves, pull reads, lifecycle            |
-| `subs.ts`                                                                          | `regSub`, graph construction from the registry, query keys       |
-| `registrar.ts`                                                                     | All registries: handlers, subscription cache, lifecycle metadata |
-| `hook.ts`                                                                          | `useSubscription` — the React binding                            |
-| `schedule.ts`                                                                      | `scheduleAfterRender` (rAF + fallback), `scheduleNextTick`       |
-| `trace.ts`                                                                         | Trace pipeline consumed by devtools                              |
-| `validation.ts`                                                                    | Shared guards for values crossing untyped runtime boundaries     |
-| `settings.ts`                                                                      | Global interceptors, global equality check                       |
-| `equality.ts` `immer-utils.ts` `debounce.ts` `loggers.ts` `env.ts` `hot-reload.ts` | Support                                                          |
+Paths in this document are relative to `src/`.
+
+| Path                              | Responsibility                                                              |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| `index.ts`                        | The only package entrypoint; re-exports the supported public API            |
+| `types.ts`                        | Public contracts and module-augmentation anchors                            |
+| `core/*`                          | Environment, equality, Immer, logging, scheduling, tracing, and validation  |
+| `runtime/app-db.ts`               | `appDb`/`renderDb`, coalesced flush, and changed-root publication           |
+| `runtime/handlers.ts`             | Typed handler definitions and framework-owned handler baselines             |
+| `runtime/event-metadata.ts`       | Per-event interceptor metadata                                              |
+| `runtime/reset.ts`                | Cross-store clear coordination                                              |
+| `runtime/subscriptions/engine.ts` | Reactive graph semantics: push waves, pull reads, and live lifecycle        |
+| `runtime/subscriptions/cache.ts`  | Root metadata, canonical instances, reverse edges, leases, and sub config   |
+| `runtime/subscriptions/keys.ts`   | Canonical query-key serialization and development validation                |
+| `events/*`                        | Event registration/pipeline, routing, interceptors, effects, and coeffects  |
+| `subscriptions/registration.ts`   | Root and computed subscription definitions                                  |
+| `subscriptions/queries.ts`        | Graph construction, cache lookup, and imperative reads                      |
+| `react/*`                         | `useSubscription` and hot-reload bindings; the only React-dependent modules |
+
+See [`code-conventions.md`](./code-conventions.md) for ownership and dependency
+rules for this tree.
 
 ## Event side
 
-**`router.ts`**
+**`events/router.ts`**
 
 | Item                  | What / why                                                                                                                  |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -56,15 +62,15 @@ dispatch(['todos/add', 'milk'])
 | `dispatch(event)`     | Async: queue the event, return immediately                                                                                  |
 | `dispatchSync(event)` | Run handler + flush before returning. Rejected inside a handler, a computation, or a listener                               |
 
-**`events.ts`**
+**`events/registration.ts` and `events/pipeline.ts`**
 
 | Item                                              | What / why                                                                                                                                          |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `regEvent(id, handler, options?)`                 | Register a pure handler. Prefer `{ coeffects, interceptors }`; coeffect specs become inject-interceptors. Legacy positional arrays remain supported |
 | `handle(eventV)`                                  | Assemble the chain: `doFx → globals → custom → handler`, run it                                                                                     |
-| `eventHandlerInterceptor`                         | Runs the handler inside `produce`; captures `newDb` + `effects`. Patches only produced when tracing is on                                           |
+| `createEventHandlerInterceptor`                   | Builds the interceptor that runs the handler inside `produce`, captures `newDb` + `effects`, and emits patches only while tracing                   |
 | `getHandlingEventId` / `getRunningHandlerEventId` | Reentrance guards (`dispatchSync` refusal, dev `dispatch`-in-handler warning)                                                                       |
-| `regEventErrorHandler`                            | Single catch-all for exceptions in the chain                                                                                                        |
+| `regEventErrorHandler`                            | Override the framework-owned catch-all for exceptions in the chain; clearing the override restores the default                                      |
 
 Event registration is replacement-based: re-registering an id replaces both
 its handler and its event-specific interceptor list. Omitting options clears
@@ -78,15 +84,15 @@ regEvent('todos/load', handler, {
 });
 ```
 
-**`interceptor.ts`** — `execute(eventV, interceptors)`; `Context = { coeffects, effects, queue, stack, newDb }`. `before` walks queue→stack, `after` unwinds the stack.
+**`events/interceptors.ts`** — `execute(eventV, interceptors)`; `Context = { coeffects, effects, queue, stack, newDb }`. `before` walks queue→stack, `after` unwinds the stack.
 
-**`fx.ts`** — `regEffect(id, handler)`. `doFxInterceptor` (after phase) commits `newDb` via `updateAppDb`, then invokes each effect handler; failures are isolated and tagged onto the event's trace. Built-ins: `DISPATCH`, `DISPATCH_LATER`. The router injects its `dispatch` function when composing these built-ins, so the write path has no `events → fx → router → events` module cycle.
+**`events/effects.ts`** — `regEffect(id, handler)`. `doFxInterceptor` (after phase) commits `newDb` via `updateAppDb`, then invokes each effect handler; failures are isolated and tagged onto the event's trace. Built-ins: `DISPATCH`, `DISPATCH_LATER`. The router injects its `dispatch` function when composing these built-ins, so the write path has no `pipeline → effects → router → pipeline` module cycle.
 
-**`cofx.ts`** — `regCoeffect(id, handler)`. `getInjectCofxInterceptor(id, value?)` injects into `context.coeffects` before the handler runs. Built-ins: `NOW`, `RANDOM`.
+**`events/coeffects.ts`** — `regCoeffect(id, handler)`. `getInjectCofxInterceptor(id, value?)` injects into `context.coeffects` before the handler runs. Built-ins: `NOW`, `RANDOM`.
 
 ## State
 
-**`db.ts`**
+**`runtime/app-db.ts`**
 
 | Item                                                | What / why                                                                      |
 | --------------------------------------------------- | ------------------------------------------------------------------------------- |
@@ -103,7 +109,7 @@ boundary.
 
 ## Subscription runtime
 
-**`subscription-runtime.ts`** — owns graph semantics only (no keys, no registry).
+**`runtime/subscriptions/engine.ts`** — owns graph semantics only (no keys, no registry).
 
 `SubscriptionCell` fields:
 
@@ -118,7 +124,7 @@ boundary.
 | `listeners` / `dependents`                        | Live edges, maintained by activation/release                                       |
 | `validatedEpoch` / `lastPullEpoch` / `queuedWave` | Memoization and dedup markers                                                      |
 
-`SubscriptionRuntime` operations:
+`SubscriptionEngine` operations:
 
 | Op                                      | What / why                                                                                                                                                    |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -129,26 +135,27 @@ boundary.
 | `phase` (`idle`/`settling`/`notifying`) | Guards: no reads, creates, or publications during computation; no publication during listener delivery                                                        |
 | `inspectSubscription(node)`             | Cache-only DTO for devtools. Never computes                                                                                                                   |
 
-Public ops: `createSubscription`, `readSubscription`, `getSubscriptionSnapshot`,
+Internal engine operations: `createSubscription`, `readSubscription`, `getSubscriptionSnapshot`,
 `subscribeToSubscription`, `publishSubscriptions`. Nodes are opaque
 (`SubscriptionNode<T>`) — the runtime never hands out mutable cells.
 
-**`subs.ts`**
+**`runtime/subscriptions/keys.ts`, `subscriptions/registration.ts`, and
+`subscriptions/queries.ts`**
 
 | Item                                     | What / why                                                                                                                                         |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `regSub(id)` / `regSub(id, 'dbKey')`     | Root: reads one top-level db key from `renderDb`. No parameters allowed                                                                            |
 | `regSub(id, computeFn, depsFn, config?)` | Computed: static dependency vectors from `depsFn(...params)`                                                                                       |
 | `getOrCreateSubscription(vector)`        | Builds (or reuses) the whole graph. Iterative — `frames` is an explicit DFS stack, so depth can't blow the JS stack. `buildingKeys` detects cycles |
-| `getSubVectorKey(vector)`                | `JSON.stringify` — the canonical cache key. Dev-warns on params that don't survive serialization                                                   |
+| `getSubVectorKey(vector)`                | Runtime-owned canonical cache key. Dev-warns on params that don't survive JSON serialization                                                       |
 | `getSubscriptionValue(vector)`           | Imperative one-shot read (services, headless, devtools)                                                                                            |
 
-**`registrar.ts`** — every registry, plus the caching policy the runtime knows
-nothing about: handler definitions, root anchoring, the instance cache with
-reverse edges, and provisional leases. See
+**`runtime/handlers.ts` and `runtime/subscriptions/cache.ts`** — handler
+definitions and the caching policy the engine knows nothing about: root
+anchoring, the instance cache with reverse edges, and provisional leases. See
 [`subscription-registry.md`](./subscription-registry.md).
 
-**`hook.ts`** — `useSubscription(vector, componentName?)`. Wraps
+**`react/use-subscription.ts`** — `useSubscription(vector, componentName?)`. Wraps
 `useSyncExternalStore`; store bindings are memoized on the serialized key, and
 the node is **re-resolved by key** on every `subscribe`/`getSnapshot` (never
 captured), which is what makes terminal computed cells safe under StrictMode,
@@ -164,7 +171,8 @@ Suspense, and remounts.
 | `setGlobalEqualityCheck` / `regGlobalInterceptor`    | App-wide defaults                                                                                                                 |
 | `shallowEqual`                                       | Opt-in equality check; default is deep equality                                                                                   |
 | `debounceAndDispatch` / `throttleAndDispatch`        | Rate-limited dispatch                                                                                                             |
-| `IS_DEV`                                             | Gates dev warnings and patch generation                                                                                           |
+| `enableTracing` / `disableTracing`                   | Gate trace collection and Immer patch generation                                                                                  |
+| `IS_DEV`                                             | Gates development-only diagnostics                                                                                                |
 
 ## Invariants
 

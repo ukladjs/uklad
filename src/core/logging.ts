@@ -23,6 +23,7 @@ const defaultLoggers: Loggers = {
 
 let currentLoggers: Loggers = { ...defaultLoggers };
 
+/** Route a message through the currently configured logger. */
 export function consoleLog(level: LogLevel, ...args: any[]): void {
   if (!(level in currentLoggers)) {
     throw new Error(`reflex: log called with unknown level: ${level}`);
@@ -30,16 +31,18 @@ export function consoleLog(level: LogLevel, ...args: any[]): void {
   currentLoggers[level](...args);
 }
 
+/** Merge logger overrides into the current configuration. */
 export function setLoggers(newLoggers: Partial<Loggers>): void {
   const keys = Object.keys(newLoggers);
   const allowed = Object.keys(defaultLoggers);
-  const invalid = keys.filter((k) => !allowed.includes(k));
+  const invalid = keys.filter((key) => !allowed.includes(key));
   if (invalid.length > 0) {
     throw new Error(`reflex: Unknown keys in newLoggers: ${invalid.join(', ')}`);
   }
   currentLoggers = { ...currentLoggers, ...newLoggers } as Loggers;
 }
 
+/** Return a snapshot of the current logger configuration. */
 export function getLoggers(): Loggers {
   return { ...currentLoggers };
 }

@@ -1,9 +1,5 @@
 import { initAppDb } from '@lib/index';
 
-// -- Types -------------------------------------------------------------------
-// The value in appDb should always match these types. TypeScript will help
-// ensure type safety at compile time.
-
 export type TodoId = number;
 
 export interface Todo {
@@ -16,18 +12,14 @@ export type Todos = Map<TodoId, Todo>;
 
 export type Showing = 'all' | 'active' | 'done';
 
-export interface DB {
+export interface TodoDb {
   todos: Todos;
   showing: Showing;
 }
 
-// -- Default appDb Value  ---------------------------------------------------
-//
-// When the application first starts, this will be the value put in appDb
-
-const defaultDB: DB = {
-  todos: new Map<TodoId, Todo>(), // an empty map of todos, keyed by id
-  showing: 'all', // show all todos
+const defaultDb: TodoDb = {
+  todos: new Map<TodoId, Todo>(),
+  showing: 'all',
 };
 
-initAppDb(defaultDB);
+initAppDb(defaultDb);

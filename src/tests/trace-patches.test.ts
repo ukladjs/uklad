@@ -8,13 +8,13 @@ import {
   disableTracing,
   registerTraceCallback,
   removeTraceCallback,
-} from '../trace';
-import { regEvent } from '../events';
-import { dispatch } from '../router';
-import { initAppDb, getAppDb } from '../db';
+} from '../core/tracing';
+import { regEvent } from '../events/registration';
+import { dispatch } from '../events/router';
+import { initAppDb, getAppDb } from '../runtime/app-db';
 import { waitForScheduled } from './test-utils';
 
-// Trace batches are flushed on a 50ms debounce (src/trace.ts)
+// Trace callbacks run after the 50 ms batching window.
 const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80));
 
 describe('Conditional patch generation', () => {

@@ -2,13 +2,13 @@ import {
   createSubscription,
   publishSubscriptions,
   subscribeToSubscription,
-} from '../subscription-runtime';
+} from '../runtime/subscriptions/engine';
 import {
   disableTracing,
   enableTracing,
   registerTraceCallback,
   removeTraceCallback,
-} from '../trace';
+} from '../core/tracing';
 
 const TRACE_CALLBACK_KEY = 'subscription-trace-tags-test';
 const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80));

@@ -1,9 +1,3 @@
-/**
- * Event IDs module - centralized, typesafe event identifiers
- * All event IDs are defined here as constants for better maintainability and type safety
- */
-
-// Event ID constants
 export const EVENT_IDS = {
   INIT_APP: 'init-app',
   ADD_TODO: 'add-todo',
@@ -15,10 +9,7 @@ export const EVENT_IDS = {
   SET_SHOWING: 'set-showing',
 } as const;
 
-// Type for all valid event IDs
 export type EventId = (typeof EVENT_IDS)[keyof typeof EVENT_IDS];
 
-// Helper type to ensure event ID is valid
-export const isValidEventId = (id: string): id is EventId => {
-  return Object.values(EVENT_IDS).includes(id as EventId);
-};
+export const isValidEventId = (id: string): id is EventId =>
+  Object.values(EVENT_IDS).includes(id as EventId);

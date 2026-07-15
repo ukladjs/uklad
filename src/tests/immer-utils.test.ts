@@ -1,36 +1,30 @@
-import { enableMapSet, original, current } from '../immer-utils';
-import { getGlobalEqualityCheck, setGlobalEqualityCheck } from '../settings';
+import { enableMapSet, original, current } from '../core/immer';
+import { getGlobalEqualityCheck, setGlobalEqualityCheck } from '../core/equality';
 import isEqual from 'fast-deep-equal';
 import isEqualEs6 from 'fast-deep-equal/es6/index.js';
 
 describe('immer-utils', () => {
   describe('enableMapSet', () => {
     beforeEach(() => {
-      // Reset to default equality check before each test
       setGlobalEqualityCheck(isEqual);
     });
 
     it('should update global equality check to isEqualEs6 when current check is default isEqual', () => {
-      // Initially should be the default isEqual
       expect(getGlobalEqualityCheck()).toBe(isEqual);
 
       enableMapSet();
 
-      // Should now be isEqualEs6
       expect(getGlobalEqualityCheck()).toBe(isEqualEs6);
     });
 
     it('should NOT override custom equality check when user has set one', () => {
-      // Set a custom equality check
       const customEquality = () => true;
       setGlobalEqualityCheck(customEquality);
 
-      // Verify it's set
       expect(getGlobalEqualityCheck()).toBe(customEquality);
 
       enableMapSet();
 
-      // Should still be the custom equality check, not isEqualEs6
       expect(getGlobalEqualityCheck()).toBe(customEquality);
       expect(getGlobalEqualityCheck()).not.toBe(isEqualEs6);
     });
@@ -52,7 +46,7 @@ describe('immer-utils', () => {
       ]);
       const set3 = new Set(['a', 'b', 'd']);
 
-      // Before enableMapSet, default isEqual might not handle Map/Set properly
+      // The default comparator treats all Map and Set instances as equivalent.
       let equalityCheck = getGlobalEqualityCheck();
 
       expect(equalityCheck(map1, map2)).toBe(true);
@@ -62,7 +56,7 @@ describe('immer-utils', () => {
 
       enableMapSet();
 
-      // After enableMapSet, isEqualEs6 should handle Map/Set properly
+      // The ES6 comparator inspects Map and Set contents.
       equalityCheck = getGlobalEqualityCheck();
 
       expect(equalityCheck(map1, map2)).toBe(true);

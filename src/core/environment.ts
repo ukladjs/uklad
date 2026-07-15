@@ -1,8 +1,3 @@
-/**
- * Environment detection utilities
- */
-
-// Type declarations for cross-platform environments
 declare const process:
   | {
       env?: {
@@ -14,11 +9,12 @@ declare const process:
 declare const __DEV__: boolean | undefined;
 
 /**
- * Checks if the current environment is development
- * Works across Node.js, React Native, Vite, and Deno
+ * Whether this module loaded in development mode.
+ *
+ * Reflex recognizes `NODE_ENV=development` and the React Native-style
+ * `__DEV__` global. Environments with another convention must expose one of
+ * those values before this module is evaluated.
  */
 export const IS_DEV: boolean =
-  // Node.js check
   (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') ||
-  // React Native / bundler check
   (typeof __DEV__ !== 'undefined' && __DEV__);

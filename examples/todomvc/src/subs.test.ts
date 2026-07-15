@@ -1,10 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { getHandler } from '@lib/registrar';
-import { initAppDb } from '@lib/db';
+import { getHandler, initAppDb, type SubDepsHandler, type SubHandler } from '@lib/index';
+
+import type { TodoDb } from './db';
 import { SUB_IDS } from './sub-ids';
-import type { DB } from './db';
-import type { SubHandler, SubDepsHandler } from '@lib/types';
 
 import './subs';
 
@@ -15,7 +14,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
         const handler = getHandler('sub', SUB_IDS.TODOS) as SubHandler;
         expect(handler).toBeDefined();
 
-        const mockDB: DB = {
+        const mockDb: TodoDb = {
           todos: new Map([
             [1, { id: 1, title: 'Todo 1', done: false }],
             [2, { id: 2, title: 'Todo 2', done: true }],
@@ -23,12 +22,11 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
           showing: 'all',
         };
 
-        // Initialize app database with test data
-        initAppDb(mockDB);
+        initAppDb(mockDb);
 
         const result = handler();
 
-        expect(result).toBe(mockDB.todos);
+        expect(result).toBe(mockDb.todos);
         expect(result.size).toBe(2);
         expect(result.get(1)).toEqual({ id: 1, title: 'Todo 1', done: false });
         expect(result.get(2)).toEqual({ id: 2, title: 'Todo 2', done: true });
@@ -37,17 +35,16 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       it('should handle empty todos map', () => {
         const handler = getHandler('sub', SUB_IDS.TODOS) as SubHandler;
 
-        const mockDB: DB = {
+        const mockDb: TodoDb = {
           todos: new Map(),
           showing: 'all',
         };
 
-        // Initialize app database with test data
-        initAppDb(mockDB);
+        initAppDb(mockDb);
 
         const result = handler();
 
-        expect(result).toBe(mockDB.todos);
+        expect(result).toBe(mockDb.todos);
         expect(result.size).toBe(0);
       });
     });
@@ -57,13 +54,12 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
         const handler = getHandler('sub', SUB_IDS.SHOWING) as SubHandler;
         expect(handler).toBeDefined();
 
-        const mockDB: DB = {
+        const mockDb: TodoDb = {
           todos: new Map(),
           showing: 'active',
         };
 
-        // Initialize app database with test data
-        initAppDb(mockDB);
+        initAppDb(mockDb);
 
         const result = handler();
 
@@ -76,13 +72,12 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
         const testCases = ['all', 'active', 'done'] as const;
 
         testCases.forEach((showingState) => {
-          const mockDB: DB = {
+          const mockDb: TodoDb = {
             todos: new Map(),
             showing: showingState,
           };
 
-          // Initialize app database with test data
-          initAppDb(mockDB);
+          initAppDb(mockDb);
 
           const result = handler();
           expect(result).toBe(showingState);

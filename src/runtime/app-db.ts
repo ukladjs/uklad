@@ -1,11 +1,13 @@
-import type { Db, DefaultAppDb } from './types';
-import { getCachedSubscription, getRootSubIdBySource } from './registrar';
-import { scheduleAfterRender } from './schedule';
+import { scheduleAfterRender } from '../core/scheduling';
+import { getCachedSubscription, getRootSubIdBySource } from './subscriptions/cache';
 import {
   assertPublicationAllowed,
   publishSubscriptions,
   type SubscriptionNode,
-} from './subscription-runtime';
+} from './subscriptions/engine';
+import { getRootSubKey } from './subscriptions/keys';
+
+import type { Db, DefaultAppDb } from '../types';
 
 // The live db: events read it (via produce) and commit new generations to it.
 let appDb: any = {};
@@ -22,6 +24,11 @@ let flushScheduled = false;
 // T infers from `value` and an augmented AppDb would never be checked.
 type NoInfer<T> = [T][T extends any ? 0 : never];
 
+/**
+ * Replace the app-db and synchronously publish changed roots to any surviving
+ * subscription graph. Call this during bootstrap or an intentional app reset,
+ * never from subscription evaluation or listener delivery.
+ */
 export function initAppDb<T = DefaultAppDb>(value: Db<NoInfer<T>>): void {
   assertPublicationAllowed();
   const oldDb = renderDb;
@@ -33,6 +40,10 @@ export function initAppDb<T = DefaultAppDb>(value: Db<NoInfer<T>>): void {
   publishSubscriptions(collectChangedRoots(oldDb, value));
 }
 
+/**
+ * Return the latest committed app-db. This live write head can be ahead of the
+ * generation visible to subscriptions until their scheduled flush completes.
+ */
 export function getAppDb<T = DefaultAppDb>(): Db<T> {
   return appDb as Db<T>;
 }
@@ -99,7 +110,7 @@ function collectChangedRoots(oldDb: any, newDb: any): SubscriptionNode<any>[] {
       continue;
     }
 
-    const subscription = getCachedSubscription(JSON.stringify([subId]));
+    const subscription = getCachedSubscription(getRootSubKey(subId));
     if (!subscription) {
       continue;
     }

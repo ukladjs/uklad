@@ -1,6 +1,5 @@
 import { produce } from 'immer';
-import { initAppDb, getAppDb, updateAppDb as commitAppDb } from '../db';
-// Type definitions for testing
+import { initAppDb, getAppDb, updateAppDb as commitAppDb } from '../runtime/app-db';
 interface TestAppState {
   counter: number;
   todos: Array<{
@@ -52,16 +51,13 @@ describe('Immer integration', () => {
 
     const updatedDb = getAppDb();
 
-    // Original db should be unchanged
     expect(initialDb.counter).toBe(0);
     expect(initialDb.user.name).toBe('John');
 
-    // New db should have the updates
     expect(updatedDb.counter).toBe(10);
     expect(updatedDb.user.name).toBe('Jane');
-    expect(updatedDb.user.email).toBe('john@example.com'); // unchanged field
+    expect(updatedDb.user.email).toBe('john@example.com');
 
-    // Objects should be different references
     expect(initialDb).not.toBe(updatedDb);
     expect(initialDb.user).not.toBe(updatedDb.user);
   });
@@ -87,7 +83,7 @@ describe('Immer integration', () => {
     const db = getAppDb();
     expect(db.user.profile).toEqual({ age: 30, location: 'SF' });
     expect(db.user.preferences).toEqual({ theme: 'dark', notifications: true });
-    expect(db.user.name).toBe('John'); // original field preserved
+    expect(db.user.name).toBe('John');
   });
 
   test('multiple updateAppDb calls should chain correctly', () => {
@@ -225,15 +221,12 @@ describe('Type-safe AppDB', () => {
 
       const updatedDb = getAppDb<TestAppState>();
 
-      // Original should be unchanged
       expect(initialDb.counter).toBe(0);
       expect(initialDb.user.name).toBe('Bob');
 
-      // Updated should have new values
       expect(updatedDb.counter).toBe(99);
       expect(updatedDb.user.name).toBe('David');
 
-      // Should be different references
       expect(initialDb).not.toBe(updatedDb);
       expect(initialDb.user).not.toBe(updatedDb.user);
     });
@@ -241,7 +234,6 @@ describe('Type-safe AppDB', () => {
 
   describe('Mixed usage patterns', () => {
     test('should handle switching between different typed states', () => {
-      // First, use TestAppState
       const testState: TestAppState = {
         counter: 1,
         todos: [],
@@ -251,7 +243,6 @@ describe('Type-safe AppDB', () => {
       const db1 = getAppDb<TestAppState>();
       expect(db1.counter).toBe(1);
 
-      // Then switch to SimpleState
       const simpleState: SimpleState = {
         count: 200,
         message: 'New state',
@@ -263,7 +254,6 @@ describe('Type-safe AppDB', () => {
     });
 
     test('should work with partial state initialization', () => {
-      // Initialize with minimal required fields
       initAppDb<TestAppState>({
         counter: 5,
         todos: [],
@@ -280,7 +270,6 @@ describe('Type-safe AppDB', () => {
 
   describe('Backward compatibility', () => {
     test('should maintain backward compatibility without type parameters', () => {
-      // This should work exactly as before
       initAppDb({
         anything: 'goes',
         counter: 123,
@@ -292,7 +281,6 @@ describe('Type-safe AppDB', () => {
       expect(db.counter).toBe(123);
       expect(db.nested.prop).toBe('value');
 
-      // Updates should work without type parameters
       updateAppDb((draft) => {
         draft.counter = 456;
         draft.newProp = 'added';
@@ -304,16 +292,13 @@ describe('Type-safe AppDB', () => {
     });
 
     test('should allow mixed typed and untyped operations', () => {
-      // Initialize without types
       initAppDb({ counter: 10, data: 'test' });
 
-      // Update with types (cast to any for this test)
       updateAppDb<any>((draft) => {
         draft.counter += 5;
         draft.typed = true;
       });
 
-      // Read without types
       const db = getAppDb();
       expect(db.counter).toBe(15);
       expect(db.data).toBe('test');

@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 
-// Mock the current function from immer for testing
+// Handler tests use plain objects instead of Immer drafts, so snapshots are identity values.
 vi.mock('immer', async () => {
   const actual = await vi.importActual('immer');
   return {

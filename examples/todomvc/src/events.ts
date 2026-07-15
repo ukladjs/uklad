@@ -1,11 +1,12 @@
-import { regEvent, clearHandlers } from '@lib/index';
-import type { Todo, TodoId, Todos, Showing } from './db';
 import { current } from 'immer';
-import { EVENT_IDS } from './event-ids';
-import { COEFFECT_IDS } from './coeffect-ids';
-import { EFFECT_IDS } from './effect-ids';
 
-// Event to initialize the app, load todos from localStorage with coeffect
+import { clearHandlers, regEvent } from '@lib/index';
+
+import { COEFFECT_IDS } from './coeffect-ids';
+import type { Showing, Todo, TodoId, Todos } from './db';
+import { EFFECT_IDS } from './effect-ids';
+import { EVENT_IDS } from './event-ids';
+
 regEvent(
   EVENT_IDS.INIT_APP,
   ({ draftDb, localStoreTodos }) => {
@@ -16,51 +17,43 @@ regEvent(
   [[COEFFECT_IDS.LOCAL_STORE_TODOS]],
 );
 
-// Event to add a new todo
 regEvent(
   EVENT_IDS.ADD_TODO,
   ({ draftDb, now }, title: string) => {
+    // The injected clock keeps ID creation deterministic and testable.
     const newTodo: Todo = {
-      id: now, // Simple ID generation
+      id: now,
       title: title.trim(),
       done: false,
     };
 
     draftDb.todos.set(newTodo.id, newTodo);
-    // Save to localStorage
     return [[EFFECT_IDS.TODOS_TO_LOCAL_STORE, current(draftDb.todos)]];
   },
   [[COEFFECT_IDS.NOW]],
 );
 
-// Event to toggle todo completion
 regEvent(EVENT_IDS.TOGGLE_DONE, ({ draftDb }, id: TodoId) => {
   const todo = draftDb.todos.get(id);
   if (todo) {
     todo.done = !todo.done;
-    // Save to localStorage
     return [[EFFECT_IDS.TODOS_TO_LOCAL_STORE, current(draftDb.todos)]];
   }
 });
 
-// Event to delete a todo
 regEvent(EVENT_IDS.DELETE_TODO, ({ draftDb }, id: TodoId) => {
   draftDb.todos.delete(id);
-  // Save to localStorage
   return [[EFFECT_IDS.TODOS_TO_LOCAL_STORE, current(draftDb.todos)]];
 });
 
-// Event to save/edit a todo
 regEvent(EVENT_IDS.SAVE, ({ draftDb }, id: TodoId, newTitle: string) => {
   const todo = draftDb.todos.get(id);
   if (todo) {
     todo.title = newTitle.trim() + 'event2';
-    // Save to localStorage
     return [[EFFECT_IDS.TODOS_TO_LOCAL_STORE, current(draftDb.todos)]];
   }
 });
 
-// Event to toggle all todos completion
 regEvent(EVENT_IDS.COMPLETE_ALL_TOGGLE, ({ draftDb }) => {
   const todosArray = Array.from((draftDb.todos as Todos).values()) as Todo[];
   const allComplete = todosArray.length > 0 && todosArray.every((todo) => todo.done);
@@ -69,11 +62,9 @@ regEvent(EVENT_IDS.COMPLETE_ALL_TOGGLE, ({ draftDb }) => {
     todo.done = !allComplete;
   });
 
-  // Save to localStorage
   return [[EFFECT_IDS.TODOS_TO_LOCAL_STORE, current(draftDb.todos)]];
 });
 
-// Event to clear completed todos
 regEvent(EVENT_IDS.CLEAR_COMPLETED, ({ draftDb }) => {
   const todosArray = Array.from((draftDb.todos as Todos).entries()) as [TodoId, Todo][];
   todosArray.forEach(([id, todo]) => {
@@ -82,16 +73,15 @@ regEvent(EVENT_IDS.CLEAR_COMPLETED, ({ draftDb }) => {
     }
   });
 
-  // Save to localStorage
   return [[EFFECT_IDS.TODOS_TO_LOCAL_STORE, current(draftDb.todos)]];
 });
 
-// Event to set showing filter
 regEvent(EVENT_IDS.SET_SHOWING, ({ draftDb }, showing: Showing) => {
   draftDb.showing = showing;
 });
 
 if (import.meta.hot) {
+  // Registrations run at module load, so remove them before Vite evaluates a replacement.
   import.meta.hot.dispose(() => {
     clearHandlers('event');
   });

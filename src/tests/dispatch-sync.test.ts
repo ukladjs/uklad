@@ -1,10 +1,12 @@
-import { regEvent, regEventErrorHandler, defaultErrorHandler } from '../events';
-import { regEffect } from '../fx';
-import { dispatch, dispatchSync } from '../router';
-import { initAppDb, getAppDb } from '../db';
-import { regSub, getOrCreateSubscription, getSubscriptionValue } from '../subs';
-import { clearSubscriptionCache } from '../registrar';
-import { getSubscriptionSnapshot, subscribeToSubscription } from '../subscription-runtime';
+import { defaultErrorHandler, regEventErrorHandler } from '../events/pipeline';
+import { regEvent } from '../events/registration';
+import { regEffect } from '../events/effects';
+import { dispatch, dispatchSync } from '../events/router';
+import { initAppDb, getAppDb } from '../runtime/app-db';
+import { regSub } from '../subscriptions/registration';
+import { getOrCreateSubscription, getSubscriptionValue } from '../subscriptions/queries';
+import { clearSubscriptionCache } from '../runtime/subscriptions/cache';
+import { getSubscriptionSnapshot, subscribeToSubscription } from '../runtime/subscriptions/engine';
 import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('dispatchSync', () => {
@@ -90,7 +92,6 @@ describe('dispatchSync', () => {
     });
 
     expect(() => dispatchSync(['ds-reentrant'])).toThrow(/dispatchSync/);
-    // The inner event never ran
     expect(getAppDb()['ds-counter']).toBe(0);
 
     regEventErrorHandler(defaultErrorHandler);
@@ -116,7 +117,6 @@ describe('dispatchSync', () => {
 
     expect(effectError).toBeDefined();
     expect(String(effectError?.message)).toMatch(/dispatchSync/);
-    // The outer event committed; the reentrant one never ran
     expect(getAppDb()['ds-counter']).toBe(10);
   });
 

@@ -1,52 +1,61 @@
-# Subscription registry (registrar)
+# Subscription bookkeeping
 
-`registrar.ts` is the framework's bookkeeping layer. It holds every handler
-definition, the canonical cache of built subscription graphs, and the metadata
-that governs their lifecycle. It owns no reactive semantics: stamps, epochs,
-publication waves, and dependency evaluation live in the runtime. The registrar
-only answers "what is registered" and "which instances currently exist".
+Paths in this document are relative to `src/`.
+
+Framework bookkeeping is split by ownership. `runtime/handlers.ts` stores
+handler definitions, while `runtime/subscriptions/cache.ts` owns the canonical
+cache of built subscription graphs and its lifecycle metadata.
+`runtime/subscriptions/keys.ts` owns canonical query-key serialization and its
+development validation.
+`runtime/event-metadata.ts` stores event interceptor lists, and
+`runtime/reset.ts` coordinates clears that span those stores. None of these
+modules owns reactive semantics: stamps, epochs, publication waves, and
+dependency evaluation live in `runtime/subscriptions/engine.ts`.
 
 ## Two layers: definitions and instances
 
-The registrar separates two things that are easy to conflate:
+The handler and subscription-cache modules separate two things that are easy to
+conflate:
 
-- **Definitions** — `id → handler function`. Written once at registration
+- **Definitions** — `id → handler function`. Written at registration
   (`regSub`, `regEvent`, …), read whenever an instance is built or an event is
-  handled. Static for the lifetime of the app unless explicitly cleared.
+  handled. Re-registering an event replaces its definition; a subscription can
+  be replaced only while none of its queries is cached. Clears remove either a
+  selected definition or the complete registry.
 - **Instances** — `serialized query key → built subscription graph`. Created
   lazily on first read of a query vector, evicted when their last consumer
   leaves. One definition (`['todos-by-id']`) produces many instances
   (`['todos-by-id', 1]`, `['todos-by-id', 2]`, …).
 
-Everything else in the file is metadata supporting the instance lifecycle:
-root anchoring, cascade invalidation, and provisional cleanup.
+The remaining state in the cache module supports the instance lifecycle: root
+anchoring, cascade invalidation, and provisional cleanup.
 
 Two architectural facts explain why the instance-side metadata exists at all:
 
-1. **Subscription nodes are opaque.** The registry cannot ask a node for its
+1. **Subscription nodes are opaque.** The cache cannot ask a node for its
    dependencies, its kind, or whether it is a root. Any structural fact the
-   registrar needs, it must record itself at creation time.
+   cache needs, it must record itself at creation time.
 2. **Computed instances are terminal.** They are evicted when unused rather
    than revived. Eviction of one instance must correctly invalidate every
-   dormant cached parent that references it, so the registrar tracks reverse
+   dormant cached parent that references it, so the cache tracks reverse
    edges the old revival machinery made unnecessary.
 
 ## Store summary
 
-| Store                                        | Shape                                 | Purpose                                   |
-| -------------------------------------------- | ------------------------------------- | ----------------------------------------- |
-| `kindToIdToHandler`                          | `HandlerKind → id → handler`          | All handler definitions                   |
-| `systemHandlers`                             | `HandlerKind → id → handler`          | Framework handlers restored after clears  |
-| `rootSubIdBySource`                          | `sourceKey → subId`                   | DB wake-up: changed db key → owning root  |
-| `rootSubSourceById`                          | `subId → sourceKey`                   | Is this id a root; what key it reads      |
-| `rootSubscriptionKeys`                       | `Set<serializedKey>`                  | Persistence guard for root cells          |
-| `subscriptionCache`                          | `key → {node, subId, dependencyKeys}` | Canonical built instances                 |
-| `dependentSubscriptionKeys`                  | `key → Set<dependentKey>`             | Reverse edges for cascade invalidation    |
-| `provisionalCurrent` / `provisionalPrevious` | `key → node`                          | Two-generation sweep of aborted renders   |
-| `interceptorsRegistry`                       | `eventId → Interceptor[]`             | Per-event interceptor chains              |
-| `subConfigRegistry`                          | `subId → SubConfig`                   | Per-subscription options (equality check) |
+| Store                                        | Owner                            | Purpose                                  |
+| -------------------------------------------- | -------------------------------- | ---------------------------------------- |
+| `handlers`                                   | `runtime/handlers.ts`            | All handler definitions                  |
+| `systemHandlers`                             | `runtime/handlers.ts`            | Framework handlers restored after clears |
+| `rootSubIdBySource`                          | `runtime/subscriptions/cache.ts` | Changed DB key → owning root             |
+| `rootSubSourceById`                          | `runtime/subscriptions/cache.ts` | Is this id a root; what key it reads     |
+| `rootSubscriptionKeys`                       | `runtime/subscriptions/cache.ts` | Persistence guard for root cells         |
+| `subscriptionCache`                          | `runtime/subscriptions/cache.ts` | Canonical built instances                |
+| `dependentSubscriptionKeys`                  | `runtime/subscriptions/cache.ts` | Reverse edges for cascade invalidation   |
+| `provisionalCurrent` / `provisionalPrevious` | `runtime/subscriptions/cache.ts` | Two-generation aborted-render sweep      |
+| `subConfigById`                              | `runtime/subscriptions/cache.ts` | Per-subscription equality options        |
+| `interceptorsByEvent`                        | `runtime/event-metadata.ts`      | Per-event interceptor chains             |
 
-## Handler definitions — `kindToIdToHandler`
+## Handler definitions — `handlers`
 
 One typed nested record keyed by `HandlerKind` (`event`, `fx`, `cofx`, `sub`,
 `subDeps`, `error`) then by id. Each inner record has a null prototype, so
@@ -61,17 +70,18 @@ what the app declares. Overwriting an existing id warns; it is allowed for
 non-subscription kinds but rejected for subscriptions while cached instances of
 that id exist (see clearing rules).
 
-Framework-owned effects and coeffects are also recorded in `systemHandlers`.
-They may be overridden through the normal registration API, but clearing that
-override restores the framework implementation. A full `clearHandlers()` does
-the same, so reset/test helpers cannot silently remove `dispatch`,
-`dispatch-later`, `now`, or `random` for the rest of the process lifetime.
+Framework-owned effects, coeffects, and the default event error handler are also
+recorded in `systemHandlers`. They may be overridden through the normal
+registration APIs, but clearing an override restores the framework
+implementation. A full `clearHandlers()` does the same, so reset/test helpers
+cannot silently remove `dispatch`, `dispatch-later`, `now`, `random`, or the
+default error handler for the rest of the process lifetime.
 
 ## Root source registry — three stores
 
-Root subscriptions are the DB wake-up anchors, and the registrar tracks them in
-three complementary structures because three different questions are asked on
-three different hot paths.
+Root subscriptions are the DB wake-up anchors, and the cache module tracks them
+in three complementary structures because three different questions are asked
+on three different hot paths.
 
 - **`rootSubIdBySource` (`sourceKey → subId`)** answers the flush question:
   a top-level db key changed identity — which root subscription owns it? The
@@ -80,7 +90,7 @@ three different hot paths.
   construction asks "is this id a root?" to decide the node's kind and to
   reject parameters on roots. With opaque nodes this fact cannot come from the
   node, so it is read here.
-- **`rootSubscriptionKeys` (`Set` of `JSON.stringify([subId])`)** is the
+- **`rootSubscriptionKeys` (`Set` of `getRootSubKey(subId)`)** is the
   persistence guard. Root cells are immune to eviction and to the provisional
   sweep — they stay registered while dormant so no publication is ever missed.
   The guard sits on the hottest paths (`evictCachedSubscription`,
@@ -97,8 +107,8 @@ sub id is reassigned.
 
 `key → { node, subId, dependencyKeys }`, where `key` is the serialized query
 vector. The node is the opaque runtime handle; `subId` and `dependencyKeys` are
-the structural facts the registrar records because the node will not surrender
-them later.
+the structural facts the cache records because the node will not surrender them
+later.
 
 `cacheSubscription` throws on a duplicate canonical key. Two live instances for
 one key would split watchers and publications across them — an invariant
@@ -130,7 +140,7 @@ Two properties matter:
 - Invalidation is proportional to the removed subgraph, not to the whole cache.
   Without the reverse index, finding dependents would scan every entry on every
   removal.
-- These are **registry metadata, not the live DAG**. The runtime keeps its own
+- These are **cache metadata, not the live DAG**. The runtime keeps its own
   `dependents` sets on active cells for publication. The reverse edges here
   additionally cover _dormant_ cached graphs, which the runtime's live edges do
   not track. The invariant they enforce: a canonical cache entry never retains
@@ -147,7 +157,7 @@ closure removal.
 Instances are created during render (`getSnapshot`), but a render may never
 commit: concurrent rendering, StrictMode, Suspense, or an aborted transition.
 Such an instance is never watched and never becomes a dependency, so the normal
-unsubscribe path can never dispose it. The provisional registers catch these.
+unsubscribe path can never dispose it. The provisional maps catch these.
 
 `provisionalCurrent` and `provisionalPrevious` implement a two-generation
 grace period. A newly created computed instance is marked in `current`. A sweep
@@ -168,19 +178,21 @@ cached instance renews the lease on its entire dormant dependency subtree
 (walked via forward `dependencyKeys`), not just the entry point, so a shared
 dependency in an older generation is not swept out from under a fresh parent.
 
-## Interceptors and subscription config
+## Event metadata and subscription config
 
-Two small independent maps, unrelated to the subscription graph:
+Two small independent maps are deliberately kept with their owning domains:
 
-- **`interceptorsRegistry` (`eventId → Interceptor[]`)** — the interceptor
-  chain applied around an event handler.
-- **`subConfigRegistry` (`subId → SubConfig`)** — per-subscription options,
-  currently a custom `equalityCheck`. Read once when an instance is built and
-  baked into the node's spec.
+- **`interceptorsByEvent` (`eventId → readonly Interceptor[]`)** lives in
+  `runtime/event-metadata.ts` and stores the chain applied around an event
+  handler.
+- **`subConfigById` (`subId → SubConfig`)** lives beside the subscription cache.
+  Its custom `equalityCheck` is read once when an instance is built and baked
+  into the node's spec.
 
 ## Clearing and lifecycle rules
 
-Clearing spans several stores, so the operations are centralized:
+Clearing spans several stores. `runtime/reset.ts` coordinates public handler
+clears; `runtime/subscriptions/cache.ts` owns subscription-specific clearing:
 
 - **`assertSubscriptionsCanBeCleared`** (from the runtime) rejects any
   subscription-affecting clear while a graph is active. Mounted stores must not
@@ -193,20 +205,23 @@ Clearing spans several stores, so the operations are centralized:
   same operation.
 - **`clearHandlers('event', id)`** removes both the handler and its interceptor
   metadata, so a later registration cannot inherit a stale chain.
+- **`clearHandlers('error', 'event-handler')`** removes a user override and
+  restores the framework default error handler.
 - **`clearSubs`** clears the instance cache, both handler kinds, and configs —
   the full public reset, subject to the active-graph guard.
 - **`clearSubsForHotReload`** is the internal HMR path. It bypasses the guard
   and clears eagerly because HMR immediately remounts the owning React tree by
   key; the guard would otherwise refuse while that tree is still mounted.
-- **`clearAllRegistries`** resets everything for a clean-slate teardown.
 
-## Why this lives in the registrar, not the runtime
+## Why cache policy lives outside the engine
 
-The split is deliberate. The runtime owns graph semantics — stamps, epochs,
+The split is deliberate. The engine owns graph semantics — stamps, epochs,
 waves, evaluation — and knows nothing about serialized keys, root persistence,
-provisional leases, or handler ids. All of that is caching policy, and it lives
-here. The previous engine spread this policy across the nodes themselves
-(dependency resolvers, revival, relinking); the current design replaces it with
-a few honest side indexes. There is more registry data, but each subscription
-node carries fewer invariants — and the structural facts a node would no longer
-tell you are recorded, once, at the moment it is cached.
+provisional leases, or handler ids. Definitions live in `runtime/handlers.ts`;
+key serialization lives in `runtime/subscriptions/keys.ts`; cache policy lives
+in `runtime/subscriptions/cache.ts`. The previous engine
+spread this policy across the nodes themselves (dependency resolvers, revival,
+relinking); the current design replaces it with explicit side indexes. There is
+more cache metadata, but each subscription node carries fewer invariants — and
+the structural facts a node does not expose are recorded once, when it is
+cached.

@@ -1,16 +1,16 @@
 /**
  * @jest-environment jsdom
  */
-// Force the dev path: IS_DEV is derived from NODE_ENV at import time, which
-// is 'test' under jest. jest.mock is hoisted above imports, so subs.ts sees
-// IS_DEV === true in this file only.
-jest.mock('../env', () => ({ IS_DEV: true }));
+// IS_DEV is captured at import time; Jest hoists this mock so query validation
+// takes its development-only branch in this suite.
+jest.mock('../core/environment', () => ({ IS_DEV: true }));
 
 import { renderHook } from '@testing-library/react';
-import { regSub, getOrCreateSubscription } from '../subs';
-import { useSubscription } from '../hook';
-import { initAppDb } from '../db';
-import { clearSubscriptionCache } from '../registrar';
+import { regSub } from '../subscriptions/registration';
+import { getOrCreateSubscription } from '../subscriptions/queries';
+import { useSubscription } from '../react/use-subscription';
+import { initAppDb } from '../runtime/app-db';
+import { clearSubscriptionCache } from '../runtime/subscriptions/cache';
 
 describe('Dev warnings for non-serializable subscription params', () => {
   regSub('warn-items');

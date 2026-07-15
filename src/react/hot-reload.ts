@@ -1,27 +1,23 @@
 import { createElement, Fragment, useEffect, useReducer, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import { consoleLog } from './loggers';
-import { clearSubsForHotReload } from './registrar';
 
-// Hot reload callback management
+import { consoleLog } from '../core/logging';
+import { clearSubsForHotReload } from '../runtime/subscriptions/cache';
+
 type HotReloadCallback = () => void;
-const hotReloadCallbacks = new Set<HotReloadCallback>();
 
-/**
- * Register a callback to be called when subs are hot reloaded
- */
+const hotReloadCallbacks = new Set<HotReloadCallback>();
+let hotReloadKeyCounter = 0;
+
+/** Register a callback and return an unregister function. */
 export function registerHotReloadCallback(callback: HotReloadCallback): () => void {
   hotReloadCallbacks.add(callback);
-
-  // Return unregister function
   return () => {
     hotReloadCallbacks.delete(callback);
   };
 }
 
-/**
- * Trigger all registered hot reload callbacks
- */
+/** Invoke every hot-reload callback, logging and isolating callback failures. */
 export function triggerHotReload(): void {
   consoleLog('log', '[reflex] Triggering hot reload callbacks');
 
@@ -34,37 +30,25 @@ export function triggerHotReload(): void {
   }
 }
 
-/**
- * Clear all hot reload callbacks
- */
+/** Remove all registered hot-reload callbacks. */
 export function clearHotReloadCallbacks(): void {
   hotReloadCallbacks.clear();
 }
 
-/**
- * React hook that forces component re-render when subs are hot reloaded
- */
+/** Re-render the calling component whenever subscription definitions are hot-reloaded. */
 export function useHotReload(): void {
   const [, forceUpdate] = useReducer((version: number) => version + 1, 0);
 
-  useEffect(() => {
-    return registerHotReloadCallback(forceUpdate);
-  }, []);
+  useEffect(() => registerHotReloadCallback(forceUpdate), []);
 }
 
-// Key counter for generating unique keys
-let keyCounter = 0;
-
-/**
- * React hook that provides a key that changes when subs are hot reloaded
- * Useful for forcing complete re-mount of component trees
- */
+/** Return a key that changes after each subscription hot reload. */
 export function useHotReloadKey(): string {
-  const [key, setKey] = useState(() => `hot-reload-${++keyCounter}`);
+  const [key, setKey] = useState(() => `hot-reload-${++hotReloadKeyCounter}`);
 
   useEffect(() => {
     const updateKey = () => {
-      setKey(`hot-reload-${++keyCounter}`);
+      setKey(`hot-reload-${++hotReloadKeyCounter}`);
     };
 
     return registerHotReloadCallback(updateKey);
@@ -74,8 +58,10 @@ export function useHotReloadKey(): string {
 }
 
 /**
- * Utility for setting up hot reload in subs modules
- * Returns dispose and accept functions for HMR
+ * Create bundler-agnostic HMR hooks for a subscription module.
+ *
+ * Disposal clears subscription definitions and cache state. Acceptance
+ * notifies mounted React consumers only when the bundler supplies a module.
  */
 export function setupSubsHotReload(): {
   dispose: () => void;
@@ -95,10 +81,7 @@ export function setupSubsHotReload(): {
   return { dispose, accept };
 }
 
-/**
- * React component that wraps children with hot reload support
- * Uses a key that changes when subs are hot reloaded to force re-mount
- */
+/** Remount descendants whenever subscription definitions are hot-reloaded. */
 export function HotReloadWrapper({ children }: { children: ReactNode }): ReactElement {
   const key = useHotReloadKey();
   return createElement(Fragment, { key }, children);

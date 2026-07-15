@@ -1,9 +1,8 @@
-import { clear, clearAll, debounceAndDispatch, throttleAndDispatch } from '../debounce';
-import { dispatch } from '../router';
+import { clear, clearAll, debounceAndDispatch, throttleAndDispatch } from '../events/rate-limit';
+import { dispatch } from '../events/router';
 import type { EventVector } from '../types';
 
-// Mock the dispatch function
-jest.mock('../router', () => ({
+jest.mock('../events/router', () => ({
   dispatch: jest.fn(),
 }));
 
@@ -14,34 +13,29 @@ describe('debounce', () => {
     jest.clearAllMocks();
     jest.clearAllTimers();
     jest.useFakeTimers();
-    clearAll(); // Clear any existing timeouts
+    clearAll();
   });
 
   afterEach(() => {
     jest.runOnlyPendingTimers();
     jest.useRealTimers();
-    clearAll(); // Clean up after each test
+    clearAll();
   });
 
   describe('clear', () => {
     it('should clear a specific timeout by event key', () => {
       const event: EventVector = ['test-event', 'param'];
 
-      // Start a debounced dispatch
       debounceAndDispatch(event, 1000);
 
-      // Clear the specific event
       clear('test-event');
 
-      // Fast-forward time past the debounce period
       jest.advanceTimersByTime(1100);
 
-      // The event should not have been dispatched
       expect(mockDispatch).not.toHaveBeenCalled();
     });
 
     it('should handle clearing non-existent event keys gracefully', () => {
-      // Should not throw when clearing a non-existent key
       expect(() => clear('non-existent-key')).not.toThrow();
     });
 
@@ -52,13 +46,10 @@ describe('debounce', () => {
       debounceAndDispatch(event1, 1000);
       debounceAndDispatch(event2, 1000);
 
-      // Clear only event1
       clear('event1');
 
-      // Fast-forward time
       jest.advanceTimersByTime(1100);
 
-      // Only event2 should have been dispatched
       expect(mockDispatch).toHaveBeenCalledTimes(1);
       expect(mockDispatch).toHaveBeenCalledWith(event2);
     });
@@ -72,16 +63,12 @@ describe('debounce', () => {
         ['event3', 'param3'],
       ];
 
-      // Start multiple debounced dispatches
       events.forEach((event) => debounceAndDispatch(event, 1000));
 
-      // Clear all timeouts
       clearAll();
 
-      // Fast-forward time past the debounce period
       jest.advanceTimersByTime(1100);
 
-      // No events should have been dispatched
       expect(mockDispatch).not.toHaveBeenCalled();
     });
 
@@ -96,14 +83,11 @@ describe('debounce', () => {
 
       debounceAndDispatch(event, 500);
 
-      // Should not dispatch immediately
       expect(mockDispatch).not.toHaveBeenCalled();
 
-      // Fast-forward to just before the debounce period
       jest.advanceTimersByTime(499);
       expect(mockDispatch).not.toHaveBeenCalled();
 
-      // Fast-forward past the debounce period
       jest.advanceTimersByTime(1);
       expect(mockDispatch).toHaveBeenCalledTimes(1);
       expect(mockDispatch).toHaveBeenCalledWith(event);
@@ -115,14 +99,12 @@ describe('debounce', () => {
       debounceAndDispatch(event, 500);
       jest.advanceTimersByTime(300);
 
-      // Call again with same event key - should reset the timer
       debounceAndDispatch(event, 500);
 
-      // Fast-forward 400ms (total 700ms from first call, but only 400ms from second)
+      // At 700 ms overall, only 400 ms has elapsed since the replacement call.
       jest.advanceTimersByTime(400);
       expect(mockDispatch).not.toHaveBeenCalled();
 
-      // Fast-forward remaining 100ms to complete second debounce
       jest.advanceTimersByTime(100);
       expect(mockDispatch).toHaveBeenCalledTimes(1);
       expect(mockDispatch).toHaveBeenCalledWith(event);
@@ -136,12 +118,11 @@ describe('debounce', () => {
       jest.advanceTimersByTime(100);
       debounceAndDispatch(event2, 100);
 
-      // After 200ms total: event2 should dispatch (started at 100ms + 100ms duration)
+      // At 200 ms overall, only event2 is due.
       jest.advanceTimersByTime(100);
       expect(mockDispatch).toHaveBeenCalledTimes(1);
       expect(mockDispatch).toHaveBeenCalledWith(event2);
 
-      // After 300ms total: event1 should dispatch
       jest.advanceTimersByTime(100);
       expect(mockDispatch).toHaveBeenCalledTimes(2);
       expect(mockDispatch).toHaveBeenCalledWith(event1);
@@ -152,7 +133,6 @@ describe('debounce', () => {
 
       debounceAndDispatch(event, 0);
 
-      // Should dispatch immediately when timer fires
       jest.advanceTimersByTime(0);
       expect(mockDispatch).toHaveBeenCalledTimes(1);
       expect(mockDispatch).toHaveBeenCalledWith(event);
@@ -165,7 +145,6 @@ describe('debounce', () => {
 
       throttleAndDispatch(event, 500);
 
-      // Should dispatch immediately
       expect(mockDispatch).toHaveBeenCalledTimes(1);
       expect(mockDispatch).toHaveBeenCalledWith(event);
     });
@@ -176,12 +155,10 @@ describe('debounce', () => {
       throttleAndDispatch(event, 500);
       expect(mockDispatch).toHaveBeenCalledTimes(1);
 
-      // Call again within throttle period
       throttleAndDispatch(event, 500);
       throttleAndDispatch(event, 500);
       throttleAndDispatch(event, 500);
 
-      // Should not dispatch additional events
       expect(mockDispatch).toHaveBeenCalledTimes(1);
     });
 
@@ -191,10 +168,8 @@ describe('debounce', () => {
       throttleAndDispatch(event, 500);
       expect(mockDispatch).toHaveBeenCalledTimes(1);
 
-      // Fast-forward past throttle period
       jest.advanceTimersByTime(500);
 
-      // Should be able to dispatch again
       throttleAndDispatch(event, 500);
       expect(mockDispatch).toHaveBeenCalledTimes(2);
       expect(mockDispatch).toHaveBeenCalledWith(event);
@@ -207,12 +182,10 @@ describe('debounce', () => {
       throttleAndDispatch(event1, 500);
       throttleAndDispatch(event2, 500);
 
-      // Both should dispatch immediately
       expect(mockDispatch).toHaveBeenCalledTimes(2);
       expect(mockDispatch).toHaveBeenNthCalledWith(1, event1);
       expect(mockDispatch).toHaveBeenNthCalledWith(2, event2);
 
-      // Subsequent calls within throttle period should be ignored
       throttleAndDispatch(event1, 500);
       throttleAndDispatch(event2, 500);
       expect(mockDispatch).toHaveBeenCalledTimes(2);
@@ -224,10 +197,8 @@ describe('debounce', () => {
       throttleAndDispatch(event, 0);
       expect(mockDispatch).toHaveBeenCalledTimes(1);
 
-      // Fast-forward minimal time
       jest.advanceTimersByTime(0);
 
-      // Should be able to throttle again immediately
       throttleAndDispatch(event, 0);
       expect(mockDispatch).toHaveBeenCalledTimes(2);
     });
@@ -241,13 +212,11 @@ describe('debounce', () => {
       debounceAndDispatch(debounceEvent, 300);
       throttleAndDispatch(throttleEvent, 300);
 
-      // Throttle should dispatch immediately
       expect(mockDispatch).toHaveBeenCalledTimes(1);
       expect(mockDispatch).toHaveBeenCalledWith(throttleEvent);
 
       jest.advanceTimersByTime(300);
 
-      // Debounce should dispatch after delay
       expect(mockDispatch).toHaveBeenCalledTimes(2);
       expect(mockDispatch).toHaveBeenCalledWith(debounceEvent);
     });
@@ -258,15 +227,12 @@ describe('debounce', () => {
       debounceAndDispatch(event, 500);
       throttleAndDispatch(event, 500);
 
-      // Throttle dispatches immediately
       expect(mockDispatch).toHaveBeenCalledTimes(1);
 
-      // Clear the debounce timeout
       clear('mixed-event');
 
       jest.advanceTimersByTime(500);
 
-      // Only the throttle should have dispatched, debounce was cleared
       expect(mockDispatch).toHaveBeenCalledTimes(1);
     });
   });

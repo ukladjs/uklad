@@ -1,7 +1,8 @@
-import { initAppDb } from '../db';
-import { clearSubscriptionCache, getSubscriptionDiagnostics } from '../registrar';
-import { getOrCreateSubscription, regSub } from '../subs';
-import { getSubscriptionSnapshot, subscribeToSubscription } from '../subscription-runtime';
+import { initAppDb } from '../runtime/app-db';
+import { clearSubscriptionCache, getSubscriptionDiagnostics } from '../runtime/subscriptions/cache';
+import { regSub } from '../subscriptions/registration';
+import { getOrCreateSubscription } from '../subscriptions/queries';
+import { getSubscriptionSnapshot, subscribeToSubscription } from '../runtime/subscriptions/engine';
 import type { SubVector } from '../types';
 
 let computedRuns = 0;

@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { scheduleAfterRender } from '../schedule';
+import { scheduleAfterRender } from '../core/scheduling';
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

@@ -1,18 +1,14 @@
 import type { Context, EventHandler, Interceptor, SubDepsHandler, SubHandler } from '../types';
+import { getHandler, getHandlers, hasHandler, registerHandler } from '../runtime/handlers';
+import { clearHandlers } from '../runtime/reset';
+import { getInterceptors, setInterceptors } from '../runtime/event-metadata';
 import {
-  clearHandlers,
   clearSubs,
-  getHandler,
-  getHandlers,
-  getInterceptors,
   getRootSubSourceById,
   getSubConfig,
-  hasHandler,
-  registerHandler,
-  setInterceptors,
   setRootSubSource,
   setSubConfig,
-} from '../registrar';
+} from '../runtime/subscriptions/cache';
 
 describe('handler registry', () => {
   beforeEach(() => {
@@ -35,6 +31,15 @@ describe('handler registry', () => {
       expect(Object.getPrototypeOf(getHandlers().event)).toBeNull();
     },
   );
+
+  it('returns a live registry view', () => {
+    const registry = getHandlers();
+    const handler = jest.fn();
+
+    registerHandler('event', 'live-handler', handler);
+
+    expect(registry.event['live-handler']).toBe(handler);
+  });
 
   it('does not log when a handler lookup misses', () => {
     expect(getHandler('event', 'missing-handler')).toBeUndefined();
@@ -67,6 +72,21 @@ describe('handler registry', () => {
 
     expect(getHandler('event', eventId)).toBeUndefined();
     expect(getInterceptors(eventId)).toEqual([]);
+  });
+
+  it('owns an immutable interceptor list after registration', () => {
+    const interceptor: Interceptor = {
+      id: 'immutable-metadata',
+      before: (context: Context) => context,
+    };
+    const registered = [interceptor];
+
+    setInterceptors('immutable-event', registered);
+    registered.length = 0;
+
+    const stored = getInterceptors('immutable-event');
+    expect(stored).toEqual([interceptor]);
+    expect(Object.isFrozen(stored)).toBe(true);
   });
 
   it('clears a complete subscription definition and its metadata', () => {

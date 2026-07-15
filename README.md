@@ -146,7 +146,7 @@ Reflex is **re-frame for the JavaScript world**. After many years of building ap
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request or file an issue with questions, suggestions, or ideas.
+Contributions are welcome! Please feel free to submit a Pull Request or file an issue with questions, suggestions, or ideas. Implementation changes should follow the [code conventions and module ownership rules](./docs/code-conventions.md).
 
 ## 📄 License
 

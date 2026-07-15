@@ -5,7 +5,7 @@ import {
   readSubscription,
   subscribeToSubscription,
   type SubscriptionNode,
-} from '../subscription-runtime';
+} from '../runtime/subscriptions/engine';
 
 let nextKey = 0;
 

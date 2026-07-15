@@ -3,12 +3,20 @@
  * coalescing, and db generation reads (subscriptions serve the last flushed
  * generation, not the live db).
  */
-import { regEvent } from '../events';
-import { dispatch } from '../router';
-import { initAppDb, getAppDb, updateAppDb, flushSubscriptions, getRenderDb } from '../db';
-import { regSub, getOrCreateSubscription, getSubscriptionValue } from '../subs';
-import { clearHandlers, clearSubscriptionCache, clearSubs } from '../registrar';
-import { getSubscriptionSnapshot, subscribeToSubscription } from '../subscription-runtime';
+import { regEvent } from '../events/registration';
+import { dispatch } from '../events/router';
+import {
+  initAppDb,
+  getAppDb,
+  updateAppDb,
+  flushSubscriptions,
+  getRenderDb,
+} from '../runtime/app-db';
+import { regSub } from '../subscriptions/registration';
+import { getOrCreateSubscription, getSubscriptionValue } from '../subscriptions/queries';
+import { clearHandlers } from '../runtime/reset';
+import { clearSubscriptionCache, clearSubs } from '../runtime/subscriptions/cache';
+import { getSubscriptionSnapshot, subscribeToSubscription } from '../runtime/subscriptions/engine';
 import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './test-utils';
 import { produce } from 'immer';
 

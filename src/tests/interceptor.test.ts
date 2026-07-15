@@ -1,8 +1,8 @@
-import { isInterceptor, execute } from '../interceptor';
-import { registerHandler, clearHandlers } from '../registrar';
+import { isInterceptor, execute } from '../events/interceptors';
+import { registerHandler } from '../runtime/handlers';
+import { clearHandlers } from '../runtime/reset';
 import type { Interceptor, Context, EventVector } from '../types';
 
-// Helper function to create a test interceptor
 function createTestInterceptor(
   id: string,
   options: {
@@ -116,8 +116,7 @@ describe('interceptor', () => {
       const eventV: EventVector = ['test-event', 'param1'];
       const result = execute(eventV, [interceptor1, interceptor2]);
 
-      // Before phase: interceptor1, interceptor2
-      // After phase: interceptor2, interceptor1 (reversed)
+      // The after phase unwinds in reverse interceptor order.
       expect(executionOrder).toEqual(['before-1', 'before-2', 'after-2', 'after-1']);
 
       expect(result.coeffects.event).toEqual(eventV);
@@ -213,7 +212,6 @@ describe('interceptor', () => {
         },
       });
 
-      // Should still throw the error when no error handler is registered
       expect(() => {
         execute(['test-event'], [faultyInterceptor]);
       }).toThrow('Test error');
@@ -240,7 +238,6 @@ describe('interceptor', () => {
     it('should create proper initial context', () => {
       const interceptor = createTestInterceptor('test', {
         before: (ctx) => {
-          // Verify initial context structure
           expect(ctx.coeffects.event).toEqual(['test-event', 'param1', 'param2']);
           expect(ctx.coeffects.draftDb).toEqual({});
           expect(ctx.effects).toEqual([]);

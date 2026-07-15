@@ -1,6 +1,7 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
+
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [react()],
@@ -15,7 +16,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    // Exclude reflex-devtools from pre-bundling so it picks up the @flexsurfer/reflex alias
+    // Pre-bundling would bypass the compatibility alias above.
     exclude: ['@flexsurfer/reflex-devtools'],
   },
 });

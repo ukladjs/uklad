@@ -4,14 +4,13 @@
  * while the legitimate paths — the built-in 'dispatch' effect, and dispatch
  * from application code outside handlers — stay silent.
  */
-// Force the dev path: IS_DEV is derived from NODE_ENV at import time, which
-// is 'test' under jest. jest.mock is hoisted above imports, so router.ts sees
-// IS_DEV === true in this file only.
-jest.mock('../env', () => ({ IS_DEV: true }));
+// IS_DEV is captured at import time; Jest hoists this mock so the event router
+// takes its development-only branch in this suite.
+jest.mock('../core/environment', () => ({ IS_DEV: true }));
 
-import { regEvent } from '../events';
-import { dispatch, dispatchSync } from '../router';
-import { initAppDb, getAppDb } from '../db';
+import { regEvent } from '../events/registration';
+import { dispatch, dispatchSync } from '../events/router';
+import { initAppDb, getAppDb } from '../runtime/app-db';
 import { waitForScheduled } from './test-utils';
 
 const purityWarnings = () =>
@@ -42,7 +41,6 @@ describe('dev warning: dispatch called from an event handler', () => {
     expect(String(warnings[0]![0])).toContain("'purity-inner'");
     expect(String(warnings[0]![0])).toContain("'purity-outer'");
 
-    // Behavior is preserved: both events processed
     expect(getAppDb().outer).toBe(1);
     expect(getAppDb().inner).toBe(1);
   });

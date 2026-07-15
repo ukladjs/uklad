@@ -1,4 +1,4 @@
-import { EventQueue, dispatch } from '../router';
+import { EventQueue, dispatch } from '../events/router';
 import type { EventVector } from '../types';
 import { waitForScheduled, waitForAnimationFrame, createEventWithMeta } from './test-utils';
 
@@ -20,7 +20,6 @@ describe('EventQueue', () => {
       queue.push(['second']);
       queue.push(['third']);
 
-      // Events should not be processed immediately
       expect(calls).toEqual([]);
       expect(queue.getState()).toBe('scheduled');
       expect(queue.getQueueLength()).toBe(3);
@@ -59,7 +58,7 @@ describe('EventQueue', () => {
 
       expect(calls).toEqual([['first'], ['second']]);
 
-      // Wait a bit more for the added event to be processed
+      // Events queued during a run move to the next scheduled snapshot.
       await waitForScheduled();
 
       expect(calls).toEqual([['first'], ['second'], ['added-during-processing']]);
@@ -126,9 +125,8 @@ describe('EventQueue', () => {
       expect(calls.length).toBe(2);
       expect(testQueue.getState()).toBe('scheduled');
       await waitForScheduled();
-      // Should process first two, then be scheduled for the third
       expect(calls.length).toBe(3);
-      expect(testQueue.getState()).toBe('idle'); // Will be idle after all processing
+      expect(testQueue.getState()).toBe('idle');
     });
   });
 
@@ -143,11 +141,10 @@ describe('EventQueue', () => {
 
       await waitForScheduled();
 
-      // Normal event should be processed first
       expect(calls[0]).toEqual(normalEvent);
       expect(queue.getState()).toBe('paused');
 
-      // Wait for flush scheduling (requestAnimationFrame)
+      // A flush pauses until the render scheduler resumes the queue.
       await waitForAnimationFrame();
 
       expect(calls).toEqual([normalEvent, flushEvent, ['after-flush']]);
@@ -163,7 +160,6 @@ describe('EventQueue', () => {
       await waitForScheduled();
 
       expect(calls.length).toBe(0);
-      // Yield event should pause for next tick
       expect(queue.getState()).toBe('paused');
 
       await waitForScheduled();
@@ -188,7 +184,7 @@ describe('EventQueue', () => {
       expect(queue.getState()).toBe('paused');
 
       await waitForScheduled();
-      // Still paused waiting for requestAnimationFrame
+      // The first metadata key wins, so a next-tick wait cannot resume this flush.
       expect(queue.getState()).toBe('paused');
 
       await waitForAnimationFrame();
@@ -206,17 +202,15 @@ describe('EventQueue', () => {
         calls.push(event);
       });
 
-      // Test with just the error event to avoid race conditions
       errorQueue.push(['error-event']);
 
       await waitForScheduled();
 
-      // Error should have occurred and queue should be purged
       expect(calls).toEqual([]);
       expect(errorQueue.getState()).toBe('idle');
       expect(errorQueue.getQueueLength()).toBe(0);
 
-      // Should log the error (may have multiple error logs from state transitions)
+      // State-transition cleanup may add logs, so only the processing error is required.
       expect(getTestLogCalls().error.length).toBeGreaterThanOrEqual(1);
       expect(
         getTestLogCalls().error.some((call) => call[0] === '[reflex] event processing exception:'),
@@ -239,25 +233,21 @@ describe('EventQueue', () => {
 
       await waitForScheduled();
 
-      // Should process first event normally
       expect(calls).toEqual([['before-error']]);
       expect(errorQueue.getState()).toBe('paused');
 
-      // Wait for the flush to trigger the error
+      // The failing meta event does not execute until the render boundary resumes.
       await waitForAnimationFrame();
 
-      // Error should have purged the queue
       expect(errorQueue.getState()).toBe('idle');
       expect(errorQueue.getQueueLength()).toBe(0);
       expect(getTestLogCalls().error.length).toBeGreaterThanOrEqual(1);
     });
 
     test('logs error for invalid state transitions', () => {
-      // This tests the default case in fsmTrigger
-      // We can't easily trigger this in normal usage, but we can test the log
       const testQueue = new EventQueue(() => {});
 
-      // Use reflection to call fsmTrigger with invalid transition
+      // Invalid transitions are unreachable through the public queue API.
       (testQueue as any).fsmTrigger('invalid-trigger' as any);
 
       expect(getTestLogCalls().error.length).toBe(1);
@@ -283,8 +273,7 @@ describe('EventQueue', () => {
 
       await waitForScheduled();
 
-      // Should process before events fully, start processing error-event (add to calls), then throw and purge,
-      // skipping after events without crashing
+      // The failing event begins, then purges every event remaining in the snapshot.
       expect(calls).toEqual([['before1'], ['before2'], ['error-event']]);
       expect(errorQueue.getState()).toBe('idle');
       expect(errorQueue.getQueueLength()).toBe(0);
@@ -317,7 +306,6 @@ describe('EventQueue', () => {
       await waitForScheduled();
       expect(queue.getState()).toBe('paused');
 
-      // Add event while paused
       queue.push(['added-while-paused']);
       expect(queue.getState()).toBe('paused');
 
@@ -350,12 +338,10 @@ describe('EventQueue', () => {
       testQueue.push(['second']);
       testQueue.push(['third']);
 
-      // Purge before processing starts
       testQueue.purge();
 
       await waitForScheduled();
 
-      // No events should be processed after purge
       expect(calls).toEqual([]);
       expect(testQueue.getQueueLength()).toBe(0);
       expect(testQueue.getState()).toBe('idle');
@@ -394,27 +380,20 @@ describe('Global dispatch function', () => {
   });
 
   test('dispatches valid events', async () => {
-    // We can't easily test the global dispatch without mocking the global queue
-    // But we can test the validation logic
-
-    // Mock console to capture invalid dispatch logs
     dispatch(['valid-event', 'param']);
 
-    // Should not log any errors for valid events
     expect(getTestLogCalls().error.length).toBe(0);
   });
 
   test('rejects invalid event vectors', () => {
-    // Test invalid events
     dispatch(null as any);
     dispatch(undefined as any);
     dispatch('not-an-array' as any);
-    dispatch([] as any); // Empty array
-    dispatch({} as any); // Object instead of array
-    dispatch([123] as any); // Event id must be a string
+    dispatch([] as any);
+    dispatch({} as any);
+    dispatch([123] as any);
     dispatch([null] as any);
 
-    // Should log errors for each invalid event
     expect(getTestLogCalls().error.length).toBe(7);
     getTestLogCalls().error.forEach((errorCall) => {
       expect(errorCall[0]).toBe('[reflex] invalid dispatch event vector.');
@@ -426,7 +405,6 @@ describe('Global dispatch function', () => {
     dispatch(['with-param', 'value']);
     dispatch(['with-multiple', 'param1', 'param2', { complex: 'object' }]);
 
-    // Should not log any errors
     expect(getTestLogCalls().error.length).toBe(0);
   });
 });
@@ -434,7 +412,6 @@ describe('Global dispatch function', () => {
 describe('Environment Specific Scheduling', () => {
   describe('scheduleAfterRender', () => {
     test('uses requestAnimationFrame when available', async () => {
-      // Mock requestAnimationFrame for testing
       const originalRAF = (globalThis as any).requestAnimationFrame;
       (globalThis as any).requestAnimationFrame = jest.fn((cb: any) => setTimeout(cb, 16));
 
@@ -452,7 +429,6 @@ describe('Environment Specific Scheduling', () => {
         await waitForScheduled();
         await waitForAnimationFrame();
       } finally {
-        // Restore original
         if (originalRAF) {
           (globalThis as any).requestAnimationFrame = originalRAF;
         } else {
@@ -464,7 +440,6 @@ describe('Environment Specific Scheduling', () => {
 
   describe('scheduleNextTick', () => {
     test('uses MessageChannel when available', async () => {
-      // MessageChannel is available in jsdom
       expect(typeof MessageChannel).toBe('function');
 
       const yieldEvent = createEventWithMeta('yield-test', { yield: true });
@@ -475,8 +450,9 @@ describe('Environment Specific Scheduling', () => {
       });
 
       testQueue.push(yieldEvent);
+      // The first tick pauses at yield; the second resumes the queue.
       await waitForScheduled();
-      await waitForScheduled(); // Wait for yield
+      await waitForScheduled();
     });
   });
 });
@@ -528,24 +504,21 @@ describe('Complex Scenarios', () => {
     mixedQueue.push(yieldEvent);
     mixedQueue.push(['normal3']);
 
-    // Process until first meta event
+    // Each metadata marker pauses at its own scheduler boundary.
     await waitForScheduled();
     expect(calls[0]).toEqual(['normal1']);
 
     expect(mixedQueue.getState()).toBe('paused');
-    // Process flush
     await waitForAnimationFrame();
 
     expect(calls[1]).toEqual(flushEvent);
     expect(calls[2]).toEqual(['normal2']);
 
-    // Process yield
     await waitForScheduled();
     expect(calls[3]).toEqual(yieldEvent);
     expect(calls[4]).toEqual(['normal3']);
     expect(mixedQueue.getState()).toBe('idle');
 
-    // Verify all events were processed in correct order
     expect(calls).toEqual([['normal1'], flushEvent, ['normal2'], yieldEvent, ['normal3']]);
   });
 
@@ -570,7 +543,6 @@ describe('Complex Scenarios', () => {
 
     await waitForAnimationFrame();
 
-    // Error should have been logged and queue purged
     expect(getTestLogCalls().error.length).toBeGreaterThanOrEqual(1);
     expect(errorQueue.getState()).toBe('idle');
     expect(errorQueue.getQueueLength()).toBe(0);

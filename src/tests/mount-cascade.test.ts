@@ -4,12 +4,13 @@
  * re-running them once per mount. By-id row subs over a shared sorted list is
  * the recommended pattern, so this is the hot path.
  */
-import { regEvent } from '../events';
-import { dispatch } from '../router';
-import { initAppDb } from '../db';
-import { regSub, getOrCreateSubscription } from '../subs';
-import { clearSubscriptionCache } from '../registrar';
-import { getSubscriptionSnapshot, subscribeToSubscription } from '../subscription-runtime';
+import { regEvent } from '../events/registration';
+import { dispatch } from '../events/router';
+import { initAppDb } from '../runtime/app-db';
+import { regSub } from '../subscriptions/registration';
+import { getOrCreateSubscription } from '../subscriptions/queries';
+import { clearSubscriptionCache } from '../runtime/subscriptions/cache';
+import { getSubscriptionSnapshot, subscribeToSubscription } from '../runtime/subscriptions/engine';
 import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('Mount recompute cascades', () => {
@@ -56,7 +57,6 @@ describe('Mount recompute cascades', () => {
       cleanups.push(subscribeToSubscription(subscription, callback));
     }
 
-    // The sorted list was computed once, not once per mounting row
     expect(sortCount).toBe(1);
     expect(callbacks.every((callback) => callback.mock.calls.length === 0)).toBe(true);
 
@@ -84,7 +84,6 @@ describe('Mount recompute cascades', () => {
     await waitForAnimationFrame();
     await waitForSubscription();
 
-    // One re-sort for the whole flush, regardless of subscriber count
     expect(sortCount).toBe(2);
     expect(callbacks[0]).toHaveBeenCalledTimes(1);
     expect(callbacks.slice(1).every((callback) => callback.mock.calls.length === 0)).toBe(true);

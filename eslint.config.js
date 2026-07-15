@@ -24,8 +24,61 @@ export default defineConfig([
       reportUnusedDisableDirectives: 'error',
     },
     rules: {
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        {
+          fixStyle: 'separate-type-imports',
+          prefer: 'type-imports',
+        },
+      ],
       '@typescript-eslint/no-empty-object-type': 'off',
       '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+  {
+    files: ['src/{core,events,runtime,subscriptions}/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react',
+              message: 'React dependencies belong in src/react.',
+            },
+            {
+              name: 'react-dom',
+              message: 'React dependencies belong in src/react.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['react/*', 'react-dom/*'],
+              message: 'React dependencies belong in src/react.',
+            },
+            {
+              group: ['../index', '../../index', '../../../index'],
+              message: 'Internal modules must import concrete files, not the public index.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/react/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['../index', '../../index', '../../../index'],
+              message: 'Internal modules must import concrete files, not the public index.',
+            },
+          ],
+        },
+      ],
     },
   },
   {

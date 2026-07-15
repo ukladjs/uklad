@@ -1,6 +1,7 @@
-import { consoleLog } from './loggers';
-import { mergeTrace, withTrace } from './trace';
-import type { EqualityCheckFn, SubVector } from './types';
+import { consoleLog } from '../../core/logging';
+import { mergeTrace, withTrace } from '../../core/tracing';
+
+import type { EqualityCheckFn, SubVector } from '../../types';
 
 declare const subscriptionNodeType: unique symbol;
 
@@ -46,31 +47,42 @@ function formatDiagnosticError(error: unknown): string {
 }
 
 class SubscriptionCell<T> {
-  readonly runtime: SubscriptionRuntime;
+  readonly engine: SubscriptionEngine;
   readonly spec: SubscriptionSpec<T>;
   readonly dependencies: SubscriptionCell<any>[];
   readonly uniqueDependencies: SubscriptionCell<any>[];
   readonly dependents = new Set<SubscriptionCell<any>>();
   readonly listeners: ListenerRegistration[] = [];
+  /** Fixed topological rank: roots are zero, dependents exceed every dependency. */
   readonly rank: number;
 
+  // Cached result and error state. `initialized` distinguishes an unread cell
+  // from a legitimate `undefined` result.
   value: T | undefined;
   initialized = false;
   hasValue = false;
   hasError = false;
   error: unknown;
+
+  // Version stamps let computed cells skip equality work when no dependency
+  // produced a new observable value.
   outputStamp = 0;
   dependencyStamps: number[] = [];
+
+  // Active cells participate in push publication. A released computed cell is
+  // terminal and must be reacquired through the canonical cache.
   active = false;
   disposed = false;
+
+  // Per-operation marks avoid allocation-heavy visited sets during pull/push.
   lastPullEpoch = 0;
   queuedWave = 0;
   validatedEpoch = 0;
 
-  constructor(runtime: SubscriptionRuntime, spec: SubscriptionSpec<T>) {
-    this.runtime = runtime;
+  constructor(engine: SubscriptionEngine, spec: SubscriptionSpec<T>) {
+    this.engine = engine;
     this.spec = spec;
-    this.dependencies = spec.dependencies.map((node) => runtime.unwrap(node));
+    this.dependencies = spec.dependencies.map((node) => engine.unwrap(node));
     this.uniqueDependencies = Array.from(new Set(this.dependencies));
     this.rank =
       spec.kind === 'root'
@@ -137,7 +149,7 @@ class SubscriptionCell<T> {
           this.hasError = false;
           this.error = undefined;
           observableChanged = valueChanged || recovered;
-          if (observableChanged) this.outputStamp = this.runtime.nextOutputStamp();
+          if (observableChanged) this.outputStamp = this.engine.nextOutputStamp();
 
           mergeTrace({ tags: { 'cached?': !observableChanged, version: this.outputStamp } });
         },
@@ -156,7 +168,7 @@ class SubscriptionCell<T> {
     this.initialized = true;
     this.hasError = true;
     this.error = error;
-    if (observableChanged) this.outputStamp = this.runtime.nextOutputStamp();
+    if (observableChanged) this.outputStamp = this.engine.nextOutputStamp();
     return observableChanged;
   }
 
@@ -190,17 +202,26 @@ class SubscriptionCell<T> {
 }
 
 /**
- * Clean-slate runtime: live graphs update by topological push from DB roots;
- * dormant reads use a memoized pull. DB publication is already the scheduler,
- * so the engine owns no node tasks or notification-debt state.
+ * Owns the lifecycle of opaque subscription cells.
+ *
+ * Active graphs settle in topological order when DB roots are published. Dormant
+ * graphs are validated lazily by a memoized pull. DB publication is already the
+ * scheduler, so this engine deliberately owns no node tasks or notification debt.
  */
-class SubscriptionRuntime {
+class SubscriptionEngine {
+  /** Deduplicates cells visited during one dormant graph traversal. */
   private pullEpoch = 0;
+  /** Deduplicates active cells queued during one root publication. */
   private wave = 0;
+  /** Monotonic observable-version source shared by every cell. */
   private outputStamp = 0;
+  /** Marks the latest DB generation against which a cell was validated. */
   private publicationEpoch = 1;
+  /** Records settle/notify phases for reentrancy guards and deferred release. */
   private phase: 'idle' | 'settling' | 'notifying' = 'idle';
+  /** Defers listener-triggered releases until notification snapshots finish. */
   private deferredReleases = new Set<SubscriptionCell<any>>();
+  /** Makes destructive registry clears fail while any graph is live. */
   private activeNodes = 0;
 
   create<T>(spec: SubscriptionSpec<T>): SubscriptionNode<T> {
@@ -317,12 +338,13 @@ class SubscriptionRuntime {
   }
 
   unwrap<T>(node: SubscriptionNode<T>): SubscriptionCell<T> {
-    if (!(node instanceof SubscriptionCell) || node.runtime !== this) {
+    if (!(node instanceof SubscriptionCell) || node.engine !== this) {
       throw new Error('[reflex] Subscription belongs to a different runtime.');
     }
     return node;
   }
 
+  /** Validate a dormant graph dependency-first without recursive call depth. */
   private pull(target: SubscriptionCell<any>, retryErrors: boolean): void {
     const epoch = ++this.pullEpoch;
     const stack: Array<[SubscriptionCell<any>, boolean]> = [[target, false]];
@@ -362,6 +384,7 @@ class SubscriptionRuntime {
     }
   }
 
+  /** Push changed roots through active dependents in topological-rank order. */
   private publishWave(roots: SubscriptionCell<any>[]): void {
     const wave = ++this.wave;
     this.publicationEpoch++;
@@ -429,6 +452,7 @@ class SubscriptionRuntime {
     }
   }
 
+  /** Activate dependencies before dependents and roll back atomically on error. */
   private activate(target: SubscriptionCell<any>): void {
     if (target.active) return;
     const stack: Array<[SubscriptionCell<any>, boolean]> = [[target, false]];
@@ -485,6 +509,7 @@ class SubscriptionRuntime {
     this.releaseUnused(subscription);
   }
 
+  /** Release an unused branch toward its dependencies; computed cells are terminal. */
   private releaseUnused(target: SubscriptionCell<any>): void {
     const stack = [target];
     while (stack.length > 0) {
@@ -524,18 +549,18 @@ class SubscriptionRuntime {
   }
 }
 
-const runtime = new SubscriptionRuntime();
+const engine = new SubscriptionEngine();
 
 export function createSubscription<T>(spec: SubscriptionSpec<T>): SubscriptionNode<T> {
-  return runtime.create(spec);
+  return engine.create(spec);
 }
 
 export function readSubscription<T>(node: SubscriptionNode<T>): T {
-  return runtime.read(node);
+  return engine.read(node);
 }
 
 export function getSubscriptionSnapshot<T>(node: SubscriptionNode<T>): T {
-  return runtime.getSnapshot(node);
+  return engine.getSnapshot(node);
 }
 
 export function subscribeToSubscription<T>(
@@ -543,21 +568,21 @@ export function subscribeToSubscription<T>(
   listener: () => void,
   componentName?: string,
 ): () => void {
-  return runtime.subscribe(node, listener, componentName);
+  return engine.subscribe(node, listener, componentName);
 }
 
 export function publishSubscriptions(roots: SubscriptionNode<any>[]): void {
-  runtime.publish(roots);
+  engine.publish(roots);
 }
 
 export function inspectSubscription(node: SubscriptionNode<any>): SubscriptionDiagnostic {
-  return runtime.inspect(node);
+  return engine.inspect(node);
 }
 
 export function assertPublicationAllowed(): void {
-  runtime.assertPublicationAllowed();
+  engine.assertPublicationAllowed();
 }
 
 export function assertSubscriptionsCanBeCleared(): void {
-  runtime.assertClearAllowed();
+  engine.assertClearAllowed();
 }

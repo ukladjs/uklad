@@ -1,5 +1,3 @@
-// TypeScript declarations for global test helpers from jest.setup.js
-
 declare global {
   function getTestLogCalls(): {
     log: any[][];

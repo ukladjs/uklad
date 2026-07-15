@@ -2,9 +2,8 @@ import {
   regGlobalInterceptor,
   getGlobalInterceptors,
   clearGlobalInterceptors,
-  setGlobalEqualityCheck,
-  getGlobalEqualityCheck,
-} from '../settings';
+} from '../events/global-interceptors';
+import { setGlobalEqualityCheck, getGlobalEqualityCheck } from '../core/equality';
 import type { Interceptor, Context, EqualityCheckFn } from '../types';
 
 beforeEach(() => {
@@ -72,7 +71,7 @@ describe('Global Interceptors', () => {
       const globals2 = getGlobalInterceptors();
 
       expect(globals1).toEqual(globals2);
-      expect(globals1).not.toBe(globals2); // Different instances
+      expect(globals1).not.toBe(globals2);
     });
   });
 
@@ -133,7 +132,7 @@ describe('Global Interceptors', () => {
       expect(currentCheck).toBe(customEquality);
       expect(currentCheck(1, 1)).toBe(true);
       expect(currentCheck(1, 2)).toBe(false);
-      expect(currentCheck({ a: 1 }, { a: 1 })).toBe(false); // Reference equality, not deep equality
+      expect(currentCheck({ a: 1 }, { a: 1 })).toBe(false);
     });
 
     it('should allow setting always-equal check', () => {

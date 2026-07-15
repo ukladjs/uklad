@@ -1,12 +1,11 @@
 import { regSub, setupSubsHotReload } from '@lib/index';
-import type { Todos, Showing } from './db';
+
+import type { Showing, Todos } from './db';
 import { SUB_IDS } from './sub-ids';
 
-// Root subscriptions
 regSub(SUB_IDS.TODOS, 'todos');
 regSub(SUB_IDS.SHOWING);
 
-// Computed subscriptions
 regSub(
   SUB_IDS.VISIBLE_TODOS,
   (todos: Todos, showing: Showing) => {

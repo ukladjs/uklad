@@ -1,87 +1,95 @@
-// Re-export main functionality
-export { initAppDb, getAppDb } from './db';
+// App database
+export { getAppDb, initAppDb } from './runtime/app-db';
 
-export { original, current, enableMapSet } from './immer-utils';
-
-export { regEvent, regEventErrorHandler, defaultErrorHandler } from './events';
-export { regSub, getSubscriptionValue } from './subs';
-export { regEffect, DISPATCH_LATER, DISPATCH } from './fx';
-export { regCoeffect, NOW, RANDOM } from './cofx';
+// Events, effects, and coeffects
+export { defaultErrorHandler, regEventErrorHandler } from './events/pipeline';
+export { regEvent } from './events/registration';
+export { dispatch, dispatchSync } from './events/router';
+export { debounceAndDispatch, throttleAndDispatch } from './events/rate-limit';
+export { DISPATCH, DISPATCH_LATER, regEffect } from './events/effects';
+export { NOW, RANDOM, regCoeffect } from './events/coeffects';
 export {
-  regGlobalInterceptor,
-  getGlobalInterceptors,
   clearGlobalInterceptors,
-  setGlobalEqualityCheck,
-  getGlobalEqualityCheck,
-} from './settings';
-export { shallowEqual } from './equality';
-export {
-  getHandler,
-  getHandlers,
-  clearHandlers,
-  clearSubscriptionCache,
-  clearSubs,
-  getSubscriptionDiagnostics,
-} from './registrar';
+  getGlobalInterceptors,
+  regGlobalInterceptor,
+} from './events/global-interceptors';
 
-export { dispatch, dispatchSync } from './router';
-export { debounceAndDispatch, throttleAndDispatch } from './debounce';
-export { useSubscription } from './hook';
+// Subscriptions and React bindings
+export { regSub } from './subscriptions/registration';
+export { getSubscriptionValue } from './subscriptions/queries';
+export { useSubscription } from './react/use-subscription';
 export {
-  registerHotReloadCallback,
-  triggerHotReload,
+  HotReloadWrapper,
   clearHotReloadCallbacks,
+  registerHotReloadCallback,
+  setupSubsHotReload,
+  triggerHotReload,
   useHotReload,
   useHotReloadKey,
-  setupSubsHotReload,
-  HotReloadWrapper,
-} from './hot-reload';
+} from './react/hot-reload';
 
-// Trace
+// Runtime configuration and diagnostics
+export { getGlobalEqualityCheck, setGlobalEqualityCheck, shallowEqual } from './core/equality';
+export { current, enableMapSet, original } from './core/immer';
 export {
-  enableTracing,
   disableTracing,
+  enableTracePrint,
+  enableTracing,
   registerTraceCallback,
   registerTraceCb,
   removeTraceCallback,
   removeTraceCb,
-  enableTracePrint,
-} from './trace';
+} from './core/tracing';
 
-// Re-export types for external use
+// Registry inspection and reset
+export { getHandler, getHandlers } from './runtime/handlers';
+export { clearHandlers } from './runtime/reset';
+export {
+  clearSubs,
+  clearSubscriptionCache,
+  getSubscriptionDiagnostics,
+} from './runtime/subscriptions/cache';
+
+// Public types
 export type {
-  EventVector,
-  EventHandler,
-  Interceptor,
-  Id,
-  SubVector,
-  Db,
-  Effects,
-  CoEffects,
+  AppDb,
   CoEffectHandler,
-  EffectHandler,
+  CoEffects,
   Context,
+  Db,
+  DefaultAppDb,
   DispatchLaterEffect,
+  DispatchVector,
+  EffectHandler,
+  EffectParams,
+  EffectPayloads,
+  Effects,
+  EqualityCheckFn,
   ErrorHandler,
+  EventHandler,
+  EventParams,
+  EventPayloads,
+  EventRegistrationOptions,
+  EventVector,
+  Id,
+  Interceptor,
   InterceptorErrorData,
   ReflexError,
   SubConfig,
-  EqualityCheckFn,
-  // Opt-in typed payload maps (augment EventPayloads/SubPayloads/EffectPayloads/AppDb from app code)
-  EventPayloads,
-  SubPayloads,
-  EffectPayloads,
-  AppDb,
-  DefaultAppDb,
-  EventParams,
-  EffectParams,
-  DispatchVector,
+  SubDepsHandler,
+  SubHandler,
   SubParams,
+  SubPayloads,
   SubResult,
   SubscribeVector,
+  SubVector,
   TraceErrorTag,
-  EventRegistrationOptions,
 } from './types';
-export type { SubscriptionDiagnostic } from './subscription-runtime';
-export type { Trace, TraceCallback, TraceId, TraceOptions, TraceTags } from './trace';
-export type { HandlerByKind, HandlerKind, HandlerRegistry, RegistryHandler } from './registrar';
+export type {
+  HandlerByKind,
+  HandlerKind,
+  HandlerRegistry,
+  RegistryHandler,
+} from './runtime/handlers';
+export type { SubscriptionDiagnostic } from './runtime/subscriptions/engine';
+export type { Trace, TraceCallback, TraceId, TraceOptions, TraceTags } from './core/tracing';

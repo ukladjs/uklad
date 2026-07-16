@@ -1,4 +1,4 @@
-import { CustomAction } from 'react-obj-view';
+import type { CustomAction } from 'react-obj-view';
 
 type ActionWrapperProps<T = {}> = {
     state: T;
@@ -50,6 +50,7 @@ export const DEFAULT_ACTION: CustomAction[] = [
                     .then(() => JSON.stringify(nodeData.value, null, 2))
                     .then(text => navigator.clipboard.writeText(text));
             }
+            return undefined;
         },
         buttonWrapper: ({ isError, isLoading, isSuccess, handleAction, children, ...buttonProps }: ActionWrapperProps & React.ButtonHTMLAttributes<HTMLButtonElement>) => {
             if (!children) return null;

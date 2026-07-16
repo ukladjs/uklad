@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import path from 'path';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   plugins: [react()],
@@ -10,8 +10,12 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom'],
     alias: {
-      '@flexsurfer/reflex': path.resolve(__dirname, '../../packages/reflex/src'),
-      '@flexsurfer/reflex-devtools': path.resolve(__dirname, '../../packages/reflex-devtools/src')
-    }
-  }
-}); 
+      '@flexsurfer/reflex': fileURLToPath(
+        new URL('../../packages/reflex/src', import.meta.url),
+      ),
+      '@flexsurfer/reflex-devtools': fileURLToPath(
+        new URL('../../packages/reflex-devtools/src', import.meta.url),
+      ),
+    },
+  },
+});

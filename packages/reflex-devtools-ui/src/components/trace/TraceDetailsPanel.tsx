@@ -1,5 +1,5 @@
 import { useSubscription } from '@flexsurfer/reflex';
-import { TraceItem } from '../../types/Trace';
+import type { TraceItem } from '../../types/Trace';
 import TraceEventDetails from './TraceEventDetails';
 import TraceRenderDetails from './TraceRenderDetails';
 import { Badge } from '../ui/Badge';

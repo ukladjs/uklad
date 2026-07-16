@@ -16,16 +16,17 @@
   "dependencies": {
     "@flexsurfer/reflex": "workspace:*",
     "@flexsurfer/reflex-devtools": "workspace:*",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@types/react": "^19.2.7",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@types/node": "^20.16.1",
-    "@vitejs/plugin-react": "^4.1.0",
-    "typescript": "^5.2.2",
-    "vite": "^7.0.6",
-    "vite-node": "^3.2.4"
+    "@typescript/native": "npm:typescript@7.0.2",
+    "@vitejs/plugin-react": "^6.0.3",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vite": "^8.1.5",
+    "vite-node": "^6.0.0"
   }
 }

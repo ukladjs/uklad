@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { TraceItem } from '../../types/Trace';
+import type { TraceItem } from '../../types/Trace';
 import TraceListItem from './TraceListItem';
 import { useSubscription } from '@flexsurfer/reflex';
 

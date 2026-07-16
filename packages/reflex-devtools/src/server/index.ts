@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
@@ -408,7 +408,8 @@ export class DevtoolsServer {
     });
 
     // Serve UI dashboard for all other routes
-    this.app.get('*', (_req: Request, res: Response) => {
+    // (express 5 / path-to-regexp v8 syntax: '{*splat}' is the catch-all)
+    this.app.get('/{*splat}', (_req: Request, res: Response) => {
       res.sendFile(path.join(this.uiPath, 'index.html'));
     });
   }

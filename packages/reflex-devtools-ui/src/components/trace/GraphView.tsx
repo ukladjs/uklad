@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
-import { Trace } from '../../types/Trace';
+import type { Trace } from '../../types/Trace';
 import { useTheme } from '../../contexts/ThemeContext';
 import ForceGraph2D from 'react-force-graph-2d';
 import { createGraphData } from '../../utils/graphUtils';

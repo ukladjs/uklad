@@ -1,4 +1,4 @@
-import { ObjectView, themeOneDark, themeQuietLight, extendTheme, ResolverFn } from 'react-obj-view';
+import { ObjectView, themeOneDark, themeQuietLight, extendTheme, type ResolverFn } from 'react-obj-view';
 import { useTheme } from '../../contexts/ThemeContext';
 
 interface Patch {
@@ -139,4 +139,5 @@ export function DiffViewer({ patches, reversePatches }: DiffViewerProps) {
             </div>
         );
     }
+    return null;
 }

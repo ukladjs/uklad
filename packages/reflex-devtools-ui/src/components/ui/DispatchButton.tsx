@@ -1,4 +1,4 @@
-import { ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes } from 'react';
 
 interface DispatchButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'> {
   size?: 'xs' | 'sm';

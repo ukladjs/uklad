@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trace } from '../../types/Trace';
+import type { Trace } from '../../types/Trace';
 import { Badge } from '../ui/Badge';
 import GraphView from './GraphView.tsx';
 

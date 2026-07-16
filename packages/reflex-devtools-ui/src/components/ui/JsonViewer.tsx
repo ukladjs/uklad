@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { ObjectView, ObjectViewHandle, themeOneDark, themeQuietLight, extendTheme, ResolverFn } from 'react-obj-view';
+import { ObjectView, type ObjectViewHandle, themeOneDark, themeQuietLight, extendTheme, type ResolverFn } from 'react-obj-view';
 import "react-obj-view/dist/react-obj-view.css";
 import { useTheme } from '../../contexts/ThemeContext';
 import { SearchBox } from './SearchBox';

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { TraceItem } from '../../types/Trace';
+import type { TraceItem } from '../../types/Trace';
 import { dispatch } from '@flexsurfer/reflex';
 import { Badge } from '../ui/Badge';
 

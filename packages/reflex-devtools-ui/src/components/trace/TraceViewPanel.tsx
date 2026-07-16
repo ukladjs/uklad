@@ -24,6 +24,7 @@ export default function TraceViewPanel({ isOpen, onClose }: TraceViewPanelProps)
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
+    return undefined;
   }, [isOpen, onClose]);
 
   const handleToggleShowRenders = useCallback(() => {

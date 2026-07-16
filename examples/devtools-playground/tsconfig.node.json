@@ -1,12 +1,15 @@
 {
   "compilerOptions": {
-    "skipLibCheck": true,
+    "target": "ES2023",
+    "lib": ["ES2023"],
     "module": "ESNext",
+    "skipLibCheck": true,
     "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true,
-    "noEmit": true
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "strict": true,
+    "noEmit": true,
+    "types": ["node"]
   },
-  "include": [
-    "vite.config.ts"
-  ]
-} 
+  "include": ["vite.config.ts"]
+}

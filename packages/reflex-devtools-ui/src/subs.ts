@@ -1,5 +1,5 @@
 import { regSub } from "@flexsurfer/reflex";
-import { TraceItem } from "./types/Trace";
+import type { TraceItem } from "./types/Trace";
 
 // Subscriptions for devtools state
 regSub('db');

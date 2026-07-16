@@ -1,6 +1,6 @@
 # Roadmap: Reflex DevTools + MCP
 
-DevTools-specific improvements for [Reflex DevTools](../packages/reflex-devtools). Coordinated library-side work remains tracked in the [Reflex roadmap](../ROADMAP.md) with **(pairs with …)** notes.
+DevTools-specific improvements for [Reflex DevTools](../packages/reflex-devtools). This backlog is scheduled through the phased [Reflex roadmap](../ROADMAP.md) (Phase 1 security baseline, Phase 3 eval harness and tool prioritization); coordinated library-side pairings from the [archived roadmap](reflex-old-roadmap.md) still apply.
 
 The canonical agent scenario these tools serve is [agent-workflow.md](agent-workflow.md) — a worked task showing which tool answers which question at each loop stage. New tools should be justified against it (and it flags the currently-proposed ones: `explain_event`, `replay_events`).
 

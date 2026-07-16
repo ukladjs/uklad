@@ -1,86 +1,108 @@
-# Roadmap: AI-Development Must-Haves
+# Roadmap
 
-Prioritized improvements for [Reflex](packages/reflex), ordered by impact. DevTools-specific work is tracked in the [DevTools roadmap](docs/devtools-roadmap.md). Items marked **(pairs with …)** need coordinated changes across both packages.
+> **Positioning:** Reflex is the deterministic application runtime for agentic React and React Native apps — observable, replayable, and verifiable by humans and agents.
 
-Context: reflex's architecture (ID-indexed events/subs, pure handlers, effects isolation) already lets an AI agent work on a large app with minimal context — the `*-ids.ts` files act as an index, exact-match grep gives retrieval, and pure handlers bound verification to a single function. The items below close the remaining gaps: React-binding correctness, runtime performance at scale, compiler feedback, a closed observe→act→verify loop against the running app, and token-frugal runtime inspection.
+This roadmap merges two independent reviews (July 2026) that converged on the same diagnosis: **the bottleneck is productization, proof, and distribution — not features.** The runtime is credible (full workspace builds clean, 405 tests pass, concurrent-safe React binding, subscription DAG, effects-as-data, tracing, headless runtime, MCP verification loop). What's missing is everything that lets an architecture or security team say yes, and evidence that the AI-agent advantage is real rather than claimed.
 
----
+Two clocks govern prioritization:
 
-## Agent indexing model
+1. **The evidence clock.** Nobody has published agent-productivity data for a state library. Being first with real numbers is worth more than being feature-complete.
+2. **The breakage window.** At current adoption, breaking architectural changes are the cheapest they will ever be. Anything breaking must land before 1.0 — and 1.0 must wait for it.
 
-Reflex should be presented to AI agents as a small set of indexes and tools, not as a large prompt blob. There are three complementary indexes:
+When items compete, pick the one that feeds the proof or exploits the breakage window.
 
-1. **Static source index** — what exists and where it is implemented: event/sub/effect ids, file:line, payload signatures, emitted effects, sub dependency graph, dispatch/useSubscription call sites, and touched db keys. This comes from `npx reflex-map` and should be available as both `APP_MAP.md` (human/LLM fallback) and `.reflex/map.json` (machine/MCP input).
-2. **Runtime state/trace index** — what actually happened in the running app: current db shape, active subscription values, recent trace rows, single-trace details, and path-indexed writes (`find_state_changes(path)`). This lives in reflex-devtools storage and is exposed through MCP.
-3. **Compile-time contract index** — what is legal to call: `EventPayloads`, `SubPayloads`, `EffectPayloads`, and `AppDb` module augmentation. This turns agent mistakes into `tsc` feedback instead of runtime surprises.
+Detailed trackers this document links into:
 
-The intended agent retrieval order is: MCP static/runtime tools first (`get_reflex_map`, `get_handlers`, `get_app_state({ shape: true })`, `find_state_changes`, `dispatch_event`), then `APP_MAP.md`, then `*-ids.ts` + exact-match `rg`, and only then implementation files. Agents should not read `events.ts`/`subs.ts` end-to-end.
-
-A full worked scenario — one task walked through the agent's loop (orient → write → launch → health → seed → act → verify → explain → reload → replay), with each tool touchpoint marked shipped/planned/proposed — lives in this monorepo: [docs/agent-workflow.md](docs/agent-workflow.md).
-
-## Reflex (lib)
-
-### P1 — Dev-mode strictness & navigation
-
-- [ ] **Capture registration source location in dev mode.** _(pairs with devtools P2: handler locations)_
-      At `regEvent`/`regSub`/`regEffect` time, capture file:line (synthetic `Error().stack`, dev-only, zero prod cost) and store it in the handler-registry layer (`src/runtime/handlers.ts`). This is the last hop from runtime observation back to source code.
-
-- [ ] **Fail loud on unregistered IDs in dev.**
-      Dispatching a typo'd event or subscribing to a missing sub currently `console.error`s and continues. In dev mode, throw — and include a nearest-match suggestion ("did you mean `todos/add`?"). String IDs are only safe if mistakes surface immediately; this matters double for AI-generated code.
-
-- [ ] **Static manifest generator.** _(promoted from P2 — devtools P1 "manifest through MCP" is blocked on it, and a P1 shouldn't depend on a P2)_
-      A small CLI (`npx reflex-map`) that scans `regEvent`/`regSub`/`regEffect` registrations, id files, dispatch/useSubscription call sites, typed payload maps, and obvious db-key writes. Emit both `APP_MAP.md` and `.reflex/map.json`: id → kind → file:line → params/result → effects emitted → sub dependency graph → call sites → touched top-level db keys. Zero-drift documentation and the ideal first read for any agent session. The JSON output is also the input for devtools MCP `get_reflex_map`, `find_reflex_id`, `get_event_contract`, and `get_sub_graph`.
-
-- [ ] **Verify and document the HMR story.**
-      The agentic loop is edit → HMR/reload → dispatch → verify, so hot-reload behavior is part of the feedback loop's correctness. Pin down and document: what happens when a module re-runs `regEvent`/`regSub` on HMR (silent overwrite? stale closures over old module state?), whether the db survives HMR vs. full reload, and what the scaffolder's recommended vite setup should be (accept-and-re-register vs. force full reload for handler files). Full reload also resets trace ids and the db — surfaced devtools-side by the `sessionEpoch` item there. Add dev warnings where the current behavior is surprising; no MCP tool can fix a noisy edit loop.
-
-- [ ] **Headless-friendly runtime primitives.** _(pairs with devtools P1: headless runtime support)_
-      Support a browserless agent loop without making devtools depend on private internals. Provide the minimal dev-only primitives needed by the headless MCP runtime: safe app-db restore for snapshots/scenarios, subscription evaluation that does not require a mounted React component, optional non-React subscription watching for services/headless checks, and clear behavior around flush timing after restore/dispatch. Keep the production API small; these primitives should either be explicitly dev-only or exposed through a narrow testing/devtools surface. This pairs with the devtools headless entry, `eval_sub`, state fixtures/scenarios, and the agent eval harness.
-      Partially delivered: `getSubscriptionValue` and devtools `eval_sub` cover one-shot headless evaluation, while `getSubscriptionDiagnostics()` provides cache-only inspection. Safe restore, public non-React watching, and an explicit restore/dispatch flush contract remain open.
+- [docs/devtools-roadmap.md](docs/devtools-roadmap.md) — DevTools + MCP tool backlog (still authoritative for that package).
+- [docs/reflex-old-roadmap.md](docs/reflex-old-roadmap.md) — previous roadmap; its **agent indexing model** and **Redux/Zustand feature-parity table** remain valid reference material.
+- [docs/agent-workflow.md](docs/agent-workflow.md) — the canonical agent scenario new tools are justified against.
 
 ---
 
-## AI agent setup & distribution
+## Phase 0 — Ship and synchronize (days, do first)
 
-### P0 — Project bootstrap
+The strongest recent work is invisible: local `main` is 9 commits ahead of the public repository, the website documents the old DevTools API, and the flagship example contains a literal bug. Nothing else pays off until the public artifact matches reality.
 
-- [ ] **`create-reflex-app` scaffolder — make the convention exist in new projects.**
-      `reflex-agent init` (below) retrofits agent config into an _existing_ project; nothing creates the project itself. The entire retrieval strategy — `*-ids.ts` as index, `APP_MAP.md`, exact-match grep, MCP-first — assumes a file convention that an agent freestyling `npm create vite` + reflex will not invent on its own. Ship a template (`npm create reflex-app`, or a flag on `reflex-agent init`) that pins it: `db.ts` / `events.ts` / `subs.ts` / `effects.ts` / `*-ids.ts`, typed payload-map augmentation stubs, `enableDevtools(createReflexInspector())` wired dev-only, CLAUDE.md/AGENTS.md router files, MCP config, and a `reflex-map` script entry. For the "agents build new projects" goal this is the true P0: every other index/tool item only applies to projects shaped like this.
+- [ ] Push `main` to the public repository.
+- [ ] Publish a coherent `0.2.0-beta` across packages.
+- [ ] Synchronize website, README, API reference, and examples with the current API (`createReflexInspector`, current DevTools setup).
+- [ ] Fix the swapped Best Practices / API Reference links in [packages/reflex/README.md](packages/reflex/README.md) (lines 131–132).
+- [ ] Include `docs/` in the npm tarball or make README links absolute — [package.json `files`](packages/reflex/package.json) currently excludes it while the README links `./docs/subscription-runtime.md`.
+- [ ] Remove the leftover `'event2'` string from the TodoMVC save handler ([examples/todomvc/src/events.ts](examples/todomvc/src/events.ts), `SAVE` event) and enable Strict Mode in [examples/todomvc/src/main.tsx](examples/todomvc/src/main.tsx).
+- [ ] Pin MCP package versions in the shipped agent templates.
 
-- [ ] **Add `npx reflex-agent init`.**
-      A bootstrap CLI should detect the host project and create/update the small router files plus local config:
-      `npx reflex-agent init --codex --claude --cursor --copilot`.
-      It should optionally add `AGENTS.md`, `CLAUDE.md`, Reflex Agent Toolkit plugin references, `.codex/config.toml` MCP config, Claude/Cursor MCP config, and a script entry for `reflex-map`. Default behavior should be conservative: never overwrite existing guidance without showing a diff or writing a clearly marked Reflex section.
+## Phase 1 — Remove enterprise disqualifiers (~1 month, parallelizable)
 
-### P2 — Guardrails and drift checks
+None of these win an evaluation, but each one loses evaluations in the first ten minutes — or triggers an instant security-team veto.
 
-- [ ] **Optional hooks/checks for map drift.**
-      Provide a lightweight check that runs `reflex-map --check` when `*-ids.ts`, `events.ts`, `subs.ts`, `effects.ts`, or typed payload maps change. In Codex this can be a plugin-bundled hook; elsewhere it can be an npm script or pre-commit hook. The goal is to keep `APP_MAP.md` and `.reflex/map.json` trustworthy without forcing heavy tooling.
+- [ ] **DevTools/MCP security baseline.** The server currently enables unrestricted CORS, accepts 50 MB payloads, and exposes unauthenticated state mutation through `/api/dispatch` ([server/index.ts](packages/reflex-devtools/src/server/index.ts)). Open CORS plus a localhost mutation endpoint is a DNS-rebinding attack surface. Ship: generated session tokens for HTTP and WebSocket, origin allowlist, read-only mode by default, separate inspect/dispatch/restore capabilities, much smaller payload limits, state/trace redaction hooks for secrets and PII, audit records for agent-triggered actions, and a runtime/DevTools/MCP protocol-version handshake.
+- [ ] **Persistence + versioned migrations.** Official persist effect/interceptor with version migrations and async storage adapters (localStorage, AsyncStorage, SecureStore). Every React Native app needs this on day one; Zustand's `persist` middleware is a top-3 reason RN teams pick it.
+- [ ] **Fail-loud dev mode.** Dispatching a typo'd event or subscribing to a missing sub currently `console.error`s and continues. In dev, throw — with a nearest-match suggestion ("did you mean `todos/add`?"). String IDs are only safe if mistakes surface immediately; this matters double for AI-generated code.
+- [ ] **Undo/redo effect.** Patches and reverse patches are already captured and unused. Nearly free, and a headline feature Zustand only has via community packages.
 
-- [ ] **Agent-facing examples and eval scenarios.**
-      Add small fixtures showing the intended cycle: "change one event", "debug wrong state path", "add a derived subscription", "fix missing effect", and "work with Map/Set patches." Each fixture should show the cheap path through indexes/MCP and the fallback path when MCP is unavailable. The harness that _runs_ these as scored agent tasks (success rate / turns / tokens) is tracked as devtools P1 ("agent eval harness"); these fixtures are its content — build them together, and let the measurements reorder both roadmaps.
+## Phase 2 — Instance-scoped runtime (the quarter's architecture project, gates 1.0)
+
+The database and registries are module-level globals ([app-db.ts](packages/reflex/src/runtime/app-db.ts), [handlers.ts](packages/reflex/src/runtime/handlers.ts)). That blocks or complicates SSR/per-request stores, microfrontends, embedded widgets, parallel tests, Storybook isolation — and, most on-thesis, **multiple agent sandboxes running side by side**. This is the last acceptable breaking change; every month of adoption makes it more expensive. Ship it before 1.0, and cut 1.0 when it lands.
+
+Target shape:
+
+```ts
+const runtime = createReflexRuntime<Contracts>({ initialDb });
+
+runtime.registerModule(feature);
+
+<ReflexProvider runtime={runtime}>
+  <App />
+</ReflexProvider>;
+```
+
+- [ ] `createReflexRuntime` + `ReflexProvider`; today's global API preserved as a compatibility facade over a default runtime (existing apps, templates, skills, and `llms.txt` keep working unchanged).
+- [ ] `@flexsurfer/reflex/vanilla` and `/react` entrypoints.
+- [ ] Store-local typed contracts as an alternative to global module augmentation.
+- [ ] Public `watchSubscription` for non-React consumers (services, headless logic).
+- [ ] Scoped feature registration returning an idempotent disposer; safe lazy loading and HMR without clearing every handler (absorbs the old roadmap's "verify and document the HMR story").
+- [ ] Headless-friendly primitives finished on the instance API: safe app-db restore, non-React subscription evaluation/watching, explicit flush contract after restore/dispatch (pairs with devtools snapshot/restore).
+- [ ] SSR/per-request stores: promoted from "Decide" to committed, delivered by this design.
+- [ ] **Cut `1.0.0`** with a written stability/semver policy once this ships.
+
+## Phase 3 — Prove and publish (overlaps Phase 2; different skillset)
+
+Agents choosing the stack for greenfield projects are the adoption wedge: humans pick libraries by popularity, agents pick by what their skills recommend and what they can verify at runtime. This phase builds the funnel and the evidence, and **the evidence gets published, not filed.**
+
+- [ ] **`create-reflex-app` scaffolder.** The entire retrieval strategy (`*-ids.ts` as index, typed payload maps, `APP_MAP.md`, MCP-first) assumes a file convention agents won't invent freestyling `npm create vite`. Template pins it: `db.ts` / `events.ts` / `subs.ts` / `effects.ts` / `*-ids.ts`, typed payload-map stubs, dev-only inspector wiring, CLAUDE.md/AGENTS.md routers, MCP config, `reflex-map` script entry.
+- [ ] **Official Expo reference app, built by agents using the Reflex toolkit.** Metro/Hermes CI, AsyncStorage + SecureStore adapters (from Phase 1 persistence), hydration migrations, background transitions, reconnect handling, offline command outbox. Dogfooding is the demo video: an agent building a real RN app, verifying every change at runtime, with metrics on screen.
+- [ ] **Agent eval harness — the roadmap's fitness function and its marketing asset.** Scripted tasks ("fix this handler bug", "add a derived sub + panel", "debug a wrong state path") run headless (`claude -p`, Codex CLI), scored on success rate, turns, tokens, wall time. Two comparisons: **MCP-connected vs file-tools-only** (internal fitness function) and **the same app in Reflex vs Zustand vs Redux Toolkit** (the public benchmark post — the headline that travels).
+- [ ] **MCP tool backlog, prioritized by harness data** (tracked in [docs/devtools-roadmap.md](docs/devtools-roadmap.md)): `get_client_logs`, `find_state_changes(path)`, `sinceId`/`sessionEpoch` cursors, `reflex-map` static manifest + source locations through MCP, shape mode, snapshot/restore, `explain_event`, deterministic replay, runtime schema validation for external tool payloads. Predicted winners: `get_client_logs` and `find_state_changes` — but let the measurements reorder the list.
+
+## Phase 4 — Supervised async tasks (`@flexsurfer/reflex-tasks`, after Phase 2)
+
+Effects return `void` and only synchronous exceptions are caught ([types.ts](packages/reflex/src/types.ts) `EffectHandler`, [effects.ts](packages/reflex/src/events/effects.ts)) — insufficient for LLM streams, tool calls, approvals, reconnects, and concurrent agents. Effects stay declarative data; tasks add supervision. Built **after** instance-scoping because tasks belong to a runtime instance — building it on globals means building it twice.
+
+Minimal core first:
+
+- [ ] Task IDs with parent/child causality.
+- [ ] `AbortSignal`, timeout, cancellation.
+- [ ] `started/succeeded/failed/cancelled` lifecycle traces, wired into DevTools/MCP from day one — this extends the observability moat to async work.
+- [ ] A `latest` concurrency policy.
+
+Then, driven by real demand: retry/backoff, deduplication, `leading`/`queue`/`parallel` policies, progress/stream events, backpressure. A generic task runtime beats an AI-specific abstraction.
+
+## Ongoing — Distribution (~⅓ of effort from Phase 3 onward)
+
+Code alone doesn't move download numbers. Every phase above produces a publishable artifact; publish it.
+
+- [ ] The cross-library agent benchmark post (Phase 3's headline result).
+- [ ] The agent-builds-an-app video with metrics on screen (Expo reference app).
+- [ ] "Reflex for Redux users" / "Reflex for Zustand users" migration-oriented docs pages — every evaluator asks; answer on our terms.
+- [ ] Prominent listings in the Claude Code / Codex plugin marketplaces.
+- [ ] The re-frame diaspora: small community, senior engineers, exactly the target companies — "re-frame for TypeScript, now with an agent loop" is a message they'll amplify.
+
+## Explicit non-goals
+
+- **No RTK Query clone.** Officially document and test the TanStack Query pairing instead. Redux Toolkit's async/caching ecosystem is a decade ahead; don't fight it.
+- **No tiny-bundle competition with Zustand.** Reflex sells architecture, observability, and verifiability, not bytes.
+- **Entity/normalization helpers, per-call-site equality options, further P2 MCP tools** — backlog until the eval harness or real users demonstrate need.
 
 ---
 
-## Feature parity: what to adopt from Redux (RTK) and Zustand
-
-Legend: ✅ has it · ⚠️ partial / community · ❌ missing.
-
-| Feature                                                | Redux Toolkit                                           | Zustand                     | Reflex today                                              | Adopt?                                                                                                                                                                         |
-| ------------------------------------------------------ | ------------------------------------------------------- | --------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Concurrent-safe React binding (`useSyncExternalStore`) | ✅ react-redux v8+                                      | ✅ built on it              | ✅ `useSyncExternalStore`                                 | **Done** — stale params, missed render→subscribe updates, and per-sub tearing fixed; cross-sub render consistency done too (subscriptions read the last flushed db generation) |
-| Typed action/event payloads                            | ✅ `PayloadAction<T>`                                   | ✅ typed store API          | ✅ opt-in `EventPayloads`/`SubPayloads` maps              | **Done** — typed dispatch/regEvent/useSubscription via module augmentation                                                                                                     |
-| Sync dispatch escape hatch                             | ✅ dispatch is sync                                     | ✅ `set` is sync            | ✅ `dispatchSync` (sync commit + sync subscription flush) | **Done** — re-frame parity; unblocks controlled inputs                                                                                                                         |
-| Undo / time-travel                                     | ✅ DevTools time-travel                                 | ⚠️ community (zundo)        | ⚠️ patches + reversePatches already captured, unused      | **P1** — built-in undo/redo effect is nearly free and a headline feature                                                                                                       |
-| Persistence + versioned migrations                     | ✅ redux-persist                                        | ✅ `persist` middleware     | ❌ hand-rolled storage effects                            | **P1** — official persist effect/interceptor with version migrations                                                                                                           |
-| Dev-mode invariant checks                              | ✅ serializability/immutability middleware, typo errors | ⚠️                          | ⚠️ console warnings only, non-fatal                       | **P1** — fail-loud dev mode                                                                                                                                                    |
-| Async data fetching & caching                          | ✅ RTK Query (dedup, invalidation, cache)               | ❌ pair with TanStack Query | ❌ hand-rolled effects                                    | **P1** standard `http` effect (retry/dedup); document TanStack Query pairing — a full RTK-Query-alike is not worth building yet                                                |
-| Per-call-site selector equality                        | ✅ `useSelector(sel, equalityFn)`                       | ✅ `shallow` / custom       | ⚠️ per-sub config only (`shallowEqual` now exported)      | **P2** — options arg on `useSubscription`                                                                                                                                      |
-| Non-React (vanilla) subscriptions                      | ✅ `store.subscribe`                                    | ✅ vanilla store            | ❌ no public watch API                                    | **P2** — export a public `watchSubscription` for non-React consumers (services, headless logic)                                                                                |
-| Entity/normalization helpers                           | ✅ `createEntityAdapter`                                | ❌                          | ❌                                                        | **P2** — small helper package for id-keyed CRUD in `draftDb`                                                                                                                   |
-| SSR / per-request stores                               | ✅                                                      | ✅                          | ❌ module-level singletons                                | **Decide** — either explicit non-goal (SPA/RN focus, document it) or a long-term instance-scoped rework                                                                        |
-| Code-split / lazy registration                         | ✅ `injectSlice`                                        | ⚠️ manual                   | ✅ side-effect imports are naturally lazy                 | — already good                                                                                                                                                                 |
-
-Worth remembering the reverse direction too: the semantic event log, memoized subscription dependency graph, effects/coeffects isolation, first-class tracing, and the devtools MCP have no equivalent in either library — that's the moat these adoptions protect.
-
----
+The moat worth protecting: the semantic event log, memoized subscription dependency graph, effects/coeffects isolation, first-class tracing, and the DevTools MCP have no equivalent in Redux or Zustand. Every phase above either proves that moat with data, removes a reason to reject it, or makes it cheaper to adopt.

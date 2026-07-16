@@ -2,6 +2,4 @@ coverage/
 dist/
 experiments/
 node_modules/
-examples/todomvc/node_modules/
-package-lock.json
-examples/todomvc/package-lock.json
+pnpm-lock.yaml

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getHandler, initAppDb, type SubDepsHandler, type SubHandler } from '@lib/index';
+import { getHandler, initAppDb, type SubDepsHandler, type SubHandler } from '@flexsurfer/reflex';
 
 import type { TodoDb } from './db';
 import { SUB_IDS } from './sub-ids';

@@ -1,0 +1,78 @@
+/**
+ * MCP Tool: eval_sub
+ * Evaluate a registered subscription without requiring a mounted component
+ */
+
+import { DevToolsAPIClient } from '../httpClient.js';
+import { serverUnavailableResult } from './errorResponse.js';
+
+export interface EvalSubParams {
+  id: string;
+  args?: any[];
+}
+
+export function evalSubTool(apiClient: DevToolsAPIClient) {
+  return {
+    name: 'eval_sub',
+    description: 'Evaluate any registered Reflex subscription against the live app state, even when no component has mounted it. Use this to verify a new subscription\'s output before writing a view. Pass only the arguments after the subscription id.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The registered subscription id (for example, "user-by-id")'
+        },
+        args: {
+          type: 'array',
+          description: 'Optional subscription arguments, excluding the id',
+          items: {
+            type: ['string', 'number', 'boolean', 'object', 'array', 'null']
+          }
+        }
+      },
+      required: ['id']
+    },
+    handler: async (params: EvalSubParams) => {
+      const args = params.args || [];
+      try {
+        const response = await apiClient.evalSub(params.id, args);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id: params.id,
+                args,
+                value: response.value
+              }, null, 2)
+            }
+          ]
+        };
+      } catch (error) {
+        const unavailable = serverUnavailableResult(error, 'eval_sub');
+        if (unavailable) return unavailable;
+
+        const details = (error as any)?.details;
+        const missingHandler = details?.phase === 'missing-handler';
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                error: 'Failed to evaluate subscription',
+                message: error instanceof Error ? error.message : 'Unknown error',
+                id: params.id,
+                args,
+                ...(details && typeof details === 'object' ? { details } : {}),
+                hint: missingHandler
+                  ? 'No handler is registered for this subscription id — check get_handlers with type "sub" for the exact spelling'
+                  : 'Make sure the DevTools server and app are running'
+              }, null, 2)
+            }
+          ],
+          isError: true
+        };
+      }
+    }
+  };
+}

@@ -1,4 +1,4 @@
-import { regSub, setupSubsHotReload } from '@lib/index';
+import { regSub, setupSubsHotReload } from '@flexsurfer/reflex';
 
 import type { Showing, Todos } from './db';
 import { SUB_IDS } from './sub-ids';

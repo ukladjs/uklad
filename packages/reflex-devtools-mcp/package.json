@@ -1,0 +1,51 @@
+{
+  "name": "@flexsurfer/reflex-devtools-mcp",
+  "version": "0.1.13",
+  "description": "MCP server for Reflex DevTools - enables AI assistants to inspect traces and dispatch events",
+  "author": "flexsurfer",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flexsurfer/reflex.git",
+    "directory": "packages/reflex-devtools-mcp"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "reflex-devtools-mcp": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "node ../../scripts/clean.mjs dist",
+    "build": "pnpm run clean && tsc",
+    "test": "pnpm run build && pnpm run test:unit",
+    "test:unit": "node --test test/*.test.mjs",
+    "check": "pnpm run test:unit",
+    "dev": "tsc --watch",
+    "start": "node dist/cli.js",
+    "prepack": "pnpm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "typescript": "^5.2.2"
+  },
+  "keywords": [
+    "mcp",
+    "devtools",
+    "debugging",
+    "ai",
+    "reflex",
+    "model-context-protocol"
+  ]
+}

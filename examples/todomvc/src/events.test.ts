@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getHandler, type CoEffects, type EventHandler } from '@lib/index';
+import { getHandler, type CoEffects, type EventHandler } from '@flexsurfer/reflex';
 
 import type { Todo, TodoDb, TodoId } from './db';
 import { EFFECT_IDS } from './effect-ids';

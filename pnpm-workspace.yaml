@@ -1,0 +1,11 @@
+packages:
+  - "packages/*"
+  - "examples/*"
+
+linkWorkspacePackages: false
+sharedWorkspaceLockfile: true
+saveWorkspaceProtocol: rolling
+disallowWorkspaceCycles: true
+onlyBuiltDependencies:
+  - esbuild
+  - unrs-resolver

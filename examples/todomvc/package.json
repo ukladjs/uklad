@@ -8,20 +8,24 @@
   },
   "scripts": {
     "dev": "vite",
+    "clean": "node ../../scripts/clean.mjs dist coverage",
     "build": "tsc -b && vite build",
+    "check": "pnpm run lint && pnpm run test",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:unit": "vitest run",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@flexsurfer/reflex": "workspace:*",
+    "@flexsurfer/reflex-devtools": "workspace:*",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@flexsurfer/reflex-devtools": "^0.1.15",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

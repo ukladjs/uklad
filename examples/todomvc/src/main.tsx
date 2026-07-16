@@ -1,8 +1,8 @@
-import { enableMapSet } from 'immer';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { dispatch, HotReloadWrapper } from '@lib/index';
+import { dispatch, enableMapSet, enableTracing, HotReloadWrapper } from '@flexsurfer/reflex';
+import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
 import { EVENT_IDS } from './event-ids';
 import TodoApp from './views';
@@ -17,6 +17,8 @@ import './storage';
 
 // Immer requires an explicit plugin before it can draft the Map-backed todo collection.
 enableMapSet();
+enableTracing();
+enableDevtools();
 
 dispatch([EVENT_IDS.INIT_APP]);
 

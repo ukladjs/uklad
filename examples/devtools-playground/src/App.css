@@ -1,0 +1,320 @@
+.app {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  line-height: 1.6;
+}
+
+.app-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 1rem;
+}
+
+.app-header h1 {
+  margin: 0 0 1rem 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.app-header p {
+  margin: 0.5rem 0;
+  opacity: 0.9;
+}
+
+.app-header a {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.app-header a:hover {
+  text-decoration: none;
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Tab navigation */
+.tab-nav {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tab-button {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid #dee2e6;
+  border-radius: 0.75rem;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-button:hover {
+  border-color: #667eea;
+  background: #f0f0ff;
+}
+
+.tab-button--active {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+
+.tab-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.tab-subs {
+  font-size: 0.7rem;
+  opacity: 0.75;
+  font-family: monospace;
+}
+
+.tab-button--active .tab-subs {
+  opacity: 0.9;
+}
+
+.tab-content {
+  min-height: 400px;
+}
+
+/* Subscription info hint */
+.sub-info {
+  font-size: 0.8rem;
+  color: #6c757d;
+  margin-bottom: 1rem;
+}
+
+.sub-info code {
+  background: #e9ecef;
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+  font-size: 0.78rem;
+}
+
+section {
+  background: #f8f9fa;
+  padding: 2rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e9ecef;
+}
+
+section h2 {
+  margin: 0 0 1.5rem 0;
+  color: #343a40;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.counter {
+  display: flex;
+  justify-content: center;
+}
+
+.counter-button {
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 1rem 2rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.counter-button:hover {
+  background: #0056b3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+}
+
+.users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.user-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.user-item:hover {
+  border-color: #007bff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.user-item.active {
+  border-color: #28a745;
+  background: #f8fff9;
+}
+
+.user-item.inactive {
+  border-color: #dc3545;
+  background: #fff8f8;
+}
+
+.user-name {
+  font-weight: 500;
+  color: #343a40;
+}
+
+.user-status {
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+.user-status.active {
+  background: rgba(40, 167, 69, 0.1);
+  color: #28a745;
+}
+
+.user-status.inactive {
+  background: rgba(220, 53, 69, 0.1);
+  color: #dc3545;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.api-button, .error-button, .map-button, .set-button, .complex-button, .test-button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.api-button {
+  background: #17a2b8;
+  color: white;
+}
+
+.api-button:hover:not(:disabled) {
+  background: #138496;
+  transform: translateY(-2px);
+}
+
+.api-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error-button {
+  background: #dc3545;
+  color: white;
+}
+
+.error-button:hover {
+  background: #c82333;
+  transform: translateY(-2px);
+}
+
+.map-button {
+  background: #28a745;
+  color: white;
+}
+
+.map-button:hover {
+  background: #218838;
+  transform: translateY(-2px);
+}
+
+.set-button {
+  background: #ffc107;
+  color: #212529;
+}
+
+.set-button:hover {
+  background: #e0a800;
+  transform: translateY(-2px);
+}
+
+.complex-button {
+  background: #6f42c1;
+  color: white;
+}
+
+.complex-button:hover {
+  background: #5a359a;
+  transform: translateY(-2px);
+}
+
+.test-button {
+  background: #6c757d;
+  color: white;
+}
+
+.test-button:hover {
+  background: #5a6268;
+  transform: translateY(-2px);
+}
+
+.info-section ol {
+  padding-left: 1.5rem;
+  color: #495057;
+}
+
+.info-section li {
+  margin-bottom: 0.5rem;
+}
+
+.info-section code {
+  background: #e9ecef;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-size: 0.875rem;
+  color: #e83e8c;
+}
+
+@media (max-width: 768px) {
+  .app {
+    padding: 1rem;
+  }
+  
+  .app-header h1 {
+    font-size: 2rem;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+  }
+  
+  .api-button, .error-button, .map-button, .set-button, .complex-button, .test-button {
+    width: 100%;
+  }
+} 

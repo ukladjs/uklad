@@ -9,7 +9,7 @@
     "skipLibCheck": true,
 
     "paths": {
-      "@lib/*": ["../../src/*"]
+      "@flexsurfer/reflex": ["../../packages/reflex/src/index.ts"]
     },
     "allowArbitraryExtensions": true,
     /* Bundler mode */

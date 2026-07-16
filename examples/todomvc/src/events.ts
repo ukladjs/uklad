@@ -1,6 +1,4 @@
-import { current } from 'immer';
-
-import { clearHandlers, regEvent } from '@lib/index';
+import { clearHandlers, current, regEvent } from '@flexsurfer/reflex';
 
 import { COEFFECT_IDS } from './coeffect-ids';
 import type { Showing, Todo, TodoId, Todos } from './db';

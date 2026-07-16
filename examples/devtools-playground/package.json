@@ -1,0 +1,31 @@
+{
+  "name": "@flexsurfer/reflex-devtools-playground",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Example app demonstrating Reflex Devtools",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:headless": "vite-node --watch src/headless.ts",
+    "clean": "node ../../scripts/clean.mjs dist vite.config.js vite.config.d.ts tsconfig.tsbuildinfo tsconfig.node.tsbuildinfo",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "build": "pnpm run typecheck && vite build",
+    "check": "pnpm run typecheck",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@flexsurfer/reflex": "workspace:*",
+    "@flexsurfer/reflex-devtools": "workspace:*",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@types/node": "^20.16.1",
+    "@vitejs/plugin-react": "^4.1.0",
+    "typescript": "^5.2.2",
+    "vite": "^7.0.6",
+    "vite-node": "^3.2.4"
+  }
+}

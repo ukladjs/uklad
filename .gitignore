@@ -9,13 +9,14 @@ lerna-debug.log*
 
 node_modules
 dist
-# tests/types/dist is a source fixture (compile-time test against the built
+# packages/reflex/tests/types/dist is a source fixture (compile-time test against the built
 # types), not build output — keep it tracked despite the dist pattern above
-!tests/types/dist/
+!packages/reflex/tests/types/dist/
+!packages/reflex/tests/types/dist/**
 dist-ssr
 experiments
-examples/todomvc/node_modules
 coverage
+.pnpm-store/
 *.local
 
 # Editor directories and files

@@ -1,0 +1,36 @@
+{
+  "name": "@flexsurfer/reflex-devtools-ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "UI dashboard for Reflex Devtools",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "clean": "node ../../scripts/clean.mjs dist",
+    "typecheck": "tsc --noEmit",
+    "build": "pnpm run typecheck && vite build",
+    "check": "pnpm run typecheck",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@flexsurfer/reflex": "workspace:*",
+    "immer": "^10.1.1",
+    "react-obj-view": "^1.1.10",
+    "react-force-graph-2d": "^1.25.3",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.16",
+    "@tailwindcss/vite": "^4.1.11",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.1.0",
+    "autoprefixer": "^10.4.21",
+    "daisyui": "^5.0.47",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.2.2",
+    "vite": "^7.0.6"
+  }
+}

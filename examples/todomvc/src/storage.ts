@@ -1,4 +1,4 @@
-import { regCoeffect, regEffect, type CoEffects } from '@lib/index';
+import { regCoeffect, regEffect, type CoEffects } from '@flexsurfer/reflex';
 
 import { COEFFECT_IDS } from './coeffect-ids';
 import type { Todo, TodoId, Todos } from './db';

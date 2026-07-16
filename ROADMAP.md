@@ -1,6 +1,6 @@
 # Roadmap: AI-Development Must-Haves
 
-Prioritized improvements for [reflex](https://github.com/flexsurfer/reflex), ordered by impact. Devtools-specific work is tracked in devtools [ROADMAP.md](https://github.com/flexsurfer/reflex-devtools/blob/main/ROADMAP.md). Items marked **(pairs with …)** need coordinated changes across both repos.
+Prioritized improvements for [Reflex](packages/reflex), ordered by impact. DevTools-specific work is tracked in the [DevTools roadmap](docs/devtools-roadmap.md). Items marked **(pairs with …)** need coordinated changes across both packages.
 
 Context: reflex's architecture (ID-indexed events/subs, pure handlers, effects isolation) already lets an AI agent work on a large app with minimal context — the `*-ids.ts` files act as an index, exact-match grep gives retrieval, and pure handlers bound verification to a single function. The items below close the remaining gaps: React-binding correctness, runtime performance at scale, compiler feedback, a closed observe→act→verify loop against the running app, and token-frugal runtime inspection.
 
@@ -16,7 +16,7 @@ Reflex should be presented to AI agents as a small set of indexes and tools, not
 
 The intended agent retrieval order is: MCP static/runtime tools first (`get_reflex_map`, `get_handlers`, `get_app_state({ shape: true })`, `find_state_changes`, `dispatch_event`), then `APP_MAP.md`, then `*-ids.ts` + exact-match `rg`, and only then implementation files. Agents should not read `events.ts`/`subs.ts` end-to-end.
 
-A full worked scenario — one task walked through the agent's loop (orient → write → launch → health → seed → act → verify → explain → reload → replay), with each tool touchpoint marked shipped/planned/proposed — lives in the devtools repo: [docs/agent-workflow.md](https://github.com/flexsurfer/reflex-devtools/blob/main/docs/agent-workflow.md).
+A full worked scenario — one task walked through the agent's loop (orient → write → launch → health → seed → act → verify → explain → reload → replay), with each tool touchpoint marked shipped/planned/proposed — lives in this monorepo: [docs/agent-workflow.md](docs/agent-workflow.md).
 
 ## Reflex (lib)
 
@@ -37,14 +37,6 @@ A full worked scenario — one task walked through the agent's loop (orient → 
 - [ ] **Headless-friendly runtime primitives.** _(pairs with devtools P1: headless runtime support)_
       Support a browserless agent loop without making devtools depend on private internals. Provide the minimal dev-only primitives needed by the headless MCP runtime: safe app-db restore for snapshots/scenarios, subscription evaluation that does not require a mounted React component, optional non-React subscription watching for services/headless checks, and clear behavior around flush timing after restore/dispatch. Keep the production API small; these primitives should either be explicitly dev-only or exposed through a narrow testing/devtools surface. This pairs with the devtools headless entry, `eval_sub`, state fixtures/scenarios, and the agent eval harness.
       Partially delivered: `getSubscriptionValue` and devtools `eval_sub` cover one-shot headless evaluation, while `getSubscriptionDiagnostics()` provides cache-only inspection. Safe restore, public non-React watching, and an explicit restore/dispatch flush contract remain open.
-
-### P2
-
-- [x] **Fix the `regEvent` overload heuristic.**
-      Added an explicit `{ coeffects, interceptors }` options form while preserving positional compatibility, and made an empty coeffect array with a fourth interceptor argument unambiguous.
-
-- [x] **Document positioning and constraints.**
-      The README now states the client-rendered React/React Native target, singleton and SSR/RSC limitations, asynchronous dispatch contract, serializable subscription parameters, and Immer draft-read cost.
 
 ---
 

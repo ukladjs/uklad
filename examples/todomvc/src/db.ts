@@ -1,4 +1,4 @@
-import { initAppDb } from '@lib/index';
+import { initAppDb } from '@flexsurfer/reflex';
 
 export type TodoId = number;
 

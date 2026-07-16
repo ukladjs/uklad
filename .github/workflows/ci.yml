@@ -15,17 +15,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'npm'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run quality checks
-        run: npm run check
+        run: pnpm --filter @flexsurfer/reflex run check
 
   typescript-compatibility:
     runs-on: ubuntu-latest
@@ -33,23 +40,34 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'npm'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build declarations
-        run: npm run build
+        run: pnpm --filter @flexsurfer/reflex run build
 
       - name: Check with native TypeScript 7
-        run: npm run typecheck && npm run test:types:package
+        run: >-
+          pnpm --filter @flexsurfer/reflex run typecheck &&
+          pnpm --filter @flexsurfer/reflex run test:types:package
 
       - name: Check with TypeScript 6 compatibility compiler
-        run: npm run typecheck:compat && npm run test:types:compat
+        run: >-
+          pnpm --filter @flexsurfer/reflex run typecheck:compat &&
+          pnpm --filter @flexsurfer/reflex run test:types:compat
 
   legacy-consumers:
     runs-on: ubuntu-latest
@@ -61,20 +79,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'npm'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build library
-        run: npm run build
+        run: pnpm --filter @flexsurfer/reflex run build
 
       - name: Verify packed tarball (runtime smoke + TypeScript ${{ matrix.typescript }})
-        run: npm run test:types:legacy -- ${{ matrix.typescript }}
+        run: >-
+          pnpm --filter @flexsurfer/reflex run test:types:legacy --
+          ${{ matrix.typescript }}
 
   test-matrix:
     runs-on: ubuntu-latest
@@ -87,28 +114,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
       - name: Setup Node.js ${{ matrix.node }}
         uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
-          cache: 'npm'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Install React ${{ matrix.react }}
         run: |
           if [ "${{ matrix.react }}" = "18.3.1" ]; then
-            npm i -D react@18.3.1 react-dom@18.3.1 @types/react@18.3.31 @types/react-dom@18.3.7
+            pnpm --filter @flexsurfer/reflex add --save-dev --save-exact --lockfile=false \
+              react@18.3.1 react-dom@18.3.1 @types/react@18.3.31 @types/react-dom@18.3.7
           else
-            npm i -D react@19.2.7 react-dom@19.2.7 @types/react@19.2.17 @types/react-dom@19.2.3
+            pnpm --filter @flexsurfer/reflex add --save-dev --save-exact --lockfile=false \
+              react@19.2.7 react-dom@19.2.7 @types/react@19.2.17 @types/react-dom@19.2.3
           fi
 
       - name: Build library
-        run: npm run build
+        run: pnpm --filter @flexsurfer/reflex run build
 
       - name: Run tests
-        run: npm run test:ci
+        run: pnpm --filter @flexsurfer/reflex run test:ci
 
   package-consumption:
     runs-on: ubuntu-latest
@@ -116,17 +152,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'npm'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build library
-        run: npm run build
+        run: pnpm --filter @flexsurfer/reflex run build
+
+      - name: Pack library
+        run: |
+          npm pack ./packages/reflex
+          mv flexsurfer-reflex-*.tgz reflex.tgz
 
       - name: Create test consumer packages
         run: |
@@ -134,7 +182,7 @@ jobs:
           mkdir -p test-consumption/esm-consumer
           cd test-consumption/esm-consumer
           npm init -y
-          npm install ../../
+          npm install ../../reflex.tgz react@19.2.7
           echo 'import { initAppDb, dispatch } from "@flexsurfer/reflex"; console.log("ESM import works");' > test.mjs
           node test.mjs
 
@@ -143,9 +191,46 @@ jobs:
           mkdir -p cjs-consumer
           cd cjs-consumer
           npm init -y
-          npm install ../../
+          npm install ../../reflex.tgz react@19.2.7
           echo 'const { initAppDb, dispatch } = require("@flexsurfer/reflex"); console.log("CommonJS require works");' > test.js
           node test.js
+
+  devtools-workspaces:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build DevTools stack
+        run: pnpm run build:devtools && pnpm run build:mcp
+
+      - name: Check DevTools UI
+        run: pnpm --filter @flexsurfer/reflex-devtools-ui run check
+
+      - name: Run DevTools package tests
+        run: pnpm --filter @flexsurfer/reflex-devtools run test:unit
+
+      - name: Run DevTools MCP tests
+        run: pnpm --filter @flexsurfer/reflex-devtools-mcp run test:unit
+
+      - name: Build DevTools playground
+        run: pnpm --filter @flexsurfer/reflex-devtools-playground run build
 
   example-todomvc:
     runs-on: ubuntu-latest
@@ -153,33 +238,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            examples/todomvc/package-lock.json
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
 
-      - name: Install root dependencies (for local lib alias)
-        run: npm ci
-
-      - name: Install example dependencies
-        working-directory: examples/todomvc
-        run: npm ci
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Build TodoMVC example
-        working-directory: examples/todomvc
-        run: npm run build
+        run: pnpm --filter todomvc run build
 
       - name: Lint TodoMVC example
-        working-directory: examples/todomvc
-        run: npm run lint
+        run: pnpm --filter todomvc run lint
 
       - name: Run TodoMVC tests
-        working-directory: examples/todomvc
-        run: npm run test
+        run: pnpm --filter todomvc run test
 
   publish-dry-run:
     runs-on: ubuntu-latest
@@ -188,29 +270,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'npm'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build library
-        run: npm run build
+        run: pnpm --filter @flexsurfer/reflex run build
 
       - name: Run tests
-        run: npm run test:ci
+        run: pnpm --filter @flexsurfer/reflex run test:ci
 
       - name: Test package publication
-        run: npm pack --dry-run
+        run: npm pack --dry-run ./packages/reflex
 
       - name: Test TodoMVC example build
-        run: |
-          cd examples/todomvc
-          npm ci
-          npm run build
+        run: pnpm --filter todomvc run build
 
   package-bundlers:
     runs-on: ubuntu-latest
@@ -222,21 +308,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'npm'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build library
-        run: npm run build
+        run: pnpm --filter @flexsurfer/reflex run build
 
       - name: Pack library
         run: |
-          npm pack
+          npm pack ./packages/reflex
           mv flexsurfer-reflex-*.tgz reflex.tgz
 
       - name: Test with ${{ matrix.bundler }}

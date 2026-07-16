@@ -16,7 +16,7 @@
  * to the local lib sources; a scaffolded project installing from npm can
  * run the same file under tsx instead.
  */
-import { enableTracing, enableMapSet } from '@flexsurfer/reflex';
+import { createReflexInspector, enableMapSet } from '@flexsurfer/reflex';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 import './db';
 import './events';
@@ -26,8 +26,7 @@ import { coeffectModes } from './coeffects.headless';
 
 const serverUrl = process.env.REFLEX_DEVTOOLS_SERVER_URL ?? '127.0.0.1:4000';
 
-enableTracing();
-enableDevtools({
+enableDevtools(createReflexInspector(), {
   serverUrl,
   // runtime: 'headless' is auto-detected (no window); declare the
   // side-effect policy so app_status can report what really executes.
@@ -35,8 +34,8 @@ enableDevtools({
   effects: {
     ...effectModes,
     ...coeffectModes,
-    'fake-effect': 'real'
-  }
+    'fake-effect': 'real',
+  },
 });
 enableMapSet();
 

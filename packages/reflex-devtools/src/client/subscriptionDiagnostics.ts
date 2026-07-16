@@ -1,13 +1,13 @@
-import type { SubscriptionDiagnostic } from "@flexsurfer/reflex";
+import type { ReflexSubscriptionDiagnostic } from './types.js';
 
-export const DISPOSED_SUBSCRIPTION = "reflex-tool-sub-disposed";
+export const DISPOSED_SUBSCRIPTION = 'reflex-tool-sub-disposed';
 
 /**
  * Convert the runtime's cache-only diagnostics into the existing devtools
  * delta protocol. The cache belongs to the client connection, not Reflex.
  */
 export function diffSubscriptionDiagnostics(
-  diagnostics: readonly SubscriptionDiagnostic[],
+  diagnostics: readonly ReflexSubscriptionDiagnostic[],
   versions: Map<string, number>,
   resetCache = false,
 ): Record<string, unknown> {
@@ -18,14 +18,15 @@ export function diffSubscriptionDiagnostics(
     if (!diagnostic.active) continue;
     // Empty is not a displayable value. Treat it as absent so a previously
     // published value is removed instead of lingering in the UI/server.
-    if (diagnostic.status === "empty") continue;
+    if (diagnostic.status === 'empty') continue;
 
     activeKeys.add(diagnostic.key);
     if (!resetCache && versions.get(diagnostic.key) === diagnostic.version) continue;
 
-    changed[diagnostic.key] = diagnostic.status === "error"
-      ? { "[SubscriptionError]": diagnostic.error ?? "Unknown subscription error" }
-      : diagnostic.value;
+    changed[diagnostic.key] =
+      diagnostic.status === 'error'
+        ? { '[SubscriptionError]': diagnostic.error ?? 'Unknown subscription error' }
+        : diagnostic.value;
     versions.set(diagnostic.key, diagnostic.version);
   }
 

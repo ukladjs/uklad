@@ -41,22 +41,35 @@ async function startServer(config = {}) {
   };
 }
 
-async function connectSdk(wsUrl, onDispatch, onEvalSub = () => {}) {
+async function connectSdk(wsUrl, onDispatch, onEvalSub = () => {}, onMessage = () => {}) {
   const socket = new WebSocket(`${wsUrl}/sdk`);
   activeSockets.add(socket);
+
+  socket.on('message', (data) => {
+    const message = JSON.parse(data.toString());
+    onMessage(message, socket);
+    if (message.type === 'dispatch-to-client') {
+      onDispatch(message, socket);
+    } else if (message.type === 'eval-sub-to-client') {
+      onEvalSub(message, socket);
+    }
+  });
 
   await new Promise((resolve, reject) => {
     socket.once('open', resolve);
     socket.once('error', reject);
   });
 
-  socket.on('message', (data) => {
-    const message = JSON.parse(data.toString());
-    if (message.type === 'dispatch-to-client') {
-      onDispatch(message, socket);
-    } else if (message.type === 'eval-sub-to-client') {
-      onEvalSub(message, socket);
-    }
+  return socket;
+}
+
+async function connectUi(wsUrl) {
+  const socket = new WebSocket(`${wsUrl}/ui`);
+  activeSockets.add(socket);
+
+  await new Promise((resolve, reject) => {
+    socket.once('open', resolve);
+    socket.once('error', reject);
   });
 
   return socket;
@@ -101,6 +114,14 @@ async function waitForStatus(baseUrl, predicate, timeoutMs = 2000) {
   return status;
 }
 
+async function waitForCondition(predicate, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    assert(Date.now() < deadline, 'condition was not satisfied before timeout');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
 test('/api/status answers without MCP instead of a 503', async () => {
   const { baseUrl } = await startServer({ enableMCP: false });
 
@@ -112,6 +133,64 @@ test('/api/status answers without MCP instead of a 503', async () => {
   assert.equal(status.sessionEpoch, 0);
   assert.equal(status.runtime, null);
   assert.equal(status.handlers, null);
+});
+
+test('MCP keeps SDK tracing demand active when the browser UI disconnects', async () => {
+  const { wsUrl } = await startServer({ enableMCP: true });
+  const tracingDemand = [];
+  await connectSdk(
+    wsUrl,
+    () => {},
+    () => {},
+    (message) => {
+      if (message.type === 'ui-connection-status') {
+        tracingDemand.push(message.payload.connectedUIs);
+      }
+    },
+  );
+
+  await waitForCondition(() => tracingDemand.length >= 1);
+  assert.equal(tracingDemand.at(-1), 1);
+
+  const uiSocket = await connectUi(wsUrl);
+  await waitForCondition(() => tracingDemand.length >= 2);
+  assert.equal(tracingDemand.at(-1), 1);
+
+  const uiClosed = new Promise((resolve) => uiSocket.once('close', resolve));
+  uiSocket.close();
+  await uiClosed;
+  await waitForCondition(() => tracingDemand.length >= 3);
+
+  assert.equal(tracingDemand.at(-1), 1);
+  assert.equal(tracingDemand.includes(0), false);
+});
+
+test('without MCP the final browser UI disconnect removes SDK tracing demand', async () => {
+  const { wsUrl } = await startServer({ enableMCP: false });
+  const tracingDemand = [];
+  await connectSdk(
+    wsUrl,
+    () => {},
+    () => {},
+    (message) => {
+      if (message.type === 'ui-connection-status') {
+        tracingDemand.push(message.payload.connectedUIs);
+      }
+    },
+  );
+
+  await waitForCondition(() => tracingDemand.length >= 1);
+  assert.equal(tracingDemand.at(-1), 0);
+
+  const uiSocket = await connectUi(wsUrl);
+  await waitForCondition(() => tracingDemand.at(-1) === 1);
+
+  const uiClosed = new Promise((resolve) => uiSocket.once('close', resolve));
+  uiSocket.close();
+  await uiClosed;
+  await waitForCondition(() => tracingDemand.at(-1) === 0 && tracingDemand.length >= 3);
+
+  assert.deepEqual(tracingDemand.slice(0, 3), [0, 1, 0]);
 });
 
 test('/api/status reports runtime info and bumps sessionEpoch per SDK session', async () => {

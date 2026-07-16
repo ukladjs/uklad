@@ -25,23 +25,55 @@ const traceCallbacks = new Map<string, TraceCallback>();
 let nextId = 1;
 let traces: Trace[] = [];
 let currentTrace: Trace | null = null;
+let manualTraceEnabled = false;
+let traceLeaseCount = 0;
 let traceEnabled = false;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Enable collection of traces completed after this call. */
+/** Keep trace collection enabled until `disableTracing` releases this manual owner. */
 export function enableTracing(): void {
-  traceEnabled = true;
+  manualTraceEnabled = true;
+  updateTraceEnabled();
 }
 
-/** Disable tracing and discard pending traces without removing callbacks. */
+/**
+ * Release the manual tracing owner.
+ *
+ * Inspector subscriptions keep collection active until their own leases are
+ * released. When no owner remains, pending traces are discarded.
+ */
 export function disableTracing(): void {
-  traceEnabled = false;
-  resetTracing();
+  manualTraceEnabled = false;
+  updateTraceEnabled();
 }
 
-/** Reset trace IDs and pending trace state without changing enablement or callbacks. */
-function resetTracing(): void {
-  nextId = 1;
+/**
+ * @internal Keep tracing active for one integration subscriber.
+ *
+ * The returned release function is idempotent. Multiple inspectors and a
+ * manual `enableTracing` owner compose without disabling one another.
+ */
+export function acquireTracing(): () => void {
+  traceLeaseCount++;
+  updateTraceEnabled();
+
+  let acquired = true;
+  return () => {
+    if (!acquired) return;
+    acquired = false;
+    traceLeaseCount--;
+    updateTraceEnabled();
+  };
+}
+
+/**
+ * Discard trace state that cannot be delivered while collection is inactive.
+ *
+ * IDs intentionally remain monotonic for the lifetime of this module instance.
+ * A lease cycle or manual tracing toggle is not necessarily an SDK session
+ * boundary, so reusing IDs would make stored trace lookups ambiguous.
+ */
+function discardPendingTraces(): void {
   traces = [];
   currentTrace = null;
   if (flushTimer) {
@@ -53,6 +85,14 @@ function resetTracing(): void {
 /** Return whether completed traces are currently collected. */
 export function isTraceEnabled(): boolean {
   return traceEnabled;
+}
+
+function updateTraceEnabled(): void {
+  const wasEnabled = traceEnabled;
+  traceEnabled = manualTraceEnabled || traceLeaseCount > 0;
+  if (!traceEnabled && wasEnabled) {
+    discardPendingTraces();
+  }
 }
 
 /**

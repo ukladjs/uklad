@@ -50,6 +50,9 @@ importers:
       '@flexsurfer/reflex':
         specifier: workspace:*
         version: link:../../packages/reflex
+      '@flexsurfer/reflex-devtools':
+        specifier: workspace:*
+        version: link:../../packages/reflex-devtools
       react:
         specifier: ^19.2.7
         version: 19.2.7
@@ -188,9 +191,6 @@ importers:
         specifier: ^8.12.1
         version: 8.21.1
     devDependencies:
-      '@flexsurfer/reflex':
-        specifier: workspace:*
-        version: link:../reflex
       '@types/cors':
         specifier: ^2.8.13
         version: 2.8.19

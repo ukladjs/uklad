@@ -84,12 +84,11 @@ If you're not using the agent toolkit plugin, the setup the skill automates is f
 
 2. **Enable it in development** (app entry point; adjust the env guard for non-Vite apps):
    ```typescript
-   import { enableTracing } from '@flexsurfer/reflex';
+   import { createReflexInspector } from '@flexsurfer/reflex';
    import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
    if (import.meta.env.DEV) {
-     enableTracing();
-     enableDevtools();
+     enableDevtools(createReflexInspector());
    }
    ```
 
@@ -134,7 +133,7 @@ Then run your app (browser tab or headless, below) and ask the agent things like
 
 ### Headless runtime — no browser required
 
-The Reflex state layer is React-free, so an autonomous agent doesn't need a browser tab to run your app. Add a `src/headless.ts` entry that imports the same `db`/`events`/`subs` modules as `main.tsx` plus Node-safe side-effect adapters (`effects.headless.ts` / `coeffects.headless.ts` twins of your browser adapters), calls `enableTracing()` + `enableDevtools()`, and run it under `tsx watch` (or `vite-node --watch`).
+The Reflex state layer is React-free, so an autonomous agent doesn't need a browser tab to run your app. Add a `src/headless.ts` entry that imports the same `db`/`events`/`subs` modules as `main.tsx` plus Node-safe side-effect adapters (`effects.headless.ts` / `coeffects.headless.ts` twins of your browser adapters), calls `enableDevtools(createReflexInspector())`, and run it under `tsx watch` (or `vite-node --watch`).
 
 The SDK auto-detects `runtime: 'headless'`, connects exactly like a browser tab, and every MCP tool works against it. `app_status` reports the runtime, the effect adapter modes (so the agent knows `local-storage-set` is memory-backed, not real), and a `sessionEpoch` that bumps on every reload so agents notice restarts — trace ids reset, seeded state gone.
 
@@ -166,11 +165,10 @@ npm install --save-dev @flexsurfer/reflex-devtools
 
 ```typescript
 // app entry point
-import { enableTracing } from '@flexsurfer/reflex';
+import { createReflexInspector } from '@flexsurfer/reflex';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
-enableTracing();
-enableDevtools(); // defaults to localhost:4000
+enableDevtools(createReflexInspector()); // defaults to localhost:4000
 ```
 
 ```json
@@ -194,6 +192,13 @@ Then open [http://localhost:4000](http://localhost:4000).
 ### Client (`enableDevtools`)
 
 ```typescript
+const disableDevtools = enableDevtools(createReflexInspector(), {
+  serverUrl: 'localhost:4000',
+});
+
+// Call during app/HMR teardown.
+disableDevtools();
+
 interface DevtoolsConfig {
   serverUrl?: string;  // Default: 'localhost:4000'
   enabled?: boolean;   // Default: true
@@ -208,6 +213,13 @@ interface DevtoolsConfig {
   effects?: Record<string, string>;
 }
 ```
+
+The inspector is created by the same Reflex module instance as the application,
+so DevTools cannot resolve a different app-db, handler registry, subscription
+cache, or trace callback registry. The returned cleanup function is idempotent
+and closes the connection, trace subscription, and pending dispatch timers.
+The inspector keeps tracing active only while DevTools is subscribed, so the
+standard setup does not need a separate `enableTracing()` call.
 
 ### Server CLI
 
@@ -231,8 +243,9 @@ Options:
 │   Your App      │ ◀──────────────────▶ │  DevTools       │
 │  (browser tab   │                      │  Server         │
 │   or headless)  │                      │                 │
-│ - Reflex SDK    │                      │ - Express API   │
-│ - DevTools SDK  │                      │ - WebSocket     │
+│ - Reflex runtime│                      │ - Express API   │
+│ - Inspector     │                      │ - WebSocket     │
+│ - DevTools SDK  │                      │ - HTTP fallback │
 └─────────────────┘                      │ - Trace storage │
                                          └───────┬─────────┘
                                      HTTP │              │ HTTP

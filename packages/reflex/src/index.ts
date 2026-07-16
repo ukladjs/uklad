@@ -1,3 +1,6 @@
+// Detect separately initialized package copies before exposing the public API.
+import './runtime/instance';
+
 // App database
 export { getAppDb, initAppDb } from './runtime/app-db';
 
@@ -40,6 +43,7 @@ export {
   removeTraceCallback,
   removeTraceCb,
 } from './core/tracing';
+export { createReflexInspector } from './inspector';
 
 // Registry inspection and reset
 export { getHandler, getHandlers } from './runtime/handlers';
@@ -93,3 +97,4 @@ export type {
 } from './runtime/handlers';
 export type { SubscriptionDiagnostic } from './runtime/subscriptions/engine';
 export type { Trace, TraceCallback, TraceId, TraceOptions, TraceTags } from './core/tracing';
+export type { ReflexHandlerKeys, ReflexInspector, ReflexInspectorSnapshot } from './inspector';

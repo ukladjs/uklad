@@ -46,7 +46,8 @@
     "assemble:ui": "node scripts/assemble-ui.mjs",
     "build:package": "pnpm run clean && pnpm run build:code && pnpm run assemble:ui",
     "test": "pnpm run build && pnpm run test:unit",
-    "test:unit": "node --test test/*.test.mjs",
+    "typecheck:contract": "tsc --noEmit -p test/types/tsconfig.json",
+    "test:unit": "pnpm run typecheck:contract && node --test test/*.test.mjs",
     "check": "pnpm run test:unit",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
@@ -63,11 +64,7 @@
     "@types/ws": "^8.5.4",
     "@types/cors": "^2.8.13",
     "@types/node": "^20.8.0",
-    "typescript": "^5.2.2",
-    "@flexsurfer/reflex": "workspace:*"
-  },
-  "peerDependencies": {
-    "@flexsurfer/reflex": "^0.1.26"
+    "typescript": "^5.2.2"
   },
   "keywords": [
     "devtools",

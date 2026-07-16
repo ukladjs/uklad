@@ -1,6 +1,19 @@
-import { registerTraceCb, getAppDb, getSubscriptionDiagnostics, dispatch, getHandlers, getSubscriptionValue, removeTraceCb } from "@flexsurfer/reflex";
-import { reflexReplacer } from "../serialization.js";
-import { diffSubscriptionDiagnostics } from "./subscriptionDiagnostics.js";
+import { reflexReplacer } from '../serialization.js';
+import { diffSubscriptionDiagnostics } from './subscriptionDiagnostics.js';
+import type {
+  ReflexInspector,
+  ReflexInspectorSnapshot,
+  ReflexTrace,
+} from './types.js';
+
+export type {
+  ReflexHandlerKeys,
+  ReflexInspector,
+  ReflexInspectorSnapshot,
+  ReflexSubscriptionDiagnostic,
+  ReflexTrace,
+  ReflexTraceCallback,
+} from './types.js';
 
 export interface DevtoolsConfig {
   serverUrl?: string;
@@ -56,15 +69,23 @@ interface PendingDispatch {
 }
 
 class DevtoolsClient {
+  private inspector: ReflexInspector;
   private config: DevtoolsConfig;
   private ws: WebSocket | null = null;
   private isConnected = false;
   private isTracingEnabled = false;
   private serverAvailable = false;
+  private isDisposed = false;
+  private traceUnsubscribe: (() => void) | null = null;
+  private connectionTimeout: ReturnType<typeof setTimeout> | null = null;
+  private rejectConnection: ((error: unknown) => void) | null = null;
+  private healthController: AbortController | null = null;
+  private eventControllers = new Set<AbortController>();
   private subscriptionVersions = new Map<string, number>();
   private pendingDispatches: PendingDispatch[] = [];
 
-  constructor(config: DevtoolsConfig) {
+  constructor(inspector: ReflexInspector, config: DevtoolsConfig) {
+    this.inspector = inspector;
     this.config = {
       enabled: true,
       serverUrl: 'localhost:4000',
@@ -74,8 +95,7 @@ class DevtoolsClient {
   }
 
   async init(): Promise<void> {
-
-    if (!this.config.enabled) return;
+    if (!this.config.enabled || this.isDisposed) return;
 
     // Browsers and React Native always have WebSocket; Node only from v22
     // (v21 experimentally). Without this guard the constructor throw would be
@@ -87,12 +107,10 @@ class DevtoolsClient {
       return;
     }
 
-    this.startTracing();
-
     this.serverAvailable = await this.checkServerAvailability();
+    if (this.isDisposed) return;
     if (!this.serverAvailable) {
       console.warn('[Reflex Devtools] Server not available, disabling devtools');
-      this.stopTracing();
       return;
     }
 
@@ -102,46 +120,86 @@ class DevtoolsClient {
     }
   }
 
-  private mapSubscriptionDiagnostics(resetCache = false): Record<string, any> {
+  private mapSubscriptionDiagnostics(
+    snapshot: ReflexInspectorSnapshot,
+    resetCache = false,
+  ): Record<string, unknown> {
     return diffSubscriptionDiagnostics(
-      getSubscriptionDiagnostics(),
+      snapshot.subscriptions,
       this.subscriptionVersions,
       resetCache,
     );
   }
 
-  private getHandlerKeys(kindToIdToHandler: Record<string, Record<string, any>>): Record<string, string[]> {
-    return {
-      event: Object.keys(kindToIdToHandler.event || {}),
-      fx: Object.keys(kindToIdToHandler.fx || {}).filter(key => !['dispatch', 'dispatch-later'].includes(key)),
-      cofx: Object.keys(kindToIdToHandler.cofx || {}).filter(key => !['now', 'random'].includes(key)),
-      sub: Object.keys(kindToIdToHandler.sub || {})
-    };
-  }
-
   private async checkServerAvailability(): Promise<boolean> {
+    const controller = createAbortController();
+    this.healthController = controller;
+    const request: RequestInit = { method: 'GET' };
+    if (controller) {
+      request.signal = controller.signal;
+    }
+
     try {
       // Use a simple GET request to check if server is running
-      const response = await fetch(`http://${this.config.serverUrl}/health`, {
-        method: 'GET'
-      });
-      return response.ok;
+      const response = await fetch(`http://${this.config.serverUrl}/health`, request);
+      return !this.isDisposed && response.ok;
     } catch (error) {
       return false;
+    } finally {
+      if (this.healthController === controller) {
+        this.healthController = null;
+      }
     }
   }
 
   private async connectWebSocket(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const wsUrl = 'ws://' + this.config.serverUrl + '/sdk';
-      this.ws = new WebSocket(wsUrl);
+      if (this.isDisposed) {
+        resolve();
+        return;
+      }
 
-      this.ws.onopen = () => {
-        this.isConnected = true;
+      const wsUrl = 'ws://' + this.config.serverUrl + '/sdk';
+      const ws = new WebSocket(wsUrl);
+      this.ws = ws;
+      let settled = false;
+
+      const clearConnectionTimeout = () => {
+        if (this.connectionTimeout) {
+          clearTimeout(this.connectionTimeout);
+          this.connectionTimeout = null;
+        }
+      };
+
+      const resolveOnce = () => {
+        if (settled) return;
+        settled = true;
+        this.rejectConnection = null;
+        clearConnectionTimeout();
         resolve();
       };
 
-      this.ws.onmessage = (event) => {
+      const rejectOnce = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        this.rejectConnection = null;
+        clearConnectionTimeout();
+        reject(error);
+      };
+      this.rejectConnection = rejectOnce;
+
+      ws.onopen = () => {
+        if (this.isDisposed) {
+          ws.close();
+          rejectOnce(new Error('Devtools client disposed during WebSocket connection'));
+          return;
+        }
+        this.isConnected = true;
+        resolveOnce();
+      };
+
+      ws.onmessage = (event) => {
+        if (this.isDisposed) return;
         try {
           const message = JSON.parse(event.data);
           this.handleServerMessage(message);
@@ -149,25 +207,30 @@ class DevtoolsClient {
         }
       };
 
-      this.ws.onerror = (error) => {
-        reject(error);
+      ws.onerror = (error) => {
+        rejectOnce(error);
       };
 
-      this.ws.onclose = () => {
+      ws.onclose = () => {
         this.isConnected = false;
+        if (!settled) {
+          rejectOnce(new Error('WebSocket closed before connecting'));
+        }
       };
 
       // Set a timeout for connection
-      setTimeout(() => {
+      this.connectionTimeout = setTimeout(() => {
         if (!this.isConnected) {
-          this.ws?.close();
-          reject(new Error('WebSocket connection timeout'));
+          ws.close();
+          rejectOnce(new Error('WebSocket connection timeout'));
         }
       }, 5000);
     });
   }
 
   private handleServerMessage(message: any): void {
+    if (this.isDisposed) return;
+
     if (message.type === 'ui-connection-status') {
       const newUICount = message.payload.connectedUIs;
 
@@ -182,7 +245,7 @@ class DevtoolsClient {
       }
     } else if (message.type === 'dispatch-to-client') {
       // Handle dispatch request from devtools UI or MCP
-      const { dispatchId, eventName, params } = message.payload;
+      const { dispatchId, eventName, params = [] } = message.payload;
 
       // MCP dispatches carry a dispatchId and expect the event's trace back
       // (reflex-dispatch-result). UI dispatches don't. Register the watcher
@@ -206,17 +269,17 @@ class DevtoolsClient {
       }
 
       // Dispatch the event in the client app with all parameters
-      dispatch([eventName, ...params]);
+      this.inspector.dispatch([eventName, ...params]);
     } else if (message.type === 'eval-sub-to-client') {
       void this.evaluateSubscription(message.payload);
     }
   }
 
   private async evaluateSubscription(payload: any): Promise<void> {
-    const { evalId, id, args } = payload;
+    const { evalId, id, args = [] } = payload;
 
     try {
-      if (!getHandlers().sub?.[id]) {
+      if (!this.inspector.getSnapshot().handlerKeys.sub.includes(id)) {
         await this.sendEvent({
           type: 'reflex-eval-sub-result',
           payload: {
@@ -230,7 +293,7 @@ class DevtoolsClient {
         return;
       }
 
-      const value = getSubscriptionValue([id, ...args]);
+      const value = this.inspector.evaluateSubscription([id, ...args]);
       await this.sendEvent({
         type: 'reflex-eval-sub-result',
         payload: { evalId, value }
@@ -254,7 +317,7 @@ class DevtoolsClient {
   // outcome. FIFO by event id: if the app happens to dispatch the same event
   // concurrently, the earliest trace wins — acceptable ambiguity for a
   // dev-only observation channel.
-  private async reportDispatchResults(traces: any[]): Promise<void> {
+  private async reportDispatchResults(traces: readonly ReflexTrace[]): Promise<void> {
     if (this.pendingDispatches.length === 0) return;
 
     for (const trace of traces) {
@@ -262,7 +325,8 @@ class DevtoolsClient {
       const index = this.pendingDispatches.findIndex(p => p.eventId === trace.operation);
       if (index === -1) continue;
 
-      const [pending] = this.pendingDispatches.splice(index, 1);
+      const pending = this.pendingDispatches.splice(index, 1)[0];
+      if (!pending) continue;
       clearTimeout(pending.timeout);
       await this.sendEvent({
         type: 'reflex-dispatch-result',
@@ -272,11 +336,12 @@ class DevtoolsClient {
   }
 
   private startTracing(): void {
+    if (this.isDisposed) return;
+
     if (!this.isTracingEnabled) {
+      this.traceUnsubscribe = this.inspector.subscribeTraces(async (traces) => {
+        if (this.isDisposed) return;
 
-      this.isTracingEnabled = true;
-
-      registerTraceCb('reflex-devtool', async (traces) => {
         // Awaited so the server has stored the traces before a dispatch
         // outcome referencing a trace id resolves — ws.send preserves order
         // by itself, but the HTTP fallback does not. sendEvent never rejects.
@@ -285,29 +350,32 @@ class DevtoolsClient {
           component: 'Reflex',
           payload: traces
         });
+        if (this.isDisposed) return;
         await this.sendEvent({
           type: 'reflex-active-subs',
           component: 'Reflex',
-          payload: this.mapSubscriptionDiagnostics()
+          payload: this.mapSubscriptionDiagnostics(this.inspector.getSnapshot())
         });
         await this.reportDispatchResults(traces);
       });
+      this.isTracingEnabled = true;
     }
 
+    const snapshot = this.inspector.getSnapshot();
     this.sendEvent({
       type: 'reflex-app-db',
       component: 'Reflex',
-      payload: getAppDb()
+      payload: snapshot.appDb
     });
     this.sendEvent({
       type: 'reflex-active-subs',
       component: 'Reflex',
-      payload: this.mapSubscriptionDiagnostics(true)
+      payload: this.mapSubscriptionDiagnostics(snapshot, true)
     });
     this.sendEvent({
       type: 'reflex-handler-keys',
       component: 'Reflex',
-      payload: this.getHandlerKeys(getHandlers())
+      payload: snapshot.handlerKeys
     });
     this.sendRuntimeInfo();
   }
@@ -329,23 +397,65 @@ class DevtoolsClient {
     });
   }
 
-  private stopTracing(): void {
+  private stopTracing(notifyServer = true): void {
     if (this.isTracingEnabled) {
       this.isTracingEnabled = false;
-      removeTraceCb('reflex-devtool');
+      this.traceUnsubscribe?.();
+      this.traceUnsubscribe = null;
 
       // No more trace callbacks are coming; answer outstanding dispatches
       // now instead of letting them time out.
       for (const pending of this.pendingDispatches) {
         clearTimeout(pending.timeout);
-        this.sendEvent({
-          type: 'reflex-dispatch-result',
-          payload: { dispatchId: pending.dispatchId, reason: 'tracing stopped before the outcome was observed' }
-        });
+        if (notifyServer) {
+          this.sendEvent({
+            type: 'reflex-dispatch-result',
+            payload: { dispatchId: pending.dispatchId, reason: 'tracing stopped before the outcome was observed' }
+          });
+        }
       }
       this.pendingDispatches = [];
 
-      this.sendRuntimeInfo();
+      if (notifyServer) {
+        this.sendRuntimeInfo();
+      }
+    }
+  }
+
+  dispose(): void {
+    if (this.isDisposed) return;
+    this.isDisposed = true;
+    this.stopTracing(false);
+    this.rejectConnection?.(new Error('Devtools client disposed during WebSocket connection'));
+    this.rejectConnection = null;
+    this.healthController?.abort();
+    this.healthController = null;
+    for (const controller of this.eventControllers) {
+      controller.abort();
+    }
+    this.eventControllers.clear();
+
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
+
+    for (const pending of this.pendingDispatches) {
+      clearTimeout(pending.timeout);
+    }
+    this.pendingDispatches = [];
+    this.subscriptionVersions.clear();
+    this.serverAvailable = false;
+    this.isConnected = false;
+
+    const ws = this.ws;
+    this.ws = null;
+    if (ws) {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.onclose = null;
+      ws.close();
     }
   }
 
@@ -362,7 +472,7 @@ class DevtoolsClient {
   }
 
   async sendEvent(event: EventPayload): Promise<void> {
-    if (!this.config.enabled || !this.serverAvailable) return;
+    if (this.isDisposed || !this.config.enabled || !this.serverAvailable) return;
 
     const eventWithTimestamp = {
       ...event,
@@ -381,18 +491,34 @@ class DevtoolsClient {
     }
 
     // Fallback to HTTP
+    const controller = createAbortController();
+    if (controller) {
+      this.eventControllers.add(controller);
+    }
+    const request: RequestInit = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: serializedEvent,
+    };
+    if (controller) {
+      request.signal = controller.signal;
+    }
+
     try {
-      await fetch(`http://${this.config.serverUrl}/event`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: serializedEvent,
-      });
+      await fetch(`http://${this.config.serverUrl}/event`, request);
     } catch (error) {
+      if (controller?.signal.aborted || isAbortError(error) || this.isDisposed) {
+        return;
+      }
       console.warn('[Reflex Devtools] Server not available, disabling devtools');
       this.serverAvailable = false;
       this.stopTracing();
+    } finally {
+      if (controller) {
+        this.eventControllers.delete(controller);
+      }
     }
   }
 }
@@ -401,12 +527,63 @@ let client: DevtoolsClient | null = null;
 
 export function logEvent(event: EventPayload): void {
   if (client) {
-    client.sendEvent(event);
-  } else {
+    void client.sendEvent(event);
   }
 }
 
-export function enableDevtools(config: DevtoolsConfig = {}): void {
-  client = new DevtoolsClient(config);
-  client.init();
+function createAbortController(): AbortController | null {
+  return typeof AbortController === 'undefined' ? null : new AbortController();
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === 'AbortError'
+  );
+}
+
+function assertInspector(inspector: ReflexInspector): void {
+  const candidate = inspector as Partial<ReflexInspector> | null | undefined;
+  const hasMethods =
+    typeof candidate?.getSnapshot === 'function' &&
+    typeof candidate.subscribeTraces === 'function' &&
+    typeof candidate.dispatch === 'function' &&
+    typeof candidate.evaluateSubscription === 'function';
+
+  if (candidate?.apiVersion !== 1 || !hasMethods) {
+    throw new Error(
+      '[Reflex Devtools] enableDevtools() requires a Reflex inspector as its first argument. ' +
+      'Call enableDevtools(createReflexInspector(), config) using the inspector created by the same Reflex package as the application.',
+    );
+  }
+}
+
+export function enableDevtools(
+  inspector: ReflexInspector,
+  config: DevtoolsConfig = {},
+): () => void {
+  assertInspector(inspector);
+
+  const nextClient = new DevtoolsClient(inspector, config);
+  client?.dispose();
+  client = nextClient;
+  void nextClient.init().catch((error: unknown) => {
+    console.error('[Reflex Devtools] Failed to initialize:', error);
+    nextClient.dispose();
+    if (client === nextClient) {
+      client = null;
+    }
+  });
+
+  let enabled = true;
+  return () => {
+    if (!enabled) return;
+    enabled = false;
+    nextClient.dispose();
+    if (client === nextClient) {
+      client = null;
+    }
+  };
 }

@@ -107,12 +107,11 @@ The bridge needs a DevTools server with a connected app to talk to. In the proje
 
 2. **Enable it in development** (app entry point):
    ```typescript
-   import { enableTracing } from '@flexsurfer/reflex';
+   import { createReflexInspector } from '@flexsurfer/reflex';
    import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
    if (import.meta.env.DEV) {
-     enableTracing();
-     enableDevtools();
+     enableDevtools(createReflexInspector());
    }
    ```
 
@@ -256,7 +255,7 @@ Reflex's state layer is React-free, so the app an agent drives does not need a b
 ```typescript
 // src/headless.ts — run under tsx (or vite-node when your project
 // resolves dependencies through vite aliases)
-import { enableTracing } from '@flexsurfer/reflex';
+import { createReflexInspector } from '@flexsurfer/reflex';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 import './db';
 import './events';
@@ -264,8 +263,7 @@ import './subs';
 import './effects.headless';    // memory/no-op adapters instead of effects.browser
 import './coeffects.headless';
 
-enableTracing();
-enableDevtools({
+enableDevtools(createReflexInspector(), {
   // runtime: 'headless' is auto-detected (no window)
   effectMode: 'safe',
   effects: { 'local-storage-set': 'memory', 'analytics-track': 'noop' }

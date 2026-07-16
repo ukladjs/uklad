@@ -171,7 +171,7 @@ Suspense, and remounts.
 | `setGlobalEqualityCheck` / `regGlobalInterceptor`    | App-wide defaults                                                                                                                 |
 | `shallowEqual`                                       | Opt-in equality check; default is deep equality                                                                                   |
 | `debounceAndDispatch` / `throttleAndDispatch`        | Rate-limited dispatch                                                                                                             |
-| `enableTracing` / `disableTracing`                   | Gate trace collection and Immer patch generation                                                                                  |
+| `enableTracing` / `disableTracing`                   | Hold or release the manual trace owner; inspector subscriptions keep tracing active through independent leases                    |
 | `IS_DEV`                                             | Gates development-only diagnostics                                                                                                |
 
 ## Invariants

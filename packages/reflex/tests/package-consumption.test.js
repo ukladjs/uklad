@@ -16,6 +16,7 @@ const expectedRuntimeExports = [
   'clearHotReloadCallbacks',
   'clearSubs',
   'clearSubscriptionCache',
+  'createReflexInspector',
   'current',
   'debounceAndDispatch',
   'defaultErrorHandler',
@@ -66,6 +67,32 @@ const removedLegacyExports = [
   'clearReactions',
 ];
 
+function loadBothModuleFormatsWithNodeEnv(nodeEnv) {
+  const distDir = path.join(__dirname, '../dist');
+  const moduleUrl = pathToFileURL(path.join(distDir, 'index.mjs')).href;
+  const commonJsPath = path.join(distDir, 'index.cjs');
+  const script = `
+    const warnings = [];
+    console.warn = (...args) => warnings.push(args.map(String).join(' '));
+    const { createRequire } = await import('node:module');
+    createRequire(import.meta.url)(${JSON.stringify(commonJsPath)});
+    await import(${JSON.stringify(moduleUrl)});
+    process.stdout.write(JSON.stringify(warnings));
+  `;
+  const env = { ...process.env };
+  if (nodeEnv === undefined) {
+    delete env.NODE_ENV;
+  } else {
+    env.NODE_ENV = nodeEnv;
+  }
+  return JSON.parse(
+    execFileSync(process.execPath, ['--input-type=module', '--eval', script], {
+      encoding: 'utf8',
+      env,
+    }),
+  );
+}
+
 describe('Package Consumption Tests', () => {
   test('Built package files exist', () => {
     const distDir = path.join(__dirname, '../dist');
@@ -113,6 +140,24 @@ describe('Package Consumption Tests', () => {
     });
   });
 
+  test('Node with unset NODE_ENV warns when CJS and ESM initialize separate runtimes', () => {
+    const warnings = loadBothModuleFormatsWithNodeEnv(undefined);
+    expect(warnings).toEqual([
+      expect.stringContaining('Multiple Reflex runtimes detected in the same JavaScript realm'),
+    ]);
+  });
+
+  test('Development warns when CJS and ESM initialize separate runtimes', () => {
+    const warnings = loadBothModuleFormatsWithNodeEnv('development');
+    expect(warnings).toEqual([
+      expect.stringContaining('Multiple Reflex runtimes detected in the same JavaScript realm'),
+    ]);
+  });
+
+  test('Production stays silent when CJS and ESM initialize separate runtimes', () => {
+    expect(loadBothModuleFormatsWithNodeEnv('production')).toEqual([]);
+  });
+
   test('TypeScript definitions exist', () => {
     const distDir = path.join(__dirname, '../dist');
     const dtsFile = fs.readFileSync(path.join(distDir, 'index.d.mts'), 'utf8');
@@ -120,7 +165,9 @@ describe('Package Consumption Tests', () => {
 
     expect(dtsFile).toContain('interface SubscriptionDiagnostic');
     expect(dtsFile).toContain('interface EventRegistrationOptions');
+    expect(dtsFile).toContain('interface ReflexInspector');
     expect(dctsFile).toContain('interface EventRegistrationOptions');
+    expect(dctsFile).toContain('interface ReflexInspector');
     removedLegacyExports.forEach((name) => {
       expect(dtsFile).not.toMatch(new RegExp(`\\b${name}\\b`));
       expect(dctsFile).not.toMatch(new RegExp(`\\b${name}\\b`));

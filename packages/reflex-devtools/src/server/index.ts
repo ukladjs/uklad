@@ -604,9 +604,8 @@ export class DevtoolsServer {
           stale.terminate();
         }
 
-        // Send connection status to newly connected SDK client
-        // If MCP is enabled, treat it as if there's always a UI connected to trigger state sending
-        const connectedUIs = this.config.enableMCP ? 1 : this.uiClients.size;
+        // Send current tracing demand to the newly connected SDK client.
+        const connectedUIs = this.getTracingDemandCount();
         ws.send(JSON.stringify({
           type: 'ui-connection-status',
           payload: { connectedUIs },
@@ -683,10 +682,18 @@ export class DevtoolsServer {
     });
   }
 
+  /**
+   * The SDK treats `connectedUIs` as an on/off tracing-demand signal.
+   * MCP remains a consumer even when no browser dashboard is connected.
+   */
+  private getTracingDemandCount(): number {
+    return this.config.enableMCP ? 1 : this.uiClients.size;
+  }
+
   private notifySDKClientsUIStatus(): void {
     const message = JSON.stringify({
       type: 'ui-connection-status',
-      payload: { connectedUIs: this.uiClients.size },
+      payload: { connectedUIs: this.getTracingDemandCount() },
       timestamp: Date.now()
     });
     

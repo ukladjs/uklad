@@ -105,11 +105,10 @@ npm i -D @flexsurfer/reflex-devtools
 Enable in your app entry point (`main.tsx`) before dispatching any events:
 
 ```ts
-import { enableTracing } from '@flexsurfer/reflex';
+import { createReflexInspector } from '@flexsurfer/reflex';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
-enableTracing();   // required — turns on the trace pipeline that devtools reads
-enableDevtools();  // opens the devtools connection
+enableDevtools(createReflexInspector());  // tracing is active while devtools is subscribed
 
 ```
 

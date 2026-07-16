@@ -292,13 +292,15 @@ restore_state { name: "category-filter-before-action" }
   }
 ```
 
-Restore should flow through a dev-only internal Reflex event so subscriptions are flushed and traces remain coherent:
+Restore should flow through a traced operation owned by the injected Reflex
+inspector so subscriptions are flushed and traces remain coherent:
 
 ```text
-["reflex-devtools/restore-state", snapshotState]
+inspector.restoreState(snapshotState)
 ```
 
-That internal event replaces the app db, then the normal subscription flush wakes the graph.
+Reflex may implement that operation with an internal event, but DevTools only
+calls the injected adapter and never imports or registers against the runtime.
 
 ### `list_snapshots`
 
@@ -461,8 +463,8 @@ MCP restore_state
   -> HTTP POST /api/snapshots/:id/restore
   -> server sends WebSocket message to SDK:
        { type: "restore-state-to-client", payload: { restoreId, state } }
-  -> SDK dispatches internal event:
-       ["reflex-devtools/restore-state", state]
+  -> SDK calls the injected Reflex inspector:
+       inspector.restoreState(state)
   -> app replaces appDb and flushes subscriptions
   -> SDK sends restore result:
        { type: "reflex-restore-result", payload: { restoreId, trace } }
@@ -485,23 +487,24 @@ The Reflex library should provide a dev-only primitive for replacing app db safe
 
 Options:
 
-1. **Devtools registers a hidden event at `enableDevtools()` time.**
+1. **The injected Reflex inspector exposes a traced restore operation.**
 
-   ```text
-   reflex-devtools/restore-state
+   ```ts
+   inspector.restoreState(nextDb)
    ```
 
-   The handler swaps db state through a library-provided internal function.
+   Reflex owns the internal event or publication-safe primitive; DevTools only
+   forwards the protocol message to the injected inspector.
 
-2. **Reflex exports a dev-only helper.**
+2. **Reflex exports a dev-only helper used by the inspector.**
 
    ```ts
    restoreAppDbForDevtools(nextDb)
    ```
 
-   The SDK calls it after receiving the restore message.
+   The inspector calls it after DevTools forwards the restore message.
 
-The first option keeps restore visible in the event trace. The second option is simpler but less aligned with the normal event pipeline. Prefer the traced event unless implementation cost proves too high.
+The first option keeps the runtime boundary explicit and restore visible in the event trace. The second option is simpler internally but should not make the DevTools package import Reflex again. Prefer the traced inspector operation unless implementation cost proves too high.
 
 ---
 

@@ -12,7 +12,8 @@ export function appStatusTool(apiClient: DevToolsAPIClient) {
     description: 'Cheap health check for the whole loop — call it first after a cold start and after any app reload. Reports whether an app is connected and how it runs (runtime "browser", "react-native", or "headless" plus its side-effect adapter modes), whether tracing is on, registered handler counts, and sessionEpoch — a counter that bumps every time the app reconnects. If sessionEpoch changed since you last looked, the app restarted: trace ids reset, stored traces cleared, and previously seeded state is gone.',
     inputSchema: {
       type: 'object',
-      properties: {}
+      properties: {},
+      additionalProperties: false
     },
     handler: async () => {
       try {
@@ -26,7 +27,11 @@ export function appStatusTool(apiClient: DevToolsAPIClient) {
           tracing: response.tracing,
           handlers: response.handlers,
           stateAvailable: response.stateAvailable,
-          traceCount: response.traceCount
+          traceCount: response.traceCount,
+          capabilities: response.capabilities,
+          readOnly: response.readOnly,
+          protocol: response.protocol,
+          security: response.security
         };
         if (response.effectMode != null) status.effectMode = response.effectMode;
         if (response.effects != null) status.effects = response.effects;
@@ -34,7 +39,7 @@ export function appStatusTool(apiClient: DevToolsAPIClient) {
 
         const hints: string[] = [];
         if (!response.mcpEnabled) {
-          hints.push('The devtools server was started without --mcp: dispatch and trace storage are disabled. Restart the project-local `devtools:mcp` script (for example, `npm run devtools:mcp`).');
+          hints.push('The devtools server was started without --mcp: MCP inspection storage is disabled. Restart the project-local `devtools:mcp` script (for example, `npm run devtools:mcp`).');
         }
         if (!response.appConnected) {
           hints.push('No app is connected. Start one — a browser tab, or a headless state runtime (a src/headless.ts entry run under tsx/vite-node) for browserless work.');
@@ -42,6 +47,9 @@ export function appStatusTool(apiClient: DevToolsAPIClient) {
           hints.push('The connected app has not reported runtime info — its @flexsurfer/reflex-devtools SDK likely predates runtime reporting.');
         } else if (response.tracing === false) {
           hints.push('Tracing is off in the app, so dispatch outcomes will come back "unknown". Open the devtools UI or restart the server with --mcp to keep tracing on.');
+        }
+        if (!response.capabilities?.includes('dispatch')) {
+          hints.push('DevTools is read-only. Restart it with --allow-dispatch only when an agent should be allowed to mutate app state.');
         }
         if (hints.length > 0) status.hints = hints;
 

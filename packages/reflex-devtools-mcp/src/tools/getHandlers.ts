@@ -22,7 +22,8 @@ export function getHandlersTool(apiClient: DevToolsAPIClient) {
           description: 'Filter by handler type',
           enum: ['event', 'fx', 'cofx', 'sub']
         }
-      }
+      },
+      additionalProperties: false
     },
     handler: async (params: GetHandlersParams) => {
       try {

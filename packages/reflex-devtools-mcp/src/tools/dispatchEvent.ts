@@ -14,23 +14,27 @@ export interface DispatchEventParams {
 export function dispatchEventTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'dispatch_event',
-    description: 'Dispatch an event to the Reflex application and observe what it did. Returns the outcome derived from the event\'s trace: "succeeded" (with the state patches it committed and the effects it emitted), "failed" (with the error — a missing handler or a throwing handler chain), or "effects-failed" (state committed, but some effect handlers threw). Use this as an act-and-verify loop: the response is the state diff, no follow-up trace query needed.',
+    description: 'Dispatch an event to the Reflex application and observe what it did. Returns the outcome derived from the event\'s trace: "succeeded" (with the state patches it committed and the effects it emitted), "failed" (with the error — a missing handler or a throwing handler chain), or "effects-failed" (state committed, but some effect handlers threw). Use this as an act-and-verify loop: the response is the state diff, no follow-up trace query needed. This is the only mutating tool: it requires the DevTools server to run with --allow-dispatch, and otherwise returns a CAPABILITY_DENIED error the user must resolve by restarting the server with that flag.',
     inputSchema: {
       type: 'object',
       properties: {
         eventName: {
           type: 'string',
+          minLength: 1,
+          maxLength: 256,
           description: 'The event ID/name to dispatch (e.g., "set-user", "fetch-data")'
         },
         params: {
           type: 'array',
+          maxItems: 100,
           description: 'Optional array of parameters to pass to the event handler',
           items: {
             type: ['string', 'number', 'boolean', 'object', 'array', 'null']
           }
         }
       },
-      required: ['eventName']
+      required: ['eventName'],
+      additionalProperties: false
     },
     handler: async (params: DispatchEventParams) => {
       try {
@@ -39,9 +43,9 @@ export function dispatchEventTool(apiClient: DevToolsAPIClient) {
 
         const result: Record<string, any> = {
           outcome: response.outcome,
-          event: params.eventName,
-          params: eventParams
+          event: params.eventName
         };
+        if (response.requestId) result.auditRequestId = response.requestId;
 
         if (response.outcome === 'succeeded') {
           result.duration = response.duration !== undefined ? `${response.duration}ms` : undefined;
@@ -77,6 +81,29 @@ export function dispatchEventTool(apiClient: DevToolsAPIClient) {
       } catch (error) {
         const unavailable = serverUnavailableResult(error, 'dispatch_event');
         if (unavailable) return unavailable;
+
+        if ((error as any)?.code === 'CAPABILITY_DENIED') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Capability denied',
+                  code: 'CAPABILITY_DENIED',
+                  tool: 'dispatch_event',
+                  event: params.eventName,
+                  message:
+                    'The DevTools server is running read-only, so this event ' +
+                    'was not dispatched and app state was not changed. Dispatch ' +
+                    'requires the server to be started with --allow-dispatch. ' +
+                    'Ask the user to restart it with that flag only if mutating ' +
+                    'app state is intended; do not work around this boundary.',
+                }, null, 2),
+              },
+            ],
+            isError: true,
+          };
+        }
 
         return {
           content: [

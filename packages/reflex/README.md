@@ -61,10 +61,14 @@ For the runtime loop, the project needs a local DevTools script (the plugin's se
 ```json
 {
   "scripts": {
-    "devtools:mcp": "reflex-devtools --mcp --host 127.0.0.1 --port 4000"
+    "devtools:mcp": "reflex-devtools --mcp --allow-dispatch --host 127.0.0.1 --port 4000 --allow-origin http://localhost:5173"
   }
 }
 ```
+
+Omit `--allow-dispatch` for a read-only inspection session. Mutation is never
+enabled implicitly by `--mcp`. Replace the `--allow-origin` value with the
+exact origin of your browser dev server, or omit it for a headless-only app.
 
 Manual MCP client configs are included as templates:
 

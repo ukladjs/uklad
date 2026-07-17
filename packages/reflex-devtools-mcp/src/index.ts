@@ -30,6 +30,9 @@ import { evalSubTool } from './tools/evalSub.js';
 
 export interface MCPServerConfig {
   devtoolsServerUrl: string;
+  token?: string;
+  clientName?: string;
+  allowInsecureRemote?: boolean;
 }
 
 // Sent to every client at initialize time — for most agents this is the only
@@ -47,9 +50,10 @@ Retrieval order (cheapest first):
 
 Caveats:
 - The app does not have to be a browser tab: a headless entry (src/headless.ts run under tsx/vite-node, no React mount) connects the same way and supports every tool here; app_status's "runtime" and effect adapter modes tell you which world you are driving.
-- dispatch_event mutates app state; it requires the devtools server started with --mcp and a connected app.
+- The DevTools server is read-only by default. dispatch_event is always listed, but it fails with CAPABILITY_DENIED unless the server was started with --allow-dispatch. Treat that error as "ask the human to restart the DevTools server with --allow-dispatch, only if mutation is actually intended" — it is a deliberate authorization boundary, never something to work around.
 - Trace ids reset and stored traces clear when the app reloads or reconnects, so a missing trace id usually means "session reset", not a bug — app_status's sessionEpoch confirms it.
-- A failed dispatch or subscription evaluation with phase "missing-handler" means that exact id is not registered — check it against get_handlers.`;
+- A failed dispatch or subscription evaluation with phase "missing-handler" means that exact id is not registered — check it against get_handlers.
+- "[REDACTED]" and "[REDACTED:CREDENTIAL]" values in state, traces, or subscription results are the default credential masking working as intended, not an application bug. Never disable or suggest disabling redaction; if a non-sensitive key is masked, the application owner can supply a custom key list in the redaction config.`;
 
 export class ReflexDevToolsMCPServer {
   private server: Server;
@@ -72,7 +76,10 @@ export class ReflexDevToolsMCPServer {
 
     // Initialize HTTP API client
     this.apiClient = new DevToolsAPIClient({
-      serverUrl: config.devtoolsServerUrl
+      serverUrl: config.devtoolsServerUrl,
+      token: config.token,
+      clientName: config.clientName ?? `reflex-devtools-mcp/${PACKAGE_VERSION}`,
+      allowInsecureRemote: config.allowInsecureRemote,
     });
 
     // Initialize tools
@@ -84,15 +91,21 @@ export class ReflexDevToolsMCPServer {
   }
 
   private registerTools(): void {
+    // dispatch_event is always advertised. The DevTools server is the single
+    // enforcement point: when it runs without --allow-dispatch, a dispatch call
+    // is rejected with CAPABILITY_DENIED and audited. Hiding the tool at
+    // list time is unreliable — MCP clients snapshot the tool list once at
+    // init, when the project-local DevTools server is usually not even running
+    // yet, so a later --allow-dispatch grant would never surface.
     const tools = [
       appStatusTool(this.apiClient),
       getTracesTool(this.apiClient),
       getTraceTool(this.apiClient),
       getAppStateTool(this.apiClient),
-      dispatchEventTool(this.apiClient),
       getHandlersTool(this.apiClient),
       getActiveSubsTool(this.apiClient),
-      evalSubTool(this.apiClient)
+      evalSubTool(this.apiClient),
+      dispatchEventTool(this.apiClient),
     ];
 
     for (const tool of tools) {
@@ -107,7 +120,11 @@ export class ReflexDevToolsMCPServer {
         tools: Array.from(this.tools.values()).map(tool => ({
           name: tool.name,
           description: tool.description,
-          inputSchema: tool.inputSchema
+          inputSchema: {
+            ...tool.inputSchema,
+            additionalProperties: false,
+          },
+          annotations: toolAnnotations(tool.name),
         }))
       };
     });
@@ -122,7 +139,28 @@ export class ReflexDevToolsMCPServer {
       }
 
       try {
-        return await tool.handler(request.params.arguments || {});
+        const toolArguments = request.params.arguments || {};
+        const validationError = validateToolArguments(
+          tool.inputSchema,
+          toolArguments,
+        );
+        if (validationError) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: 'Invalid tool arguments',
+                  code: 'INVALID_ARGUMENT',
+                  tool: toolName,
+                  message: validationError,
+                }, null, 2),
+              },
+            ],
+            isError: true,
+          };
+        }
+        return await tool.handler(toolArguments);
       } catch (error) {
         return {
           content: [
@@ -142,16 +180,18 @@ export class ReflexDevToolsMCPServer {
   }
 
   async start(): Promise<void> {
-    // Check if DevTools server is available
+    // A health check is best-effort diagnostics only; the tool set no longer
+    // depends on server capabilities, so an unreachable or read-only server
+    // never changes what is advertised.
     try {
       const isHealthy = await this.apiClient.checkHealth();
-      if (isHealthy) {
-        console.error('[MCP] Connected to DevTools server');
-      } else {
-        console.error('[MCP] Warning: DevTools server health check failed');
-      }
+      console.error(
+        isHealthy
+          ? '[MCP] Connected to DevTools server'
+          : '[MCP] Warning: DevTools server health check failed',
+      );
     } catch (error) {
-      console.error('[MCP] Warning: Could not connect to DevTools server:', 
+      console.error('[MCP] Warning: Could not connect to DevTools server:',
         error instanceof Error ? error.message : 'Unknown error');
       console.error('[MCP] Make sure DevTools server is running on the configured host/port');
     }
@@ -168,6 +208,117 @@ export class ReflexDevToolsMCPServer {
     await this.server.close();
     console.error('[MCP] Server stopped');
   }
+}
+
+function toolAnnotations(name: string) {
+  if (name === 'dispatch_event') {
+    return {
+      title: 'Dispatch Reflex event',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    };
+  }
+  return {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  };
+}
+
+function validateToolArguments(
+  schema: any,
+  value: unknown,
+): string | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return 'Arguments must be an object.';
+  }
+  const record = value as Record<string, unknown>;
+  const properties = schema?.properties ?? {};
+  const required = new Set<string>(schema?.required ?? []);
+
+  for (const key of required) {
+    if (!Object.prototype.hasOwnProperty.call(record, key)) {
+      return `Missing required property "${key}".`;
+    }
+  }
+  if (schema?.additionalProperties === false) {
+    for (const key of Object.keys(record)) {
+      if (!Object.prototype.hasOwnProperty.call(properties, key)) {
+        return `Unknown property "${key}".`;
+      }
+    }
+  }
+
+  for (const [key, propertySchema] of Object.entries<any>(properties)) {
+    const candidate = record[key];
+    if (candidate === undefined) continue;
+    const error = validateSchemaValue(propertySchema, candidate, key);
+    if (error) return error;
+  }
+  return null;
+}
+
+function validateSchemaValue(
+  schema: any,
+  value: unknown,
+  path: string,
+): string | null {
+  const acceptedTypes = Array.isArray(schema?.type)
+    ? schema.type
+    : [schema?.type];
+  const actualType = value === null
+    ? 'null'
+    : Array.isArray(value)
+      ? 'array'
+      : Number.isInteger(value)
+        ? 'integer'
+        : typeof value === 'number'
+          ? 'number'
+          : typeof value;
+  const typeMatches = acceptedTypes.includes(actualType)
+    || (actualType === 'integer' && acceptedTypes.includes('number'))
+    || (actualType === 'object' && acceptedTypes.includes('object'));
+  if (!typeMatches) {
+    return `"${path}" has the wrong type.`;
+  }
+  if (schema.enum && !schema.enum.includes(value)) {
+    return `"${path}" must be one of: ${schema.enum.join(', ')}.`;
+  }
+  if (typeof value === 'string') {
+    if (schema.minLength !== undefined && value.length < schema.minLength) {
+      return `"${path}" is too short.`;
+    }
+    if (schema.maxLength !== undefined && value.length > schema.maxLength) {
+      return `"${path}" is too long.`;
+    }
+  }
+  if (typeof value === 'number') {
+    if (schema.minimum !== undefined && value < schema.minimum) {
+      return `"${path}" is below the minimum.`;
+    }
+    if (schema.maximum !== undefined && value > schema.maximum) {
+      return `"${path}" exceeds the maximum.`;
+    }
+  }
+  if (Array.isArray(value)) {
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) {
+      return `"${path}" contains too many items.`;
+    }
+    if (schema.items) {
+      for (let index = 0; index < value.length; index += 1) {
+        const error = validateSchemaValue(
+          schema.items,
+          value[index],
+          `${path}[${index}]`,
+        );
+        if (error) return error;
+      }
+    }
+  }
+  return null;
 }
 
 export async function createMCPServer(config: MCPServerConfig): Promise<ReflexDevToolsMCPServer> {

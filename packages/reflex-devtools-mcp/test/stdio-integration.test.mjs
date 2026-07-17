@@ -8,6 +8,10 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 const CLI_PATH = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+const PROTOCOL_VERSION = 1;
+const PROTOCOL_HEADER = 'reflex-devtools-protocol-version';
+const CLIENT_HEADER = 'x-reflex-client';
+const SESSION_TOKEN = 'fake-mcp-session-token';
 
 function parseToolResult(result) {
   assert.equal(result.content?.[0]?.type, 'text');
@@ -24,24 +28,79 @@ async function readJson(req) {
 }
 
 function sendJson(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Reflex-DevTools-Protocol-Version': String(PROTOCOL_VERSION),
+  });
   res.end(JSON.stringify(body));
 }
 
-async function startFakeDevtoolsServer() {
+function assertProtocolHeaders(req) {
+  assert.equal(
+    req.headers[PROTOCOL_HEADER],
+    String(PROTOCOL_VERSION),
+    `${req.method} ${req.url} should send the DevTools protocol header`,
+  );
+  assert.match(
+    req.headers[CLIENT_HEADER] || '',
+    /^reflex-devtools-mcp\/\d+\.\d+\.\d+$/,
+    `${req.method} ${req.url} should identify the MCP client`,
+  );
+}
+
+function assertAuthenticatedRequest(req) {
+  assertProtocolHeaders(req);
+  assert.equal(
+    req.headers.authorization,
+    `Bearer ${SESSION_TOKEN}`,
+    `${req.method} ${req.url} should send the bootstrapped bearer token`,
+  );
+}
+
+async function startFakeDevtoolsServer({
+  capabilities = ['inspect', 'dispatch'],
+} = {}) {
   const dispatchRequests = [];
   const evalSubRequests = [];
+  const requests = [];
 
   const httpServer = createServer(async (req, res) => {
     try {
       const url = new URL(req.url || '/', 'http://127.0.0.1');
+      requests.push({
+        method: req.method,
+        pathname: url.pathname,
+        authorization: req.headers.authorization,
+        protocolVersion: req.headers[PROTOCOL_HEADER],
+        client: req.headers[CLIENT_HEADER],
+      });
 
       if (req.method === 'GET' && url.pathname === '/health') {
-        sendJson(res, 200, { status: 'ok', connectedClients: 1 });
+        assert.equal(req.headers.authorization, undefined);
+        sendJson(res, 200, {
+          status: 'ok',
+          protocolVersion: PROTOCOL_VERSION,
+          authenticationRequired: true,
+        });
+        return;
+      }
+
+      if (req.method === 'POST' && url.pathname === '/auth/session') {
+        assertProtocolHeaders(req);
+        assert.equal(req.headers.authorization, undefined);
+        assert.deepEqual(await readJson(req), { role: 'mcp' });
+        sendJson(res, 200, {
+          success: true,
+          role: 'mcp',
+          token: SESSION_TOKEN,
+          capabilities,
+          protocolVersion: PROTOCOL_VERSION,
+        });
         return;
       }
 
       if (req.method === 'GET' && url.pathname === '/api/status') {
+        assertAuthenticatedRequest(req);
         sendJson(res, 200, {
           success: true,
           mcpEnabled: true,
@@ -56,11 +115,27 @@ async function startFakeDevtoolsServer() {
           handlers: { event: 1, fx: 1, cofx: 0, sub: 1 },
           stateAvailable: true,
           traceCount: 0,
+          capabilities,
+          readOnly:
+            !capabilities.includes('dispatch')
+            && !capabilities.includes('restore'),
+          protocol: {
+            version: PROTOCOL_VERSION,
+            runtimeVersion: PROTOCOL_VERSION,
+            inspectorApiVersion: 1,
+          },
+          security: {
+            authenticated: true,
+            loopbackOnly: true,
+            redactionEnabled: true,
+            auditEnabled: true,
+          },
         });
         return;
       }
 
       if (req.method === 'GET' && url.pathname === '/api/handlers') {
+        assertAuthenticatedRequest(req);
         sendJson(res, 200, {
           success: true,
           handlerKeys: {
@@ -74,6 +149,18 @@ async function startFakeDevtoolsServer() {
       }
 
       if (req.method === 'POST' && url.pathname === '/api/dispatch') {
+        assertAuthenticatedRequest(req);
+        if (!capabilities.includes('dispatch')) {
+          // Mirror the real server: the capability is enforced in the auth
+          // layer before the dispatch body is ever processed.
+          sendJson(res, 403, {
+            success: false,
+            code: 'CAPABILITY_DENIED',
+            error: 'The dispatch capability is not granted.',
+            requiredCapability: 'dispatch',
+          });
+          return;
+        }
         const body = await readJson(req);
         dispatchRequests.push(body);
 
@@ -101,6 +188,7 @@ async function startFakeDevtoolsServer() {
           effects: [['fake-effect', 123]],
         });
       } else if (req.method === 'POST' && url.pathname === '/api/eval-sub') {
+        assertAuthenticatedRequest(req);
         const body = await readJson(req);
         evalSubRequests.push(body);
         sendJson(res, 200, {
@@ -129,6 +217,7 @@ async function startFakeDevtoolsServer() {
   return {
     dispatchRequests,
     evalSubRequests,
+    requests,
     port: address.port,
     close: () => new Promise((resolve, reject) => {
       httpServer.close((error) => {
@@ -139,8 +228,7 @@ async function startFakeDevtoolsServer() {
   };
 }
 
-test('stdio MCP server lists tools and dispatches events through the DevTools HTTP API', async () => {
-  const fakeDevtools = await startFakeDevtoolsServer();
+async function connectMCP(fakeDevtools) {
   const client = new Client(
     { name: 'reflex-devtools-mcp-integration-test', version: '0.0.0' },
     { capabilities: {} },
@@ -150,10 +238,90 @@ test('stdio MCP server lists tools and dispatches events through the DevTools HT
     args: [CLI_PATH, '--host', '127.0.0.1', '--port', String(fakeDevtools.port)],
     stderr: 'ignore',
   });
+  await client.connect(transport);
+  return client;
+}
+
+test('stdio MCP server lists dispatch_event for a read-only session and denies the call', async () => {
+  const fakeDevtools = await startFakeDevtoolsServer({
+    capabilities: ['inspect'],
+  });
+  const client = await connectMCP(fakeDevtools);
 
   try {
-    await client.connect(transport);
+    const tools = await client.listTools();
+    // dispatch_event is always advertised — the tool list is a static snapshot;
+    // the DevTools server, not the bridge, enforces the dispatch grant.
+    assert.deepEqual(
+      tools.tools.map((tool) => tool.name).sort(),
+      [
+        'app_status',
+        'dispatch_event',
+        'eval_sub',
+        'get_active_subs',
+        'get_app_state',
+        'get_handlers',
+        'get_trace',
+        'get_traces',
+      ],
+    );
+    const dispatchTool = tools.tools.find(({ name }) => name === 'dispatch_event');
+    assert.deepEqual(dispatchTool.annotations, {
+      title: 'Dispatch Reflex event',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    });
+    for (const tool of tools.tools.filter(({ name }) => name !== 'dispatch_event')) {
+      assert.deepEqual(tool.annotations, {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
+      assert.equal(tool.inputSchema.additionalProperties, false);
+    }
 
+    const status = parseToolResult(await client.callTool({
+      name: 'app_status',
+      arguments: {},
+    }));
+    assert.deepEqual(status.capabilities, ['inspect']);
+    assert.equal(status.readOnly, true);
+    assert.equal(status.security.authenticated, true);
+    assert.ok(status.hints.some((hint) => /read-only/.test(hint)));
+
+    // Calling dispatch against a read-only server is denied with an actionable
+    // error, not silently absent, and it must not mutate state.
+    const denied = parseToolResult(await client.callTool({
+      name: 'dispatch_event',
+      arguments: { eventName: 'fake-event', params: [] },
+    }));
+    assert.equal(denied.code, 'CAPABILITY_DENIED');
+    assert.match(denied.message, /--allow-dispatch/);
+    assert.equal(
+      fakeDevtools.dispatchRequests.length,
+      0,
+      'a denied dispatch must never mutate app state',
+    );
+
+    assert.equal(
+      fakeDevtools.requests.filter(({ pathname }) => pathname === '/auth/session').length,
+      1,
+      'the client should reuse one bootstrapped session token',
+    );
+  } finally {
+    await client.close().catch(() => {});
+    await fakeDevtools.close();
+  }
+});
+
+test('stdio MCP server dispatches and reports outcomes when the server grants dispatch', async () => {
+  const fakeDevtools = await startFakeDevtoolsServer();
+  const client = await connectMCP(fakeDevtools);
+
+  try {
     const tools = await client.listTools();
     assert.deepEqual(
       tools.tools.map((tool) => tool.name).sort(),
@@ -168,6 +336,24 @@ test('stdio MCP server lists tools and dispatches events through the DevTools HT
         'get_traces',
       ],
     );
+    const dispatchTool = tools.tools.find(({ name }) => name === 'dispatch_event');
+    assert.deepEqual(dispatchTool.annotations, {
+      title: 'Dispatch Reflex event',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    });
+    assert.equal(dispatchTool.inputSchema.additionalProperties, false);
+    for (const tool of tools.tools.filter(({ name }) => name !== 'dispatch_event')) {
+      assert.deepEqual(tool.annotations, {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      });
+      assert.equal(tool.inputSchema.additionalProperties, false);
+    }
 
     // The initialize-time instructions are the agent's primary usage docs:
     // they must be advertised and must mention every tool the server exposes.
@@ -176,7 +362,7 @@ test('stdio MCP server lists tools and dispatches events through the DevTools HT
     for (const tool of tools.tools) {
       assert.ok(instructions.includes(tool.name), `instructions should mention ${tool.name}`);
     }
-    assert.match(instructions, /--mcp/);
+    assert.match(instructions, /--allow-dispatch/);
 
     const status = parseToolResult(await client.callTool({
       name: 'app_status',
@@ -185,6 +371,14 @@ test('stdio MCP server lists tools and dispatches events through the DevTools HT
     assert.equal(status.appConnected, true);
     assert.equal(status.runtime, 'headless');
     assert.equal(status.sessionEpoch, 1);
+    assert.deepEqual(status.capabilities, ['inspect', 'dispatch']);
+    assert.equal(status.readOnly, false);
+    assert.deepEqual(status.protocol, {
+      version: PROTOCOL_VERSION,
+      runtimeVersion: PROTOCOL_VERSION,
+      inspectorApiVersion: 1,
+    });
+    assert.equal(status.security.authenticated, true);
 
     const handlers = parseToolResult(await client.callTool({
       name: 'get_handlers',
@@ -199,6 +393,7 @@ test('stdio MCP server lists tools and dispatches events through the DevTools HT
     assert.equal(succeeded.outcome, 'succeeded');
     assert.equal(succeeded.traceId, 101);
     assert.deepEqual(succeeded.effectsEmitted, [['fake-effect', 123]]);
+    assert.equal('params' in succeeded, false);
 
     const subValue = parseToolResult(await client.callTool({
       name: 'eval_sub',
@@ -206,6 +401,7 @@ test('stdio MCP server lists tools and dispatches events through the DevTools HT
     }));
     assert.equal(subValue.id, 'counter');
     assert.deepEqual(subValue.value, { counter: 2, multiplier: 3 });
+    assert.equal('args' in subValue, false);
 
     const failed = parseToolResult(await client.callTool({
       name: 'dispatch_event',
@@ -222,6 +418,11 @@ test('stdio MCP server lists tools and dispatches events through the DevTools HT
     assert.deepEqual(fakeDevtools.evalSubRequests, [
       { id: 'counter', args: [3] },
     ]);
+    assert.equal(
+      fakeDevtools.requests.filter(({ pathname }) => pathname === '/auth/session').length,
+      1,
+      'the client should reuse one bootstrapped session token',
+    );
   } finally {
     await client.close().catch(() => {});
     await fakeDevtools.close();

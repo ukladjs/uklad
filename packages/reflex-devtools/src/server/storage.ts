@@ -8,6 +8,87 @@ import { applyPatches, enablePatches, enableMapSet } from 'immer';
 enablePatches();
 enableMapSet();
 
+const DEFAULT_MAX_ACTIVE_SUBSCRIPTION_BYTES = 8 * 1024 * 1024;
+const DEFAULT_MAX_APP_STATE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_MAX_TRACE_STORAGE_BYTES = 16 * 1024 * 1024;
+const MAX_ESTIMATE_DEPTH = 100;
+
+export type StorageRetentionKind = 'app-state' | 'active-subscriptions';
+
+/** Expected capacity rejection, distinct from malformed data or server bugs. */
+export class StorageRetentionError extends Error {
+  readonly kind: StorageRetentionKind;
+
+  constructor(kind: StorageRetentionKind) {
+    super(
+      kind === 'app-state'
+        ? 'App state retention limit exceeded.'
+        : 'Active subscription retention limit exceeded.',
+    );
+    this.name = 'StorageRetentionError';
+    this.kind = kind;
+  }
+}
+
+function estimateValueBytes(value: unknown, limit: number): number {
+  let total = 0;
+  const seen = new WeakSet<object>();
+  const stack: Array<{ value: unknown; depth: number }> = [
+    { value, depth: 0 },
+  ];
+
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    const candidate = current.value;
+    if (candidate === null || candidate === undefined) {
+      total += 4;
+    } else if (typeof candidate === 'string') {
+      total += Buffer.byteLength(candidate, 'utf8');
+    } else if (
+      typeof candidate === 'number'
+      || typeof candidate === 'bigint'
+    ) {
+      total += 16;
+    } else if (typeof candidate === 'boolean') {
+      total += 4;
+    } else if (typeof candidate !== 'object') {
+      total += 16;
+    } else if (!seen.has(candidate)) {
+      seen.add(candidate);
+      if (current.depth >= MAX_ESTIMATE_DEPTH) {
+        total += 32;
+      } else if (Array.isArray(candidate)) {
+        if (total + candidate.length * 4 > limit) return limit + 1;
+        for (let index = 0; index < candidate.length; index += 1) {
+          stack.push({
+            value: candidate[index],
+            depth: current.depth + 1,
+          });
+        }
+      } else if (candidate instanceof Map) {
+        if (total + candidate.size * 8 > limit) return limit + 1;
+        for (const [key, item] of candidate) {
+          stack.push({ value: key, depth: current.depth + 1 });
+          stack.push({ value: item, depth: current.depth + 1 });
+        }
+      } else if (candidate instanceof Set) {
+        if (total + candidate.size * 4 > limit) return limit + 1;
+        for (const item of candidate) {
+          stack.push({ value: item, depth: current.depth + 1 });
+        }
+      } else {
+        for (const [key, item] of Object.entries(candidate)) {
+          total += Buffer.byteLength(key, 'utf8');
+          stack.push({ value: item, depth: current.depth + 1 });
+        }
+      }
+    }
+
+    if (total > limit) return total;
+  }
+  return total;
+}
+
 export interface Trace {
   id: number;
   start: number;
@@ -34,57 +115,153 @@ export interface RuntimeInfo {
   effectMode?: string;
   effects?: Record<string, string>;
   tracing?: boolean;
+  protocolVersion?: number;
+  inspectorApiVersion?: number;
 }
 
 export class TraceStorage {
   private traces: Trace[] = [];
+  private traceSizes: number[] = [];
+  private traceBytes = 0;
   private appState: any = null;
-  private activeSubs: Record<string, any> = {};
+  private activeSubs: Record<string, any> = Object.create(null);
+  private activeSubSizes: Record<string, number> = Object.create(null);
+  private activeSubBytes = 0;
   private handlerKeys: HandlerKeys | null = null;
   private runtimeInfo: RuntimeInfo | null = null;
   private readonly maxTraces: number;
+  private readonly maxActiveSubscriptions: number;
+  private readonly maxActiveSubscriptionBytes: number;
+  private readonly maxAppStateBytes: number;
+  private readonly maxTraceStorageBytes: number;
 
-  constructor(maxTraces: number = 1000) {
+  constructor(
+    maxTraces: number = 1000,
+    maxActiveSubscriptions: number = 10_000,
+    maxActiveSubscriptionBytes:
+      number = DEFAULT_MAX_ACTIVE_SUBSCRIPTION_BYTES,
+    maxAppStateBytes: number = DEFAULT_MAX_APP_STATE_BYTES,
+    maxTraceStorageBytes: number = DEFAULT_MAX_TRACE_STORAGE_BYTES,
+  ) {
     this.maxTraces = maxTraces;
+    this.maxActiveSubscriptions = maxActiveSubscriptions;
+    this.maxActiveSubscriptionBytes = maxActiveSubscriptionBytes;
+    this.maxAppStateBytes = maxAppStateBytes;
+    this.maxTraceStorageBytes = maxTraceStorageBytes;
   }
 
-  addTraces(traces: Trace[]): void {
-    // Store raw traces without processing
-    this.traces.push(...traces);
+  addTraces(traces: Trace[]): boolean {
+    let appStateRetentionRejected = false;
 
-    // Apply patches from traces to the app state
-    const allPatches = traces
-      .filter(trace => trace.tags?.patches?.length > 0)
-      .flatMap(trace => trace.tags!.patches!);
+    // Avoid spreading attacker-controlled arrays into a function call; large
+    // argument lists can throw before the configured retention bound applies.
+    for (const trace of traces) {
+      this.traces.push(trace);
+      const traceSize = estimateValueBytes(
+        trace,
+        this.maxTraceStorageBytes + 1,
+      );
+      this.traceSizes.push(traceSize);
+      this.traceBytes += traceSize;
 
-    // Apply patches to the app state if we have patches and state
-    if (allPatches.length > 0 && this.appState) {
-      try {
-        this.appState = applyPatches(this.appState, allPatches);
-      } catch (error) {
-        console.warn('[Reflex Devtools] Failed to apply patches to app state:', error);
-        // Continue without applying patches - traces are still stored
+      const patches = trace.tags?.patches;
+      if (Array.isArray(patches) && patches.length > 0 && this.appState !== null) {
+        try {
+          const nextState = applyPatches(this.appState, patches);
+          if (
+            estimateValueBytes(nextState, this.maxAppStateBytes + 1)
+            > this.maxAppStateBytes
+          ) {
+            throw new StorageRetentionError('app-state');
+          }
+          this.appState = nextState;
+        } catch (error) {
+          if (error instanceof StorageRetentionError) {
+            appStateRetentionRejected = true;
+          } else {
+            console.warn('[Reflex Devtools] Failed to apply trace patches to app state.');
+          }
+        }
       }
     }
 
-    // Limit stored traces
-    if (this.traces.length > this.maxTraces) {
-      this.traces = this.traces.slice(-this.maxTraces);
+    let removeCount = Math.max(0, this.traces.length - this.maxTraces);
+    let removedBytes = 0;
+    for (let index = 0; index < removeCount; index += 1) {
+      removedBytes += this.traceSizes[index] ?? 0;
     }
+    while (
+      removeCount < this.traces.length
+      && this.traceBytes - removedBytes > this.maxTraceStorageBytes
+    ) {
+      removedBytes += this.traceSizes[removeCount] ?? 0;
+      removeCount += 1;
+    }
+    if (removeCount > 0) {
+      this.traces.splice(0, removeCount);
+      this.traceSizes.splice(0, removeCount);
+      this.traceBytes -= removedBytes;
+    }
+
+    return appStateRetentionRejected;
   }
 
   updateAppState(state: any): void {
+    if (
+      estimateValueBytes(state, this.maxAppStateBytes + 1)
+      > this.maxAppStateBytes
+    ) {
+      throw new StorageRetentionError('app-state');
+    }
     this.appState = state;
   }
 
   updateActiveSubs(subs: Record<string, any>): void {
+    let projectedSize = Object.keys(this.activeSubs).length;
+    let projectedBytes = this.activeSubBytes;
+    const nextSizes = new Map<string, number>();
     for (const [key, value] of Object.entries(subs)) {
-      if (value === "reflex-tool-sub-disposed") {
-        delete this.activeSubs[key];
+      const exists = Object.prototype.hasOwnProperty.call(this.activeSubs, key);
+      const previousSize = this.activeSubSizes[key] ?? 0;
+      if (value === 'reflex-tool-sub-disposed') {
+        if (exists) {
+          projectedSize -= 1;
+          projectedBytes -= previousSize;
+        }
+      } else if (!exists) {
+        projectedSize += 1;
+        const nextSize = estimateValueBytes(
+          value,
+          this.maxActiveSubscriptionBytes + 1,
+        );
+        nextSizes.set(key, nextSize);
+        projectedBytes += nextSize;
       } else {
-        this.activeSubs[key] = value;
+        const nextSize = estimateValueBytes(
+          value,
+          this.maxActiveSubscriptionBytes + 1,
+        );
+        nextSizes.set(key, nextSize);
+        projectedBytes += nextSize - previousSize;
       }
     }
+    if (
+      projectedSize > this.maxActiveSubscriptions
+      || projectedBytes > this.maxActiveSubscriptionBytes
+    ) {
+      throw new StorageRetentionError('active-subscriptions');
+    }
+
+    for (const [key, value] of Object.entries(subs)) {
+      if (value === 'reflex-tool-sub-disposed') {
+        delete this.activeSubs[key];
+        delete this.activeSubSizes[key];
+      } else {
+        this.activeSubs[key] = value;
+        this.activeSubSizes[key] = nextSizes.get(key) ?? 0;
+      }
+    }
+    this.activeSubBytes = projectedBytes;
   }
 
   updateHandlerKeys(keys: HandlerKeys): void {
@@ -168,10 +345,13 @@ export class TraceStorage {
   
   clear(): void {
     this.traces = [];
+    this.traceSizes = [];
+    this.traceBytes = 0;
     this.appState = null;
-    this.activeSubs = {};
+    this.activeSubs = Object.create(null);
+    this.activeSubSizes = Object.create(null);
+    this.activeSubBytes = 0;
     this.handlerKeys = null;
     this.runtimeInfo = null;
   }
 }
-

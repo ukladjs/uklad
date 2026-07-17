@@ -4,7 +4,7 @@
       "command": "npx",
       "args": [
         "--yes",
-        "--package=@flexsurfer/reflex-devtools-mcp",
+        "--package=@flexsurfer/reflex-devtools-mcp@0.1.13",
         "reflex-devtools-mcp",
         "--host",
         "127.0.0.1",

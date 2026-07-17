@@ -2,17 +2,40 @@ import { createServer } from 'node:http';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DevToolsAPIClient, DevToolsServerUnavailableError } from '../dist/httpClient.js';
+import {
+  DevToolsAPIClient,
+  DevToolsServerUnavailableError,
+  REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+} from '../dist/httpClient.js';
 import { appStatusTool } from '../dist/tools/appStatus.js';
 import { dispatchEventTool } from '../dist/tools/dispatchEvent.js';
 import { evalSubTool } from '../dist/tools/evalSub.js';
+import { getActiveSubsTool } from '../dist/tools/getActiveSubs.js';
 import { getAppStateTool } from '../dist/tools/getAppState.js';
 import { getHandlersTool } from '../dist/tools/getHandlers.js';
 import { getTraceTool } from '../dist/tools/getTrace.js';
 import { getTracesTool } from '../dist/tools/getTraces.js';
 
+const PROTOCOL_HEADER = 'reflex-devtools-protocol-version';
+const CLIENT_HEADER = 'x-reflex-client';
+const SESSION_TOKEN = 'unit-test-mcp-token';
+
 function parseToolResult(result) {
   return JSON.parse(result.content[0].text);
+}
+
+async function readJson(req) {
+  let raw = '';
+  for await (const chunk of req) raw += chunk;
+  return raw ? JSON.parse(raw) : {};
+}
+
+function sendJson(res, status, body, protocolVersion = REFLEX_DEVTOOLS_PROTOCOL_VERSION) {
+  res.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Reflex-DevTools-Protocol-Version': String(protocolVersion),
+  });
+  res.end(JSON.stringify(body));
 }
 
 test('app_status reports a healthy headless session without hints', async () => {
@@ -32,6 +55,19 @@ test('app_status reports a healthy headless session without hints', async () => 
         handlers: { event: 14, fx: 3, cofx: 1, sub: 9 },
         stateAvailable: true,
         traceCount: 42,
+        capabilities: ['inspect', 'dispatch'],
+        readOnly: false,
+        protocol: {
+          version: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+          runtimeVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+          inspectorApiVersion: 1,
+        },
+        security: {
+          authenticated: true,
+          loopbackOnly: true,
+          redactionEnabled: true,
+          auditEnabled: true,
+        },
       };
     },
   };
@@ -45,11 +81,15 @@ test('app_status reports a healthy headless session without hints', async () => 
   assert.deepEqual(body.effects, { 'local-storage-set': 'memory' });
   assert.equal(body.tracing, true);
   assert.deepEqual(body.handlers, { event: 14, fx: 3, cofx: 1, sub: 9 });
+  assert.deepEqual(body.capabilities, ['inspect', 'dispatch']);
+  assert.equal(body.readOnly, false);
+  assert.equal(body.protocol.version, REFLEX_DEVTOOLS_PROTOCOL_VERSION);
+  assert.equal(body.security.authenticated, true);
   assert.equal('hints' in body, false);
   assert.equal('connectedApps' in body, false);
 });
 
-test('app_status explains a disconnected app and a missing --mcp flag', async () => {
+test('app_status explains a disconnected, read-only app and a missing --mcp flag', async () => {
   const apiClient = {
     async getStatus() {
       return {
@@ -66,6 +106,19 @@ test('app_status explains a disconnected app and a missing --mcp flag', async ()
         handlers: null,
         stateAvailable: false,
         traceCount: 0,
+        capabilities: ['inspect'],
+        readOnly: true,
+        protocol: {
+          version: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+          runtimeVersion: null,
+          inspectorApiVersion: null,
+        },
+        security: {
+          authenticated: true,
+          loopbackOnly: true,
+          redactionEnabled: true,
+          auditEnabled: true,
+        },
       };
     },
   };
@@ -76,9 +129,12 @@ test('app_status explains a disconnected app and a missing --mcp flag', async ()
   assert.equal(body.mcpEnabled, false);
   assert.equal('effectMode' in body, false);
   assert.equal('effects' in body, false);
-  assert.equal(body.hints.length, 2);
+  assert.deepEqual(body.capabilities, ['inspect']);
+  assert.equal(body.readOnly, true);
+  assert.equal(body.hints.length, 3);
   assert.match(body.hints[0], /--mcp/);
   assert.match(body.hints[1], /headless/);
+  assert.match(body.hints[2], /read-only/);
 });
 
 test('get_handlers tells the agent how to start the DevTools server when unreachable', async () => {
@@ -103,12 +159,10 @@ test('get_handlers tells the agent how to start the DevTools server when unreach
 
 test('get_app_state returns only the requested state slice', async () => {
   const apiClient = {
-    async getAppState() {
+    async getAppState(path) {
+      assert.equal(path, 'user.profile');
       return {
-        state: {
-          user: { profile: { id: 'u1', name: 'Ada' } },
-          unrelated: { large: ['do-not-return'] },
-        },
+        state: { id: 'u1', name: 'Ada' },
       };
     },
   };
@@ -145,7 +199,7 @@ test('get_traces returns compact rows without full trace tags', async () => {
               patches: [{ op: 'replace', path: ['user'], value: { id: 1 } }],
               effects: [['persist-user']],
               error: { phase: 'handler', message: 'boom' },
-              effectErrors: [{ effect: 'persist-user', message: 'failed' }],
+              effectErrorCount: 1,
             },
           },
         ],
@@ -175,6 +229,30 @@ test('get_traces returns compact rows without full trace tags', async () => {
   assert.equal('patches' in row, false);
   assert.equal('effects' in row, false);
   assert.equal('childOf' in row, false);
+});
+
+test('get_active_subs passes the server-side filter and returns compact values', async () => {
+  const apiClient = {
+    async getSubscriptions(filter) {
+      assert.equal(filter, 'user');
+      return {
+        total: 5,
+        subscriptions: {
+          '["current-user"]': { id: 'u1', name: 'Ada' },
+          '["user-role"]': 'admin',
+        },
+      };
+    },
+  };
+
+  const result = await getActiveSubsTool(apiClient).handler({ filter: 'user' });
+  const body = parseToolResult(result);
+
+  assert.deepEqual(body.summary, { total: 5, filtered: 2 });
+  assert.deepEqual(body.subscriptions, [
+    { key: '["current-user"]', value: { id: 'u1', name: 'Ada' } },
+    { key: '["user-role"]', value: 'admin' },
+  ]);
 });
 
 test('get_trace removes reversePatches from MCP output', async () => {
@@ -230,6 +308,7 @@ test('dispatch_event formats failed outcomes with actionable hints', async () =>
   assert.equal(body.traceId, 9);
   assert.equal(body.error.phase, 'missing-handler');
   assert.match(body.hint, /get_handlers/);
+  assert.equal('params' in body, false);
 });
 
 test('eval_sub returns the value for an unmounted parameterized subscription', async () => {
@@ -246,7 +325,7 @@ test('eval_sub returns the value for an unmounted parameterized subscription', a
 
   assert.equal(result.isError, undefined);
   assert.equal(body.id, 'user-by-id');
-  assert.deepEqual(body.args, [7]);
+  assert.equal('args' in body, false);
   assert.deepEqual(body.value, { id: 7, name: 'Ada' });
 });
 
@@ -267,13 +346,65 @@ test('eval_sub gives missing subscription ids an actionable hint', async () => {
   assert.match(body.hint, /get_handlers/);
 });
 
+test('DevToolsAPIClient refuses remote plaintext bearer-token transport', () => {
+  assert.throws(
+    () => new DevToolsAPIClient({
+      serverUrl: 'http://devtools.example:4000',
+      token: 'x'.repeat(43),
+    }),
+    /remote plaintext HTTP/,
+  );
+  assert.doesNotThrow(
+    () => new DevToolsAPIClient({
+      serverUrl: 'http://devtools.example:4000',
+      token: 'x'.repeat(43),
+      allowInsecureRemote: true,
+    }),
+  );
+});
+
 test('DevToolsAPIClient surfaces trace lookup errors from the server body', async () => {
-  const httpServer = createServer((_req, res) => {
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
+  const requests = [];
+  const httpServer = createServer(async (req, res) => {
+    requests.push({
+      method: req.method,
+      url: req.url,
+      authorization: req.headers.authorization,
+      protocolVersion: req.headers[PROTOCOL_HEADER],
+      client: req.headers[CLIENT_HEADER],
+    });
+
+    if (req.method === 'POST' && req.url === '/auth/session') {
+      assert.equal(
+        req.headers[PROTOCOL_HEADER],
+        String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+      );
+      assert.equal(req.headers[CLIENT_HEADER], 'mcp-unit-test');
+      assert.equal(req.headers.authorization, undefined);
+      assert.deepEqual(await readJson(req), { role: 'mcp' });
+      sendJson(res, 200, {
+        success: true,
+        role: 'mcp',
+        token: SESSION_TOKEN,
+        capabilities: ['inspect'],
+        protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+      });
+      return;
+    }
+
+    assert.equal(req.method, 'GET');
+    assert.equal(req.url, '/api/traces/99');
+    assert.equal(req.headers.authorization, `Bearer ${SESSION_TOKEN}`);
+    assert.equal(
+      req.headers[PROTOCOL_HEADER],
+      String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+    );
+    assert.equal(req.headers[CLIENT_HEADER], 'mcp-unit-test');
+    sendJson(res, 404, {
       success: false,
+      code: 'TRACE_NOT_FOUND',
       error: 'No trace with id 99',
-    }));
+    });
   });
 
   await new Promise((resolve) => {
@@ -286,11 +417,142 @@ test('DevToolsAPIClient surfaces trace lookup errors from the server body', asyn
 
     const apiClient = new DevToolsAPIClient({
       serverUrl: `127.0.0.1:${address.port}`,
+      clientName: 'mcp-unit-test',
     });
 
     await assert.rejects(
       () => apiClient.getTrace(99),
-      /No trace with id 99/,
+      (error) => {
+        assert.match(error.message, /No trace with id 99/);
+        assert.equal(error.code, 'TRACE_NOT_FOUND');
+        assert.equal(error.details.code, 'TRACE_NOT_FOUND');
+        return true;
+      },
+    );
+    assert.deepEqual(
+      requests.map(({ method, url }) => `${method} ${url}`),
+      ['POST /auth/session', 'GET /api/traces/99'],
+    );
+  } finally {
+    await new Promise((resolve, reject) => {
+      httpServer.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+  }
+});
+
+test('DevToolsAPIClient uses an explicit token and validates status protocol metadata', async () => {
+  const requests = [];
+  const httpServer = createServer((req, res) => {
+    requests.push(`${req.method} ${req.url}`);
+    assert.equal(req.method, 'GET');
+    assert.equal(req.url, '/api/status');
+    assert.equal(req.headers.authorization, 'Bearer configured-token');
+    assert.equal(
+      req.headers[PROTOCOL_HEADER],
+      String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+    );
+    assert.equal(req.headers[CLIENT_HEADER], 'remote-mcp');
+    sendJson(res, 200, {
+      success: true,
+      capabilities: ['inspect'],
+      protocol: {
+        version: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+        runtimeVersion: null,
+        inspectorApiVersion: null,
+      },
+    });
+  });
+
+  await new Promise((resolve) => {
+    httpServer.listen(0, '127.0.0.1', resolve);
+  });
+
+  try {
+    const address = httpServer.address();
+    assert(address && typeof address === 'object');
+    const apiClient = new DevToolsAPIClient({
+      serverUrl: `http://127.0.0.1:${address.port}/`,
+      token: 'configured-token',
+      clientName: 'remote-mcp',
+    });
+
+    const status = await apiClient.getStatus();
+    assert.deepEqual(status.capabilities, ['inspect']);
+    assert.deepEqual(requests, ['GET /api/status']);
+  } finally {
+    await new Promise((resolve, reject) => {
+      httpServer.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+  }
+});
+
+test('DevToolsAPIClient rejects incompatible protocol response headers', async () => {
+  const httpServer = createServer((req, res) => {
+    assert.equal(req.headers.authorization, 'Bearer configured-token');
+    sendJson(res, 200, { success: true }, REFLEX_DEVTOOLS_PROTOCOL_VERSION + 1);
+  });
+
+  await new Promise((resolve) => {
+    httpServer.listen(0, '127.0.0.1', resolve);
+  });
+
+  try {
+    const address = httpServer.address();
+    assert(address && typeof address === 'object');
+    const apiClient = new DevToolsAPIClient({
+      serverUrl: `127.0.0.1:${address.port}`,
+      token: 'configured-token',
+    });
+
+    await assert.rejects(
+      () => apiClient.getTrace(1),
+      /Incompatible Reflex DevTools protocol.*received 2/,
+    );
+  } finally {
+    await new Promise((resolve, reject) => {
+      httpServer.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+  }
+});
+
+test('DevToolsAPIClient rejects incompatible protocol metadata in /api/status', async () => {
+  const httpServer = createServer((req, res) => {
+    assert.equal(req.url, '/api/status');
+    sendJson(res, 200, {
+      success: true,
+      capabilities: ['inspect'],
+      protocol: {
+        version: REFLEX_DEVTOOLS_PROTOCOL_VERSION + 1,
+        runtimeVersion: null,
+        inspectorApiVersion: null,
+      },
+    });
+  });
+
+  await new Promise((resolve) => {
+    httpServer.listen(0, '127.0.0.1', resolve);
+  });
+
+  try {
+    const address = httpServer.address();
+    assert(address && typeof address === 'object');
+    const apiClient = new DevToolsAPIClient({
+      serverUrl: `127.0.0.1:${address.port}`,
+      token: 'configured-token',
+    });
+
+    await assert.rejects(
+      () => apiClient.getStatus(),
+      /Incompatible Reflex DevTools protocol.*received 2/,
     );
   } finally {
     await new Promise((resolve, reject) => {

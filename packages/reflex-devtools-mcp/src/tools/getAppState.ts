@@ -19,16 +19,18 @@ export function getAppStateTool(apiClient: DevToolsAPIClient) {
       properties: {
         path: {
           type: 'string',
+          maxLength: 512,
           description: 'JSON path for one state slice (e.g., "user.profile" or "items[0]"). Strongly prefer this over an unscoped app-db dump.'
-        }
-      }
+        },
+      },
+      additionalProperties: false
     },
     handler: async (params: GetAppStateParams) => {
       try {
-        const response = await apiClient.getAppState();
+        const response = await apiClient.getAppState(params.path);
         const state = response.state;
 
-        if (!state) {
+        if (state === null || state === undefined) {
           return {
             content: [
               {
@@ -42,55 +44,17 @@ export function getAppStateTool(apiClient: DevToolsAPIClient) {
           };
         }
 
-        let result = state;
-
-      // Simple path traversal (supports dot notation and array indices)
-      if (params.path) {
-        const parts = params.path.split(/\.|\[|\]/).filter(p => p !== '');
-        try {
-          for (const part of parts) {
-            result = result[part];
-            if (result === undefined) {
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: JSON.stringify({
-                      error: `Path "${params.path}" not found in state. This might be a calculated subscription value. Try using get_active_subs instead.`
-                    }, null, 2)
-                  }
-                ],
-                isError: true
-              };
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                path: params.path || '(root)',
+                state
+              }, null, 2)
             }
-          }
-        } catch (error) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  error: `Invalid path: ${params.path}`,
-                  message: error instanceof Error ? error.message : 'Unknown error'
-                }, null, 2)
-              }
-            ],
-            isError: true
-          };
-        }
-      }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              path: params.path || '(root)',
-              state: result
-            }, null, 2)
-          }
-        ]
-      };
+          ]
+        };
       } catch (error) {
         const unavailable = serverUnavailableResult(error, 'get_app_state');
         if (unavailable) return unavailable;

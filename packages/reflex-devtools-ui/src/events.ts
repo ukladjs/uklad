@@ -154,6 +154,13 @@ regEvent('set-connected', ({ draftDb }, isConnected: boolean) => {
     draftDb.isConnected = isConnected;
 });
 
+regEvent('set-capabilities', ({ draftDb }, capabilities: string[]) => {
+    draftDb.capabilities = capabilities;
+    if (!capabilities.includes('dispatch')) {
+        draftDb.dispatchModalOpenState = {};
+    }
+});
+
 regEvent('set-filter', ({ draftDb }, filter: string) => {
     draftDb.filter = filter;
     draftDb.selectedTrace = null;

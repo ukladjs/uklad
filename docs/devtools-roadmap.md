@@ -10,6 +10,18 @@ The canonical agent scenario these tools serve is [agent-workflow.md](agent-work
 
 ### P1
 
+- [x] **Secure DevTools/MCP transport and capability baseline.**
+  The server now defaults to `127.0.0.1`, generates separate runtime/UI/MCP
+  role tokens with loopback-only bootstrap, authenticates HTTP and WebSocket
+  clients, validates Host and exact browser origins (including localhost
+  cross-origin access), and refuses non-loopback binding without explicit
+  remote mode, exact allowlists, and configured credentials. `--mcp`
+  is read-only; dispatch and the reserved restore capability require separate
+  grants. Runtime/server redaction, bounded control and telemetry payloads,
+  event-specific runtime bounds, mutation audit records, reconnect-safe session
+  handling, and a fail-closed protocol-version handshake complete the Phase 1
+  trust boundary. Remote use still requires TLS or an SSH tunnel.
+
 - [ ] **`find_state_changes(path)` tool.**
   The server already stores Immer patches per trace (`server/storage.ts`); index them by path and answer "which events wrote `todos.3.done`, in order?" server-side, returning `[{event, timestamp, patch}]`. This is *the* debugging question — answering it in one cheap call instead of having an agent scan fat traces is the biggest context-efficiency win available in the stack.
 
@@ -28,11 +40,26 @@ The canonical agent scenario these tools serve is [agent-workflow.md](agent-work
 
 ### P2
 
+- [ ] **Principal-scoped UI/MCP capabilities.**
+  Replace the current server-wide dispatch/restore grants with explicit capability sets per authenticated role. The dashboard and MCP principal must be independently configurable, and status responses plus advertised MCP tools must reflect the caller's effective permissions.
+
+- [ ] **Proxy-aware HTTP abuse controls and remote-deployment guidance.**
+  Add bounded rate limiting for bootstrap, authentication failures, and control endpoints with `Retry-After` responses. Trust forwarded client addresses only behind explicit trusted-proxy configuration, and document reverse-proxy limits so remote mode does not rely on spoofable `X-Forwarded-For` values or accidentally expose loopback bootstrap.
+
+- [ ] **Configurable storage-retention byte limits.**
+  `TraceStorage`'s `maxAppStateBytes`, `maxActiveSubscriptionBytes`, and `maxTraceStorageBytes` (`server/storage.ts`) are fixed at their 8/8/16 MiB defaults because the server only threads `maxTraces` into the constructor. Surface them through `ServerConfig` and matching CLI flags (e.g. `--max-app-state-kib`), validated with the same `boundedInteger` bounds as the payload limits, so large-app-db and heavy-subscription inspection is possible without editing source. Consider whether the 8 MiB transport ceiling (`REFLEX_DEVTOOLS_MAX_RUNTIME_PAYLOAD_BYTES`) should rise in step, since a retained appDb cannot exceed what the transport admits.
+
+- [ ] **Conventional CLI help/host flags.**
+  Reserve `-h` for help and move the host shorthand to `-H` while preserving compatibility through a coordinated beta change or deprecation path. Keep `--host` and `--help` stable.
+
+- [ ] **Typed protocol modules and instance-ready server boundaries.**
+  Decode untrusted messages from `unknown` into shared discriminated unions, then extract protocol validation, authentication/origin policy, audit handling, HTTP routing, and WebSocket session handling from the server entrypoint. Keep this behavior-preserving and align the session/routing boundary with Phase 2 multi-runtime work.
+
 - [ ] **Shape mode for `get_app_state`.**
   Add `depth` or `shape: true` returning keys + types + collection sizes — the runtime equivalent of reading `db.ts`, and the right first call on an unfamiliar large app. (`get_app_state` already takes a `path` for scoped reads; shape mode is the discovery step that tells the agent which paths are worth reading — the full dump is unusable on a real-sized db.)
 
 - [ ] **State fixtures: `snapshot_state` / `restore_state` (and a dev-only `set_state`).**
-  Testing "dispatch X when there are 50 todos and one is overdue" currently means dispatching a setup sequence or clicking through the UI. The server already maintains the authoritative state mirror (`server/storage.ts` applies patches); snapshotting is storing that value under an id. Restore pushes it back through a `restore-to-client` message, and the injected Reflex inspector performs the core-owned restore operation so DevTools never imports or registers against the runtime directly. The restore should still flow through a traced, subscription-safe core path. A generic `set_state(path, value)` micro-fixture rides the same mechanism. Dev-only and gated behind `--mcp` like dispatch. Pairs naturally with (but does not depend on) lib feature-parity P1 "undo/redo effect".
+  Testing "dispatch X when there are 50 todos and one is overdue" currently means dispatching a setup sequence or clicking through the UI. The server already maintains the authoritative state mirror (`server/storage.ts` applies patches); snapshotting is storing that value under an id. Restore pushes it back through a `restore-to-client` message, and the injected Reflex inspector performs the core-owned restore operation so DevTools never imports or registers against the runtime directly. The restore should still flow through a traced, subscription-safe core path. A generic `set_state(path, value)` micro-fixture rides the same mechanism. Dev-only, requires `--mcp`, and must additionally require the separate `--allow-restore` capability; it must never inherit dispatch permission implicitly. Pairs naturally with (but does not depend on) lib feature-parity P1 "undo/redo effect".
 
 - [ ] **Source locations in `get_handlers`.** *(depends on lib P1: source capture)*
   Return file:line per handler id, so the agent goes from runtime observation to the exact source line with zero greps.

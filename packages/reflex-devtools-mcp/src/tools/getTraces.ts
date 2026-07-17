@@ -22,13 +22,14 @@ export function getTracesTool(apiClient: DevToolsAPIClient) {
       type: 'object',
       properties: {
         limit: {
-          type: 'number',
+          type: 'integer',
           description: 'Maximum number of traces to return (default: 50, max: 1000)',
           minimum: 1,
           maximum: 1000
         },
         eventFilter: {
           type: 'string',
+          maxLength: 256,
           description: 'Filter traces by event/operation name (case-insensitive substring match)'
         },
         minDuration: {
@@ -41,7 +42,8 @@ export function getTracesTool(apiClient: DevToolsAPIClient) {
           description: 'Filter by operation type',
           enum: ['event', 'render', 'sub/create', 'sub/run', 'sub/dispose']
         }
-      }
+      },
+      additionalProperties: false
     },
     handler: async (params: GetTracesParams) => {
       try {
@@ -71,7 +73,7 @@ export function getTracesTool(apiClient: DevToolsAPIClient) {
             event: tags.event,
             query: tags.queryV,
             error: tags.error ? `${tags.error.phase}: ${tags.error.message}` : undefined,
-            effectErrors: tags.effectErrors?.length || undefined,
+            effectErrors: tags.effectErrorCount || undefined,
             // The client SDK serializes undefined as the string 'undefined'
             childOf: trace.childOf === 'undefined' ? undefined : trace.childOf
           };

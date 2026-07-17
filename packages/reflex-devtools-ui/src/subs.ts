@@ -8,6 +8,7 @@ regSub('handlerKeys');
 regSub('handlerUsage');
 regSub('traces');
 regSub('isConnected');
+regSub('capabilities');
 regSub('filter');
 regSub('splitPosition');
 regSub('isDragging');

@@ -18,11 +18,13 @@ export function getTraceTool(apiClient: DevToolsAPIClient) {
       type: 'object',
       properties: {
         id: {
-          type: 'number',
+          type: 'integer',
+          minimum: 0,
           description: 'The trace id, as returned by get_traces'
         }
       },
-      required: ['id']
+      required: ['id'],
+      additionalProperties: false
     },
     handler: async (params: GetTraceParams) => {
       try {

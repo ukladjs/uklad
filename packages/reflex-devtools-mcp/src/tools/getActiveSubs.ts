@@ -19,27 +19,19 @@ export function getActiveSubsTool(apiClient: DevToolsAPIClient) {
       properties: {
         filter: {
           type: 'string',
+          maxLength: 256,
           description: 'Optional filter to match subscription keys (case-insensitive substring match)'
         }
-      }
+      },
+      additionalProperties: false
     },
     handler: async (params: GetActiveSubsParams) => {
       try {
-        const response = await apiClient.getSubscriptions();
+        const response = await apiClient.getSubscriptions(params.filter);
         const activeSubs = response.subscriptions || {};
-        
-        let filtered = Object.entries(activeSubs);
-
-        // Apply filter if provided
-        if (params.filter) {
-          const filterLower = params.filter.toLowerCase();
-          filtered = filtered.filter(([key]) => 
-            key.toLowerCase().includes(filterLower)
-          );
-        }
 
         // Format subscriptions
-        const subscriptions = filtered.map(([key, value]) => ({
+        const subscriptions = Object.entries(activeSubs).map(([key, value]) => ({
           key,
           value
         }));
@@ -50,7 +42,7 @@ export function getActiveSubsTool(apiClient: DevToolsAPIClient) {
               type: 'text',
               text: JSON.stringify({
                 summary: {
-                  total: Object.keys(activeSubs).length,
+                  total: response.total ?? Object.keys(activeSubs).length,
                   filtered: subscriptions.length
                 },
                 subscriptions

@@ -20,17 +20,21 @@ export function evalSubTool(apiClient: DevToolsAPIClient) {
       properties: {
         id: {
           type: 'string',
+          minLength: 1,
+          maxLength: 256,
           description: 'The registered subscription id (for example, "user-by-id")'
         },
         args: {
           type: 'array',
+          maxItems: 100,
           description: 'Optional subscription arguments, excluding the id',
           items: {
             type: ['string', 'number', 'boolean', 'object', 'array', 'null']
           }
         }
       },
-      required: ['id']
+      required: ['id'],
+      additionalProperties: false
     },
     handler: async (params: EvalSubParams) => {
       const args = params.args || [];
@@ -42,7 +46,6 @@ export function evalSubTool(apiClient: DevToolsAPIClient) {
               type: 'text',
               text: JSON.stringify({
                 id: params.id,
-                args,
                 value: response.value
               }, null, 2)
             }
@@ -53,7 +56,9 @@ export function evalSubTool(apiClient: DevToolsAPIClient) {
         if (unavailable) return unavailable;
 
         const details = (error as any)?.details;
-        const missingHandler = details?.phase === 'missing-handler';
+        const evaluationError = details?.error ?? details;
+        const missingHandler =
+          evaluationError?.phase === 'missing-handler';
         return {
           content: [
             {
@@ -62,8 +67,9 @@ export function evalSubTool(apiClient: DevToolsAPIClient) {
                 error: 'Failed to evaluate subscription',
                 message: error instanceof Error ? error.message : 'Unknown error',
                 id: params.id,
-                args,
-                ...(details && typeof details === 'object' ? { details } : {}),
+                ...(evaluationError && typeof evaluationError === 'object'
+                  ? { details: evaluationError }
+                  : {}),
                 hint: missingHandler
                   ? 'No handler is registered for this subscription id — check get_handlers with type "sub" for the exact spelling'
                   : 'Make sure the DevTools server and app are running'

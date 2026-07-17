@@ -8,6 +8,8 @@ export function DispatchEventModal() {
         initialParams: any[];
     } | undefined;
     const handlerKeys = useSubscription<{ event: string[]; fx: string[]; cofx: string[]; sub: string[]; } | null>(['handlerKeys']);
+    const capabilities = useSubscription<string[]>(['capabilities']) ?? [];
+    const canDispatch = capabilities.includes('dispatch');
 
     const [eventName, setEventName] = useState(dispatchModalState?.eventName || '');
     const [eventParams, setEventParams] = useState<any[]>(dispatchModalState?.initialParams || []);
@@ -35,9 +37,10 @@ export function DispatchEventModal() {
     }, [dispatchModalState?.isOpen, dispatchModalState?.eventName, dispatchModalState?.initialParams]);
 
     const handleDispatch = useCallback(() => {
+        if (!canDispatch) return;
         dispatch(['dispatch-to-client', eventName, ...eventParams]);
         dispatch(['close-dispatch-modal']);
-    }, [eventName, eventParams]);
+    }, [canDispatch, eventName, eventParams]);
 
     const handleClose = useCallback(() => {
         dispatch(['close-dispatch-modal']);
@@ -254,7 +257,8 @@ export function DispatchEventModal() {
                     <button 
                         className="btn btn-primary"
                         onClick={handleDispatch}
-                        disabled={!eventName.trim() || hasErrors}
+                        disabled={!canDispatch || !eventName.trim() || hasErrors}
+                        title={canDispatch ? undefined : 'DevTools is read-only'}
                     >
                         Dispatch
                     </button>
@@ -263,4 +267,3 @@ export function DispatchEventModal() {
         </div>
     );
 }
-

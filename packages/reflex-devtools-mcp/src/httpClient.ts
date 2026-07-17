@@ -1,9 +1,19 @@
 /**
- * HTTP client for querying DevTools server REST API
+ * Authenticated HTTP client for the project-local DevTools REST API.
  */
+
+import { isIP } from 'node:net';
+
+export const REFLEX_DEVTOOLS_PROTOCOL_VERSION = 1;
+const PROTOCOL_HEADER = 'Reflex-DevTools-Protocol-Version';
+const CLIENT_HEADER = 'X-Reflex-Client';
 
 export interface DevToolsAPIConfig {
   serverUrl: string;
+  token?: string;
+  clientName?: string;
+  requestTimeoutMs?: number;
+  allowInsecureRemote?: boolean;
 }
 
 export class DevToolsServerUnavailableError extends Error {
@@ -13,7 +23,19 @@ export class DevToolsServerUnavailableError extends Error {
   }
 }
 
-export function isDevToolsServerUnavailableError(error: unknown): error is DevToolsServerUnavailableError {
+export class DevToolsProtocolMismatchError extends Error {
+  constructor(public readonly received: unknown) {
+    super(
+      `Incompatible Reflex DevTools protocol. Expected ` +
+      `${REFLEX_DEVTOOLS_PROTOCOL_VERSION}, received ${String(received)}.`,
+    );
+    this.name = 'DevToolsProtocolMismatchError';
+  }
+}
+
+export function isDevToolsServerUnavailableError(
+  error: unknown,
+): error is DevToolsServerUnavailableError {
   return error instanceof DevToolsServerUnavailableError;
 }
 
@@ -25,29 +47,184 @@ export function devToolsServerUnavailableBody(retryTool: string) {
       'No Reflex DevTools server is connected.',
       'Start the project-local DevTools script from the project root (or use the detected package manager equivalent):',
       `  ${command}`,
-      'If the script is missing, add "devtools:mcp": "reflex-devtools --mcp --host 127.0.0.1 --port 4000" to package.json.',
-      `Then reload the app and retry ${retryTool}.`
+      'If the script is missing, add "devtools:mcp": "reflex-devtools --mcp --host 127.0.0.1 --port 4000 --allow-origin http://localhost:5173" to package.json (replace the origin with the browser app\'s exact dev-server origin, or omit it for headless-only use).',
+      `Then reload the app and retry ${retryTool}.`,
     ].join('\n'),
     command,
-    retry: retryTool
+    retry: retryTool,
   };
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname
+    .replace(/^\[/, '')
+    .replace(/\]$/, '')
+    .toLowerCase();
+  if (normalized === 'localhost') return true;
+  if (isIP(normalized) === 4) {
+    return Number.parseInt(normalized.split('.')[0] ?? '', 10) === 127;
+  }
+  return normalized === '::1' || normalized.startsWith('::ffff:127.');
+}
+
+function normalizeBaseUrl(
+  serverUrl: string,
+  allowInsecureRemote: boolean,
+): string {
+  const withScheme = /^https?:\/\//i.test(serverUrl)
+    ? serverUrl
+    : `http://${serverUrl}`;
+  const url = new URL(withScheme);
+  if (
+    (url.protocol !== 'http:' && url.protocol !== 'https:')
+    || url.username
+    || url.password
+    || url.search
+    || url.hash
+  ) {
+    throw new Error(
+      'DevTools serverUrl must be an http(s) URL without credentials, query, or fragment.',
+    );
+  }
+  if (
+    url.protocol === 'http:'
+    && !isLoopbackHostname(url.hostname)
+    && !allowInsecureRemote
+  ) {
+    throw new Error(
+      'Refusing to send a DevTools bearer token over remote plaintext HTTP. ' +
+      'Use HTTPS, a loopback SSH tunnel, or explicitly allow an insecure trusted network.',
+    );
+  }
+  return url.toString().replace(/\/+$/, '');
+}
+
 export class DevToolsAPIClient {
-  private baseUrl: string;
-  private serverUrl: string;
+  private readonly baseUrl: string;
+  private readonly serverUrl: string;
+  private readonly clientName: string;
+  private readonly requestTimeoutMs: number;
+  private token: string | null;
+  private tokenWasBootstrapped = false;
+  private sessionPromise: Promise<string> | null = null;
 
   constructor(config: DevToolsAPIConfig) {
     this.serverUrl = config.serverUrl;
-    this.baseUrl = `http://${config.serverUrl}`;
+    this.baseUrl = normalizeBaseUrl(
+      config.serverUrl,
+      config.allowInsecureRemote ?? false,
+    );
+    this.clientName = config.clientName ?? 'reflex-devtools-mcp';
+    this.requestTimeoutMs = config.requestTimeoutMs ?? 10_000;
+    this.token = config.token ?? null;
   }
 
-  private async fetch(path: string, init?: RequestInit): Promise<Response> {
+  private async ensureSession(): Promise<string> {
+    if (this.token) return this.token;
+    if (this.sessionPromise) return this.sessionPromise;
+
+    this.sessionPromise = this.bootstrapSession();
     try {
-      return await fetch(`${this.baseUrl}${path}`, init);
-    } catch (error) {
+      const token = await this.sessionPromise;
+      this.token = token;
+      this.tokenWasBootstrapped = true;
+      return token;
+    } finally {
+      this.sessionPromise = null;
+    }
+  }
+
+  private async bootstrapSession(): Promise<string> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/auth/session`, {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
+        headers: {
+          'Content-Type': 'application/json',
+          [PROTOCOL_HEADER]: String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+          [CLIENT_HEADER]: this.clientName,
+        },
+        body: JSON.stringify({ role: 'mcp' }),
+      });
+    } catch {
       throw new DevToolsServerUnavailableError(this.serverUrl);
     }
+
+    const body: any = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(
+        body?.error
+        || `DevTools session bootstrap failed with HTTP ${response.status}. ` +
+          'Remote servers require REFLEX_DEVTOOLS_MCP_TOKEN.',
+      );
+    }
+    if (
+      response.headers.get(PROTOCOL_HEADER)
+        !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
+      || body?.protocolVersion !== REFLEX_DEVTOOLS_PROTOCOL_VERSION
+      || typeof body?.token !== 'string'
+    ) {
+      throw new DevToolsProtocolMismatchError(body?.protocolVersion);
+    }
+    return body.token;
+  }
+
+  private async fetch(
+    path: string,
+    init: RequestInit = {},
+    retryAuth = true,
+  ): Promise<Response> {
+    const token = await this.ensureSession();
+    const headers = new Headers(init.headers);
+    headers.set('Authorization', `Bearer ${token}`);
+    headers.set(
+      PROTOCOL_HEADER,
+      String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+    );
+    headers.set(CLIENT_HEADER, this.clientName);
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        ...init,
+        headers,
+        redirect: 'error',
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
+      });
+    } catch {
+      throw new DevToolsServerUnavailableError(this.serverUrl);
+    }
+
+    const responseVersion = response.headers.get(PROTOCOL_HEADER);
+    if (responseVersion !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)) {
+      throw new DevToolsProtocolMismatchError(responseVersion ?? 'missing');
+    }
+
+    if (
+      response.status === 401
+      && retryAuth
+      && this.tokenWasBootstrapped
+    ) {
+      this.token = null;
+      this.tokenWasBootstrapped = false;
+      return this.fetch(path, init, false);
+    }
+    return response;
+  }
+
+  private async responseBody(response: Response): Promise<any> {
+    const body: any = await response.json().catch(() => null);
+    if (!response.ok) {
+      const error = new Error(
+        body?.error || `HTTP ${response.status}: ${response.statusText}`,
+      );
+      (error as any).code = body?.code;
+      (error as any).details = body;
+      throw error;
+    }
+    return body;
   }
 
   async getTraces(params: {
@@ -57,111 +234,85 @@ export class DevToolsAPIClient {
     opType?: string;
   } = {}): Promise<any> {
     const queryParams = new URLSearchParams();
-    if (params.limit) queryParams.append('limit', params.limit.toString());
-    if (params.eventFilter) queryParams.append('eventFilter', params.eventFilter);
-    if (params.minDuration) queryParams.append('minDuration', params.minDuration.toString());
-    if (params.opType) queryParams.append('opType', params.opType);
-
-    const response = await this.fetch(`/api/traces?${queryParams}`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    if (params.limit !== undefined) {
+      queryParams.append('limit', params.limit.toString());
     }
-    return response.json();
+    if (params.eventFilter) {
+      queryParams.append('eventFilter', params.eventFilter);
+    }
+    if (params.minDuration !== undefined) {
+      queryParams.append('minDuration', params.minDuration.toString());
+    }
+    if (params.opType) queryParams.append('opType', params.opType);
+    const suffix = queryParams.size > 0 ? `?${queryParams}` : '';
+    return this.responseBody(await this.fetch(`/api/traces${suffix}`));
   }
 
   async getTrace(id: number): Promise<any> {
-    const response = await this.fetch(`/api/traces/${id}`);
-    if (!response.ok) {
-      const body: any = await response.json().catch(() => null);
-      throw new Error(body?.error || `HTTP ${response.status}: ${response.statusText}`);
-    }
-    return response.json();
+    return this.responseBody(await this.fetch(`/api/traces/${id}`));
   }
 
-  async getAppState(): Promise<any> {
-    const response = await this.fetch('/api/state');
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return response.json();
+  async getAppState(path?: string): Promise<any> {
+    const suffix = path
+      ? `?path=${encodeURIComponent(path)}`
+      : '';
+    return this.responseBody(await this.fetch(`/api/state${suffix}`));
   }
 
-  async getSubscriptions(): Promise<any> {
-    const response = await this.fetch('/api/subscriptions');
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return response.json();
+  async getSubscriptions(filter?: string): Promise<any> {
+    const suffix = filter ? `?filter=${encodeURIComponent(filter)}` : '';
+    return this.responseBody(await this.fetch(`/api/subscriptions${suffix}`));
   }
 
   async getHandlers(type?: string): Promise<any> {
-    const queryParams = type ? `?type=${type}` : '';
-    const response = await this.fetch(`/api/handlers${queryParams}`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return response.json();
+    const suffix = type ? `?type=${encodeURIComponent(type)}` : '';
+    return this.responseBody(await this.fetch(`/api/handlers${suffix}`));
   }
 
   async getStats(): Promise<any> {
-    const response = await this.fetch('/api/stats');
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return response.json();
+    return this.responseBody(await this.fetch('/api/stats'));
+  }
+
+  async getAuditRecords(limit = 100): Promise<any> {
+    return this.responseBody(
+      await this.fetch(`/api/audit?limit=${encodeURIComponent(limit)}`),
+    );
   }
 
   async dispatchEvent(eventName: string, params: any[] = []): Promise<any> {
-    const response = await this.fetch('/api/dispatch', {
+    return this.responseBody(await this.fetch('/api/dispatch', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ eventName, params }),
-    });
-    if (!response.ok) {
-      // The server puts the reason (e.g. no app connected) in the body
-      const body: any = await response.json().catch(() => null);
-      throw new Error(body?.error || `HTTP ${response.status}: ${response.statusText}`);
-    }
-    return response.json();
+    }));
   }
 
   async evalSub(id: string, args: any[] = []): Promise<any> {
-    const response = await this.fetch('/api/eval-sub', {
+    return this.responseBody(await this.fetch('/api/eval-sub', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, args }),
-    });
-    const body: any = await response.json().catch(() => null);
-    if (!response.ok) {
-      const detail = body?.error;
-      const error = new Error(
-        typeof detail === 'string'
-          ? detail
-          : detail?.message || `HTTP ${response.status}: ${response.statusText}`
-      );
-      (error as any).details = detail;
-      throw error;
+    }));
+  }
+
+  async getStatus(): Promise<any> {
+    const body = await this.responseBody(await this.fetch('/api/status'));
+    if (body?.protocol?.version !== REFLEX_DEVTOOLS_PROTOCOL_VERSION) {
+      throw new DevToolsProtocolMismatchError(body?.protocol?.version);
     }
     return body;
   }
 
-  async getStatus(): Promise<any> {
-    const response = await this.fetch('/api/status');
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    return response.json();
-  }
-
   async checkHealth(): Promise<boolean> {
     try {
-      const response = await this.fetch('/health');
-      return response.ok;
-    } catch (error) {
+      const response = await fetch(`${this.baseUrl}/health`, {
+        redirect: 'error',
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
+      });
+      const body: any = await response.json().catch(() => null);
+      return response.ok
+        && body?.protocolVersion === REFLEX_DEVTOOLS_PROTOCOL_VERSION;
+    } catch {
       return false;
     }
   }

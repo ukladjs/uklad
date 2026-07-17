@@ -1,13 +1,25 @@
 import type { ButtonHTMLAttributes } from 'react';
+import { useSubscription } from '@flexsurfer/reflex';
 
 interface DispatchButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'> {
   size?: 'xs' | 'sm';
 }
 
-export default function DispatchButton({ size = 'sm', onClick, ...props }: DispatchButtonProps) {
+export default function DispatchButton({
+  size = 'sm',
+  onClick,
+  disabled,
+  title,
+  ...props
+}: DispatchButtonProps) {
+  const capabilities = useSubscription<string[]>(['capabilities']) ?? [];
+  const canDispatch = capabilities.includes('dispatch');
+
   return (
     <button
       onClick={onClick}
+      disabled={!canDispatch || disabled}
+      title={canDispatch ? title : 'DevTools is read-only'}
       className={`btn btn-${size} btn-ghost gap-1`}
       {...props}
     >

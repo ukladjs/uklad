@@ -1,4 +1,21 @@
 import { reflexReplacer } from '../serialization.js';
+import {
+  createKeyRedactor,
+  redactDevtoolsEvent,
+  type DevtoolsRedaction,
+} from '../redaction.js';
+import {
+  REFLEX_DEVTOOLS_CLIENT_HEADER,
+  REFLEX_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES,
+  REFLEX_DEVTOOLS_MAX_RUNTIME_PAYLOAD_BYTES,
+  REFLEX_DEVTOOLS_PROTOCOL_HEADER,
+  REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+  REFLEX_DEVTOOLS_RUNTIME_ERROR_TYPE,
+  REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER,
+  REFLEX_DEVTOOLS_TELEMETRY_DROPPED_CODE,
+  REFLEX_DEVTOOLS_WS_PROTOCOL,
+  type RuntimeTelemetryDroppedPayload,
+} from '../protocol.js';
 import { diffSubscriptionDiagnostics } from './subscriptionDiagnostics.js';
 import type {
   ReflexInspector,
@@ -14,10 +31,46 @@ export type {
   ReflexTrace,
   ReflexTraceCallback,
 } from './types.js';
+export {
+  createKeyRedactor,
+  DEFAULT_SENSITIVE_KEYS,
+} from '../redaction.js';
+export type {
+  DevtoolsRedaction,
+  KeyRedactorOptions,
+  RedactionContext,
+  StateRedactor,
+  TraceRedactor,
+} from '../redaction.js';
+export {
+  REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+} from '../protocol.js';
+export type {
+  DevtoolsCapability,
+  DevtoolsClientRole,
+  DevtoolsProtocolInfo,
+} from '../protocol.js';
 
 export interface DevtoolsConfig {
   serverUrl?: string;
   enabled?: boolean;
+  /**
+   * Permit sending a runtime bearer token to a non-loopback http:// endpoint.
+   * Prefer HTTPS or a loopback SSH tunnel. This opt-out is intentionally
+   * explicit because bearer credentials provide no protection on plaintext.
+   */
+  allowInsecureRemote?: boolean;
+  /**
+   * Runtime-scoped session token. Local loopback clients obtain a generated
+   * process token automatically; remote clients must receive this explicitly.
+   */
+  sessionToken?: string;
+  /**
+   * Redaction runs before state or traces leave the application process.
+   * Common credential-like keys are masked by default. Set `false` only when
+   * the inspected data is known to be non-sensitive.
+   */
+  redaction?: DevtoolsRedaction | false;
   /**
    * Which environment the app runs in. Auto-detected when omitted:
    * 'react-native' when navigator.product says so, 'headless' when there
@@ -50,6 +103,11 @@ export interface EventPayload {
 // reporting an unknown outcome. Kept below the server's own /api/dispatch
 // timeout so the server gets a definitive answer instead of timing out.
 const DISPATCH_TRACE_TIMEOUT_MS = 4000;
+const HEALTH_REQUEST_TIMEOUT_MS = 3000;
+const EVENT_REQUEST_TIMEOUT_MS = 5000;
+const RECONNECT_MAX_DELAY_MS = 10_000;
+const RECONNECT_STABILITY_MS = 10_000;
+const MAX_DEDUPLICATED_DIAGNOSTICS = 128;
 
 // React Native must be checked before `window`: RN aliases the global object
 // to `window`, so a window check alone would mislabel it as a browser.
@@ -63,7 +121,7 @@ function detectRuntime(): 'browser' | 'headless' | 'react-native' {
 }
 
 interface PendingDispatch {
-  dispatchId: number;
+  dispatchId: string;
   eventId: string;
   timeout: ReturnType<typeof setTimeout>;
 }
@@ -71,6 +129,12 @@ interface PendingDispatch {
 class DevtoolsClient {
   private inspector: ReflexInspector;
   private config: DevtoolsConfig;
+  private httpBaseUrl: string;
+  private webSocketBaseUrl: string;
+  private sessionToken: string | null;
+  private readonly hasConfiguredSessionToken: boolean;
+  private runtimeSessionId: string | null = null;
+  private redaction: DevtoolsRedaction | undefined;
   private ws: WebSocket | null = null;
   private isConnected = false;
   private isTracingEnabled = false;
@@ -78,20 +142,43 @@ class DevtoolsClient {
   private isDisposed = false;
   private traceUnsubscribe: (() => void) | null = null;
   private connectionTimeout: ReturnType<typeof setTimeout> | null = null;
+  private connectionStableTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
+  private maxRuntimePayloadBytes =
+    REFLEX_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES;
+  private readonly emittedDiagnostics = new Set<string>();
   private rejectConnection: ((error: unknown) => void) | null = null;
   private healthController: AbortController | null = null;
   private eventControllers = new Set<AbortController>();
   private subscriptionVersions = new Map<string, number>();
   private pendingDispatches: PendingDispatch[] = [];
+  private dispatchCorrelations = new WeakMap<object, string>();
 
   constructor(inspector: ReflexInspector, config: DevtoolsConfig) {
     this.inspector = inspector;
     this.config = {
       enabled: true,
-      serverUrl: 'localhost:4000',
+      serverUrl: '127.0.0.1:4000',
       runtime: detectRuntime(),
       ...config,
     };
+    this.httpBaseUrl = normalizeHttpBaseUrl(
+      this.config.serverUrl!,
+      this.config.allowInsecureRemote ?? false,
+    );
+    this.webSocketBaseUrl = this.httpBaseUrl.replace(/^http/, 'ws');
+    this.hasConfiguredSessionToken = this.config.sessionToken !== undefined;
+    this.sessionToken = this.config.sessionToken ?? null;
+    if (this.config.redaction === false) {
+      this.redaction = undefined;
+    } else {
+      const redactSensitiveKeys = createKeyRedactor();
+      this.redaction = {
+        state: this.config.redaction?.state ?? redactSensitiveKeys,
+        trace: this.config.redaction?.trace ?? redactSensitiveKeys,
+      };
+    }
   }
 
   async init(): Promise<void> {
@@ -111,12 +198,80 @@ class DevtoolsClient {
     if (this.isDisposed) return;
     if (!this.serverAvailable) {
       console.warn('[Reflex Devtools] Server not available, disabling devtools');
+      this.scheduleReconnect();
       return;
+    }
+
+    if (!this.sessionToken) {
+      this.sessionToken = await this.bootstrapSession();
+      if (this.isDisposed) return;
+      if (!this.sessionToken) {
+        console.warn(
+          '[Reflex Devtools] Could not obtain a runtime session token. ' +
+          'Remote servers require DevtoolsConfig.sessionToken.',
+        );
+        this.scheduleReconnect();
+        return;
+      }
     }
 
     try {
       await this.connectWebSocket();
     } catch (error) {
+      if (!this.isDisposed) {
+        console.warn(
+          '[Reflex Devtools] Authenticated WebSocket connection failed:',
+          error instanceof Error ? error.message : 'Unknown error',
+        );
+        this.scheduleReconnect();
+      }
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.isDisposed || this.reconnectTimer) return;
+    const exponentialDelay = Math.min(
+      500 * (2 ** Math.min(this.reconnectAttempts, 5)),
+      RECONNECT_MAX_DELAY_MS,
+    );
+    // Equal jitter avoids synchronized reconnect storms while retaining a
+    // useful lower bound for repeated policy failures.
+    const delay = Math.min(
+      RECONNECT_MAX_DELAY_MS,
+      Math.ceil(exponentialDelay / 2)
+        + Math.floor(Math.random() * Math.max(1, exponentialDelay / 2)),
+    );
+    this.reconnectAttempts += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.reconnect();
+    }, delay);
+    (this.reconnectTimer as any).unref?.();
+  }
+
+  private async reconnect(): Promise<void> {
+    if (this.isDisposed || this.isConnected) return;
+
+    this.serverAvailable = await this.checkServerAvailability();
+    if (this.isDisposed) return;
+    if (!this.serverAvailable) {
+      this.scheduleReconnect();
+      return;
+    }
+
+    if (!this.sessionToken) {
+      this.sessionToken = await this.bootstrapSession();
+      if (this.isDisposed) return;
+      if (!this.sessionToken) {
+        this.scheduleReconnect();
+        return;
+      }
+    }
+
+    try {
+      await this.connectWebSocket();
+    } catch {
+      if (!this.isDisposed) this.scheduleReconnect();
     }
   }
 
@@ -133,22 +288,72 @@ class DevtoolsClient {
 
   private async checkServerAvailability(): Promise<boolean> {
     const controller = createAbortController();
+    const timeout = controller
+      ? setTimeout(() => controller.abort(), HEALTH_REQUEST_TIMEOUT_MS)
+      : null;
     this.healthController = controller;
-    const request: RequestInit = { method: 'GET' };
+    const request: RequestInit = { method: 'GET', redirect: 'error' };
     if (controller) {
       request.signal = controller.signal;
     }
 
     try {
-      // Use a simple GET request to check if server is running
-      const response = await fetch(`http://${this.config.serverUrl}/health`, request);
-      return !this.isDisposed && response.ok;
+      const response = await fetch(`${this.httpBaseUrl}/health`, request);
+      if (!response.ok || this.isDisposed) return false;
+      const body = await response.json().catch(() => null);
+      return response.headers.get(REFLEX_DEVTOOLS_PROTOCOL_HEADER)
+          === String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
+        && body?.protocolVersion === REFLEX_DEVTOOLS_PROTOCOL_VERSION;
     } catch (error) {
       return false;
     } finally {
+      if (timeout) clearTimeout(timeout);
       if (this.healthController === controller) {
         this.healthController = null;
       }
+    }
+  }
+
+  private async bootstrapSession(): Promise<string | null> {
+    const controller = createAbortController();
+    const timeout = controller
+      ? setTimeout(() => controller.abort(), HEALTH_REQUEST_TIMEOUT_MS)
+      : null;
+    if (controller) this.eventControllers.add(controller);
+    const request: RequestInit = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        [REFLEX_DEVTOOLS_PROTOCOL_HEADER]:
+          String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+        [REFLEX_DEVTOOLS_CLIENT_HEADER]: 'reflex-devtools-runtime',
+      },
+      body: JSON.stringify({ role: 'runtime' }),
+      redirect: 'error',
+    };
+    if (controller) request.signal = controller.signal;
+
+    try {
+      const response = await fetch(
+        `${this.httpBaseUrl}/auth/session`,
+        request,
+      );
+      const body = await response.json().catch(() => null);
+      if (
+        !response.ok
+        || response.headers.get(REFLEX_DEVTOOLS_PROTOCOL_HEADER)
+          !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
+        || body?.protocolVersion !== REFLEX_DEVTOOLS_PROTOCOL_VERSION
+        || typeof body?.token !== 'string'
+      ) {
+        return null;
+      }
+      return body.token;
+    } catch {
+      return null;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      if (controller) this.eventControllers.delete(controller);
     }
   }
 
@@ -159,8 +364,8 @@ class DevtoolsClient {
         return;
       }
 
-      const wsUrl = 'ws://' + this.config.serverUrl + '/sdk';
-      const ws = new WebSocket(wsUrl);
+      const wsUrl = `${this.webSocketBaseUrl}/sdk`;
+      const ws = new WebSocket(wsUrl, [REFLEX_DEVTOOLS_WS_PROTOCOL]);
       this.ws = ws;
       let settled = false;
 
@@ -194,14 +399,49 @@ class DevtoolsClient {
           rejectOnce(new Error('Devtools client disposed during WebSocket connection'));
           return;
         }
-        this.isConnected = true;
-        resolveOnce();
+        try {
+          ws.send(JSON.stringify({
+            type: 'reflex-auth',
+            payload: {
+              role: 'runtime',
+              token: this.sessionToken,
+              protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+              inspectorApiVersion: this.inspector.apiVersion,
+            },
+          }));
+        } catch (error) {
+          rejectOnce(error);
+        }
       };
 
       ws.onmessage = (event) => {
         if (this.isDisposed) return;
         try {
           const message = JSON.parse(event.data);
+          if (message.type === 'devtools-server-hello') {
+            const runtimePayloadBytes =
+              message.payload?.limits?.runtimePayloadBytes;
+            if (
+              message.payload?.protocolVersion
+                !== REFLEX_DEVTOOLS_PROTOCOL_VERSION
+              || typeof message.payload?.runtimeSessionId !== 'string'
+              || !Number.isInteger(runtimePayloadBytes)
+              || runtimePayloadBytes < 1
+              || runtimePayloadBytes
+                > REFLEX_DEVTOOLS_MAX_RUNTIME_PAYLOAD_BYTES
+            ) {
+              ws.close(1002, 'Invalid DevTools server hello');
+              rejectOnce(new Error('DevTools protocol handshake failed'));
+              return;
+            }
+            this.maxRuntimePayloadBytes = runtimePayloadBytes;
+            this.runtimeSessionId = message.payload.runtimeSessionId;
+            this.isConnected = true;
+            this.markConnectionStableAfter(ws);
+            resolveOnce();
+            return;
+          }
+          if (!this.isConnected) return;
           this.handleServerMessage(message);
         } catch (error) {
         }
@@ -211,10 +451,30 @@ class DevtoolsClient {
         rejectOnce(error);
       };
 
-      ws.onclose = () => {
-        this.isConnected = false;
+      ws.onclose = (event) => {
+        const isCurrentSocket = this.ws === ws;
+        if (isCurrentSocket) {
+          this.ws = null;
+          if (this.connectionStableTimer) {
+            clearTimeout(this.connectionStableTimer);
+            this.connectionStableTimer = null;
+          }
+          this.isConnected = false;
+          this.runtimeSessionId = null;
+          this.stopTracing(false);
+          if (!this.hasConfiguredSessionToken) {
+            this.sessionToken = null;
+          }
+        }
         if (!settled) {
           rejectOnce(new Error('WebSocket closed before connecting'));
+        }
+        const superseded =
+          event.code === 1000
+          && event.reason === 'Superseded by a newer authenticated runtime';
+        if (!this.isDisposed && isCurrentSocket && !superseded) {
+          this.reportAbnormalClose(event.code, event.reason);
+          this.scheduleReconnect();
         }
       };
 
@@ -228,10 +488,33 @@ class DevtoolsClient {
     });
   }
 
+  private markConnectionStableAfter(ws: WebSocket): void {
+    if (this.connectionStableTimer) {
+      clearTimeout(this.connectionStableTimer);
+    }
+    this.connectionStableTimer = setTimeout(() => {
+      this.connectionStableTimer = null;
+      if (
+        !this.isDisposed
+        && this.ws === ws
+        && this.isConnected
+        && ws.readyState === WebSocket.OPEN
+      ) {
+        this.reconnectAttempts = 0;
+      }
+    }, RECONNECT_STABILITY_MS);
+    (this.connectionStableTimer as any).unref?.();
+  }
+
   private handleServerMessage(message: any): void {
     if (this.isDisposed) return;
 
-    if (message.type === 'ui-connection-status') {
+    if (
+      message.type === REFLEX_DEVTOOLS_RUNTIME_ERROR_TYPE
+      && isRuntimeTelemetryDroppedPayload(message.payload)
+    ) {
+      this.reportRuntimeTelemetryDrop(message.payload);
+    } else if (message.type === 'ui-connection-status') {
       const newUICount = message.payload.connectedUIs;
 
 
@@ -269,10 +552,46 @@ class DevtoolsClient {
       }
 
       // Dispatch the event in the client app with all parameters
-      this.inspector.dispatch([eventName, ...params]);
+      const eventVector: [string, ...any[]] = [eventName, ...params];
+      if (typeof dispatchId === 'string') {
+        this.dispatchCorrelations.set(eventVector, dispatchId);
+      }
+      this.inspector.dispatch(eventVector);
     } else if (message.type === 'eval-sub-to-client') {
       void this.evaluateSubscription(message.payload);
     }
+  }
+
+  private reportRuntimeTelemetryDrop(
+    payload: RuntimeTelemetryDroppedPayload,
+  ): void {
+    const action = payload.reason === 'retention-limit'
+      ? 'Reduce retained state/subscription data; reconnecting the runtime clears session retention.'
+      : 'Check the server-side redaction hook; the unredacted value was not retained.';
+    this.warnOnce(
+      `${payload.code}:${payload.reason}:${payload.eventType}`,
+      `[Reflex Devtools] Server dropped ${safeEventType(payload.eventType)} telemetry (${payload.reason}). ${action}`,
+    );
+  }
+
+  private reportAbnormalClose(code: number, reason: string): void {
+    if (code === 1000) return;
+    const normalizedCode = Number.isInteger(code) ? code : 1006;
+    const safeReason = sanitizeCloseReason(reason);
+    const payloadGuidance = normalizedCode === 1009
+      ? ' The peer enforced its hard WebSocket frame limit; verify the negotiated payload limit.'
+      : '';
+    this.warnOnce(
+      `websocket-close:${normalizedCode}:${safeReason}`,
+      `[Reflex Devtools] WebSocket closed abnormally (code ${normalizedCode}${safeReason ? `, reason: ${safeReason}` : ''}). Reconnecting with bounded backoff.${payloadGuidance}`,
+    );
+  }
+
+  private warnOnce(key: string, message: string): void {
+    if (this.emittedDiagnostics.has(key)) return;
+    if (this.emittedDiagnostics.size >= MAX_DEDUPLICATED_DIAGNOSTICS) return;
+    this.emittedDiagnostics.add(key);
+    console.warn(message);
   }
 
   private async evaluateSubscription(payload: any): Promise<void> {
@@ -305,8 +624,7 @@ class DevtoolsClient {
           evalId,
           error: {
             phase: 'evaluation',
-            message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined
+            message: error instanceof Error ? error.message : String(error)
           }
         }
       });
@@ -322,11 +640,22 @@ class DevtoolsClient {
 
     for (const trace of traces) {
       if (trace.opType !== 'event') continue;
-      const index = this.pendingDispatches.findIndex(p => p.eventId === trace.operation);
+      const tracedEvent = trace.tags?.event;
+      const correlationId =
+        Array.isArray(tracedEvent)
+          ? this.dispatchCorrelations.get(tracedEvent)
+          : undefined;
+      if (typeof correlationId !== 'string') continue;
+      const index = this.pendingDispatches.findIndex(
+        (pending) => pending.dispatchId === correlationId,
+      );
       if (index === -1) continue;
 
       const pending = this.pendingDispatches.splice(index, 1)[0];
       if (!pending) continue;
+      if (Array.isArray(tracedEvent)) {
+        this.dispatchCorrelations.delete(tracedEvent);
+      }
       clearTimeout(pending.timeout);
       await this.sendEvent({
         type: 'reflex-dispatch-result',
@@ -385,15 +714,26 @@ class DevtoolsClient {
   // to agents through /api/status. Re-sent whenever tracing flips so the
   // server's view never goes stale.
   private sendRuntimeInfo(): void {
+    // Omit unset optional fields instead of sending them as undefined: the
+    // reflexReplacer serializes undefined to the string 'undefined', which the
+    // server's runtime-info schema rejects (e.g. effects must be a record),
+    // closing the socket and forcing a reconnect loop.
+    const payload: Record<string, unknown> = {
+      runtime: this.config.runtime,
+      tracing: this.isTracingEnabled,
+      protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+      inspectorApiVersion: this.inspector.apiVersion,
+    };
+    if (this.config.effectMode !== undefined) {
+      payload.effectMode = this.config.effectMode;
+    }
+    if (this.config.effects !== undefined) {
+      payload.effects = this.config.effects;
+    }
     this.sendEvent({
       type: 'reflex-runtime-info',
       component: 'Reflex',
-      payload: {
-        runtime: this.config.runtime,
-        effectMode: this.config.effectMode,
-        effects: this.config.effects,
-        tracing: this.isTracingEnabled
-      }
+      payload,
     });
   }
 
@@ -439,6 +779,14 @@ class DevtoolsClient {
       clearTimeout(this.connectionTimeout);
       this.connectionTimeout = null;
     }
+    if (this.connectionStableTimer) {
+      clearTimeout(this.connectionStableTimer);
+      this.connectionStableTimer = null;
+    }
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
 
     for (const pending of this.pendingDispatches) {
       clearTimeout(pending.timeout);
@@ -447,6 +795,7 @@ class DevtoolsClient {
     this.subscriptionVersions.clear();
     this.serverAvailable = false;
     this.isConnected = false;
+    this.runtimeSessionId = null;
 
     const ws = this.ws;
     this.ws = null;
@@ -479,7 +828,29 @@ class DevtoolsClient {
       timestamp: event.timestamp || Date.now()
     };
 
-    const serializedEvent = this.serializeEventData(eventWithTimestamp);
+    let redactedEvent: EventPayload;
+    try {
+      redactedEvent = redactDevtoolsEvent(
+        eventWithTimestamp,
+        this.redaction,
+        'runtime',
+      );
+    } catch {
+      console.error(
+        `[Reflex Devtools] Redaction failed for event type ${event.type}; payload dropped.`,
+      );
+      return;
+    }
+
+    const serializedEvent = this.serializeEventData(redactedEvent);
+    const serializedBytes = utf8ByteLength(serializedEvent);
+    if (serializedBytes > this.maxRuntimePayloadBytes) {
+      this.warnOnce(
+        `payload-limit:${event.type}:${this.maxRuntimePayloadBytes}`,
+        `[Reflex Devtools] Dropped ${safeEventType(event.type)} telemetry before transport: serialized size ${serializedBytes} bytes exceeds the negotiated ${this.maxRuntimePayloadBytes}-byte runtime limit. Reduce the inspected state/trace batch or raise maxRuntimePayloadBytes on the trusted devtools server.`,
+      );
+      return;
+    }
 
     // Try WebSocket first
     if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
@@ -492,6 +863,9 @@ class DevtoolsClient {
 
     // Fallback to HTTP
     const controller = createAbortController();
+    const timeout = controller
+      ? setTimeout(() => controller.abort(), EVENT_REQUEST_TIMEOUT_MS)
+      : null;
     if (controller) {
       this.eventControllers.add(controller);
     }
@@ -499,23 +873,58 @@ class DevtoolsClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.sessionToken}`,
+        [REFLEX_DEVTOOLS_PROTOCOL_HEADER]:
+          String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+        [REFLEX_DEVTOOLS_CLIENT_HEADER]: 'reflex-devtools-runtime',
+        [REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER]:
+          this.runtimeSessionId ?? '',
       },
       body: serializedEvent,
+      redirect: 'error',
     };
     if (controller) {
       request.signal = controller.signal;
     }
 
     try {
-      await fetch(`http://${this.config.serverUrl}/event`, request);
+      const response = await fetch(`${this.httpBaseUrl}/event`, request);
+      const responseBody = await response.json().catch(() => null);
+      const runtimeDrop = isRuntimeTelemetryDroppedPayload(
+        responseBody?.notice ?? responseBody,
+      )
+        ? responseBody.notice ?? responseBody
+        : null;
+      const responseVersion = response.headers.get(
+        REFLEX_DEVTOOLS_PROTOCOL_HEADER,
+      );
+      if (
+        response.status === 401
+        || response.status === 409
+        || response.status === 426
+        || responseVersion !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
+      ) {
+        this.serverAvailable = false;
+        this.stopTracing(false);
+        if (!this.hasConfiguredSessionToken) this.sessionToken = null;
+        this.scheduleReconnect();
+      } else if (runtimeDrop) {
+        this.reportRuntimeTelemetryDrop(runtimeDrop);
+      } else if (!response.ok) {
+        console.warn(
+          `[Reflex Devtools] Runtime event was rejected with HTTP ${response.status}.`,
+        );
+      }
     } catch (error) {
       if (controller?.signal.aborted || isAbortError(error) || this.isDisposed) {
         return;
       }
       console.warn('[Reflex Devtools] Server not available, disabling devtools');
       this.serverAvailable = false;
-      this.stopTracing();
+      this.stopTracing(false);
+      this.scheduleReconnect();
     } finally {
+      if (timeout) clearTimeout(timeout);
       if (controller) {
         this.eventControllers.delete(controller);
       }
@@ -531,6 +940,50 @@ export function logEvent(event: EventPayload): void {
   }
 }
 
+function utf8ByteLength(value: string): number {
+  let bytes = 0;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0)!;
+    if (codePoint <= 0x7F) bytes += 1;
+    else if (codePoint <= 0x7FF) bytes += 2;
+    else if (codePoint <= 0xFFFF) bytes += 3;
+    else bytes += 4;
+  }
+  return bytes;
+}
+
+function isRuntimeTelemetryDroppedPayload(
+  value: unknown,
+): value is RuntimeTelemetryDroppedPayload {
+  if (!value || typeof value !== 'object') return false;
+  const payload = value as Partial<RuntimeTelemetryDroppedPayload>;
+  return payload.code === REFLEX_DEVTOOLS_TELEMETRY_DROPPED_CODE
+    && (
+      payload.reason === 'redaction-failed'
+      || payload.reason === 'retention-limit'
+    )
+    && typeof payload.eventType === 'string'
+    && payload.eventType.length > 0
+    && payload.eventType.length <= 128
+    && !/[\u0000-\u001F\u007F]/.test(payload.eventType);
+}
+
+function safeEventType(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    return 'runtime-event';
+  }
+  return JSON.stringify(
+    value.replace(/[\u0000-\u001F\u007F]/g, '?').slice(0, 128),
+  );
+}
+
+function sanitizeCloseReason(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/[\u0000-\u001F\u007F]/g, '?')
+    .slice(0, 256);
+}
+
 function createAbortController(): AbortController | null {
   return typeof AbortController === 'undefined' ? null : new AbortController();
 }
@@ -542,6 +995,54 @@ function isAbortError(error: unknown): boolean {
     'name' in error &&
     error.name === 'AbortError'
   );
+}
+
+function normalizeHttpBaseUrl(
+  serverUrl: string,
+  allowInsecureRemote: boolean,
+): string {
+  const withScheme = /^https?:\/\//i.test(serverUrl)
+    ? serverUrl
+    : `http://${serverUrl}`;
+  const url = new URL(withScheme);
+  if (
+    (url.protocol !== 'http:' && url.protocol !== 'https:')
+    || url.username
+    || url.password
+    || url.search
+    || url.hash
+  ) {
+    throw new Error(
+      '[Reflex Devtools] serverUrl must be an http(s) URL without credentials, query, or fragment.',
+    );
+  }
+  if (
+    url.protocol === 'http:'
+    && !isLoopbackHostname(url.hostname)
+    && !allowInsecureRemote
+  ) {
+    throw new Error(
+      '[Reflex Devtools] Refusing to send a runtime token over remote plaintext HTTP. ' +
+      'Use HTTPS, a loopback SSH tunnel, or set allowInsecureRemote only on a trusted network.',
+    );
+  }
+  return url.toString().replace(/\/+$/, '');
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname
+    .replace(/^\[/, '')
+    .replace(/\]$/, '')
+    .toLowerCase();
+  if (normalized === 'localhost' || normalized === '::1') return true;
+  if (normalized.startsWith('::ffff:127.')) return true;
+  const octets = normalized.split('.');
+  return octets.length === 4
+    && octets[0] === '127'
+    && octets.every((octet) =>
+      /^\d{1,3}$/.test(octet)
+      && Number(octet) >= 0
+      && Number(octet) <= 255);
 }
 
 function assertInspector(inspector: ReflexInspector): void {

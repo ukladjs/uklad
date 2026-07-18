@@ -9,7 +9,7 @@ import {
   type Draft,
 } from 'immer';
 
-import { getGlobalEqualityCheck, setGlobalEqualityCheck } from './equality';
+import { replaceDefaultEqualityCheck } from './equality';
 
 let patchesPluginEnabled = false;
 
@@ -31,9 +31,11 @@ export function current<T>(value: T): T {
  */
 export function enableMapSet(): void {
   immerEnableMapSet();
-  if (getGlobalEqualityCheck() === isEqual) {
-    setGlobalEqualityCheck(isEqualEs6);
-  }
+  // The fallback is process-wide because Immer's Map/Set plugin is process-wide,
+  // but runtime-local equality overrides must remain untouched. Do not consult
+  // the compatibility runtime here: its override must not decide whether other
+  // runtimes receive the ES6-aware framework fallback.
+  replaceDefaultEqualityCheck(isEqual, isEqualEs6);
 }
 
 /** Idempotently enable Immer patch generation for event tracing. */

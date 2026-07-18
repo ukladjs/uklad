@@ -1,8 +1,9 @@
 import { scheduleAfterRender } from '../../core/scheduling';
-import { clearHandlerEntries, SUBSCRIPTION_HANDLER_KINDS } from '../handlers';
+import { clearHandlerEntriesForRuntime, SUBSCRIPTION_HANDLER_KINDS } from '../handlers';
+import { defaultRuntimeScope, isRuntimeDisposed, type RuntimeScope } from '../scope';
 import {
-  assertSubscriptionsCanBeCleared,
-  inspectSubscription,
+  assertSubscriptionsCanBeClearedForRuntime,
+  inspectSubscriptionForRuntime,
   type SubscriptionDiagnostic,
   type SubscriptionNode,
 } from './engine';
@@ -16,68 +17,126 @@ interface SubscriptionEntry {
   dependencyKeys: readonly string[];
 }
 
-const rootSubIdBySource = new Map<string, Id>();
-const rootSubSourceById = new Map<Id, string>();
-const rootSubscriptionKeys = new Set<string>();
+interface SubscriptionCacheState {
+  readonly rootSubIdBySource: Map<string, Id>;
+  readonly rootSubSourceById: Map<Id, string>;
+  readonly rootSubscriptionKeys: Set<string>;
+  readonly subscriptionCache: Map<string, SubscriptionEntry>;
+  readonly dependentSubscriptionKeys: Map<string, Set<string>>;
+  readonly subConfigById: Map<Id, SubConfig>;
+  provisionalCurrent: Map<string, SubscriptionNode<any>>;
+  provisionalPrevious: Map<string, SubscriptionNode<any>>;
+  provisionalSweepScheduled: boolean;
+}
 
-const subscriptionCache = new Map<string, SubscriptionEntry>();
-const dependentSubscriptionKeys = new Map<string, Set<string>>();
-const subConfigById = new Map<Id, SubConfig>();
+const cacheStates = new WeakMap<RuntimeScope, SubscriptionCacheState>();
 
-let provisionalCurrent = new Map<string, SubscriptionNode<any>>();
-let provisionalPrevious = new Map<string, SubscriptionNode<any>>();
-let provisionalSweepScheduled = false;
-
-// Root source metadata
+function getCacheState(runtime: RuntimeScope): SubscriptionCacheState {
+  let state = cacheStates.get(runtime);
+  if (!state) {
+    state = {
+      rootSubIdBySource: new Map(),
+      rootSubSourceById: new Map(),
+      rootSubscriptionKeys: new Set(),
+      subscriptionCache: new Map(),
+      dependentSubscriptionKeys: new Map(),
+      subConfigById: new Map(),
+      provisionalCurrent: new Map(),
+      provisionalPrevious: new Map(),
+      provisionalSweepScheduled: false,
+    };
+    cacheStates.set(runtime, state);
+  }
+  return state;
+}
 
 export function setRootSubSource(subId: Id, sourceKey: string): void {
-  const previousSource = rootSubSourceById.get(subId);
+  setRootSubSourceForRuntime(defaultRuntimeScope, subId, sourceKey);
+}
+
+/** @internal Set root subscription metadata for one runtime. */
+export function setRootSubSourceForRuntime(
+  runtime: RuntimeScope,
+  subId: Id,
+  sourceKey: string,
+): void {
+  const state = getCacheState(runtime);
+  const previousSource = state.rootSubSourceById.get(subId);
   if (
     previousSource !== undefined &&
     previousSource !== sourceKey &&
-    rootSubIdBySource.get(previousSource) === subId
+    state.rootSubIdBySource.get(previousSource) === subId
   ) {
-    rootSubIdBySource.delete(previousSource);
+    state.rootSubIdBySource.delete(previousSource);
   }
 
-  const previousSubId = rootSubIdBySource.get(sourceKey);
+  const previousSubId = state.rootSubIdBySource.get(sourceKey);
   if (previousSubId !== undefined && previousSubId !== subId) {
-    rootSubSourceById.delete(previousSubId);
-    rootSubscriptionKeys.delete(getRootSubKey(previousSubId));
+    state.rootSubSourceById.delete(previousSubId);
+    state.rootSubscriptionKeys.delete(getRootSubKey(previousSubId));
   }
 
-  rootSubIdBySource.set(sourceKey, subId);
-  rootSubSourceById.set(subId, sourceKey);
-  rootSubscriptionKeys.add(getRootSubKey(subId));
+  state.rootSubIdBySource.set(sourceKey, subId);
+  state.rootSubSourceById.set(subId, sourceKey);
+  state.rootSubscriptionKeys.add(getRootSubKey(subId));
 }
 
 export function getRootSubIdBySource(sourceKey: string): Id | undefined {
-  return rootSubIdBySource.get(sourceKey);
+  return getRootSubIdBySourceForRuntime(defaultRuntimeScope, sourceKey);
+}
+
+/** @internal Get a root subscription id in one runtime. */
+export function getRootSubIdBySourceForRuntime(
+  runtime: RuntimeScope,
+  sourceKey: string,
+): Id | undefined {
+  return getCacheState(runtime).rootSubIdBySource.get(sourceKey);
 }
 
 export function getRootSubSourceById(subId: Id): string | undefined {
-  return rootSubSourceById.get(subId);
+  return getRootSubSourceByIdForRuntime(defaultRuntimeScope, subId);
+}
+
+/** @internal Get a root source key in one runtime. */
+export function getRootSubSourceByIdForRuntime(
+  runtime: RuntimeScope,
+  subId: Id,
+): string | undefined {
+  return getCacheState(runtime).rootSubSourceById.get(subId);
 }
 
 export function clearRootSubSource(subId: Id): void {
-  const sourceKey = rootSubSourceById.get(subId);
-  rootSubSourceById.delete(subId);
-  rootSubscriptionKeys.delete(getRootSubKey(subId));
-  if (sourceKey !== undefined && rootSubIdBySource.get(sourceKey) === subId) {
-    rootSubIdBySource.delete(sourceKey);
+  clearRootSubSourceForRuntime(defaultRuntimeScope, subId);
+}
+
+/** @internal Clear one runtime's root-source metadata for an id. */
+export function clearRootSubSourceForRuntime(runtime: RuntimeScope, subId: Id): void {
+  const state = getCacheState(runtime);
+  const sourceKey = state.rootSubSourceById.get(subId);
+  state.rootSubSourceById.delete(subId);
+  state.rootSubscriptionKeys.delete(getRootSubKey(subId));
+  if (sourceKey !== undefined && state.rootSubIdBySource.get(sourceKey) === subId) {
+    state.rootSubIdBySource.delete(sourceKey);
   }
 }
 
-function clearRootSubSources(): void {
-  rootSubIdBySource.clear();
-  rootSubSourceById.clear();
-  rootSubscriptionKeys.clear();
+function clearRootSubSourcesForRuntime(runtime: RuntimeScope): void {
+  const state = getCacheState(runtime);
+  state.rootSubIdBySource.clear();
+  state.rootSubSourceById.clear();
+  state.rootSubscriptionKeys.clear();
 }
 
-// Canonical query cache
-
 export function getCachedSubscription(key: string): SubscriptionNode<any> | undefined {
-  return subscriptionCache.get(key)?.node;
+  return getCachedSubscriptionForRuntime(defaultRuntimeScope, key);
+}
+
+/** @internal Get a cached subscription from one runtime. */
+export function getCachedSubscriptionForRuntime(
+  runtime: RuntimeScope,
+  key: string,
+): SubscriptionNode<any> | undefined {
+  return getCacheState(runtime).subscriptionCache.get(key)?.node;
 }
 
 export function cacheSubscription(
@@ -86,109 +145,194 @@ export function cacheSubscription(
   subId: Id,
   dependencyKeys: readonly string[],
 ): void {
-  if (subscriptionCache.has(key)) {
+  cacheSubscriptionForRuntime(defaultRuntimeScope, key, subscription, subId, dependencyKeys);
+}
+
+/** @internal Cache a subscription in one runtime. */
+export function cacheSubscriptionForRuntime(
+  runtime: RuntimeScope,
+  key: string,
+  subscription: SubscriptionNode<any>,
+  subId: Id,
+  dependencyKeys: readonly string[],
+): void {
+  const state = getCacheState(runtime);
+  if (state.subscriptionCache.has(key)) {
     throw new Error(
       `[reflex] Subscription cache invariant violated: duplicate canonical key ${key}.`,
     );
   }
 
   const ownedDependencyKeys = [...dependencyKeys];
-  subscriptionCache.set(key, { node: subscription, subId, dependencyKeys: ownedDependencyKeys });
+  state.subscriptionCache.set(key, {
+    node: subscription,
+    subId,
+    dependencyKeys: ownedDependencyKeys,
+  });
   for (const dependencyKey of new Set(ownedDependencyKeys)) {
-    const dependents = dependentSubscriptionKeys.get(dependencyKey) ?? new Set<string>();
+    const dependents = state.dependentSubscriptionKeys.get(dependencyKey) ?? new Set<string>();
     dependents.add(key);
-    dependentSubscriptionKeys.set(dependencyKey, dependents);
+    state.dependentSubscriptionKeys.set(dependencyKey, dependents);
   }
 }
 
-/** @internal Exposed for focused cache lifecycle tests. */
 export function hasCachedSubscription(key: string): boolean {
-  return subscriptionCache.has(key);
+  return hasCachedSubscriptionForRuntime(defaultRuntimeScope, key);
+}
+
+/** @internal Test cache membership in one runtime. */
+export function hasCachedSubscriptionForRuntime(runtime: RuntimeScope, key: string): boolean {
+  return getCacheState(runtime).subscriptionCache.has(key);
 }
 
 export function hasCachedSubscriptionForId(subId: Id): boolean {
-  for (const entry of subscriptionCache.values()) {
+  return hasCachedSubscriptionForIdForRuntime(defaultRuntimeScope, subId);
+}
+
+/** @internal Test whether one runtime has a cached query for an id. */
+export function hasCachedSubscriptionForIdForRuntime(runtime: RuntimeScope, subId: Id): boolean {
+  for (const entry of getCacheState(runtime).subscriptionCache.values()) {
     if (entry.subId === subId) return true;
   }
   return false;
 }
 
-/** Return cache-only diagnostics without exposing runtime-owned nodes. */
 export function getSubscriptionDiagnostics(): readonly SubscriptionDiagnostic[] {
-  return Array.from(subscriptionCache.values(), ({ node }) => inspectSubscription(node));
+  return getSubscriptionDiagnosticsForRuntime(defaultRuntimeScope);
+}
+
+/** @internal Return cache-only diagnostics for one runtime. */
+export function getSubscriptionDiagnosticsForRuntime(
+  runtime: RuntimeScope,
+): readonly SubscriptionDiagnostic[] {
+  return Array.from(getCacheState(runtime).subscriptionCache.values(), ({ node }) =>
+    inspectSubscriptionForRuntime(runtime, node),
+  );
 }
 
 export function clearSubscriptionCache(): void;
 export function clearSubscriptionCache(key: string): void;
 export function clearSubscriptionCache(key?: string): void {
-  assertSubscriptionsCanBeCleared();
-  clearSubscriptionCacheEntries(key);
+  clearSubscriptionCacheForRuntime(defaultRuntimeScope, key);
 }
 
-/** Clear cache state after the caller has enforced lifecycle safety. */
-function clearSubscriptionCacheEntries(key?: string): void {
+/** @internal Clear all or one cache key in a runtime. */
+export function clearSubscriptionCacheForRuntime(runtime: RuntimeScope, key?: string): void {
+  assertSubscriptionsCanBeClearedForRuntime(runtime);
+  clearSubscriptionCacheEntriesForRuntime(runtime, key);
+}
+
+function clearSubscriptionCacheEntriesForRuntime(runtime: RuntimeScope, key?: string): void {
+  const state = getCacheState(runtime);
   if (key === undefined) {
-    subscriptionCache.clear();
-    dependentSubscriptionKeys.clear();
-    provisionalCurrent.clear();
-    provisionalPrevious.clear();
+    state.subscriptionCache.clear();
+    state.dependentSubscriptionKeys.clear();
+    state.provisionalCurrent.clear();
+    state.provisionalPrevious.clear();
     return;
   }
-  removeSubscriptionCacheClosure([key]);
+  removeSubscriptionCacheClosure(runtime, [key]);
 }
 
-function clearSubscriptionCacheEntriesForId(subId: Id): void {
+function clearSubscriptionCacheEntriesForIdForRuntime(runtime: RuntimeScope, subId: Id): void {
   const keys: string[] = [];
-  for (const [key, entry] of subscriptionCache) {
+  for (const [key, entry] of getCacheState(runtime).subscriptionCache) {
     if (entry.subId === subId) keys.push(key);
   }
-  removeSubscriptionCacheClosure(keys);
+  removeSubscriptionCacheClosure(runtime, keys);
 }
 
-/** Remove entries and every cached parent that transitively depends on them. */
-function removeSubscriptionCacheClosure(initialKeys: Iterable<string>): void {
-  const keysToRemove = new Set<string>();
+function removeSubscriptionCacheClosure(
+  runtime: RuntimeScope,
+  initialKeys: Iterable<string>,
+): void {
+  const state = getCacheState(runtime);
+  const keysToRemove = collectSubscriptionCacheClosureKeys(state, initialKeys);
+
+  for (const key of keysToRemove) {
+    const entry = state.subscriptionCache.get(key);
+    if (entry) {
+      state.subscriptionCache.delete(key);
+      for (const dependencyKey of new Set(entry.dependencyKeys)) {
+        const dependents = state.dependentSubscriptionKeys.get(dependencyKey);
+        dependents?.delete(key);
+        if (dependents?.size === 0) state.dependentSubscriptionKeys.delete(dependencyKey);
+      }
+    }
+    state.dependentSubscriptionKeys.delete(key);
+    state.provisionalCurrent.delete(key);
+    state.provisionalPrevious.delete(key);
+  }
+}
+
+function collectSubscriptionCacheClosureKeys(
+  state: SubscriptionCacheState,
+  initialKeys: Iterable<string>,
+): Set<string> {
+  const keys = new Set<string>();
   const pendingKeys = Array.from(initialKeys);
 
   while (pendingKeys.length > 0) {
     const key = pendingKeys.pop()!;
-    if (keysToRemove.has(key)) continue;
-    keysToRemove.add(key);
-    for (const dependentKey of dependentSubscriptionKeys.get(key) ?? []) {
+    if (keys.has(key)) continue;
+    keys.add(key);
+    for (const dependentKey of state.dependentSubscriptionKeys.get(key) ?? []) {
       pendingKeys.push(dependentKey);
     }
   }
+  return keys;
+}
 
-  for (const key of keysToRemove) {
-    const entry = subscriptionCache.get(key);
-    if (entry) {
-      subscriptionCache.delete(key);
-      for (const dependencyKey of new Set(entry.dependencyKeys)) {
-        const dependents = dependentSubscriptionKeys.get(dependencyKey);
-        dependents?.delete(key);
-        if (dependents?.size === 0) dependentSubscriptionKeys.delete(dependencyKey);
-      }
+/** @internal Assert that clearing one definition cannot detach an active graph. */
+export function assertSubscriptionDefinitionCanBeClearedForRuntime(
+  runtime: RuntimeScope,
+  subId: Id,
+): void {
+  const state = getCacheState(runtime);
+  const definitionKeys: string[] = [];
+  for (const [key, entry] of state.subscriptionCache) {
+    if (entry.subId === subId) definitionKeys.push(key);
+  }
+
+  const affectedKeys = collectSubscriptionCacheClosureKeys(state, definitionKeys);
+  for (const key of affectedKeys) {
+    const node = state.subscriptionCache.get(key)?.node;
+    if (node && inspectSubscriptionForRuntime(runtime, node).active) {
+      throw new Error(
+        `[reflex] Cannot clear subscription '${subId}' while its subscription graph is active.`,
+      );
     }
-    dependentSubscriptionKeys.delete(key);
-    provisionalCurrent.delete(key);
-    provisionalPrevious.delete(key);
   }
 }
 
-/** Remove an unused computed cell without evicting persistent root cells. */
 export function evictCachedSubscription(key: string, subscription: SubscriptionNode<any>): void {
-  if (rootSubscriptionKeys.has(key) || subscriptionCache.get(key)?.node !== subscription) return;
-  removeSubscriptionCacheClosure([key]);
+  evictCachedSubscriptionForRuntime(defaultRuntimeScope, key, subscription);
 }
 
-// Provisional lifetime
+/** @internal Evict an unused computed subscription from one runtime. */
+export function evictCachedSubscriptionForRuntime(
+  runtime: RuntimeScope,
+  key: string,
+  subscription: SubscriptionNode<any>,
+): void {
+  const state = getCacheState(runtime);
+  if (
+    state.rootSubscriptionKeys.has(key) ||
+    state.subscriptionCache.get(key)?.node !== subscription
+  ) {
+    return;
+  }
+  removeSubscriptionCacheClosure(runtime, [key]);
+}
 
-function scheduleProvisionalSweep(): void {
-  if (provisionalSweepScheduled) return;
-  provisionalSweepScheduled = true;
+function scheduleProvisionalSweepForRuntime(runtime: RuntimeScope): void {
+  const state = getCacheState(runtime);
+  if (state.provisionalSweepScheduled) return;
+  state.provisionalSweepScheduled = true;
   scheduleAfterRender(() => {
-    provisionalSweepScheduled = false;
-    sweepProvisionalSubscriptions();
+    state.provisionalSweepScheduled = false;
+    if (isRuntimeDisposed(runtime)) return;
+    sweepProvisionalSubscriptionsForRuntime(runtime);
   });
 }
 
@@ -196,22 +340,49 @@ export function markProvisionalSubscription(
   key: string,
   subscription: SubscriptionNode<any>,
 ): void {
-  // Root cells are persistent DB wake-up anchors, even without observers.
-  if (rootSubscriptionKeys.has(key)) return;
-  provisionalCurrent.set(key, subscription);
-  scheduleProvisionalSweep();
+  markProvisionalSubscriptionForRuntime(defaultRuntimeScope, key, subscription);
+}
+
+/** @internal Mark a newly read computed subscription provisional in one runtime. */
+export function markProvisionalSubscriptionForRuntime(
+  runtime: RuntimeScope,
+  key: string,
+  subscription: SubscriptionNode<any>,
+): void {
+  const state = getCacheState(runtime);
+  if (state.rootSubscriptionKeys.has(key)) return;
+  state.provisionalCurrent.set(key, subscription);
+  scheduleProvisionalSweepForRuntime(runtime);
 }
 
 export function unmarkProvisionalSubscription(
   key: string,
   subscription: SubscriptionNode<any>,
 ): void {
-  if (provisionalCurrent.get(key) === subscription) provisionalCurrent.delete(key);
-  if (provisionalPrevious.get(key) === subscription) provisionalPrevious.delete(key);
+  unmarkProvisionalSubscriptionForRuntime(defaultRuntimeScope, key, subscription);
 }
 
-/** Renew the complete dormant dependency component reached from a cache hit. */
+/** @internal Remove a provisional mark in one runtime. */
+export function unmarkProvisionalSubscriptionForRuntime(
+  runtime: RuntimeScope,
+  key: string,
+  subscription: SubscriptionNode<any>,
+): void {
+  const state = getCacheState(runtime);
+  if (state.provisionalCurrent.get(key) === subscription) state.provisionalCurrent.delete(key);
+  if (state.provisionalPrevious.get(key) === subscription) state.provisionalPrevious.delete(key);
+}
+
 export function renewProvisionalSubscriptionTree(rootKey: string): void {
+  renewProvisionalSubscriptionTreeForRuntime(defaultRuntimeScope, rootKey);
+}
+
+/** @internal Renew a dormant dependency component in one runtime. */
+export function renewProvisionalSubscriptionTreeForRuntime(
+  runtime: RuntimeScope,
+  rootKey: string,
+): void {
+  const state = getCacheState(runtime);
   const pendingKeys = [rootKey];
   const visited = new Set<string>();
   let renewed = false;
@@ -220,75 +391,110 @@ export function renewProvisionalSubscriptionTree(rootKey: string): void {
     const key = pendingKeys.pop()!;
     if (visited.has(key)) continue;
     visited.add(key);
-    const entry = subscriptionCache.get(key);
+    const entry = state.subscriptionCache.get(key);
     if (!entry) continue;
 
-    const isCurrent = provisionalCurrent.get(key) === entry.node;
-    const isPrevious = provisionalPrevious.get(key) === entry.node;
+    const isCurrent = state.provisionalCurrent.get(key) === entry.node;
+    const isPrevious = state.provisionalPrevious.get(key) === entry.node;
     if (!isCurrent && !isPrevious) continue;
     if (isPrevious) {
-      provisionalPrevious.delete(key);
-      provisionalCurrent.set(key, entry.node);
+      state.provisionalPrevious.delete(key);
+      state.provisionalCurrent.set(key, entry.node);
       renewed = true;
     }
     for (const dependencyKey of entry.dependencyKeys) pendingKeys.push(dependencyKey);
   }
 
-  if (renewed) scheduleProvisionalSweep();
+  if (renewed) scheduleProvisionalSweepForRuntime(runtime);
 }
 
-/** @internal Advance the provisional lease generation in lifecycle tests. */
 export function sweepProvisionalSubscriptions(): void {
-  const expiredKeys: string[] = [];
-  for (const [key, subscription] of provisionalPrevious) {
-    if (subscriptionCache.get(key)?.node === subscription) expiredKeys.push(key);
-  }
-  removeSubscriptionCacheClosure(expiredKeys);
-  provisionalPrevious = provisionalCurrent;
-  provisionalCurrent = new Map();
-  if (provisionalPrevious.size > 0) scheduleProvisionalSweep();
+  sweepProvisionalSubscriptionsForRuntime(defaultRuntimeScope);
 }
 
-// Subscription configuration and reset coordination
+/** @internal Advance one runtime's provisional lease generation. */
+export function sweepProvisionalSubscriptionsForRuntime(runtime: RuntimeScope): void {
+  const state = getCacheState(runtime);
+  const expiredKeys: string[] = [];
+  for (const [key, subscription] of state.provisionalPrevious) {
+    if (state.subscriptionCache.get(key)?.node === subscription) expiredKeys.push(key);
+  }
+  removeSubscriptionCacheClosure(runtime, expiredKeys);
+  state.provisionalPrevious = state.provisionalCurrent;
+  state.provisionalCurrent = new Map();
+  if (state.provisionalPrevious.size > 0) scheduleProvisionalSweepForRuntime(runtime);
+}
 
 export function getSubConfig(subId: Id): SubConfig | undefined {
-  return subConfigById.get(subId);
+  return getSubConfigForRuntime(defaultRuntimeScope, subId);
+}
+
+/** @internal Get subscription configuration from one runtime. */
+export function getSubConfigForRuntime(runtime: RuntimeScope, subId: Id): SubConfig | undefined {
+  return getCacheState(runtime).subConfigById.get(subId);
 }
 
 export function setSubConfig(subId: Id, config: SubConfig): void {
-  subConfigById.set(subId, config);
+  setSubConfigForRuntime(defaultRuntimeScope, subId, config);
+}
+
+/** @internal Set subscription configuration in one runtime. */
+export function setSubConfigForRuntime(runtime: RuntimeScope, subId: Id, config: SubConfig): void {
+  getCacheState(runtime).subConfigById.set(subId, config);
 }
 
 export function clearSubConfigs(): void;
 export function clearSubConfigs(subId: Id): void;
 export function clearSubConfigs(subId?: Id): void {
-  if (subId === undefined) subConfigById.clear();
-  else subConfigById.delete(subId);
+  clearSubConfigsForRuntime(defaultRuntimeScope, subId);
 }
 
-/** @internal Remove subscription definitions and all metadata derived from them. */
+/** @internal Clear subscription configuration in one runtime. */
+export function clearSubConfigsForRuntime(runtime: RuntimeScope, subId?: Id): void {
+  const state = getCacheState(runtime);
+  if (subId === undefined) state.subConfigById.clear();
+  else state.subConfigById.delete(subId);
+}
+
 export function clearSubscriptionDefinitions(subId?: Id): void {
+  clearSubscriptionDefinitionsForRuntime(defaultRuntimeScope, subId);
+}
+
+/** @internal Remove subscription definitions and metadata from one runtime. */
+export function clearSubscriptionDefinitionsForRuntime(runtime: RuntimeScope, subId?: Id): void {
   if (subId === undefined) {
-    for (const kind of SUBSCRIPTION_HANDLER_KINDS) clearHandlerEntries(kind);
-    clearRootSubSources();
-    clearSubscriptionCacheEntries();
-    clearSubConfigs();
+    for (const kind of SUBSCRIPTION_HANDLER_KINDS) {
+      clearHandlerEntriesForRuntime(runtime, kind);
+    }
+    clearRootSubSourcesForRuntime(runtime);
+    clearSubscriptionCacheEntriesForRuntime(runtime);
+    clearSubConfigsForRuntime(runtime);
     return;
   }
 
-  for (const kind of SUBSCRIPTION_HANDLER_KINDS) clearHandlerEntries(kind, subId);
-  clearRootSubSource(subId);
-  clearSubscriptionCacheEntriesForId(subId);
-  clearSubConfigs(subId);
+  for (const kind of SUBSCRIPTION_HANDLER_KINDS) {
+    clearHandlerEntriesForRuntime(runtime, kind, subId);
+  }
+  clearRootSubSourceForRuntime(runtime, subId);
+  clearSubscriptionCacheEntriesForIdForRuntime(runtime, subId);
+  clearSubConfigsForRuntime(runtime, subId);
 }
 
-/** Clear every subscription definition and cached query. */
 export function clearSubs(): void {
-  assertSubscriptionsCanBeCleared();
-  clearSubscriptionDefinitions();
+  clearSubsForRuntime(defaultRuntimeScope);
 }
 
-/** @internal HMR immediately remounts the owning React tree after disposal. */
+/** @internal Clear every subscription definition and cached query in one runtime. */
+export function clearSubsForRuntime(runtime: RuntimeScope): void {
+  assertSubscriptionsCanBeClearedForRuntime(runtime);
+  clearSubscriptionDefinitionsForRuntime(runtime);
+}
+
 export function clearSubsForHotReload(): void {
-  clearSubscriptionDefinitions();
+  clearSubsForHotReloadForRuntime(defaultRuntimeScope);
+}
+
+/** @internal HMR-clear one runtime whose React tree is about to remount. */
+export function clearSubsForHotReloadForRuntime(runtime: RuntimeScope): void {
+  clearSubscriptionDefinitionsForRuntime(runtime);
 }

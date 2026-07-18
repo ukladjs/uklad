@@ -1,8 +1,10 @@
 # Reflex architecture (compact spec)
 
-One central db. Events are pure functions that describe a new db plus effects.
-Effects are the only side effects. Subscriptions are a cached, reactive DAG
-derived from the db. React reads subscriptions through `useSyncExternalStore`.
+Each `ReflexRuntime` owns one central db. Events are pure functions that
+describe a new db plus effects. Effects are the only side effects.
+Subscriptions are a cached, reactive DAG derived from that runtime's db. React
+reads subscriptions through `useSyncExternalStore` and the nearest
+`ReflexProvider` (or the compatibility `defaultRuntime`).
 
 ## End-to-end flow
 
@@ -32,22 +34,26 @@ dispatch(['todos/add', 'milk'])
 
 Paths in this document are relative to `src/`.
 
-| Path                              | Responsibility                                                              |
-| --------------------------------- | --------------------------------------------------------------------------- |
-| `index.ts`                        | The only package entrypoint; re-exports the supported public API            |
-| `types.ts`                        | Public contracts and module-augmentation anchors                            |
-| `core/*`                          | Environment, equality, Immer, logging, scheduling, tracing, and validation  |
-| `runtime/app-db.ts`               | `appDb`/`renderDb`, coalesced flush, and changed-root publication           |
-| `runtime/handlers.ts`             | Typed handler definitions and framework-owned handler baselines             |
-| `runtime/event-metadata.ts`       | Per-event interceptor metadata                                              |
-| `runtime/reset.ts`                | Cross-store clear coordination                                              |
-| `runtime/subscriptions/engine.ts` | Reactive graph semantics: push waves, pull reads, and live lifecycle        |
-| `runtime/subscriptions/cache.ts`  | Root metadata, canonical instances, reverse edges, leases, and sub config   |
-| `runtime/subscriptions/keys.ts`   | Canonical query-key serialization and development validation                |
-| `events/*`                        | Event registration/pipeline, routing, interceptors, effects, and coeffects  |
-| `subscriptions/registration.ts`   | Root and computed subscription definitions                                  |
-| `subscriptions/queries.ts`        | Graph construction, cache lookup, and imperative reads                      |
-| `react/*`                         | `useSubscription` and hot-reload bindings; the only React-dependent modules |
+| Path                              | Responsibility                                                               |
+| --------------------------------- | ---------------------------------------------------------------------------- |
+| `index.ts`                        | Combined compatibility entrypoint                                            |
+| `vanilla.ts` / `react.ts`         | React-free runtime and React-only public entrypoints                         |
+| `contracts.ts`                    | Store-local runtime contract extraction and vector/result types              |
+| `types.ts`                        | Public contracts and module-augmentation anchors                             |
+| `runtime/runtime.ts`              | `createReflexRuntime`, default facade owner, modules, watches, restore/flush |
+| `runtime/scope.ts`                | Immutable runtime identity and terminal lifecycle marker                     |
+| `core/*`                          | Environment, equality, Immer, logging, scheduling, tracing, and validation   |
+| `runtime/app-db.ts`               | `appDb`/`renderDb`, coalesced flush, and changed-root publication            |
+| `runtime/handlers.ts`             | Typed handler definitions and framework-owned handler baselines              |
+| `runtime/event-metadata.ts`       | Per-event interceptor metadata                                               |
+| `runtime/reset.ts`                | Cross-store clear coordination                                               |
+| `runtime/subscriptions/engine.ts` | Reactive graph semantics: push waves, pull reads, and live lifecycle         |
+| `runtime/subscriptions/cache.ts`  | Root metadata, canonical instances, reverse edges, leases, and sub config    |
+| `runtime/subscriptions/keys.ts`   | Canonical query-key serialization and development validation                 |
+| `events/*`                        | Event registration/pipeline, routing, interceptors, effects, and coeffects   |
+| `subscriptions/registration.ts`   | Root and computed subscription definitions                                   |
+| `subscriptions/queries.ts`        | Graph construction, cache lookup, and imperative reads                       |
+| `react/*`                         | `useSubscription` and hot-reload bindings; the only React-dependent modules  |
 
 See [`code-conventions.md`](./code-conventions.md) for ownership and dependency
 rules for this tree.
@@ -56,11 +62,11 @@ rules for this tree.
 
 **`events/router.ts`**
 
-| Item                  | What / why                                                                                                                  |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `EventQueue`          | FSM (`idle → scheduled → running → paused`). Processes the queued snapshot; events added during a run move to the next tick |
-| `dispatch(event)`     | Async: queue the event, return immediately                                                                                  |
-| `dispatchSync(event)` | Run handler + flush before returning. Rejected inside a handler, a computation, or a listener                               |
+| Item                  | What / why                                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `EventQueue`          | Per-runtime FSM (`idle → scheduled → running → paused`). Events added during a run move to the next tick; idle waiters implement `flush()` |
+| `dispatch(event)`     | Async: queue the event, return immediately                                                                                                 |
+| `dispatchSync(event)` | Run handler + flush before returning. Rejected inside a handler, a computation, or a listener                                              |
 
 **`events/registration.ts` and `events/pipeline.ts`**
 
@@ -92,7 +98,8 @@ regEvent('todos/load', handler, {
 
 ## State
 
-**`runtime/app-db.ts`**
+**`runtime/app-db.ts`** — every operation receives an explicit runtime scope;
+the package-root functions pass `defaultRuntime`'s scope.
 
 | Item                                                | What / why                                                                      |
 | --------------------------------------------------- | ------------------------------------------------------------------------------- |
@@ -155,11 +162,11 @@ definitions and the caching policy the engine knows nothing about: root
 anchoring, the instance cache with reverse edges, and provisional leases. See
 [`subscription-registry.md`](./subscription-registry.md).
 
-**`react/use-subscription.ts`** — `useSubscription(vector, componentName?)`. Wraps
-`useSyncExternalStore`; store bindings are memoized on the serialized key, and
-the node is **re-resolved by key** on every `subscribe`/`getSnapshot` (never
-captured), which is what makes terminal computed cells safe under StrictMode,
-Suspense, and remounts.
+**`react/use-subscription.ts`** — `useSubscription(vector, componentName?)`.
+Wraps `useSyncExternalStore`; store bindings are memoized on the runtime plus
+serialized key and use the runtime's read primitive plus its internal render
+subscription bridge. Provider changes therefore rebind without crossing
+subscription engines.
 
 ## Support
 
@@ -168,7 +175,7 @@ Suspense, and remounts.
 | `scheduleAfterRender(f)`                             | rAF, with a 100 ms timeout fallback — a hidden tab must not stall flushes forever                                                 |
 | `scheduleNextTick(f)`                                | `setImmediate` (RN) / `MessageChannel` (web) scheduling for queued event work                                                     |
 | `withTrace` / `mergeTrace` / `registerTraceCallback` | Trace pipeline. opTypes: `event`, `sub/create`, `sub/run`, `sub/dispose`, `render`. Tag `subscriptionKey` identifies the instance |
-| `setGlobalEqualityCheck` / `regGlobalInterceptor`    | App-wide defaults                                                                                                                 |
+| `setGlobalEqualityCheck` / `regGlobalInterceptor`    | Runtime-wide defaults                                                                                                             |
 | `shallowEqual`                                       | Opt-in equality check; default is deep equality                                                                                   |
 | `debounceAndDispatch` / `throttleAndDispatch`        | Rate-limited dispatch                                                                                                             |
 | `enableTracing` / `disableTracing`                   | Hold or release the manual trace owner; inspector subscriptions keep tracing active through independent leases                    |
@@ -176,6 +183,8 @@ Suspense, and remounts.
 
 ## Invariants
 
+- Every mutable db, queue, registry, cache, trace, and callback store is keyed
+  by an explicit runtime scope. Scheduled callbacks capture that scope.
 - `renderDb` advances **only** inside a publication. The flush is the single publication boundary.
 - One canonical node per serialized query key. Duplicates are an error.
 - Roots are persistent db anchors; computed cells are terminal and evicted when unused.

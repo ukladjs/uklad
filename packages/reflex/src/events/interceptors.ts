@@ -1,5 +1,6 @@
-import { mergeTrace } from '../core/tracing';
-import { getHandler } from '../runtime/handlers';
+import { mergeTraceForRuntime } from '../core/tracing';
+import { getHandlerForRuntime } from '../runtime/handlers';
+import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
 
 import type {
   CoEffects,
@@ -34,8 +35,18 @@ export function isInterceptor(value: unknown): value is Interceptor {
 
 /** @internal Execute an event's interceptor chain. */
 export function execute(event: EventVector, interceptors: Interceptor[]): Context {
+  return executeForRuntime(defaultRuntimeScope, event, interceptors);
+}
+
+/** @internal Execute an event interceptor chain in one runtime. */
+export function executeForRuntime(
+  runtime: RuntimeScope,
+  event: EventVector,
+  interceptors: Interceptor[],
+): Context {
   const context = createContext(event, interceptors);
-  const errorHandler: ErrorHandler | undefined = getHandler(
+  const errorHandler: ErrorHandler | undefined = getHandlerForRuntime(
+    runtime,
     ERROR_HANDLER_KIND,
     EVENT_ERROR_HANDLER_ID,
   );
@@ -44,7 +55,7 @@ export function execute(event: EventVector, interceptors: Interceptor[]): Contex
     try {
       return executeInterceptors({ ...context, originalException: true });
     } catch (error: unknown) {
-      traceError(error, event);
+      traceError(runtime, error, event);
       throw error;
     }
   }
@@ -56,7 +67,7 @@ export function execute(event: EventVector, interceptors: Interceptor[]): Contex
       isReflexError(error) ? error : toReflexError(error, { id: 'unknown-interceptor' }, 'before'),
       { eventV: event },
     );
-    traceError(reflexError, event);
+    traceError(runtime, reflexError, event);
     errorHandler(reflexError.cause, reflexError);
     return context;
   }
@@ -79,7 +90,7 @@ function isReflexError(value: unknown): value is ReflexError {
   return candidate.cause instanceof Error && typeof candidate.data === 'object';
 }
 
-function traceError(value: unknown, event: EventVector): void {
+function traceError(runtime: RuntimeScope, value: unknown, event: EventVector): void {
   const reflexError = isReflexError(value) ? value : undefined;
   const originalError = reflexError?.cause ?? normalizeError(value);
   const traceErrorTag: TraceErrorTag = {
@@ -90,7 +101,7 @@ function traceError(value: unknown, event: EventVector): void {
     ...(reflexError ? { direction: reflexError.data.direction } : {}),
     eventV: event,
   };
-  mergeTrace({ tags: { error: traceErrorTag } });
+  mergeTraceForRuntime(runtime, { tags: { error: traceErrorTag } });
 }
 
 function toReflexError(

@@ -616,7 +616,7 @@ State snapshots may contain user data, tokens, or local test secrets. Guardrails
 - Add `snapshot_state`, `list_snapshots`, `delete_snapshot`.
 - Add SDK restore protocol.
 - Add `restore_state`.
-- Include `sessionEpoch` and staleness warnings in every response. *(sessionEpoch exists and rides `app_status` today; every-response propagation is still open)*
+- Include `sessionEpoch` and staleness warnings in every response. *(identity/epoch now ride successful runtime-scoped responses and `get_trace` accepts an expected epoch; consistent error-response propagation and cursor-reset warnings remain open)*
 - ~~Scaffold `effects.headless.ts` and `coeffects.headless.ts` with safe defaults for common browser APIs.~~ ✅ shipped (reference scaffold in `examples/devtools-playground`)
 - ~~Make `app_status` report `runtime`, `effectMode`, and registered effect adapter modes.~~ ✅ shipped
 

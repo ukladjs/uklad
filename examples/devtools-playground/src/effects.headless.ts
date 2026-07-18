@@ -1,5 +1,6 @@
-import { regEffect } from "@flexsurfer/reflex";
-import { memoryStorage } from "./headless-env";
+import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import type { PlaygroundContracts } from './db';
+import { memoryStorage } from './headless-env';
 
 // Headless adapters: same effect ids as effects.browser.ts, safe by
 // default — browser state becomes an in-memory map, pure UI affordances
@@ -14,10 +15,12 @@ export const effectModes = {
   'set-document-title': 'noop',
 } as const;
 
-regEffect('local-storage-set', ({ key, value }: { key: string; value: unknown }) => {
-  memoryStorage.set(key, JSON.stringify(value));
-});
+export function installHeadlessEffects(runtime: ReflexRuntime<PlaygroundContracts>): void {
+  runtime.regEffect('local-storage-set', ({ key, value }: { key: string; value: unknown }) => {
+    memoryStorage.set(key, JSON.stringify(value));
+  });
 
-regEffect('set-document-title', () => {
-  // no-op: there is no document; the emitted effect is still observable
-});
+  runtime.regEffect('set-document-title', () => {
+    // no-op: there is no document; the emitted effect is still observable
+  });
+}

@@ -1,11 +1,172 @@
 import { current, regEvent } from "@flexsurfer/reflex";
 import { applyPatches, enablePatches } from "immer";
 import type { Badge, Trace, TraceItem } from './types/Trace';
+import type { DevtoolsRuntimeSummary } from './types/Runtime';
 
 // Enable Immer patches plugin for applyPatches functionality
 enablePatches();
 
-regEvent('add-traces', ({ draftDb }, traces: Trace[]) => {
+function clearRuntimeView(draftDb: any) {
+    draftDb.db = "";
+    draftDb.traces = [];
+    draftDb.activeSubs = {};
+    draftDb.handlerKeys = null;
+    draftDb.handlerUsage = {};
+    draftDb.selectedTrace = null;
+    draftDb.dispatchModalOpenState = {};
+}
+
+function acceptsRuntimeMessage(draftDb: any, runtimeId: string, sessionEpoch: number) {
+    if (
+        runtimeId !== draftDb.selectedRuntimeId
+        || draftDb.pendingRuntimeId !== null
+        || !Number.isSafeInteger(sessionEpoch)
+        || sessionEpoch < 1
+        || sessionEpoch < draftDb.sessionEpoch
+    ) {
+        return false;
+    }
+    if (sessionEpoch > draftDb.sessionEpoch) {
+        clearRuntimeView(draftDb);
+        draftDb.sessionEpoch = sessionEpoch;
+    }
+    return true;
+}
+
+regEvent('set-runtimes', (
+    { draftDb },
+    runtimes: DevtoolsRuntimeSummary[],
+    serverSelectedRuntimeId?: string | null,
+) => {
+    const previousRuntimeId = draftDb.selectedRuntimeId as string | null;
+    const previousEpoch = draftDb.sessionEpoch as number;
+    const pendingRuntimeId = draftDb.pendingRuntimeId as string | null;
+    draftDb.runtimes = runtimes;
+
+    if (pendingRuntimeId !== null) {
+        const pending = runtimes.find(
+            ({ runtimeId }) => runtimeId === pendingRuntimeId,
+        );
+        if (pending) {
+            // Runtime-status messages are advisory while a selection request is
+            // in flight. Only devtools-runtime-selected commits the server's
+            // acknowledgement, so an older status cannot roll the UI back.
+            if (
+                draftDb.selectedRuntimeId === pending.runtimeId
+                && draftDb.sessionEpoch !== pending.sessionEpoch
+            ) {
+                clearRuntimeView(draftDb);
+                draftDb.sessionEpoch = pending.sessionEpoch;
+            }
+            return undefined;
+        }
+
+        // The requested runtime disappeared before acknowledgement. Reconcile
+        // with the server list instead of leaving dispatch pinned to a ghost.
+        draftDb.pendingRuntimeId = null;
+    }
+
+    const selected = (
+        typeof serverSelectedRuntimeId === 'string'
+            ? runtimes.find(({ runtimeId }) => runtimeId === serverSelectedRuntimeId)
+            : undefined
+    )
+        ?? runtimes.find(({ runtimeId }) => runtimeId === previousRuntimeId)
+        ?? runtimes.find(({ connected }) => connected)
+        ?? runtimes[0]
+        ?? null;
+    const nextRuntimeId = selected?.runtimeId ?? null;
+    const nextEpoch = selected?.sessionEpoch ?? 0;
+    const selectionChanged = previousRuntimeId !== nextRuntimeId;
+    if (selectionChanged || previousEpoch !== nextEpoch) {
+        clearRuntimeView(draftDb);
+        draftDb.selectedRuntimeId = nextRuntimeId;
+        draftDb.sessionEpoch = nextEpoch;
+    }
+
+    if (nextRuntimeId && serverSelectedRuntimeId == null) {
+        draftDb.pendingRuntimeId = nextRuntimeId;
+        return [['send-runtime-selection', nextRuntimeId]];
+    }
+    return undefined;
+});
+
+regEvent('select-runtime', ({ draftDb }, runtimeId: string) => {
+    const selected = (draftDb.runtimes as DevtoolsRuntimeSummary[])
+        .find((runtime) => runtime.runtimeId === runtimeId);
+    if (
+        !selected
+        || (
+            selected.runtimeId === draftDb.selectedRuntimeId
+            && draftDb.pendingRuntimeId === null
+        )
+        || selected.runtimeId === draftDb.pendingRuntimeId
+    ) return;
+
+    clearRuntimeView(draftDb);
+    draftDb.selectedRuntimeId = selected.runtimeId;
+    draftDb.pendingRuntimeId = selected.runtimeId;
+    draftDb.sessionEpoch = selected.sessionEpoch;
+    return [['send-runtime-selection', selected.runtimeId]];
+});
+
+regEvent('runtime-selected', (
+    { draftDb },
+    identity: { runtimeId: string; runtimeName: string; sessionEpoch: number },
+) => {
+    if (
+        draftDb.pendingRuntimeId !== null
+        && draftDb.pendingRuntimeId !== identity.runtimeId
+    ) {
+        return;
+    }
+
+    if (
+        draftDb.selectedRuntimeId !== identity.runtimeId
+        || draftDb.sessionEpoch !== identity.sessionEpoch
+    ) {
+        clearRuntimeView(draftDb);
+    }
+    draftDb.selectedRuntimeId = identity.runtimeId;
+    draftDb.sessionEpoch = identity.sessionEpoch;
+    draftDb.pendingRuntimeId = null;
+});
+
+regEvent('runtime-selection-rejected', (
+    { draftDb },
+    runtimes: DevtoolsRuntimeSummary[],
+    serverSelectedRuntimeId: string | null,
+) => {
+    draftDb.pendingRuntimeId = null;
+    draftDb.runtimes = runtimes;
+    const selected = (
+        typeof serverSelectedRuntimeId === 'string'
+            ? runtimes.find(({ runtimeId }) => runtimeId === serverSelectedRuntimeId)
+            : undefined
+    )
+        ?? runtimes.find(({ runtimeId }) => runtimeId === draftDb.selectedRuntimeId)
+        ?? runtimes.find(({ connected }) => connected)
+        ?? runtimes[0]
+        ?? null;
+
+    if (
+        draftDb.selectedRuntimeId !== (selected?.runtimeId ?? null)
+        || draftDb.sessionEpoch !== (selected?.sessionEpoch ?? 0)
+    ) {
+        clearRuntimeView(draftDb);
+    }
+    draftDb.selectedRuntimeId = selected?.runtimeId ?? null;
+    draftDb.sessionEpoch = selected?.sessionEpoch ?? 0;
+
+    if (selected && serverSelectedRuntimeId === null) {
+        draftDb.pendingRuntimeId = selected.runtimeId;
+        return [['send-runtime-selection', selected.runtimeId]];
+    }
+    return undefined;
+});
+
+regEvent('add-traces', ({ draftDb }, traces: Trace[], runtimeId: string, sessionEpoch: number) => {
+    if (!acceptsRuntimeMessage(draftDb, runtimeId, sessionEpoch)) return;
     // Initialize handlerUsage if not exists
     if (!draftDb.handlerUsage) {
         draftDb.handlerUsage = {};
@@ -122,11 +283,13 @@ regEvent('add-traces', ({ draftDb }, traces: Trace[]) => {
     draftDb.traces.push(...eventTraceItems, ...renderTraceItemUpdated);
 });
 
-regEvent('update-db', ({ draftDb }, db: any) => {
+regEvent('update-db', ({ draftDb }, db: any, runtimeId: string, sessionEpoch: number) => {
+    if (!acceptsRuntimeMessage(draftDb, runtimeId, sessionEpoch)) return;
     draftDb.db = db;
 });
 
-regEvent('update-active-subs', ({ draftDb }, activeSubs: any) => {
+regEvent('update-active-subs', ({ draftDb }, activeSubs: any, runtimeId: string, sessionEpoch: number) => {
+    if (!acceptsRuntimeMessage(draftDb, runtimeId, sessionEpoch)) return;
     if (!draftDb.activeSubs) {
         draftDb.activeSubs = {};
     }
@@ -140,7 +303,8 @@ regEvent('update-active-subs', ({ draftDb }, activeSubs: any) => {
     }
 });
 
-regEvent('update-handler-keys', ({ draftDb }, handlerKeys: any) => {
+regEvent('update-handler-keys', ({ draftDb }, handlerKeys: any, runtimeId: string, sessionEpoch: number) => {
+    if (!acceptsRuntimeMessage(draftDb, runtimeId, sessionEpoch)) return;
     draftDb.handlerKeys = handlerKeys;
 });
 
@@ -194,8 +358,13 @@ regEvent('set-selected-trace', ({ draftDb }, trace: TraceItem) => {
     draftDb.selectedTrace = trace;
 });
 
-regEvent('dispatch-to-client', (_ctx, eventName: string, ...params: any[]) => {
-    return [['send-dispatch-to-client', { eventName, params }]];
+regEvent('dispatch-to-client', ({ draftDb }, eventName: string, ...params: any[]) => {
+    if (draftDb.pendingRuntimeId !== null || !draftDb.selectedRuntimeId) return;
+    return [['send-dispatch-to-client', {
+        runtimeId: draftDb.selectedRuntimeId,
+        eventName,
+        params
+    }]];
 });
 
 regEvent('open-dispatch-modal', ({ draftDb }, eventName: string = 'event-id', initialParams: any[] = []) => {

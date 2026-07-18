@@ -4,9 +4,17 @@
  */
 
 import { DevToolsAPIClient } from '../httpClient.js';
-import { serverUnavailableResult } from './errorResponse.js';
+import {
+  runtimeRoutingErrorResult,
+  serverUnavailableResult,
+} from './errorResponse.js';
+import {
+  runtimeIdInputProperty,
+  runtimeMetadata,
+  type RuntimeSelectionParams,
+} from './runtimeSelection.js';
 
-export interface EvalSubParams {
+export interface EvalSubParams extends RuntimeSelectionParams {
   id: string;
   args?: any[];
 }
@@ -31,7 +39,8 @@ export function evalSubTool(apiClient: DevToolsAPIClient) {
           items: {
             type: ['string', 'number', 'boolean', 'object', 'array', 'null']
           }
-        }
+        },
+        runtimeId: runtimeIdInputProperty,
       },
       required: ['id'],
       additionalProperties: false
@@ -39,12 +48,17 @@ export function evalSubTool(apiClient: DevToolsAPIClient) {
     handler: async (params: EvalSubParams) => {
       const args = params.args || [];
       try {
-        const response = await apiClient.evalSub(params.id, args);
+        const response = await apiClient.evalSub(
+          params.id,
+          args,
+          params.runtimeId,
+        );
         return {
           content: [
             {
               type: 'text',
               text: JSON.stringify({
+                ...runtimeMetadata(response),
                 id: params.id,
                 value: response.value
               }, null, 2)
@@ -54,6 +68,12 @@ export function evalSubTool(apiClient: DevToolsAPIClient) {
       } catch (error) {
         const unavailable = serverUnavailableResult(error, 'eval_sub');
         if (unavailable) return unavailable;
+        const routing = runtimeRoutingErrorResult(
+          error,
+          'eval_sub',
+          params.runtimeId,
+        );
+        if (routing) return routing;
 
         const details = (error as any)?.details;
         const evaluationError = details?.error ?? details;

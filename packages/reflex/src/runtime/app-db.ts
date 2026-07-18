@@ -1,121 +1,134 @@
 import { scheduleAfterRender } from '../core/scheduling';
-import { getCachedSubscription, getRootSubIdBySource } from './subscriptions/cache';
+import { defaultRuntimeScope, isRuntimeDisposed, type RuntimeScope } from './scope';
 import {
-  assertPublicationAllowed,
-  publishSubscriptions,
+  getCachedSubscriptionForRuntime,
+  getRootSubIdBySourceForRuntime,
+} from './subscriptions/cache';
+import {
+  assertPublicationAllowedForRuntime,
+  publishSubscriptionsForRuntime,
   type SubscriptionNode,
 } from './subscriptions/engine';
 import { getRootSubKey } from './subscriptions/keys';
 
 import type { Db, DefaultAppDb } from '../types';
 
-// The live db: events read it (via produce) and commit new generations to it.
-let appDb: any = {};
-// The last flushed generation: everything render-facing (root subscription
-// handlers, and therefore the whole subscription graph) reads this one. It only
-// advances in flushSubscriptions, so between an event's commit and the next
-// flush all subscriptions — alive caches and newly mounting components alike —
-// serve one consistent db generation instead of a mixed-version window.
-let renderDb: any = {};
+interface AppDbState {
+  appDb: any;
+  renderDb: any;
+  flushScheduled: boolean;
+}
 
-let flushScheduled = false;
+const appDbStates = new WeakMap<RuntimeScope, AppDbState>();
 
-// Keeps T out of inference so the DefaultAppDb default applies: without it,
-// T infers from `value` and an augmented AppDb would never be checked.
+function getAppDbState(runtime: RuntimeScope): AppDbState {
+  let state = appDbStates.get(runtime);
+  if (!state) {
+    state = { appDb: {}, renderDb: {}, flushScheduled: false };
+    appDbStates.set(runtime, state);
+  }
+  return state;
+}
+
 type NoInfer<T> = [T][T extends any ? 0 : never];
 
-/**
- * Replace the app-db and synchronously publish changed roots to any surviving
- * subscription graph. Call this during bootstrap or an intentional app reset,
- * never from subscription evaluation or listener delivery.
- */
+/** Replace the compatibility runtime's app-db and publish surviving roots. */
 export function initAppDb<T = DefaultAppDb>(value: Db<NoInfer<T>>): void {
-  assertPublicationAllowed();
-  const oldDb = renderDb;
-  appDb = value;
-  renderDb = value;
-  // Usually init runs before subscriptions exist. If it is deliberately used
-  // to replace the DB while a graph survives (tests, app reset), publish the
-  // changed roots now so active snapshots cannot retain the previous DB.
-  publishSubscriptions(collectChangedRoots(oldDb, value));
+  initAppDbForRuntime(defaultRuntimeScope, value);
 }
 
-/**
- * Return the latest committed app-db. This live write head can be ahead of the
- * generation visible to subscriptions until their scheduled flush completes.
- */
+/** @internal Replace one runtime's db heads and publish surviving roots. */
+export function initAppDbForRuntime<T = DefaultAppDb>(
+  runtime: RuntimeScope,
+  value: Db<NoInfer<T>>,
+): void {
+  assertPublicationAllowedForRuntime(runtime);
+  const state = getAppDbState(runtime);
+  const oldDb = state.renderDb;
+  state.appDb = value;
+  state.renderDb = value;
+  publishSubscriptionsForRuntime(runtime, collectChangedRoots(runtime, oldDb, value));
+}
+
+/** Return the latest committed compatibility app-db. */
 export function getAppDb<T = DefaultAppDb>(): Db<T> {
-  return appDb as Db<T>;
+  return getAppDbForRuntime<T>(defaultRuntimeScope);
 }
 
-/**
- * The db generation subscriptions read from. Internal: root subscription
- * handlers go through this so reads are consistent with the flush cycle.
- */
+/** @internal Return the latest committed db for one runtime. */
+export function getAppDbForRuntime<T = DefaultAppDb>(runtime: RuntimeScope): Db<T> {
+  return getAppDbState(runtime).appDb as Db<T>;
+}
+
+/** Return the compatibility runtime's render-visible db generation. */
 export function getRenderDb<T = DefaultAppDb>(): Db<T> {
-  return renderDb as Db<T>;
+  return getRenderDbForRuntime<T>(defaultRuntimeScope);
 }
 
-/**
- * Commit a new db generation produced by an event handler and schedule the
- * subscription flush. Immer's structural sharing makes the change detection
- * here (and the per-key diff at flush time) a pure reference comparison:
- * untouched state keeps its identity, changed paths get fresh objects.
- */
+/** @internal Return one runtime's render-visible db generation. */
+export function getRenderDbForRuntime<T = DefaultAppDb>(runtime: RuntimeScope): Db<T> {
+  return getAppDbState(runtime).renderDb as Db<T>;
+}
+
+/** Commit a compatibility db generation and schedule subscription publication. */
 export function updateAppDb<T = Record<string, any>>(newDb: Db<T>): void {
-  if (newDb === appDb) {
-    return;
-  }
-  appDb = newDb;
-  if (!flushScheduled) {
-    flushScheduled = true;
-    scheduleAfterRender(() => {
-      flushScheduled = false;
-      flushSubscriptions();
-    });
-  }
+  updateAppDbForRuntime(defaultRuntimeScope, newDb);
 }
 
-/**
- * Promote the live db to the render generation and wake the root subscriptions
- * whose top-level key actually changed, found with a shallow reference diff
- * (`!Object.is(old[k], new[k])`). Consecutive events between two flushes coalesce into
- * a single diff against the previously flushed generation.
- *
- * Publication itself is synchronous. Ordinary dispatch reaches this function
- * from its scheduled DB flush; dispatchSync calls it inline.
- */
+/** @internal Commit one runtime's db generation and schedule publication. */
+export function updateAppDbForRuntime<T = Record<string, any>>(
+  runtime: RuntimeScope,
+  newDb: Db<T>,
+): void {
+  const state = getAppDbState(runtime);
+  if (newDb === state.appDb) return;
+  state.appDb = newDb;
+  if (state.flushScheduled) return;
+  state.flushScheduled = true;
+  scheduleAfterRender(() => {
+    state.flushScheduled = false;
+    if (isRuntimeDisposed(runtime)) return;
+    flushSubscriptionsForRuntime(runtime);
+  });
+}
+
+/** Publish the compatibility runtime's latest db generation. */
 export function flushSubscriptions(): void {
-  if (renderDb === appDb) {
-    return;
-  }
-  assertPublicationAllowed();
-  const oldDb = renderDb;
-  const newDb = appDb;
-  renderDb = newDb;
-
-  publishSubscriptions(collectChangedRoots(oldDb, newDb));
+  flushSubscriptionsForRuntime(defaultRuntimeScope);
 }
 
-function collectChangedRoots(oldDb: any, newDb: any): SubscriptionNode<any>[] {
+/** @internal Publish one runtime's latest db generation synchronously. */
+export function flushSubscriptionsForRuntime(runtime: RuntimeScope): void {
+  const state = getAppDbState(runtime);
+  if (state.renderDb === state.appDb) return;
+  assertPublicationAllowedForRuntime(runtime);
+  const oldDb = state.renderDb;
+  const newDb = state.appDb;
+  state.renderDb = newDb;
+  publishSubscriptionsForRuntime(runtime, collectChangedRoots(runtime, oldDb, newDb));
+}
+
+/** @internal Return whether one runtime still has an unflushed db generation. */
+export function hasPendingDbFlushForRuntime(runtime: RuntimeScope): boolean {
+  const state = getAppDbState(runtime);
+  return state.renderDb !== state.appDb;
+}
+
+function collectChangedRoots(
+  runtime: RuntimeScope,
+  oldDb: any,
+  newDb: any,
+): SubscriptionNode<any>[] {
   const dirtyRoots: SubscriptionNode<any>[] = [];
   const keys = new Set([...Object.keys(oldDb), ...Object.keys(newDb)]);
   for (const key of keys) {
-    if (Object.is(oldDb[key], newDb[key])) {
-      continue;
-    }
+    if (Object.is(oldDb[key], newDb[key])) continue;
 
-    const subId = getRootSubIdBySource(key);
-    if (subId === undefined) {
-      continue;
-    }
+    const subId = getRootSubIdBySourceForRuntime(runtime, key);
+    if (subId === undefined) continue;
 
-    const subscription = getCachedSubscription(getRootSubKey(subId));
-    if (!subscription) {
-      continue;
-    }
-    dirtyRoots.push(subscription);
+    const subscription = getCachedSubscriptionForRuntime(runtime, getRootSubKey(subId));
+    if (subscription) dirtyRoots.push(subscription);
   }
-
   return dirtyRoots;
 }

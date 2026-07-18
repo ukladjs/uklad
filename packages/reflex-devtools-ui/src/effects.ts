@@ -1,10 +1,11 @@
 import { dispatch, regEffect, enableMapSet } from '@flexsurfer/reflex';
 import { saveSettings } from './utils/settingsStorage';
 import { reflexReviver } from './utils/serialization';
+import type { DevtoolsRuntimeSummary } from './types/Runtime';
 
 enableMapSet();
 
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = 2;
 const WS_PROTOCOL = `reflex-devtools.v${PROTOCOL_VERSION}`;
 const PROTOCOL_HEADER = 'Reflex-DevTools-Protocol-Version';
 
@@ -13,6 +14,41 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let capabilities = new Set<string>();
 let sessionToken: string | null = null;
 let sessionTokenSource: 'bootstrap' | 'configured' | null = null;
+
+function isRuntimeSummary(value: unknown): value is DevtoolsRuntimeSummary {
+  if (typeof value !== 'object' || value === null) return false;
+  const runtime = value as Partial<DevtoolsRuntimeSummary>;
+  return (
+    typeof runtime.runtimeId === 'string'
+    && typeof runtime.runtimeName === 'string'
+    && typeof runtime.connected === 'boolean'
+    && Number.isSafeInteger(runtime.sessionEpoch)
+    && runtime.sessionEpoch! >= 0
+    && (
+      runtime.runtime === null
+      || runtime.runtime === 'browser'
+      || runtime.runtime === 'headless'
+      || runtime.runtime === 'react-native'
+    )
+  );
+}
+
+function readRuntimeSummaries(value: unknown): DevtoolsRuntimeSummary[] | null {
+  return Array.isArray(value) && value.every(isRuntimeSummary) ? value : null;
+}
+
+function isRuntimeIdentity(value: unknown): value is {
+  runtimeId: string;
+  runtimeName: string;
+  sessionEpoch: number;
+} {
+  if (typeof value !== 'object' || value === null) return false;
+  const identity = value as Record<string, unknown>;
+  return typeof identity.runtimeId === 'string'
+    && typeof identity.runtimeName === 'string'
+    && Number.isSafeInteger(identity.sessionEpoch)
+    && (identity.sessionEpoch as number) >= 1;
+}
 
 function isLoopbackHostname(hostname: string): boolean {
   const normalized = hostname
@@ -159,9 +195,11 @@ async function connectWebSocket(): Promise<void> {
       const data = JSON.parse(event.data, reflexReviver);
       if (data.type === 'devtools-connected') {
         const acceptedCapabilities = data.payload?.capabilities;
+        const runtimes = readRuntimeSummaries(data.payload?.runtimes);
         if (
           authenticated
           || data.payload?.protocolVersion !== PROTOCOL_VERSION
+          || runtimes === null
           || !Array.isArray(acceptedCapabilities)
           || !acceptedCapabilities.every((capability: unknown) =>
             capability === 'inspect'
@@ -179,14 +217,49 @@ async function connectWebSocket(): Promise<void> {
         wsRef.close(1002, 'DevTools server sent data before authentication');
       } else if (data.type === 'devtools-error') {
         console.error(`[UI] ${data.payload?.code}: ${data.payload?.message}`);
+        if (
+          data.payload?.code === 'INVALID_RUNTIME_ID'
+          || data.payload?.code === 'RUNTIME_NOT_FOUND'
+          || data.payload?.code === 'RUNTIME_SELECTION_REQUIRED'
+          || data.payload?.code === 'STALE_RUNTIME_SELECTION'
+        ) {
+          const runtimes = readRuntimeSummaries(data.payload?.runtimes);
+          if (runtimes !== null) {
+            dispatch([
+              'runtime-selection-rejected',
+              runtimes,
+              typeof data.payload?.selectedRuntimeId === 'string'
+                ? data.payload.selectedRuntimeId
+                : null,
+            ]);
+          }
+        }
+      } else if (data.type === 'devtools-runtime-status') {
+        const runtimes = readRuntimeSummaries(data.payload?.runtimes);
+        if (runtimes === null) {
+          wsRef.close(1002, 'DevTools server sent an invalid runtime list');
+          return;
+        }
+        const selectedRuntimeId = data.payload?.selectedRuntimeId;
+        if (selectedRuntimeId !== null && typeof selectedRuntimeId !== 'string') {
+          wsRef.close(1002, 'DevTools server sent an invalid runtime selection');
+          return;
+        }
+        dispatch(['set-runtimes', runtimes, selectedRuntimeId]);
+      } else if (data.type === 'devtools-runtime-selected') {
+        if (!isRuntimeIdentity(data.payload)) {
+          wsRef.close(1002, 'DevTools server sent an invalid runtime selection acknowledgement');
+          return;
+        }
+        dispatch(['runtime-selected', data.payload]);
       } else if (data.type === 'reflex-traces') {
-        dispatch(['add-traces', data.payload]);
+        dispatch(['add-traces', data.payload, data.runtimeId, data.sessionEpoch]);
       } else if (data.type === 'reflex-app-db') {
-        dispatch(['update-db', data.payload]);
+        dispatch(['update-db', data.payload, data.runtimeId, data.sessionEpoch]);
       } else if (data.type === 'reflex-active-subs') {
-        dispatch(['update-active-subs', data.payload]);
+        dispatch(['update-active-subs', data.payload, data.runtimeId, data.sessionEpoch]);
       } else if (data.type === 'reflex-handler-keys') {
-        dispatch(['update-handler-keys', data.payload]);
+        dispatch(['update-handler-keys', data.payload, data.runtimeId, data.sessionEpoch]);
       }
     } catch (error) {
       console.error('Error parsing DevTools event:', error);
@@ -197,6 +270,7 @@ async function connectWebSocket(): Promise<void> {
     if (wsConnection === wsRef) wsConnection = null;
     capabilities.clear();
     dispatch(['set-capabilities', []]);
+    dispatch(['set-runtimes', []]);
     dispatch(['set-connected', false]);
 
     if (sessionTokenSource === 'bootstrap') {
@@ -219,15 +293,30 @@ regEffect('save-settings', (settings) => {
   saveSettings(settings);
 });
 
+regEffect('send-runtime-selection', (runtimeId: string) => {
+  if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
+    console.error('[UI] WebSocket is not connected.');
+    return;
+  }
+  wsConnection.send(JSON.stringify({
+    type: 'select-runtime',
+    payload: { runtimeId },
+  }));
+});
+
 regEffect(
   'send-dispatch-to-client',
-  (payload: { eventName: string; params: any[] }) => {
+  (payload: { runtimeId: string | null; eventName: string; params: any[] }) => {
     if (!capabilities.has('dispatch')) {
       console.error('[UI] DevTools is read-only; dispatch is not granted.');
       return;
     }
     if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
       console.error('[UI] WebSocket is not connected.');
+      return;
+    }
+    if (!payload.runtimeId) {
+      console.error('[UI] Select a runtime before dispatching.');
       return;
     }
 

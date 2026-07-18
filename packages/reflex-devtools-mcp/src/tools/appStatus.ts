@@ -4,23 +4,49 @@
  */
 
 import { DevToolsAPIClient } from '../httpClient.js';
-import { serverUnavailableResult } from './errorResponse.js';
+import {
+  runtimeRoutingErrorResult,
+  serverUnavailableResult,
+} from './errorResponse.js';
+import {
+  runtimeIdInputProperty,
+  type RuntimeSelectionParams,
+} from './runtimeSelection.js';
 
 export function appStatusTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'app_status',
-    description: 'Cheap health check for the whole loop — call it first after a cold start and after any app reload. Reports whether an app is connected and how it runs (runtime "browser", "react-native", or "headless" plus its side-effect adapter modes), whether tracing is on, registered handler counts, and sessionEpoch — a counter that bumps every time the app reconnects. If sessionEpoch changed since you last looked, the app restarted: trace ids reset, stored traces cleared, and previously seeded state is gone.',
+    description: 'Cheap health and runtime-discovery check — call it first after a cold start and after any app reload. Lists every known runtime and its stable runtimeId. Pass runtimeId to select one when multiple runtimes are connected. Reports how the selected runtime runs ("browser", "react-native", or "headless"), tracing, handler counts, and sessionEpoch. If sessionEpoch changed, its DevTools connection session changed and server-stored trace ids were invalidated; a transient reconnect can leave runtime state intact.',
     inputSchema: {
       type: 'object',
-      properties: {},
+      properties: {
+        runtimeId: runtimeIdInputProperty,
+      },
       additionalProperties: false
     },
-    handler: async () => {
+    handler: async (params: RuntimeSelectionParams) => {
       try {
-        const response = await apiClient.getStatus();
+        const response = await apiClient.getStatus(params.runtimeId);
+        const selectedRuntimeId =
+          response.selectedRuntimeId ?? response.runtimeId ?? null;
+        const runtimes = Array.isArray(response.runtimes)
+          ? response.runtimes
+          : response.runtimeId
+            ? [{
+                runtimeId: response.runtimeId,
+                runtimeName: response.runtimeName,
+                connected: response.appConnected,
+                sessionEpoch: response.sessionEpoch,
+                runtime: response.runtime,
+              }]
+            : [];
 
         const status: Record<string, any> = {
           appConnected: response.appConnected,
+          runtimeId: response.runtimeId,
+          runtimeName: response.runtimeName,
+          selectedRuntimeId,
+          runtimes,
           sessionEpoch: response.sessionEpoch,
           mcpEnabled: response.mcpEnabled,
           runtime: response.runtime,
@@ -64,6 +90,12 @@ export function appStatusTool(apiClient: DevToolsAPIClient) {
       } catch (error) {
         const unavailable = serverUnavailableResult(error, 'app_status');
         if (unavailable) return unavailable;
+        const routing = runtimeRoutingErrorResult(
+          error,
+          'app_status',
+          params.runtimeId,
+        );
+        if (routing) return routing;
 
         return {
           content: [

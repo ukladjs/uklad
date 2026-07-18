@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { enableDevtools } from '../dist/client/index.js';
+import { enableDevtools, logEvent } from '../dist/client/index.js';
 
 const waitForTurn = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -13,6 +13,7 @@ class FakeWebSocket {
   static autoOpen = true;
   static throwOnSend = false;
   static runtimePayloadBytes = 1024 * 1024;
+  static serverHelloOverride = null;
 
   readyState = FakeWebSocket.CONNECTING;
   sent = [];
@@ -43,11 +44,15 @@ class FakeWebSocket {
         this.emit({
           type: 'devtools-server-hello',
           payload: {
-            protocolVersion: 1,
+            protocolVersion: 2,
+            runtimeId: message.payload.runtimeId,
+            runtimeName: message.payload.runtimeName,
             runtimeSessionId: 'runtime-session-test',
+            sessionEpoch: 1,
             limits: {
               runtimePayloadBytes: FakeWebSocket.runtimePayloadBytes,
             },
+            ...FakeWebSocket.serverHelloOverride,
           },
         });
       });
@@ -73,7 +78,7 @@ class FakeWebSocket {
 
 function response(
   body,
-  { ok = true, status = 200, protocolVersion = '1' } = {},
+  { ok = true, status = 200, protocolVersion = '2' } = {},
 ) {
   return {
     ok,
@@ -91,18 +96,24 @@ function response(
 
 async function successfulFetch(url) {
   if (String(url).endsWith('/health')) {
-    return response({ protocolVersion: 1 });
+    return response({ protocolVersion: 2 });
   }
   if (String(url).endsWith('/auth/session')) {
     return response({
-      protocolVersion: 1,
+      protocolVersion: 2,
       token: 'runtime-test-token',
     });
   }
   return response({ success: true });
 }
 
-function createFakeInspector(appDb = { count: 1 }) {
+function createFakeInspector(
+  appDb = { count: 1 },
+  {
+    runtimeId = 'runtime-test',
+    runtimeName = 'Runtime test',
+  } = {},
+) {
   let traceCallback = null;
   let unsubscribeCount = 0;
   let snapshotCount = 0;
@@ -110,7 +121,9 @@ function createFakeInspector(appDb = { count: 1 }) {
   const evaluations = [];
 
   const inspector = {
-    apiVersion: 1,
+    apiVersion: 2,
+    runtimeId,
+    runtimeName,
     getSnapshot() {
       snapshotCount++;
       return {
@@ -244,6 +257,18 @@ test('uses only the injected inspector and returns idempotent cleanup', async ()
   try {
     assert.throws(() => enableDevtools({ serverUrl: 'localhost:4000' }), /createReflexInspector/);
     assert.throws(
+      () => enableDevtools({ ...fake.inspector, apiVersion: 1 }),
+      /createReflexInspector/,
+    );
+    assert.throws(
+      () => enableDevtools({ ...fake.inspector, runtimeName: '' }),
+      /createReflexInspector/,
+    );
+    assert.throws(
+      () => enableDevtools({ ...fake.inspector, runtimeId: ' runtime-test' }),
+      /createReflexInspector/,
+    );
+    assert.throws(
       () => enableDevtools(fake.inspector, {
         serverUrl: 'http://devtools.test:4000',
       }),
@@ -262,15 +287,17 @@ test('uses only the injected inspector and returns idempotent cleanup', async ()
     assert.equal(FakeWebSocket.instances.length, 1);
     const socket = FakeWebSocket.instances[0];
     assert.equal(socket.url, 'ws://devtools.test/sdk');
-    assert.deepEqual(socket.protocols, ['reflex-devtools.v1']);
+    assert.deepEqual(socket.protocols, ['reflex-devtools.v2']);
     assert.equal(socket.readyState, FakeWebSocket.OPEN);
     assert.equal(fake.unsubscribeCount, 0);
     assert.equal(fake.snapshotCount, 0);
     assert.equal(socket.sent.length, 1);
     assert.equal(socket.sent[0].type, 'reflex-auth');
     assert.equal(socket.sent[0].payload.role, 'runtime');
-    assert.equal(socket.sent[0].payload.protocolVersion, 1);
-    assert.equal(socket.sent[0].payload.inspectorApiVersion, 1);
+    assert.equal(socket.sent[0].payload.protocolVersion, 2);
+    assert.equal(socket.sent[0].payload.inspectorApiVersion, 2);
+    assert.equal(socket.sent[0].payload.runtimeId, 'runtime-test');
+    assert.equal(socket.sent[0].payload.runtimeName, 'Runtime test');
     assert.equal(typeof socket.sent[0].payload.token, 'string');
 
     socket.emit({
@@ -411,10 +438,10 @@ test('fails closed when session bootstrap omits the protocol response header', a
   globalThis.WebSocket = FakeWebSocket;
   globalThis.fetch = async (url) => {
     if (String(url).endsWith('/health')) {
-      return response({ protocolVersion: 1 });
+      return response({ protocolVersion: 2 });
     }
     return response(
-      { protocolVersion: 1, token: 'runtime-test-token' },
+      { protocolVersion: 2, token: 'runtime-test-token' },
       { protocolVersion: null },
     );
   };
@@ -433,7 +460,139 @@ test('fails closed when session bootstrap omits the protocol response header', a
   }
 });
 
-test('a replacement client disposes the previous one without stale cleanup crossing over', async () => {
+test('fails closed when the server hello has the wrong runtime identity or epoch', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWebSocket = globalThis.WebSocket;
+  FakeWebSocket.autoOpen = true;
+  FakeWebSocket.throwOnSend = false;
+  globalThis.WebSocket = FakeWebSocket;
+  globalThis.fetch = successfulFetch;
+
+  try {
+    for (const invalidHello of [
+      { runtimeId: 'another-runtime' },
+      { runtimeName: 'Another runtime' },
+      { runtimeSessionId: '' },
+      { sessionEpoch: 0 },
+      { sessionEpoch: 1.5 },
+    ]) {
+      FakeWebSocket.instances = [];
+      FakeWebSocket.serverHelloOverride = invalidHello;
+      const fake = createFakeInspector();
+      const cleanup = enableDevtools(fake.inspector);
+      try {
+        await waitForTurn();
+        await waitForTurn();
+        assert.equal(FakeWebSocket.instances.length, 1);
+        assert.equal(
+          FakeWebSocket.instances[0].readyState,
+          FakeWebSocket.CLOSED,
+        );
+      } finally {
+        cleanup();
+      }
+    }
+  } finally {
+    FakeWebSocket.serverHelloOverride = null;
+    globalThis.fetch = originalFetch;
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
+test('simultaneous runtime clients connect and clean up independently', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWebSocket = globalThis.WebSocket;
+  const originalWarn = console.warn;
+  FakeWebSocket.instances = [];
+  FakeWebSocket.autoOpen = true;
+  FakeWebSocket.throwOnSend = false;
+  globalThis.WebSocket = FakeWebSocket;
+  globalThis.fetch = successfulFetch;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args.map(String).join(' '));
+
+  const first = createFakeInspector(
+    { count: 1 },
+    { runtimeId: 'runtime-first', runtimeName: 'Runtime first' },
+  );
+  const second = createFakeInspector(
+    { count: 2 },
+    { runtimeId: 'runtime-second', runtimeName: 'Runtime second' },
+  );
+  const cleanupFirst = enableDevtools(first.inspector);
+  let cleanupSecond;
+
+  try {
+    await waitForTurn();
+    await waitForTurn();
+    const firstSocket = FakeWebSocket.instances[0];
+    firstSocket.emit({
+      type: 'ui-connection-status',
+      payload: { connectedUIs: 1 },
+    });
+
+    cleanupSecond = enableDevtools(second.inspector);
+    assert.equal(first.unsubscribeCount, 0);
+    assert.equal(firstSocket.readyState, FakeWebSocket.OPEN);
+
+    await waitForTurn();
+    await waitForTurn();
+    const secondSocket = FakeWebSocket.instances[1];
+    assert.equal(secondSocket.readyState, FakeWebSocket.OPEN);
+    assert.equal(secondSocket.sent[0].payload.runtimeId, 'runtime-second');
+    secondSocket.emit({
+      type: 'ui-connection-status',
+      payload: { connectedUIs: 1 },
+    });
+    logEvent({ type: 'ambiguous-runtime-note', payload: true });
+    logEvent({ type: 'ambiguous-runtime-note', payload: true });
+    assert.equal(
+      [...firstSocket.sent, ...secondSocket.sent].some(
+        (event) => event.type === 'ambiguous-runtime-note',
+      ),
+      false,
+    );
+    assert.equal(
+      warnings.filter((warning) => warning.includes('requires runtimeId')).length,
+      1,
+    );
+    logEvent(
+      { type: 'runtime-note', payload: { owner: 'second' } },
+      'runtime-second',
+    );
+    assert.equal(
+      firstSocket.sent.some((event) => event.type === 'runtime-note'),
+      false,
+    );
+    assert.equal(
+      secondSocket.sent.some((event) => event.type === 'runtime-note'),
+      true,
+    );
+
+    cleanupFirst();
+    assert.equal(first.unsubscribeCount, 1);
+    assert.equal(firstSocket.readyState, FakeWebSocket.CLOSED);
+    assert.equal(second.unsubscribeCount, 0);
+    assert.equal(secondSocket.readyState, FakeWebSocket.OPEN);
+    logEvent({ type: 'legacy-runtime-note', payload: true });
+    assert.equal(
+      secondSocket.sent.some((event) => event.type === 'legacy-runtime-note'),
+      true,
+    );
+
+    cleanupSecond();
+    assert.equal(second.unsubscribeCount, 1);
+    assert.equal(secondSocket.readyState, FakeWebSocket.CLOSED);
+  } finally {
+    cleanupFirst();
+    cleanupSecond?.();
+    console.warn = originalWarn;
+    globalThis.fetch = originalFetch;
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
+test('enabling the same runtime replaces only that runtime client', async () => {
   const originalFetch = globalThis.fetch;
   const originalWebSocket = globalThis.WebSocket;
   FakeWebSocket.instances = [];
@@ -443,7 +602,10 @@ test('a replacement client disposes the previous one without stale cleanup cross
   globalThis.fetch = successfulFetch;
 
   const first = createFakeInspector();
-  const second = createFakeInspector();
+  const second = createFakeInspector(
+    { count: 2 },
+    { runtimeId: 'runtime-test', runtimeName: 'Runtime test' },
+  );
   const cleanupFirst = enableDevtools(first.inspector);
   let cleanupSecond;
 
@@ -472,6 +634,14 @@ test('a replacement client disposes the previous one without stale cleanup cross
     cleanupFirst();
     assert.equal(second.unsubscribeCount, 0);
     assert.equal(secondSocket.readyState, FakeWebSocket.OPEN);
+
+    logEvent({ type: 'replacement-runtime-note', payload: true });
+    assert.equal(
+      secondSocket.sent.some(
+        (event) => event.type === 'replacement-runtime-note',
+      ),
+      true,
+    );
 
     cleanupSecond();
     assert.equal(second.unsubscribeCount, 1);
@@ -634,18 +804,20 @@ test('cleanup aborts in-flight HTTP fallback events', async () => {
   globalThis.WebSocket = FakeWebSocket;
 
   const eventSignals = [];
+  const eventHeaders = [];
   globalThis.fetch = async (url, options = {}) => {
     if (String(url).endsWith('/health')) {
-      return response({ protocolVersion: 1 });
+      return response({ protocolVersion: 2 });
     }
     if (String(url).endsWith('/auth/session')) {
       return response({
-        protocolVersion: 1,
+        protocolVersion: 2,
         token: 'runtime-test-token',
       });
     }
 
     eventSignals.push(options.signal);
+    eventHeaders.push(new Headers(options.headers));
     return new Promise((_resolve, reject) => {
       options.signal.addEventListener(
         'abort',
@@ -674,6 +846,10 @@ test('cleanup aborts in-flight HTTP fallback events', async () => {
 
     assert.equal(eventSignals.length, 4);
     assert.ok(eventSignals.every((signal) => !signal.aborted));
+    assert.ok(eventHeaders.every((headers) =>
+      headers.get('x-reflex-runtime-id') === 'runtime-test'));
+    assert.ok(eventHeaders.every((headers) =>
+      headers.get('x-reflex-runtime-session') === 'runtime-session-test'));
 
     cleanup();
     assert.ok(eventSignals.every((signal) => signal.aborted));

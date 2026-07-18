@@ -11,6 +11,7 @@ interface CliConfig {
   host: string;
   enableMCP: boolean;
   maxTraces: number;
+  maxRuntimes: number;
   capabilities: DevtoolsCapability[];
   allowRemote: boolean;
   allowedHosts: string[];
@@ -47,6 +48,7 @@ function parseArgs(): CliConfig {
   let host = '127.0.0.1';
   let enableMCP = false;
   let maxTraces = 1000;
+  let maxRuntimes = 16;
   let allowRemote = false;
   let maxControlPayloadBytes: number | undefined;
   let maxRuntimePayloadBytes: number | undefined;
@@ -92,6 +94,10 @@ function parseArgs(): CliConfig {
         maxTraces = readPositiveInteger(args[index + 1], arg);
         index += 1;
         break;
+      case '--max-runtimes':
+        maxRuntimes = readPositiveInteger(args[index + 1], arg);
+        index += 1;
+        break;
       case '--max-control-kib':
         maxControlPayloadBytes =
           readPositiveInteger(args[index + 1], arg) * 1024;
@@ -126,6 +132,7 @@ function parseArgs(): CliConfig {
     host,
     enableMCP,
     maxTraces,
+    maxRuntimes,
     capabilities,
     allowRemote,
     allowedHosts,
@@ -149,6 +156,7 @@ Options:
   --allow-dispatch           Grant the separate dispatch capability
   --allow-restore            Reserve/grant the separate restore capability
   --max-traces <number>      Maximum stored traces (default: 1000)
+  --max-runtimes <number>    Maximum retained runtime entries (default: 16)
   --max-control-kib <number> HTTP/UI control payload limit (default: 64 KiB)
   --max-runtime-kib <number> Runtime telemetry payload limit (default: 1024 KiB)
   --allow-remote             Explicitly allow a non-loopback bind

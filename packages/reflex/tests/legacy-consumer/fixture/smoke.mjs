@@ -2,6 +2,8 @@
 // subscription cycle against the packed tarball, not the repo sources.
 import assert from 'node:assert';
 import {
+  ReflexProvider,
+  defaultRuntime,
   dispatchSync,
   getAppDb,
   getSubscriptionValue,
@@ -9,6 +11,11 @@ import {
   regEvent,
   regSub,
 } from '@flexsurfer/reflex';
+import { ReflexProvider as subpathReflexProvider } from '@flexsurfer/reflex/react';
+import { defaultRuntime as subpathDefaultRuntime } from '@flexsurfer/reflex/vanilla';
+
+assert.strictEqual(defaultRuntime, subpathDefaultRuntime);
+assert.strictEqual(ReflexProvider, subpathReflexProvider);
 
 initAppDb({ count: 0 });
 regEvent('inc', ({ draftDb }) => {

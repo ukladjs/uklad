@@ -3,13 +3,22 @@ import { produce, produceWithPatches, type Draft } from 'immer';
 import { IS_DEV } from '../core/environment';
 import { ensurePatchesEnabled } from '../core/immer';
 import { consoleLog } from '../core/logging';
-import { isTraceEnabled, mergeTrace, withTrace } from '../core/tracing';
-import { getAppDb } from '../runtime/app-db';
-import { getInterceptors } from '../runtime/event-metadata';
-import { getHandler, registerHandler, registerSystemHandler } from '../runtime/handlers';
-import { doFxInterceptor } from './effects';
-import { getGlobalInterceptors } from './global-interceptors';
-import { execute } from './interceptors';
+import {
+  isTraceEnabledForRuntime,
+  mergeTraceForRuntime,
+  withTraceForRuntime,
+} from '../core/tracing';
+import { getAppDbForRuntime } from '../runtime/app-db';
+import { getInterceptorsForRuntime } from '../runtime/event-metadata';
+import {
+  getHandlerForRuntime,
+  registerHandlerForRuntime,
+  registerSystemHandlerForRuntime,
+} from '../runtime/handlers';
+import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
+import { getDoFxInterceptorForRuntime } from './effects';
+import { getGlobalInterceptorsForRuntime } from './global-interceptors';
+import { executeForRuntime } from './interceptors';
 
 import type {
   Context,
@@ -28,22 +37,50 @@ const HANDLER_KIND = 'event';
 const ERROR_HANDLER_KIND = 'error';
 const EVENT_ERROR_HANDLER_ID = 'event-handler';
 
-let handlingEventId: Id | null = null;
-let runningHandlerEventId: Id | null = null;
+interface PipelineState {
+  handlingEventId: Id | null;
+  runningHandlerEventId: Id | null;
+}
+
+const pipelineStates = new WeakMap<RuntimeScope, PipelineState>();
+
+function getPipelineState(runtime: RuntimeScope): PipelineState {
+  let state = pipelineStates.get(runtime);
+  if (!state) {
+    state = { handlingEventId: null, runningHandlerEventId: null };
+    pipelineStates.set(runtime, state);
+  }
+  return state;
+}
 
 /** @internal Return the event whose interceptor chain is executing. */
 export function getHandlingEventId(): Id | null {
-  return handlingEventId;
+  return getHandlingEventIdForRuntime(defaultRuntimeScope);
+}
+
+/** @internal Return the event being handled by one runtime. */
+export function getHandlingEventIdForRuntime(runtime: RuntimeScope): Id | null {
+  return getPipelineState(runtime).handlingEventId;
 }
 
 /** @internal Return the event whose pure handler is executing. */
 export function getRunningHandlerEventId(): Id | null {
-  return runningHandlerEventId;
+  return getRunningHandlerEventIdForRuntime(defaultRuntimeScope);
+}
+
+/** @internal Return the pure handler currently running in one runtime. */
+export function getRunningHandlerEventIdForRuntime(runtime: RuntimeScope): Id | null {
+  return getPipelineState(runtime).runningHandlerEventId;
 }
 
 /** Register the handler for unhandled event-pipeline exceptions. */
 export function regEventErrorHandler(handler: ErrorHandler): void {
-  registerHandler(ERROR_HANDLER_KIND, EVENT_ERROR_HANDLER_ID, handler);
+  regEventErrorHandlerForRuntime(defaultRuntimeScope, handler);
+}
+
+/** @internal Register one runtime's event-pipeline error handler. */
+export function regEventErrorHandlerForRuntime(runtime: RuntimeScope, handler: ErrorHandler): void {
+  registerHandlerForRuntime(runtime, ERROR_HANDLER_KIND, EVENT_ERROR_HANDLER_ID, handler);
 }
 
 /** Log and rethrow an unhandled event-pipeline exception. */
@@ -58,8 +95,13 @@ export function defaultErrorHandler(originalError: Error, reflexError: ReflexErr
 
 /** @internal Run a registered event through its interceptor pipeline. */
 export function handle(event: EventVector): void {
+  handleForRuntime(defaultRuntimeScope, event);
+}
+
+/** @internal Run a registered event through one runtime's pipeline. */
+export function handleForRuntime(runtime: RuntimeScope, event: EventVector): void {
   const eventId = event[0];
-  const handler = getHandler(HANDLER_KIND, eventId);
+  const handler = getHandlerForRuntime(runtime, HANDLER_KIND, eventId);
 
   if (!handler) {
     consoleLog('error', '[reflex] no event handler registered for:', eventId);
@@ -68,37 +110,61 @@ export function handle(event: EventVector): void {
       message: `no event handler registered for: ${eventId}`,
       eventV: event,
     };
-    withTrace({ operation: eventId, opType: HANDLER_KIND, tags: { event, error } }, () => {});
+    withTraceForRuntime(
+      runtime,
+      { operation: eventId, opType: HANDLER_KIND, tags: { event, error } },
+      () => {},
+    );
     return;
   }
 
   const interceptors = [
-    doFxInterceptor,
-    injectGlobalInterceptors,
-    ...getInterceptors(eventId),
-    createEventHandlerInterceptor(handler),
+    getDoFxInterceptorForRuntime(runtime),
+    getInjectGlobalInterceptorsForRuntime(runtime),
+    ...getInterceptorsForRuntime(runtime, eventId),
+    createEventHandlerInterceptor(runtime, handler),
   ];
 
-  handlingEventId = eventId;
+  const state = getPipelineState(runtime);
+  state.handlingEventId = eventId;
   try {
-    withTrace({ operation: eventId, opType: HANDLER_KIND, tags: { event } }, () => {
-      execute(event, interceptors);
-    });
+    withTraceForRuntime(
+      runtime,
+      { operation: eventId, opType: HANDLER_KIND, tags: { event } },
+      () => {
+        executeForRuntime(runtime, event, interceptors);
+      },
+    );
   } finally {
-    handlingEventId = null;
+    state.handlingEventId = null;
   }
 }
 
-/** @internal Inject the current global interceptors into an event pipeline. */
-export const injectGlobalInterceptors: Interceptor = {
-  id: 'inject-global-interceptors',
-  before(context) {
-    context.queue = [...getGlobalInterceptors(), ...context.queue];
-    return context;
-  },
-};
+const injectGlobalInterceptorsByRuntime = new WeakMap<RuntimeScope, Interceptor>();
 
-function createEventHandlerInterceptor(handler: EventHandler<any>): Interceptor {
+/** @internal Inject the current global interceptors into an event pipeline. */
+export function getInjectGlobalInterceptorsForRuntime(runtime: RuntimeScope): Interceptor {
+  let interceptor = injectGlobalInterceptorsByRuntime.get(runtime);
+  if (!interceptor) {
+    interceptor = {
+      id: 'inject-global-interceptors',
+      before(context) {
+        context.queue = [...getGlobalInterceptorsForRuntime(runtime), ...context.queue];
+        return context;
+      },
+    };
+    injectGlobalInterceptorsByRuntime.set(runtime, interceptor);
+  }
+  return interceptor;
+}
+
+export const injectGlobalInterceptors: Interceptor =
+  getInjectGlobalInterceptorsForRuntime(defaultRuntimeScope);
+
+function createEventHandlerInterceptor(
+  runtime: RuntimeScope,
+  handler: EventHandler<any>,
+): Interceptor {
   return {
     id: 'fx-handler',
     before(context: Context) {
@@ -108,21 +174,25 @@ function createEventHandlerInterceptor(handler: EventHandler<any>): Interceptor 
 
       const recipe = (draftDb: Draft<Db>) => {
         const coeffects = { ...context.coeffects, draftDb };
-        runningHandlerEventId = event[0];
+        const state = getPipelineState(runtime);
+        state.runningHandlerEventId = event[0];
         try {
           effects = handler(coeffects, ...params) ?? [];
         } finally {
-          runningHandlerEventId = null;
+          state.runningHandlerEventId = null;
         }
       };
 
-      if (isTraceEnabled()) {
+      if (isTraceEnabledForRuntime(runtime)) {
         ensurePatchesEnabled();
-        const [newDb, patches, reversePatches] = produceWithPatches(getAppDb<Db>(), recipe);
+        const [newDb, patches, reversePatches] = produceWithPatches(
+          getAppDbForRuntime<Db>(runtime),
+          recipe,
+        );
         context.newDb = newDb;
-        mergeTrace({ tags: { patches, reversePatches, effects } });
+        mergeTraceForRuntime(runtime, { tags: { patches, reversePatches, effects } });
       } else {
-        context.newDb = produce(getAppDb<Db>(), recipe);
+        context.newDb = produce(getAppDbForRuntime<Db>(runtime), recipe);
       }
 
       if (IS_DEV) {
@@ -152,4 +222,17 @@ function createEventHandlerInterceptor(handler: EventHandler<any>): Interceptor 
 
 // Install the framework default at module evaluation. User overrides remain
 // replaceable, while handler clears restore this baseline.
-registerSystemHandler(ERROR_HANDLER_KIND, EVENT_ERROR_HANDLER_ID, defaultErrorHandler);
+/** @internal Install the framework event error handler in one runtime. */
+export function registerBuiltInErrorHandler(runtime: RuntimeScope): void {
+  registerSystemHandlerForRuntime(
+    runtime,
+    ERROR_HANDLER_KIND,
+    EVENT_ERROR_HANDLER_ID,
+    defaultErrorHandler,
+  );
+}
+
+// Compatibility APIs can import this module without constructing defaultRuntime.
+// Install the default-scope baseline at module evaluation; explicit runtimes are
+// initialized by ReflexRuntimeImplementation.
+registerBuiltInErrorHandler(defaultRuntimeScope);

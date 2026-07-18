@@ -39,7 +39,11 @@ export interface ReflexInspectorSnapshot {
  * application runtime.
  */
 export interface ReflexInspector {
-  readonly apiVersion: 1;
+  readonly apiVersion: 2;
+  /** Stable identity of the exact Reflex runtime owned by this inspector. */
+  readonly runtimeId: string;
+  /** Human-readable runtime label. Names are not routing identifiers. */
+  readonly runtimeName: string;
   getSnapshot(): ReflexInspectorSnapshot;
   subscribeTraces(callback: ReflexTraceCallback): () => void;
   dispatch(event: [string, ...any[]]): void;

@@ -30,11 +30,13 @@ import {
   REFLEX_DEVTOOLS_PROTOCOL_HEADER,
   REFLEX_DEVTOOLS_PROTOCOL_VERSION,
   REFLEX_DEVTOOLS_RUNTIME_ERROR_TYPE,
+  REFLEX_DEVTOOLS_RUNTIME_ID_HEADER,
   REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER,
   REFLEX_DEVTOOLS_TELEMETRY_DROPPED_CODE,
   REFLEX_DEVTOOLS_WS_PROTOCOL,
   type DevtoolsCapability,
   type DevtoolsClientRole,
+  type DevtoolsRuntimeSummary,
   type RuntimeTelemetryDroppedPayload,
   type RuntimeTelemetryDropReason,
 } from '../protocol.js';
@@ -65,11 +67,15 @@ export type {
 } from '../redaction.js';
 export {
   REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+  REFLEX_DEVTOOLS_RUNTIME_ID_HEADER,
 } from '../protocol.js';
 export type {
   DevtoolsCapability,
   DevtoolsClientRole,
   DevtoolsProtocolInfo,
+  DevtoolsRuntimeIdentity,
+  DevtoolsRuntimeKind,
+  DevtoolsRuntimeSummary,
 } from '../protocol.js';
 
 export interface AuditRecord {
@@ -92,6 +98,8 @@ export interface AuditRecord {
   readonly reason?: string;
   readonly traceId?: number;
   readonly durationMs?: number;
+  readonly runtimeId?: string;
+  readonly runtimeName?: string;
   readonly sessionEpoch: number;
   readonly protocolVersion: number;
 }
@@ -117,6 +125,8 @@ export interface ServerConfig {
   maxAuditRecords?: number;
   maxPendingWebSockets?: number;
   maxUiClients?: number;
+  /** Maximum number of connected or retained runtime identities. */
+  maxRuntimes?: number;
   redaction?: DevtoolsRedaction | false;
   onAuditRecord?: (record: AuditRecord) => void | Promise<void>;
 }
@@ -131,6 +141,7 @@ interface PendingDispatch {
   readonly res: Response;
   readonly timeout: NodeJS.Timeout;
   readonly runtimeSessionId: string;
+  readonly runtimeId: string;
   readonly requestId: string;
   readonly startedAt: number;
   readonly target: string;
@@ -141,17 +152,38 @@ interface PendingSubEval {
   readonly res: Response;
   readonly timeout: NodeJS.Timeout;
   readonly runtimeSessionId: string;
+  readonly runtimeId: string;
 }
 
 interface RuntimeSocketMetadata {
   readonly sessionId: string;
+  readonly runtimeId: string;
+  readonly runtimeName: string;
+  readonly sessionEpoch: number;
   readonly protocolVersion: number;
   readonly inspectorApiVersion: number;
+}
+
+interface RuntimeEntry {
+  readonly runtimeId: string;
+  runtimeName: string;
+  socket: WebSocket | null;
+  metadata: RuntimeSocketMetadata | null;
+  /**
+   * Bounded dashboard mirror. Without MCP it keeps no trace history, but still
+   * follows trace patches so selecting another runtime can replay current
+   * state, subscriptions, handlers, and runtime information.
+   */
+  readonly snapshot: TraceStorage;
+  readonly storage: TraceStorage | null;
+  sessionEpoch: number;
+  lastConnectedAt: number;
 }
 
 interface UiSocketMetadata {
   readonly auth: AuthContext;
   readonly origin?: string;
+  selectedRuntimeId: string | null;
 }
 
 interface RuntimeTelemetryDrop {
@@ -165,6 +197,18 @@ type RuntimeEventProcessingResult =
   | { readonly status: 'invalid' }
   | { readonly status: 'internal-error' };
 
+type RuntimeSelectionResult =
+  | { readonly ok: true; readonly runtime: RuntimeEntry }
+  | {
+      readonly ok: false;
+      readonly status: 400 | 404 | 409;
+      readonly code:
+        | 'INVALID_RUNTIME_ID'
+        | 'RUNTIME_NOT_FOUND'
+        | 'RUNTIME_SELECTION_REQUIRED';
+      readonly error: string;
+    };
+
 const DISPATCH_OUTCOME_TIMEOUT_MS = 5000;
 const SUB_EVAL_TIMEOUT_MS = 5000;
 const WEBSOCKET_AUTH_TIMEOUT_MS = 3000;
@@ -172,6 +216,7 @@ const DEFAULT_CONTROL_PAYLOAD_BYTES = 64 * 1024;
 const DEFAULT_MAX_PENDING_ACTIONS = 32;
 const DEFAULT_MAX_AUDIT_RECORDS = 500;
 const DEFAULT_MAX_PENDING_WEBSOCKETS = 16;
+const DEFAULT_MAX_RUNTIMES = 16;
 const MAX_EVENT_ID_LENGTH = 256;
 const MAX_EVENT_PARAMS = 100;
 const MAX_TRACE_QUERY_LIMIT = 1000;
@@ -183,6 +228,7 @@ const MAX_ACTIVE_SUB_CHANGES_PER_MESSAGE = 5000;
 const MAX_HANDLER_KEYS_PER_TYPE = 10_000;
 const MAX_RUNTIME_EFFECT_ADAPTERS = 1000;
 const MAX_DIAGNOSTIC_KEY_LENGTH = 4096;
+const MAX_RUNTIME_NAME_LENGTH = 256;
 
 function isRecord(value: unknown): value is Record<string, any> {
   return value !== null
@@ -249,6 +295,7 @@ export class DevtoolsServer {
     maxAuditRecords: number;
     maxPendingWebSockets: number;
     maxUiClients: number;
+    maxRuntimes: number;
   };
   private readonly capabilities: ReadonlySet<DevtoolsCapability>;
   private readonly tokens: SessionTokens;
@@ -259,13 +306,10 @@ export class DevtoolsServer {
   private readonly pendingWebSockets = new Set<WebSocket>();
   private readonly auditRecords: AuditRecord[] = [];
   private readonly uiPath: string;
-  private readonly storage: TraceStorage | null;
+  private readonly runtimes = new Map<string, RuntimeEntry>();
   private readonly pendingDispatches = new Map<string, PendingDispatch>();
   private readonly pendingSubEvals = new Map<string, PendingSubEval>();
   private readonly socketLiveness = new WeakMap<WebSocket, boolean>();
-  private sdkClient: WebSocket | null = null;
-  private runtimeSocketMetadata: RuntimeSocketMetadata | null = null;
-  private sessionEpoch = 0;
   private heartbeatTimer: NodeJS.Timeout | null = null;
 
   constructor(config: ServerConfig) {
@@ -344,6 +388,12 @@ export class DevtoolsServer {
         8,
         64,
       ),
+      maxRuntimes: boundedInteger(
+        'maxRuntimes',
+        config.maxRuntimes,
+        DEFAULT_MAX_RUNTIMES,
+        256,
+      ),
     };
     this.capabilities = uniqueCapabilities(config.capabilities);
     this.tokens = createSessionTokens(config.tokens);
@@ -377,10 +427,7 @@ export class DevtoolsServer {
       };
     }
 
-    this.storage = this.config.enableMCP
-      ? new TraceStorage(this.config.maxTraces)
-      : null;
-    if (this.storage) {
+    if (this.config.enableMCP) {
       console.log('[Reflex Devtools] MCP inspection enabled - trace storage active');
     }
 
@@ -521,6 +568,7 @@ export class DevtoolsServer {
             'Content-Type',
             'Reflex-DevTools-Protocol-Version',
             'X-Reflex-Client',
+            'X-Reflex-Runtime-Id',
             'X-Reflex-Runtime-Session',
           ].join(', '),
         );
@@ -609,19 +657,25 @@ export class DevtoolsServer {
     this.app.get(
       '/api/status',
       this.authenticateHttp('mcp'),
-      (_req: Request, res: Response) => {
-        const connected = this.sdkClient?.readyState === WebSocket.OPEN;
-        const runtimeInfo = this.storage?.getRuntimeInfo() ?? null;
-        const handlerKeys = this.storage?.getHandlerKeys() ?? null;
+      (req: Request, res: Response) => {
+        const runtime = this.selectRuntimeForHttp(req, res, 'query');
+        if (!runtime) return;
+        const connected = this.isRuntimeConnected(runtime);
+        const runtimeInfo = runtime.storage?.getRuntimeInfo() ?? null;
+        const handlerKeys = runtime.storage?.getHandlerKeys() ?? null;
         const auth = res.locals.auth as AuthContext;
 
         res.json({
           success: true,
           mcpEnabled: this.config.enableMCP,
           appConnected: connected,
-          connectedApps: connected ? 1 : 0,
+          connectedApps: this.connectedRuntimes().length,
           connectedUIs: this.uiClients.size,
-          sessionEpoch: this.sessionEpoch,
+          runtimeId: runtime.runtimeId,
+          runtimeName: runtime.runtimeName,
+          selectedRuntimeId: runtime.runtimeId,
+          runtimes: this.runtimeSummaries(),
+          sessionEpoch: runtime.sessionEpoch,
           runtime: runtimeInfo?.runtime ?? null,
           effectMode: runtimeInfo?.effectMode ?? null,
           effects: runtimeInfo?.effects ?? null,
@@ -635,8 +689,8 @@ export class DevtoolsServer {
               }
             : null,
           stateAvailable:
-            this.storage ? this.storage.getAppState() !== null : false,
-          traceCount: this.storage?.getStats().totalTraces ?? 0,
+            runtime.storage ? runtime.storage.getAppState() !== null : false,
+          traceCount: runtime.storage?.getStats().totalTraces ?? 0,
           capabilities: [...auth.capabilities],
           readOnly:
             !auth.capabilities.has('dispatch')
@@ -644,9 +698,9 @@ export class DevtoolsServer {
           protocol: {
             version: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
             runtimeVersion:
-              this.runtimeSocketMetadata?.protocolVersion ?? null,
+              runtime.metadata?.protocolVersion ?? null,
             inspectorApiVersion:
-              this.runtimeSocketMetadata?.inspectorApiVersion ?? null,
+              runtime.metadata?.inspectorApiVersion ?? null,
           },
           security: {
             authenticated: true,
@@ -663,7 +717,8 @@ export class DevtoolsServer {
       '/api/traces',
       this.authenticateHttp('mcp', 'inspect'),
       (req, res) => {
-        if (!this.requireStorage(res)) return;
+        const runtime = this.selectRuntimeForHttp(req, res, 'query');
+        if (!runtime || !this.requireStorage(runtime, res)) return;
         try {
           const rawLimit = req.query.limit;
           const limit = rawLimit === undefined
@@ -696,7 +751,7 @@ export class DevtoolsServer {
             return;
           }
 
-          const traces = this.storage!.getTraces({
+          const traces = runtime.storage!.getTraces({
             limit,
             eventFilter:
               typeof req.query.eventFilter === 'string'
@@ -734,7 +789,12 @@ export class DevtoolsServer {
                 }
               : undefined,
           }));
-          this.sendSerialized(res, { success: true, traces });
+          this.sendSerialized(res, {
+            success: true,
+            ...this.runtimeResponseIdentity(runtime),
+            stats: runtime.storage!.getStats(),
+            traces,
+          });
         } catch (error) {
           this.sendInternalError(res, error);
         }
@@ -745,7 +805,45 @@ export class DevtoolsServer {
       '/api/traces/:id',
       this.authenticateHttp('mcp', 'inspect'),
       (req, res) => {
-        if (!this.requireStorage(res)) return;
+        const runtime = this.selectRuntimeForHttp(req, res, 'query');
+        if (!runtime || !this.requireStorage(runtime, res)) return;
+        const rawSessionEpoch = req.query.sessionEpoch;
+        const expectedSessionEpoch = rawSessionEpoch === undefined
+          ? undefined
+          : typeof rawSessionEpoch === 'string'
+            && /^\d+$/.test(rawSessionEpoch)
+            ? Number(rawSessionEpoch)
+            : Number.NaN;
+        if (
+          expectedSessionEpoch !== undefined
+          && (
+            !Number.isSafeInteger(expectedSessionEpoch)
+            || expectedSessionEpoch < 1
+          )
+        ) {
+          res.status(400).json({
+            success: false,
+            code: 'INVALID_SESSION_EPOCH',
+            error: 'sessionEpoch must be a positive safe integer.',
+          });
+          return;
+        }
+        if (
+          expectedSessionEpoch !== undefined
+          && expectedSessionEpoch !== runtime.sessionEpoch
+        ) {
+          res.status(409).json({
+            success: false,
+            code: 'SESSION_EPOCH_MISMATCH',
+            error:
+              `Runtime "${runtime.runtimeId}" is now in session epoch ` +
+              `${runtime.sessionEpoch}; trace ${req.params.id} belonged to ` +
+              `epoch ${expectedSessionEpoch}.`,
+            expectedSessionEpoch,
+            ...this.runtimeResponseIdentity(runtime),
+          });
+          return;
+        }
         const id = Number(req.params.id);
         if (!Number.isInteger(id)) {
           res.status(400).json({
@@ -754,7 +852,7 @@ export class DevtoolsServer {
           });
           return;
         }
-        const trace = this.storage!.getTrace(id);
+        const trace = runtime.storage!.getTrace(id);
         if (!trace) {
           res.status(404).json({
             success: false,
@@ -768,6 +866,7 @@ export class DevtoolsServer {
         if (tags) delete tags.reversePatches;
         this.sendSerialized(res, {
           success: true,
+          ...this.runtimeResponseIdentity(runtime),
           trace: { ...trace, tags },
         });
       },
@@ -777,10 +876,11 @@ export class DevtoolsServer {
       '/api/state',
       this.authenticateHttp('mcp', 'inspect'),
       (req, res) => {
-        if (!this.requireStorage(res)) return;
+        const runtime = this.selectRuntimeForHttp(req, res, 'query');
+        if (!runtime || !this.requireStorage(runtime, res)) return;
         const pathValue =
           typeof req.query.path === 'string' ? req.query.path : undefined;
-        let state = this.storage!.getAppState();
+        let state = runtime.storage!.getAppState();
         if (pathValue) {
           if (pathValue.length > 512) {
             res.status(400).json({
@@ -801,6 +901,7 @@ export class DevtoolsServer {
         }
         this.sendSerialized(res, {
           success: true,
+          ...this.runtimeResponseIdentity(runtime),
           path: pathValue ?? null,
           state,
         });
@@ -811,20 +912,22 @@ export class DevtoolsServer {
       '/api/subscriptions',
       this.authenticateHttp('mcp', 'inspect'),
       (req, res) => {
-        if (!this.requireStorage(res)) return;
+        const runtime = this.selectRuntimeForHttp(req, res, 'query');
+        if (!runtime || !this.requireStorage(runtime, res)) return;
         const filter = typeof req.query.filter === 'string'
           ? req.query.filter.slice(0, MAX_EVENT_ID_LENGTH).toLowerCase()
           : null;
         const subscriptions = filter
           ? Object.fromEntries(
-              Object.entries(this.storage!.getActiveSubs())
+              Object.entries(runtime.storage!.getActiveSubs())
                 .filter(([key]) => key.toLowerCase().includes(filter)),
             )
-          : this.storage!.getActiveSubs();
+          : runtime.storage!.getActiveSubs();
         this.sendSerialized(res, {
           success: true,
+          ...this.runtimeResponseIdentity(runtime),
           subscriptions,
-          total: Object.keys(this.storage!.getActiveSubs()).length,
+          total: Object.keys(runtime.storage!.getActiveSubs()).length,
         });
       },
     );
@@ -833,7 +936,8 @@ export class DevtoolsServer {
       '/api/handlers',
       this.authenticateHttp('mcp', 'inspect'),
       (req, res) => {
-        if (!this.requireStorage(res)) return;
+        const runtime = this.selectRuntimeForHttp(req, res, 'query');
+        if (!runtime || !this.requireStorage(runtime, res)) return;
         const type = req.query.type;
         if (
           type !== undefined
@@ -848,9 +952,10 @@ export class DevtoolsServer {
           });
           return;
         }
-        const handlerKeys = this.storage!.getHandlerKeys();
+        const handlerKeys = runtime.storage!.getHandlerKeys();
         res.json({
           success: true,
+          ...this.runtimeResponseIdentity(runtime),
           handlerKeys:
             type && handlerKeys
               ? { [type]: handlerKeys[type] }
@@ -862,11 +967,13 @@ export class DevtoolsServer {
     this.app.get(
       '/api/stats',
       this.authenticateHttp('mcp', 'inspect'),
-      (_req, res) => {
-        if (!this.requireStorage(res)) return;
+      (req, res) => {
+        const runtime = this.selectRuntimeForHttp(req, res, 'query');
+        if (!runtime || !this.requireStorage(runtime, res)) return;
         res.json({
           success: true,
-          stats: this.storage!.getStats(),
+          ...this.runtimeResponseIdentity(runtime),
+          stats: runtime.storage!.getStats(),
         });
       },
     );
@@ -918,8 +1025,10 @@ export class DevtoolsServer {
       this.requireJsonContentType,
       jsonBodyParser(this.config.maxRuntimePayloadBytes),
       (req, res) => {
+        const runtime = res.locals.runtime as RuntimeEntry;
         const result = this.processInboundRuntimeEvent(
           req.body,
+          runtime.runtimeId,
           String(req.headers[REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER]),
         );
         if (result.status === 'invalid') {
@@ -1123,11 +1232,22 @@ export class DevtoolsServer {
     res: Response,
     next: NextFunction,
   ): void => {
+    const runtimeId = req.headers[REFLEX_DEVTOOLS_RUNTIME_ID_HEADER];
     const sessionId = req.headers[REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER];
+    const runtime = typeof runtimeId === 'string'
+      ? this.runtimes.get(runtimeId)
+      : undefined;
     if (
-      typeof sessionId !== 'string'
-      || !this.runtimeSocketMetadata
-      || sessionId !== this.runtimeSocketMetadata.sessionId
+      this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_RUNTIME_ID_HEADER) !== 1
+      || this.headerCount(
+        req.rawHeaders,
+        REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER,
+      ) !== 1
+      || typeof runtimeId !== 'string'
+      || typeof sessionId !== 'string'
+      || !runtime
+      || !this.isRuntimeConnected(runtime)
+      || sessionId !== runtime.metadata?.sessionId
     ) {
       res.status(409).json({
         success: false,
@@ -1136,6 +1256,7 @@ export class DevtoolsServer {
       });
       return;
     }
+    res.locals.runtime = runtime;
     next();
   };
 
@@ -1204,12 +1325,26 @@ export class DevtoolsServer {
     this.sdkWss.on('connection', (ws, req) => {
       this.authenticateWebSocket(ws, req, 'runtime', (authMessage) => {
         const inspectorApiVersion = authMessage.payload?.inspectorApiVersion;
-        if (inspectorApiVersion !== 1) {
+        if (inspectorApiVersion !== 2) {
           ws.close(1002, 'Unsupported inspector API version');
+          return;
+        }
+        const runtimeId = authMessage.payload?.runtimeId;
+        const runtimeName = authMessage.payload?.runtimeName;
+        if (
+          !this.validRuntimeId(runtimeId)
+          || !this.validRuntimeIdentityText(
+            runtimeName,
+            MAX_RUNTIME_NAME_LENGTH,
+          )
+        ) {
+          ws.close(1008, 'Invalid runtime identity');
           return;
         }
         this.activateRuntimeSocket(ws, {
           sessionId: randomUUID(),
+          runtimeId,
+          runtimeName,
           protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
           inspectorApiVersion,
         });
@@ -1288,21 +1423,45 @@ export class DevtoolsServer {
 
   private activateRuntimeSocket(
     ws: WebSocket,
-    metadata: RuntimeSocketMetadata,
+    candidateMetadata: Omit<RuntimeSocketMetadata, 'sessionEpoch'>,
   ): void {
-    const stale = this.sdkClient;
+    let runtime = this.runtimes.get(candidateMetadata.runtimeId);
+    if (!runtime) {
+      this.evictRetainedRuntimeIfNeeded();
+      if (this.runtimes.size >= this.config.maxRuntimes) {
+        ws.close(1013, 'Too many runtime connections');
+        return;
+      }
+      runtime = {
+        runtimeId: candidateMetadata.runtimeId,
+        runtimeName: candidateMetadata.runtimeName,
+        socket: null,
+        metadata: null,
+        ...this.createRuntimeStorage(),
+        sessionEpoch: 0,
+        lastConnectedAt: 0,
+      };
+      this.runtimes.set(runtime.runtimeId, runtime);
+    }
 
-    // Authentication and compatibility have completed. Only now does a new
-    // runtime become a session boundary and supersede the previous runtime.
-    this.sdkClient = ws;
-    this.runtimeSocketMetadata = metadata;
-    this.sessionEpoch += 1;
-    this.storage?.clear();
+    const stale = runtime.socket;
+    runtime.sessionEpoch += 1;
+    runtime.runtimeName = candidateMetadata.runtimeName;
+    runtime.lastConnectedAt = Date.now();
+    const metadata: RuntimeSocketMetadata = {
+      ...candidateMetadata,
+      sessionEpoch: runtime.sessionEpoch,
+    };
+    runtime.socket = ws;
+    runtime.metadata = metadata;
+    runtime.snapshot.clear();
     this.failPendingDispatches(
-      'App session restarted before the dispatch outcome was observed',
+      'DevTools runtime session changed before the dispatch outcome was observed',
+      runtime.runtimeId,
     );
     this.failPendingSubEvals(
-      'App session restarted before the subscription evaluation completed',
+      'DevTools runtime session changed before the subscription evaluation completed',
+      runtime.runtimeId,
     );
 
     if (stale && stale !== ws) {
@@ -1314,7 +1473,9 @@ export class DevtoolsServer {
       payload: {
         protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
         runtimeSessionId: metadata.sessionId,
-        sessionEpoch: this.sessionEpoch,
+        runtimeId: runtime.runtimeId,
+        runtimeName: runtime.runtimeName,
+        sessionEpoch: runtime.sessionEpoch,
         capabilities: [...this.capabilities],
         limits: {
           runtimePayloadBytes: this.config.maxRuntimePayloadBytes,
@@ -1324,6 +1485,8 @@ export class DevtoolsServer {
       timestamp: Date.now(),
     });
     this.sendTracingDemand(ws);
+    this.notifyUiRuntimeStatus();
+    this.refreshUiSelectionsAfterRuntimeConnect(runtime);
 
     const withinRateLimit = this.createMessageRateLimiter(
       MAX_RUNTIME_MESSAGES_PER_MINUTE,
@@ -1344,7 +1507,11 @@ export class DevtoolsServer {
         ws.close(1007, 'Invalid JSON');
         return;
       }
-      const result = this.processInboundRuntimeEvent(event, metadata.sessionId);
+      const result = this.processInboundRuntimeEvent(
+        event,
+        runtime.runtimeId,
+        metadata.sessionId,
+      );
       if (result.status === 'invalid') {
         ws.close(1008, 'Invalid runtime event');
         return;
@@ -1359,15 +1526,17 @@ export class DevtoolsServer {
     });
 
     const remove = (): void => {
-      if (this.sdkClient !== ws) return;
-      this.sdkClient = null;
-      this.runtimeSocketMetadata = null;
+      if (runtime.socket !== ws) return;
+      runtime.socket = null;
       this.failPendingDispatches(
         'App disconnected before reporting the dispatch outcome',
+        runtime.runtimeId,
       );
       this.failPendingSubEvals(
         'App disconnected before reporting the subscription value',
+        runtime.runtimeId,
       );
+      this.notifyUiRuntimeStatus();
     };
     ws.on('close', remove);
     ws.on('error', remove);
@@ -1385,6 +1554,9 @@ export class DevtoolsServer {
     const metadata: UiSocketMetadata = {
       auth,
       origin: req.headers.origin,
+      selectedRuntimeId: this.connectedRuntimes().length === 1
+        ? this.connectedRuntimes()[0]!.runtimeId
+        : null,
     };
     this.uiClients.set(ws, metadata);
     this.notifySDKClientsUIStatus();
@@ -1394,6 +1566,8 @@ export class DevtoolsServer {
       payload: {
         message: 'Connected to Reflex Devtools',
         protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+        runtimes: this.runtimeSummaries(),
+        selectedRuntimeId: metadata.selectedRuntimeId,
         capabilities: [...auth.capabilities],
         readOnly:
           !auth.capabilities.has('dispatch')
@@ -1401,6 +1575,11 @@ export class DevtoolsServer {
       },
       timestamp: Date.now(),
     });
+    this.sendRuntimeStatusToUi(ws);
+    if (metadata.selectedRuntimeId) {
+      const selected = this.runtimes.get(metadata.selectedRuntimeId);
+      if (selected) this.sendSelectedRuntimeSnapshot(ws, selected);
+    }
 
     const withinRateLimit = this.createMessageRateLimiter(
       MAX_UI_MESSAGES_PER_MINUTE,
@@ -1420,6 +1599,33 @@ export class DevtoolsServer {
         message = JSON.parse(this.rawDataToString(data));
       } catch {
         ws.close(1007, 'Invalid JSON');
+        return;
+      }
+
+      if (message?.type === 'select-runtime') {
+        const selection = this.resolveRuntimeSelection(
+          message.payload?.runtimeId,
+        );
+        if (!selection.ok) {
+          this.sendToSocket(ws, {
+            type: 'devtools-error',
+            payload: {
+              code: selection.code,
+              message: selection.error,
+              selectedRuntimeId: metadata.selectedRuntimeId,
+              runtimes: this.runtimeSummaries(),
+            },
+          });
+          return;
+        }
+        if (metadata.selectedRuntimeId === selection.runtime.runtimeId) {
+          this.sendRuntimeStatusToUi(ws);
+          this.sendRuntimeSelectionAcknowledgement(ws, selection.runtime);
+          return;
+        }
+        metadata.selectedRuntimeId = selection.runtime.runtimeId;
+        this.sendRuntimeStatusToUi(ws);
+        this.sendSelectedRuntimeSnapshot(ws, selection.runtime);
         return;
       }
 
@@ -1479,8 +1685,72 @@ export class DevtoolsServer {
       }
 
       const requestId = randomUUID();
-      const sent = this.broadcastToSDK({
+      if (
+        metadata.selectedRuntimeId === null
+        || message.payload.runtimeId !== metadata.selectedRuntimeId
+      ) {
+        this.appendAudit({
+          requestId,
+          principal: 'ui',
+          client: auth.client,
+          transport: 'websocket',
+          action: 'dispatch',
+          capability: 'dispatch',
+          target: message.payload.eventName,
+          runtimeId: this.validRuntimeId(message.payload.runtimeId)
+            ? message.payload.runtimeId
+            : undefined,
+          status: 'denied',
+          reason: 'stale-runtime-selection',
+        });
+        this.sendToSocket(ws, {
+          type: 'devtools-error',
+          payload: {
+            requestId,
+            code: 'STALE_RUNTIME_SELECTION',
+            message:
+              'The dispatch runtime does not match the dashboard selection. ' +
+              'Wait for runtime selection to be acknowledged and retry.',
+            requestedRuntimeId:
+              typeof message.payload.runtimeId === 'string'
+                ? message.payload.runtimeId
+                : null,
+            selectedRuntimeId: metadata.selectedRuntimeId,
+            runtimes: this.runtimeSummaries(),
+          },
+        });
+        return;
+      }
+      const selection = this.resolveRuntimeSelection(
+        metadata.selectedRuntimeId,
+      );
+      if (!selection.ok) {
+        this.appendAudit({
+          requestId,
+          principal: 'ui',
+          client: auth.client,
+          transport: 'websocket',
+          action: 'dispatch',
+          capability: 'dispatch',
+          target: message.payload.eventName,
+          status: 'denied',
+          reason: selection.code.toLowerCase().replaceAll('_', '-'),
+        });
+        this.sendToSocket(ws, {
+          type: 'devtools-error',
+          payload: {
+            requestId,
+            code: selection.code,
+            message: selection.error,
+            runtimes: this.runtimeSummaries(),
+          },
+        });
+        return;
+      }
+      const runtime = selection.runtime;
+      const sent = this.sendToRuntime(runtime, {
         type: 'dispatch-to-client',
+        runtimeId: runtime.runtimeId,
         payload: {
           eventName: message.payload.eventName,
           params: message.payload.params ?? [],
@@ -1495,9 +1765,21 @@ export class DevtoolsServer {
         action: 'dispatch',
         capability: 'dispatch',
         target: message.payload.eventName,
+        runtimeId: runtime.runtimeId,
         status: sent > 0 ? 'accepted' : 'unknown',
-        reason: sent > 0 ? undefined : 'no-runtime-connected',
+        reason: sent > 0 ? undefined : 'runtime-disconnected',
       });
+      if (sent === 0) {
+        this.sendToSocket(ws, {
+          type: 'devtools-error',
+          payload: {
+            requestId,
+            code: 'RUNTIME_NOT_CONNECTED',
+            message: `Runtime "${runtime.runtimeId}" is not connected.`,
+            runtimeId: runtime.runtimeId,
+          },
+        });
+      }
     });
 
     const remove = (): void => {
@@ -1554,6 +1836,23 @@ export class DevtoolsServer {
       res.status(400).json({ success: false, requestId, error });
       return;
     }
+    const selection = this.resolveRuntimeSelection(req.body?.runtimeId);
+    if (!selection.ok) {
+      this.appendAudit({
+        requestId,
+        principal: 'mcp',
+        client: auth.client,
+        transport: 'http',
+        action: 'dispatch',
+        capability: 'dispatch',
+        target,
+        status: 'denied',
+        reason: selection.code.toLowerCase().replaceAll('_', '-'),
+      });
+      this.sendRuntimeSelectionError(res, selection, requestId);
+      return;
+    }
+    const runtime = selection.runtime;
     if (
       this.pendingDispatches.size + this.pendingSubEvals.size
       >= this.config.maxPendingActions
@@ -1566,6 +1865,7 @@ export class DevtoolsServer {
         action: 'dispatch',
         capability: 'dispatch',
         target,
+        runtimeId: runtime.runtimeId,
         status: 'denied',
         reason: 'pending-action-limit',
       });
@@ -1578,9 +1878,8 @@ export class DevtoolsServer {
       return;
     }
     if (
-      !this.sdkClient
-      || this.sdkClient.readyState !== WebSocket.OPEN
-      || !this.runtimeSocketMetadata
+      !this.isRuntimeConnected(runtime)
+      || !runtime.metadata
     ) {
       this.appendAudit({
         requestId,
@@ -1590,6 +1889,7 @@ export class DevtoolsServer {
         action: 'dispatch',
         capability: 'dispatch',
         target,
+        runtimeId: runtime.runtimeId,
         status: 'unknown',
         reason: 'no-runtime-connected',
       });
@@ -1602,10 +1902,11 @@ export class DevtoolsServer {
     }
 
     const dispatchId = randomUUID();
-    const runtimeSessionId = this.runtimeSocketMetadata.sessionId;
+    const runtimeSessionId = runtime.metadata.sessionId;
     const startedAt = Date.now();
-    const sent = this.broadcastToSDK({
+    const sent = this.sendToRuntime(runtime, {
       type: 'dispatch-to-client',
+      runtimeId: runtime.runtimeId,
       payload: {
         dispatchId,
         eventName: req.body.eventName,
@@ -1622,6 +1923,7 @@ export class DevtoolsServer {
         action: 'dispatch',
         capability: 'dispatch',
         target,
+        runtimeId: runtime.runtimeId,
         status: 'unknown',
         reason: 'runtime-disconnected',
       });
@@ -1641,6 +1943,7 @@ export class DevtoolsServer {
       action: 'dispatch',
       capability: 'dispatch',
       target: req.body.eventName,
+      runtimeId: runtime.runtimeId,
       status: 'accepted',
     });
 
@@ -1657,6 +1960,7 @@ export class DevtoolsServer {
         action: 'dispatch',
         capability: 'dispatch',
         target: req.body.eventName,
+        runtimeId: runtime.runtimeId,
         status: 'unknown',
         reason: 'outcome-timeout',
         durationMs: Date.now() - startedAt,
@@ -1665,6 +1969,7 @@ export class DevtoolsServer {
         success: true,
         outcome: 'unknown',
         requestId,
+        ...this.runtimeResponseIdentity(runtime),
         message,
       });
     }, DISPATCH_OUTCOME_TIMEOUT_MS);
@@ -1673,6 +1978,7 @@ export class DevtoolsServer {
       res,
       timeout,
       runtimeSessionId,
+      runtimeId: runtime.runtimeId,
       requestId,
       startedAt,
       target: req.body.eventName,
@@ -1707,6 +2013,8 @@ export class DevtoolsServer {
       });
       return;
     }
+    const runtime = this.selectRuntimeForHttp(req, res, 'body');
+    if (!runtime) return;
     if (
       this.pendingDispatches.size + this.pendingSubEvals.size
       >= this.config.maxPendingActions
@@ -1718,7 +2026,7 @@ export class DevtoolsServer {
       });
       return;
     }
-    if (!this.runtimeSocketMetadata) {
+    if (!this.isRuntimeConnected(runtime) || !runtime.metadata) {
       res.status(503).json({
         success: false,
         error: 'No app connected to the devtools server; the subscription was not evaluated',
@@ -1727,9 +2035,10 @@ export class DevtoolsServer {
     }
 
     const evalId = randomUUID();
-    const runtimeSessionId = this.runtimeSocketMetadata.sessionId;
-    const sent = this.broadcastToSDK({
+    const runtimeSessionId = runtime.metadata.sessionId;
+    const sent = this.sendToRuntime(runtime, {
       type: 'eval-sub-to-client',
+      runtimeId: runtime.runtimeId,
       payload: { evalId, id, args: args ?? [] },
       timestamp: Date.now(),
     });
@@ -1745,6 +2054,7 @@ export class DevtoolsServer {
       this.pendingSubEvals.delete(evalId);
       res.status(504).json({
         success: false,
+        ...this.runtimeResponseIdentity(runtime),
         error: `Subscription evaluation timed out after ${SUB_EVAL_TIMEOUT_MS}ms`,
       });
     }, SUB_EVAL_TIMEOUT_MS);
@@ -1752,11 +2062,13 @@ export class DevtoolsServer {
       res,
       timeout,
       runtimeSessionId,
+      runtimeId: runtime.runtimeId,
     });
   }
 
   private processInboundRuntimeEvent(
     candidate: any,
+    runtimeId: string,
     runtimeSessionId: string,
   ): RuntimeEventProcessingResult {
     if (
@@ -1769,7 +2081,12 @@ export class DevtoolsServer {
     ) {
       return { status: 'invalid' };
     }
-    if (this.runtimeSocketMetadata?.sessionId !== runtimeSessionId) {
+    const runtime = this.runtimes.get(runtimeId);
+    if (
+      !runtime
+      || runtime.metadata?.sessionId !== runtimeSessionId
+      || !this.isRuntimeConnected(runtime)
+    ) {
       return { status: 'invalid' };
     }
     if (!this.validRuntimeEvent(candidate)) return { status: 'invalid' };
@@ -1792,16 +2109,19 @@ export class DevtoolsServer {
 
     try {
       if (event.type === 'reflex-dispatch-result') {
-        this.resolveDispatch(event.payload, runtimeSessionId);
+        this.resolveDispatch(event.payload, runtimeId, runtimeSessionId);
         return { status: 'accepted' };
       }
       if (event.type === 'reflex-eval-sub-result') {
-        this.resolveSubEval(event.payload, runtimeSessionId);
+        this.resolveSubEval(event.payload, runtimeId, runtimeSessionId);
         return { status: 'accepted' };
       }
 
-      const retentionRejected = this.processStorageEvent(event);
-      this.broadcastEventToUI(event);
+      const retentionRejected = this.processStorageEvent(runtime, event);
+      if (event.type === 'reflex-runtime-info') {
+        this.notifyUiRuntimeStatus();
+      }
+      this.broadcastEventToUI(runtime, event);
       return retentionRejected
         ? {
             status: 'accepted',
@@ -1831,39 +2151,47 @@ export class DevtoolsServer {
     }
   }
 
-  private processStorageEvent(event: any): boolean {
-    if (!this.storage) return false;
+  private processStorageEvent(runtime: RuntimeEntry, event: any): boolean {
+    const storage = runtime.snapshot;
     switch (event.type) {
       case 'reflex-traces':
         if (Array.isArray(event.payload)) {
-          return this.storage.addTraces(event.payload);
+          return storage.addTraces(event.payload);
         }
         break;
       case 'reflex-app-db':
         if (event.payload !== undefined) {
-          this.storage.updateAppState(event.payload);
+          storage.updateAppState(event.payload);
         }
         break;
       case 'reflex-active-subs':
         if (event.payload && typeof event.payload === 'object') {
-          this.storage.updateActiveSubs(event.payload);
+          storage.updateActiveSubs(event.payload);
         }
         break;
       case 'reflex-handler-keys':
-        if (event.payload) this.storage.updateHandlerKeys(event.payload);
+        if (event.payload) storage.updateHandlerKeys(event.payload);
         break;
       case 'reflex-runtime-info':
-        if (event.payload) this.storage.updateRuntimeInfo(event.payload);
+        if (event.payload) storage.updateRuntimeInfo(event.payload);
         break;
     }
     return false;
   }
 
-  private resolveDispatch(payload: any, runtimeSessionId: string): void {
+  private resolveDispatch(
+    payload: any,
+    runtimeId: string,
+    runtimeSessionId: string,
+  ): void {
     const dispatchId = payload?.dispatchId;
     if (typeof dispatchId !== 'string') return;
     const pending = this.pendingDispatches.get(dispatchId);
-    if (!pending || pending.runtimeSessionId !== runtimeSessionId) return;
+    if (
+      !pending
+      || pending.runtimeId !== runtimeId
+      || pending.runtimeSessionId !== runtimeSessionId
+    ) return;
 
     clearTimeout(pending.timeout);
     this.pendingDispatches.delete(dispatchId);
@@ -1883,6 +2211,7 @@ export class DevtoolsServer {
         success: true,
         outcome,
         requestId: pending.requestId,
+        ...this.runtimeResponseIdentityById(pending.runtimeId),
         traceId: payload.trace.id,
         event: tags.event,
         duration: payload.trace.duration,
@@ -1898,6 +2227,7 @@ export class DevtoolsServer {
         success: true,
         outcome: 'unknown',
         requestId: pending.requestId,
+        ...this.runtimeResponseIdentityById(pending.runtimeId),
         message: payload.reason || 'The app reported no trace for this dispatch',
       };
     }
@@ -1910,6 +2240,7 @@ export class DevtoolsServer {
       action: 'dispatch',
       capability: 'dispatch',
       target: pending.target,
+      runtimeId: pending.runtimeId,
       status,
       reason,
       traceId: payload.trace?.id,
@@ -1918,28 +2249,42 @@ export class DevtoolsServer {
     this.sendSerialized(pending.res, body);
   }
 
-  private resolveSubEval(payload: any, runtimeSessionId: string): void {
+  private resolveSubEval(
+    payload: any,
+    runtimeId: string,
+    runtimeSessionId: string,
+  ): void {
     const evalId = payload?.evalId;
     if (typeof evalId !== 'string') return;
     const pending = this.pendingSubEvals.get(evalId);
-    if (!pending || pending.runtimeSessionId !== runtimeSessionId) return;
+    if (
+      !pending
+      || pending.runtimeId !== runtimeId
+      || pending.runtimeSessionId !== runtimeSessionId
+    ) return;
 
     clearTimeout(pending.timeout);
     this.pendingSubEvals.delete(evalId);
     if (payload.error) {
       pending.res
         .status(payload.error.phase === 'missing-handler' ? 404 : 422)
-        .json({ success: false, error: payload.error });
+        .json({
+          success: false,
+          ...this.runtimeResponseIdentityById(pending.runtimeId),
+          error: payload.error,
+        });
       return;
     }
     this.sendSerialized(pending.res, {
       success: true,
+      ...this.runtimeResponseIdentityById(pending.runtimeId),
       value: payload.value,
     });
   }
 
-  private failPendingDispatches(reason: string): void {
+  private failPendingDispatches(reason: string, runtimeId?: string): void {
     for (const [dispatchId, pending] of this.pendingDispatches) {
+      if (runtimeId !== undefined && pending.runtimeId !== runtimeId) continue;
       clearTimeout(pending.timeout);
       this.pendingDispatches.delete(dispatchId);
       this.appendAudit({
@@ -1950,6 +2295,7 @@ export class DevtoolsServer {
         action: 'dispatch',
         capability: 'dispatch',
         target: pending.target,
+        runtimeId: pending.runtimeId,
         status: 'unknown',
         reason,
         durationMs: Date.now() - pending.startedAt,
@@ -1958,16 +2304,22 @@ export class DevtoolsServer {
         success: true,
         outcome: 'unknown',
         requestId: pending.requestId,
+        ...this.runtimeResponseIdentityById(pending.runtimeId),
         message: reason,
       });
     }
   }
 
-  private failPendingSubEvals(reason: string): void {
+  private failPendingSubEvals(reason: string, runtimeId?: string): void {
     for (const [evalId, pending] of this.pendingSubEvals) {
+      if (runtimeId !== undefined && pending.runtimeId !== runtimeId) continue;
       clearTimeout(pending.timeout);
       this.pendingSubEvals.delete(evalId);
-      pending.res.status(503).json({ success: false, error: reason });
+      pending.res.status(503).json({
+        success: false,
+        ...this.runtimeResponseIdentityById(pending.runtimeId),
+        error: reason,
+      });
     }
   }
 
@@ -1989,26 +2341,132 @@ export class DevtoolsServer {
   }
 
   private notifySDKClientsUIStatus(): void {
-    if (this.sdkClient?.readyState === WebSocket.OPEN) {
-      this.sendTracingDemand(this.sdkClient);
+    for (const runtime of this.connectedRuntimes()) {
+      this.sendTracingDemand(runtime.socket!);
     }
   }
 
-  private broadcastEventToUI(event: any): void {
+  private sendRuntimeStatusToUi(client: WebSocket): void {
+    const metadata = this.uiClients.get(client);
+    this.sendToSocket(client, {
+      type: 'devtools-runtime-status',
+      payload: {
+        selectedRuntimeId: metadata?.selectedRuntimeId ?? null,
+        runtimes: this.runtimeSummaries(),
+      },
+      timestamp: Date.now(),
+    });
+  }
+
+  private notifyUiRuntimeStatus(): void {
+    for (const client of this.uiClients.keys()) {
+      this.sendRuntimeStatusToUi(client);
+    }
+  }
+
+  private refreshUiSelectionsAfterRuntimeConnect(runtime: RuntimeEntry): void {
+    const isOnlyConnectedRuntime = this.connectedRuntimes().length === 1;
+    for (const [client, metadata] of this.uiClients) {
+      if (
+        metadata.selectedRuntimeId !== runtime.runtimeId
+        && !(metadata.selectedRuntimeId === null && isOnlyConnectedRuntime)
+      ) {
+        continue;
+      }
+      metadata.selectedRuntimeId = runtime.runtimeId;
+      this.sendRuntimeStatusToUi(client);
+      this.sendSelectedRuntimeSnapshot(client, runtime);
+    }
+  }
+
+  private sendSelectedRuntimeSnapshot(
+    client: WebSocket,
+    runtime: RuntimeEntry,
+  ): void {
+    this.sendRuntimeSelectionAcknowledgement(client, runtime);
+
+    const metadata = this.uiClients.get(client);
+    if (!metadata?.auth.capabilities.has('inspect')) return;
+
+    const storage = runtime.snapshot;
+    const traces = storage.getTraces();
+    if (traces.length === 0) {
+      this.sendTaggedRuntimeEventToUi(client, runtime, {
+        type: 'reflex-traces',
+        payload: [],
+        timestamp: Date.now(),
+      });
+    } else {
+      for (let index = 0; index < traces.length; index += 200) {
+        this.sendTaggedRuntimeEventToUi(client, runtime, {
+          type: 'reflex-traces',
+          payload: traces.slice(index, index + 200),
+          timestamp: Date.now(),
+        });
+      }
+    }
+    this.sendTaggedRuntimeEventToUi(client, runtime, {
+      type: 'reflex-app-db',
+      payload: storage.getAppState(),
+      timestamp: Date.now(),
+    });
+    this.sendTaggedRuntimeEventToUi(client, runtime, {
+      type: 'reflex-active-subs',
+      payload: storage.getActiveSubs(),
+      timestamp: Date.now(),
+    });
+    this.sendTaggedRuntimeEventToUi(client, runtime, {
+      type: 'reflex-handler-keys',
+      payload: storage.getHandlerKeys(),
+      timestamp: Date.now(),
+    });
+    this.sendTaggedRuntimeEventToUi(client, runtime, {
+      type: 'reflex-runtime-info',
+      payload: storage.getRuntimeInfo(),
+      timestamp: Date.now(),
+    });
+  }
+
+  private sendRuntimeSelectionAcknowledgement(
+    client: WebSocket,
+    runtime: RuntimeEntry,
+  ): void {
+    this.sendToSocket(client, {
+      type: 'devtools-runtime-selected',
+      payload: this.runtimeResponseIdentity(runtime),
+      timestamp: Date.now(),
+    });
+  }
+
+  private sendTaggedRuntimeEventToUi(
+    client: WebSocket,
+    runtime: RuntimeEntry,
+    event: any,
+  ): void {
     let serialized: string;
     try {
-      serialized = JSON.stringify(event, reflexReplacer);
+      serialized = JSON.stringify({
+        ...event,
+        ...this.runtimeResponseIdentity(runtime),
+      }, reflexReplacer);
     } catch {
       return;
     }
+    this.sendRawToSocket(client, serialized);
+  }
+
+  private broadcastEventToUI(runtime: RuntimeEntry, event: any): void {
     for (const [client, metadata] of this.uiClients) {
-      if (!metadata.auth.capabilities.has('inspect')) continue;
-      this.sendRawToSocket(client, serialized);
+      if (
+        !metadata.auth.capabilities.has('inspect')
+        || metadata.selectedRuntimeId !== runtime.runtimeId
+      ) continue;
+      this.sendTaggedRuntimeEventToUi(client, runtime, event);
     }
   }
 
-  private broadcastToSDK(message: any): number {
-    const client = this.sdkClient;
+  private sendToRuntime(runtime: RuntimeEntry, message: any): number {
+    const client = runtime.socket;
     if (!client || client.readyState !== WebSocket.OPEN) return 0;
     return this.sendToSocket(client, message) ? 1 : 0;
   }
@@ -2067,11 +2525,15 @@ export class DevtoolsServer {
       'id' | 'timestamp' | 'sessionEpoch' | 'protocolVersion'
     >,
   ): void {
+    const runtime = record.runtimeId
+      ? this.runtimes.get(record.runtimeId)
+      : undefined;
     const fullRecord: AuditRecord = Object.freeze({
       ...record,
+      runtimeName: record.runtimeName ?? runtime?.runtimeName,
       id: randomUUID(),
       timestamp: Date.now(),
-      sessionEpoch: this.sessionEpoch,
+      sessionEpoch: runtime?.sessionEpoch ?? 0,
       protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
     });
     this.auditRecords.push(fullRecord);
@@ -2105,6 +2567,21 @@ export class DevtoolsServer {
     return typeof value === 'string'
       && value.trim().length > 0
       && value.length <= MAX_EVENT_ID_LENGTH
+      && !/[\u0000-\u001F\u007F]/.test(value);
+  }
+
+  private validRuntimeId(value: unknown): value is string {
+    return typeof value === 'string'
+      && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
+  }
+
+  private validRuntimeIdentityText(
+    value: unknown,
+    maxLength: number,
+  ): value is string {
+    return typeof value === 'string'
+      && value.trim().length > 0
+      && value.length <= maxLength
       && !/[\u0000-\u001F\u007F]/.test(value);
   }
 
@@ -2238,7 +2715,7 @@ export class DevtoolsServer {
     }
     if (
       payload.inspectorApiVersion !== undefined
-      && payload.inspectorApiVersion !== 1
+      && payload.inspectorApiVersion !== 2
     ) {
       return false;
     }
@@ -2332,10 +2809,167 @@ export class DevtoolsServer {
     return { found: true, value: current };
   }
 
-  private requireStorage(res: Response): boolean {
-    if (this.storage) return true;
+  private isRuntimeConnected(runtime: RuntimeEntry): boolean {
+    return runtime.socket?.readyState === WebSocket.OPEN
+      && runtime.metadata !== null;
+  }
+
+  private connectedRuntimes(): RuntimeEntry[] {
+    return [...this.runtimes.values()]
+      .filter((runtime) => this.isRuntimeConnected(runtime));
+  }
+
+  private runtimeSummaries(): DevtoolsRuntimeSummary[] {
+    return [...this.runtimes.values()].map((runtime) => ({
+      runtimeId: runtime.runtimeId,
+      runtimeName: runtime.runtimeName,
+      connected: this.isRuntimeConnected(runtime),
+      sessionEpoch: runtime.sessionEpoch,
+      runtime: runtime.snapshot.getRuntimeInfo()?.runtime ?? null,
+    }));
+  }
+
+  private createRuntimeStorage(): Pick<RuntimeEntry, 'snapshot' | 'storage'> {
+    if (this.config.enableMCP) {
+      const storage = new TraceStorage(this.config.maxTraces);
+      return { snapshot: storage, storage };
+    }
+
+    // maxTraces=0 retains the bounded state/subscription/handler mirror and
+    // applies trace patches while discarding trace history after each batch.
+    return { snapshot: new TraceStorage(0), storage: null };
+  }
+
+  private runtimeResponseIdentity(runtime: RuntimeEntry): {
+    runtimeId: string;
+    runtimeName: string;
+    sessionEpoch: number;
+  } {
+    return {
+      runtimeId: runtime.runtimeId,
+      runtimeName: runtime.runtimeName,
+      sessionEpoch: runtime.sessionEpoch,
+    };
+  }
+
+  private runtimeResponseIdentityById(runtimeId: string): {
+    runtimeId: string;
+    runtimeName: string;
+    sessionEpoch: number;
+  } {
+    const runtime = this.runtimes.get(runtimeId);
+    return runtime
+      ? this.runtimeResponseIdentity(runtime)
+      : { runtimeId, runtimeName: runtimeId, sessionEpoch: 0 };
+  }
+
+  private evictRetainedRuntimeIfNeeded(): void {
+    if (this.runtimes.size < this.config.maxRuntimes) return;
+    let oldest: RuntimeEntry | null = null;
+    let oldestUnselected: RuntimeEntry | null = null;
+    const selectedRuntimeIds = new Set(
+      [...this.uiClients.values()]
+        .map((metadata) => metadata.selectedRuntimeId)
+        .filter((runtimeId): runtimeId is string => runtimeId !== null),
+    );
+    for (const runtime of this.runtimes.values()) {
+      if (this.isRuntimeConnected(runtime)) continue;
+      if (!oldest || runtime.lastConnectedAt < oldest.lastConnectedAt) {
+        oldest = runtime;
+      }
+      if (
+        !selectedRuntimeIds.has(runtime.runtimeId)
+        && (
+          !oldestUnselected
+          || runtime.lastConnectedAt < oldestUnselected.lastConnectedAt
+        )
+      ) {
+        oldestUnselected = runtime;
+      }
+    }
+    const evicted = oldestUnselected ?? oldest;
+    if (!evicted) return;
+    this.runtimes.delete(evicted.runtimeId);
+    for (const metadata of this.uiClients.values()) {
+      if (metadata.selectedRuntimeId === evicted.runtimeId) {
+        metadata.selectedRuntimeId = null;
+      }
+    }
+  }
+
+  private resolveRuntimeSelection(runtimeId: unknown): RuntimeSelectionResult {
+    if (runtimeId !== undefined) {
+      if (!this.validRuntimeId(runtimeId)) {
+        return {
+          ok: false,
+          status: 400,
+          code: 'INVALID_RUNTIME_ID',
+          error: 'runtimeId is invalid.',
+        };
+      }
+      const runtime = this.runtimes.get(runtimeId);
+      if (!runtime) {
+        return {
+          ok: false,
+          status: 404,
+          code: 'RUNTIME_NOT_FOUND',
+          error: `No runtime with id "${runtimeId}" is known to this server.`,
+        };
+      }
+      return { ok: true, runtime };
+    }
+
+    const connected = this.connectedRuntimes();
+    if (connected.length === 1) {
+      return { ok: true, runtime: connected[0]! };
+    }
+    return {
+      ok: false,
+      status: 409,
+      code: 'RUNTIME_SELECTION_REQUIRED',
+      error: connected.length === 0
+        ? 'runtimeId is required because no runtime is connected.'
+        : 'runtimeId is required because multiple runtimes are connected.',
+    };
+  }
+
+  private sendRuntimeSelectionError(
+    res: Response,
+    selection: Exclude<RuntimeSelectionResult, { readonly ok: true }>,
+    requestId?: string,
+  ): void {
+    res.status(selection.status).json({
+      success: false,
+      requestId,
+      code: selection.code,
+      error: selection.error,
+      selectedRuntimeId: null,
+      runtimes: this.runtimeSummaries(),
+    });
+  }
+
+  private selectRuntimeForHttp(
+    req: Request,
+    res: Response,
+    source: 'query' | 'body',
+    requestId?: string,
+  ): RuntimeEntry | null {
+    const runtimeId = source === 'query'
+      ? req.query.runtimeId
+      : req.body?.runtimeId;
+    const selection = this.resolveRuntimeSelection(runtimeId);
+    if (!selection.ok) {
+      this.sendRuntimeSelectionError(res, selection, requestId);
+      return null;
+    }
+    return selection.runtime;
+  }
+
+  private requireStorage(runtime: RuntimeEntry, res: Response): boolean {
+    if (runtime.storage) return true;
     res.status(503).json({
       success: false,
+      runtimeId: runtime.runtimeId,
       error: 'MCP inspection is disabled. Start the server with --mcp.',
     });
     return false;
@@ -2436,9 +3070,11 @@ export class DevtoolsServer {
     this.pendingWebSockets.clear();
     for (const client of this.uiClients.keys()) client.terminate();
     this.uiClients.clear();
-    this.sdkClient?.terminate();
-    this.sdkClient = null;
-    this.runtimeSocketMetadata = null;
+    for (const runtime of this.runtimes.values()) {
+      runtime.socket?.terminate();
+      runtime.socket = null;
+    }
+    this.runtimes.clear();
 
     return new Promise((resolve) => {
       let websocketServersClosed = 0;
@@ -2462,7 +3098,9 @@ export class DevtoolsServer {
         ...this.pendingWebSockets,
         ...this.uiClients.keys(),
       ]);
-      if (this.sdkClient) sockets.add(this.sdkClient);
+      for (const runtime of this.connectedRuntimes()) {
+        sockets.add(runtime.socket!);
+      }
 
       for (const socket of sockets) {
         if (this.socketLiveness.get(socket) === false) {

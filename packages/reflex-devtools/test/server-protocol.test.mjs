@@ -11,8 +11,8 @@ const activeSockets = new Set();
 const sessionsByBaseUrl = new Map();
 const sessionsByWsUrl = new Map();
 
-const PROTOCOL_VERSION = '1';
-const WS_PROTOCOL = 'reflex-devtools.v1';
+const PROTOCOL_VERSION = '2';
+const WS_PROTOCOL = 'reflex-devtools.v2';
 
 afterEach(async () => {
   for (const socket of activeSockets) {
@@ -43,7 +43,7 @@ async function bootstrapSession(baseUrl, role) {
   assert.equal(response.status, 200);
   assert.equal(body.success, true);
   assert.equal(body.role, role);
-  assert.equal(body.protocolVersion, 1);
+  assert.equal(body.protocolVersion, 2);
   assert.equal(typeof body.token, 'string');
   assert(body.token.length >= 32);
   return body;
@@ -93,7 +93,13 @@ async function startServer(
   };
 }
 
-async function connectSdk(wsUrl, onDispatch, onEvalSub = () => {}, onMessage = () => {}) {
+async function connectSdk(
+  wsUrl,
+  onDispatch,
+  onEvalSub = () => {},
+  onMessage = () => {},
+  identity = { runtimeId: 'runtime-test', runtimeName: 'Runtime test' },
+) {
   const session = sessionsByWsUrl.get(wsUrl);
   assert(session, `missing test session for ${wsUrl}`);
 
@@ -120,6 +126,7 @@ async function connectSdk(wsUrl, onDispatch, onEvalSub = () => {}, onMessage = (
     const message = JSON.parse(data.toString());
     if (message.type === 'devtools-server-hello') {
       socket.runtimeSessionId = message.payload.runtimeSessionId;
+      socket.runtimeId = message.payload.runtimeId;
       socket.serverHello = message.payload;
       resolveHello(message);
     }
@@ -141,8 +148,10 @@ async function connectSdk(wsUrl, onDispatch, onEvalSub = () => {}, onMessage = (
     type: 'reflex-auth',
     payload: {
       role: 'runtime',
-      protocolVersion: 1,
-      inspectorApiVersion: 1,
+      protocolVersion: 2,
+      inspectorApiVersion: 2,
+      runtimeId: identity.runtimeId,
+      runtimeName: identity.runtimeName,
       token: session.runtime.token,
     },
   }));
@@ -158,11 +167,13 @@ async function connectUi(wsUrl) {
   assert(session, `missing test session for ${wsUrl}`);
 
   const socket = new WebSocket(`${wsUrl}/ui`, WS_PROTOCOL);
+  socket.receivedMessages = [];
   activeSockets.add(socket);
 
   const connected = new Promise((resolve, reject) => {
     const onMessage = (data) => {
       const message = JSON.parse(data.toString());
+      socket.receivedMessages.push(message);
       if (message.type !== 'devtools-connected') return;
       socket.removeListener('close', onClose);
       socket.removeListener('error', reject);
@@ -191,7 +202,7 @@ async function connectUi(wsUrl) {
     type: 'reflex-auth',
     payload: {
       role: 'ui',
-      protocolVersion: 1,
+      protocolVersion: 2,
       token: session.ui.token,
     },
   }));
@@ -321,37 +332,54 @@ function authenticatedFetch(baseUrl, path, init = {}, role = 'mcp') {
   return fetch(`${baseUrl}${path}`, { ...init, headers });
 }
 
-function postDispatch(baseUrl, eventName, params = []) {
+function postDispatch(baseUrl, eventName, params = [], runtimeId) {
   return authenticatedFetch(baseUrl, '/api/dispatch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ eventName, params }),
+    body: JSON.stringify({ eventName, params, runtimeId }),
   });
 }
 
-function postEvalSub(baseUrl, id, args = []) {
+function postEvalSub(baseUrl, id, args = [], runtimeId) {
   return authenticatedFetch(baseUrl, '/api/eval-sub', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, args }),
+    body: JSON.stringify({ id, args, runtimeId }),
   });
 }
 
-async function getStatus(baseUrl) {
-  const response = await authenticatedFetch(baseUrl, '/api/status');
+async function getStatus(baseUrl, runtimeId) {
+  const suffix = runtimeId === undefined
+    ? ''
+    : `?runtimeId=${encodeURIComponent(runtimeId)}`;
+  let response = await authenticatedFetch(baseUrl, `/api/status${suffix}`);
+  if (response.status === 409) {
+    const selection = await response.json();
+    if (selection.runtimes?.length === 1) {
+      response = await authenticatedFetch(
+        baseUrl,
+        `/api/status?runtimeId=${encodeURIComponent(selection.runtimes[0].runtimeId)}`,
+      );
+    }
+  }
   assert.equal(response.status, 200);
   return response.json();
 }
 
 // Poll /api/status until `predicate` holds — WebSocket processing is async
 // relative to HTTP, so tests can't assert immediately after socket.send.
-async function waitForStatus(baseUrl, predicate, timeoutMs = 2000) {
+async function waitForStatus(
+  baseUrl,
+  predicate,
+  timeoutMs = 2000,
+  runtimeId,
+) {
   const deadline = Date.now() + timeoutMs;
-  let status = await getStatus(baseUrl);
+  let status = await getStatus(baseUrl, runtimeId);
   while (!predicate(status)) {
     assert(Date.now() < deadline, `status never satisfied predicate: ${JSON.stringify(status)}`);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    status = await getStatus(baseUrl);
+    status = await getStatus(baseUrl, runtimeId);
   }
   return status;
 }
@@ -364,11 +392,31 @@ async function waitForCondition(predicate, timeoutMs = 2000) {
   }
 }
 
+async function waitForRuntimeState(
+  baseUrl,
+  runtimeId,
+  predicate,
+  timeoutMs = 2000,
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    const response = await authenticatedFetch(
+      baseUrl,
+      `/api/state?runtimeId=${encodeURIComponent(runtimeId)}`,
+    );
+    const body = await response.json();
+    if (response.status === 200 && predicate(body.state)) return body.state;
+    assert(Date.now() < deadline, 'runtime state did not satisfy predicate');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
 test('the default read-only capability denies HTTP and UI dispatches and audits both', async () => {
   const { baseUrl, wsUrl } = await startServer(
     {},
     { grantTestCapabilities: false },
   );
+  await connectSdk(wsUrl, () => {});
 
   const status = await getStatus(baseUrl);
   assert.deepEqual(status.capabilities, ['inspect']);
@@ -466,7 +514,7 @@ test('protected HTTP APIs reject missing or wrong credentials and protocol misma
   body = await response.json();
   assert.equal(response.status, 426);
   assert.equal(body.code, 'PROTOCOL_MISMATCH');
-  assert.deepEqual(body.supportedVersions, [1]);
+  assert.deepEqual(body.supportedVersions, [2]);
 });
 
 test('HTTP requests reject disallowed Origin and Host values before API handling', async () => {
@@ -512,8 +560,8 @@ test('failed or incompatible SDK authentication cannot supersede a valid runtime
     type: 'reflex-auth',
     payload: {
       role: 'runtime',
-      protocolVersion: 1,
-      inspectorApiVersion: 1,
+      protocolVersion: 2,
+      inspectorApiVersion: 2,
       token: 'not-the-runtime-token',
     },
   }));
@@ -528,7 +576,7 @@ test('failed or incompatible SDK authentication cannot supersede a valid runtime
     type: 'reflex-auth',
     payload: {
       role: 'runtime',
-      protocolVersion: 1,
+      protocolVersion: 2,
       inspectorApiVersion: 999,
       token: sessions.runtime.token,
     },
@@ -536,6 +584,22 @@ test('failed or incompatible SDK authentication cannot supersede a valid runtime
   assert.deepEqual(await incompatibleClosed, {
     code: 1002,
     reason: 'Unsupported inspector API version',
+  });
+
+  const unidentifiedSocket = await openWebSocket(`${wsUrl}/sdk`);
+  const unidentifiedClosed = waitForSocketClose(unidentifiedSocket);
+  unidentifiedSocket.send(JSON.stringify({
+    type: 'reflex-auth',
+    payload: {
+      role: 'runtime',
+      protocolVersion: 2,
+      inspectorApiVersion: 2,
+      token: sessions.runtime.token,
+    },
+  }));
+  assert.deepEqual(await unidentifiedClosed, {
+    code: 1008,
+    reason: 'Invalid runtime identity',
   });
 
   const status = await getStatus(baseUrl);
@@ -560,6 +624,7 @@ test('runtime HTTP fallback rejects a stale session after SDK reconnect', async 
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'X-Reflex-Runtime-Id': firstSocket.runtimeId,
       'X-Reflex-Runtime-Session': staleSessionId,
     },
     body: JSON.stringify({
@@ -612,11 +677,11 @@ test('oversized runtime trace batches close only the offending socket without cr
 
 test('retention-limit rejection sends a bounded notice and keeps the runtime socket open', async () => {
   const { server, baseUrl, wsUrl } = await startServer();
+  const socket = await connectSdk(wsUrl, () => {});
   // Exercise the real storage limiter with a small test-only threshold. TS
   // private/readonly fields are compile-time constraints and remain ordinary
   // object properties in the emitted JavaScript.
-  server.storage.maxAppStateBytes = 128;
-  const socket = await connectSdk(wsUrl, () => {});
+  server.runtimes.get('runtime-test').storage.maxAppStateBytes = 128;
 
   const noticePromise = waitForSocketMessage(
     socket,
@@ -723,9 +788,11 @@ test('hard WebSocket frame limits may close oversized senders with 1009', async 
 });
 
 test('internal HTTP failures return a correlation id without raw error detail', async () => {
-  const { server, baseUrl } = await startServer();
+  const { server, baseUrl, wsUrl } = await startServer();
+  await connectSdk(wsUrl, () => {});
   const marker = 'internal-secret-error-detail';
-  const originalGetTraces = server.storage.getTraces;
+  const storage = server.runtimes.get('runtime-test').storage;
+  const originalGetTraces = storage.getTraces;
   const originalConsoleError = console.error;
   const diagnostics = [];
   const internalError = new Error(marker);
@@ -734,7 +801,7 @@ test('internal HTTP failures return a correlation id without raw error detail', 
       throw new Error('hostile error-name accessor');
     },
   });
-  server.storage.getTraces = () => {
+  storage.getTraces = () => {
     throw internalError;
   };
   console.error = (...args) => diagnostics.push(args.map(String).join(' '));
@@ -754,7 +821,7 @@ test('internal HTTP failures return a correlation id without raw error detail', 
     assert.match(diagnostics[0], new RegExp(body.requestId));
     assert.equal(diagnostics[0].includes(marker), false);
   } finally {
-    server.storage.getTraces = originalGetTraces;
+    storage.getTraces = originalGetTraces;
     console.error = originalConsoleError;
   }
 });
@@ -911,14 +978,15 @@ test('non-loopback binding is refused without an explicit remote security config
 });
 
 test('/api/status answers without MCP instead of a 503', async () => {
-  const { baseUrl } = await startServer({ enableMCP: false });
+  const { baseUrl, wsUrl } = await startServer({ enableMCP: false });
+  await connectSdk(wsUrl, () => {});
 
   const status = await getStatus(baseUrl);
 
   assert.equal(status.success, true);
   assert.equal(status.mcpEnabled, false);
-  assert.equal(status.appConnected, false);
-  assert.equal(status.sessionEpoch, 0);
+  assert.equal(status.appConnected, true);
+  assert.equal(status.sessionEpoch, 1);
   assert.equal(status.runtime, null);
   assert.equal(status.handlers, null);
 });
@@ -984,12 +1052,12 @@ test('without MCP the final browser UI disconnect removes SDK tracing demand', a
 test('/api/status reports runtime info and bumps sessionEpoch per SDK session', async () => {
   const { baseUrl, wsUrl } = await startServer();
 
-  // Before any app connects
-  let status = await getStatus(baseUrl);
-  assert.equal(status.mcpEnabled, true);
-  assert.equal(status.appConnected, false);
-  assert.equal(status.sessionEpoch, 0);
-  assert.equal(status.stateAvailable, false);
+  // Before any app connects the server cannot infer a selection.
+  const unselectedResponse = await authenticatedFetch(baseUrl, '/api/status');
+  const unselected = await unselectedResponse.json();
+  assert.equal(unselectedResponse.status, 409);
+  assert.equal(unselected.code, 'RUNTIME_SELECTION_REQUIRED');
+  assert.deepEqual(unselected.runtimes, []);
 
   // First SDK session reports a headless runtime with safe adapters
   const socket = await connectSdk(wsUrl, () => {});
@@ -1007,7 +1075,7 @@ test('/api/status reports runtime info and bumps sessionEpoch per SDK session', 
     payload: { event: ['a', 'b'], fx: ['c'], cofx: [], sub: ['d', 'e', 'f'] },
   });
 
-  status = await waitForStatus(baseUrl, (s) => s.runtime !== null && s.handlers !== null);
+  let status = await waitForStatus(baseUrl, (s) => s.runtime !== null && s.handlers !== null);
   assert.equal(status.appConnected, true);
   assert.equal(status.sessionEpoch, 1);
   assert.equal(status.runtime, 'headless');
@@ -1067,7 +1135,7 @@ test('a new SDK connection supersedes the previous one instead of double-dispatc
   assert.equal(firstClientDispatches, 0);
 });
 
-test('a session restart fails in-flight dispatches instead of leaving them to time out', async () => {
+test('a session replacement fails in-flight dispatches instead of leaving them to time out', async () => {
   const { baseUrl, wsUrl } = await startServer();
 
   // First session receives the dispatch but never reports an outcome
@@ -1078,7 +1146,7 @@ test('a session restart fails in-flight dispatches instead of leaving them to ti
   const responsePromise = postDispatch(baseUrl, 'increment-counter');
   await delivered;
 
-  // App restarts mid-flight: a new SDK session connects
+  // A new SDK session connects while the action is in flight.
   await connectSdk(wsUrl, () => {});
 
   const response = await responsePromise;
@@ -1088,7 +1156,7 @@ test('a session restart fails in-flight dispatches instead of leaving them to ti
   assert.equal(body.outcome, 'unknown');
   // The session-boundary message, not the 5s "no trace" timeout and not the
   // all-clients-gone disconnect message.
-  assert.match(body.message, /session restarted/);
+  assert.match(body.message, /runtime session changed/);
 });
 
 test('/api/dispatch requires MCP mode', async () => {
@@ -1108,9 +1176,10 @@ test('/api/dispatch reports when no SDK app is connected', async () => {
   const response = await postDispatch(baseUrl, 'increment-counter');
   const body = await response.json();
 
-  assert.equal(response.status, 503);
+  assert.equal(response.status, 409);
   assert.equal(body.success, false);
-  assert.match(body.error, /No app connected/);
+  assert.equal(body.code, 'RUNTIME_SELECTION_REQUIRED');
+  assert.deepEqual(body.runtimes, []);
 });
 
 test('/api/dispatch rejects malformed params before broadcasting', async () => {
@@ -1283,8 +1352,8 @@ test('/api/eval-sub requires MCP mode and a connected app', async () => {
   response = await postEvalSub(server.baseUrl, 'counter');
   body = await response.json();
 
-  assert.equal(response.status, 503);
-  assert.match(body.error, /No app connected/);
+  assert.equal(response.status, 409);
+  assert.equal(body.code, 'RUNTIME_SELECTION_REQUIRED');
 });
 
 test('/api/eval-sub rejects malformed args before broadcasting', async () => {
@@ -1369,7 +1438,8 @@ test('/api/eval-sub fails promptly if the app disconnects', async () => {
 });
 
 test('/api/traces/:id rejects malformed trace ids', async () => {
-  const { baseUrl } = await startServer();
+  const { baseUrl, wsUrl } = await startServer();
+  await connectSdk(wsUrl, () => {});
 
   const response = await authenticatedFetch(baseUrl, '/api/traces/12abc');
   const body = await response.json();
@@ -1377,4 +1447,776 @@ test('/api/traces/:id rejects malformed trace ids', async () => {
   assert.equal(response.status, 400);
   assert.equal(body.success, false);
   assert.match(body.error, /Trace id must be a number/);
+});
+
+test('two runtimes coexist with isolated status, state, handlers, traces, dispatch, and evaluation', async () => {
+  const { baseUrl, wsUrl } = await startServer();
+  let alphaDispatches = 0;
+  let betaDispatches = 0;
+  let alphaEvals = 0;
+  let betaEvals = 0;
+
+  const alpha = await connectSdk(
+    wsUrl,
+    () => { alphaDispatches += 1; },
+    () => { alphaEvals += 1; },
+    () => {},
+    { runtimeId: 'runtime-alpha', runtimeName: 'Runtime Alpha' },
+  );
+  const beta = await connectSdk(
+    wsUrl,
+    (message, socket) => {
+      betaDispatches += 1;
+      sendSdkEvent(socket, {
+        type: 'reflex-dispatch-result',
+        payload: {
+          dispatchId: message.payload.dispatchId,
+          trace: {
+            id: 902,
+            start: 1,
+            duration: 2,
+            operation: message.payload.eventName,
+            opType: 'event',
+            tags: { event: [message.payload.eventName] },
+          },
+        },
+      });
+    },
+    (message, socket) => {
+      betaEvals += 1;
+      sendSdkEvent(socket, {
+        type: 'reflex-eval-sub-result',
+        payload: {
+          evalId: message.payload.evalId,
+          value: { owner: 'beta', args: message.payload.args },
+        },
+      });
+    },
+    () => {},
+    { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
+  );
+
+  const ambiguousStatusResponse = await authenticatedFetch(baseUrl, '/api/status');
+  const ambiguousStatus = await ambiguousStatusResponse.json();
+  assert.equal(ambiguousStatusResponse.status, 409);
+  assert.equal(ambiguousStatus.code, 'RUNTIME_SELECTION_REQUIRED');
+  assert.deepEqual(
+    ambiguousStatus.runtimes.map(({ runtimeId, runtimeName, connected, sessionEpoch }) => ({
+      runtimeId,
+      runtimeName,
+      connected,
+      sessionEpoch,
+    })),
+    [
+      {
+        runtimeId: 'runtime-alpha',
+        runtimeName: 'Runtime Alpha',
+        connected: true,
+        sessionEpoch: 1,
+      },
+      {
+        runtimeId: 'runtime-beta',
+        runtimeName: 'Runtime Beta',
+        connected: true,
+        sessionEpoch: 1,
+      },
+    ],
+  );
+
+  sendSdkEvent(alpha, {
+    type: 'reflex-runtime-info',
+    payload: { runtime: 'headless', tracing: true },
+  });
+  sendSdkEvent(alpha, {
+    type: 'reflex-app-db',
+    payload: { owner: 'alpha', value: 1 },
+  });
+  sendSdkEvent(alpha, {
+    type: 'reflex-handler-keys',
+    payload: { event: ['alpha-event'], fx: [], cofx: [], sub: ['alpha-sub'] },
+  });
+  sendSdkEvent(alpha, {
+    type: 'reflex-active-subs',
+    payload: { '["alpha-sub"]': 'alpha-value' },
+  });
+  sendSdkEvent(alpha, {
+    type: 'reflex-traces',
+    payload: [{ id: 7, start: 1, operation: 'alpha-event', opType: 'event' }],
+  });
+
+  sendSdkEvent(beta, {
+    type: 'reflex-runtime-info',
+    payload: { runtime: 'browser', tracing: false },
+  });
+  sendSdkEvent(beta, {
+    type: 'reflex-app-db',
+    payload: { owner: 'beta', value: 2 },
+  });
+  sendSdkEvent(beta, {
+    type: 'reflex-handler-keys',
+    payload: { event: ['beta-event'], fx: ['beta-fx'], cofx: [], sub: [] },
+  });
+  sendSdkEvent(beta, {
+    type: 'reflex-active-subs',
+    payload: { '["beta-sub"]': 'beta-value' },
+  });
+  sendSdkEvent(beta, {
+    type: 'reflex-traces',
+    payload: [{ id: 7, start: 2, operation: 'beta-event', opType: 'event' }],
+  });
+
+  const alphaStatus = await waitForStatus(
+    baseUrl,
+    (status) => status.traceCount === 1 && status.handlers?.event === 1,
+    2000,
+    'runtime-alpha',
+  );
+  const betaStatus = await getStatus(baseUrl, 'runtime-beta');
+  assert.equal(alphaStatus.runtimeId, 'runtime-alpha');
+  assert.equal(alphaStatus.runtimeName, 'Runtime Alpha');
+  assert.equal(alphaStatus.runtime, 'headless');
+  assert.equal(betaStatus.runtimeId, 'runtime-beta');
+  assert.equal(betaStatus.runtime, 'browser');
+
+  const alphaStateResponse = await authenticatedFetch(
+    baseUrl,
+    '/api/state?runtimeId=runtime-alpha',
+  );
+  const alphaState = await alphaStateResponse.json();
+  const betaStateResponse = await authenticatedFetch(
+    baseUrl,
+    '/api/state?runtimeId=runtime-beta',
+  );
+  const betaState = await betaStateResponse.json();
+  assert.deepEqual(alphaState.state, { owner: 'alpha', value: 1 });
+  assert.deepEqual(betaState.state, { owner: 'beta', value: 2 });
+  assert.deepEqual(
+    [alphaState.runtimeId, alphaState.runtimeName, alphaState.sessionEpoch],
+    ['runtime-alpha', 'Runtime Alpha', 1],
+  );
+
+  const alphaTrace = await (
+    await authenticatedFetch(baseUrl, '/api/traces/7?runtimeId=runtime-alpha')
+  ).json();
+  const betaTrace = await (
+    await authenticatedFetch(baseUrl, '/api/traces/7?runtimeId=runtime-beta')
+  ).json();
+  assert.equal(alphaTrace.trace.operation, 'alpha-event');
+  assert.equal(betaTrace.trace.operation, 'beta-event');
+
+  const alphaTraces = await (
+    await authenticatedFetch(baseUrl, '/api/traces?runtimeId=runtime-alpha')
+  ).json();
+  assert.equal(alphaTraces.runtimeId, 'runtime-alpha');
+  assert.equal(alphaTraces.sessionEpoch, 1);
+  assert.equal(alphaTraces.stats.totalTraces, 1);
+
+  const alphaHandlers = await (
+    await authenticatedFetch(baseUrl, '/api/handlers?runtimeId=runtime-alpha')
+  ).json();
+  const betaHandlers = await (
+    await authenticatedFetch(baseUrl, '/api/handlers?runtimeId=runtime-beta')
+  ).json();
+  assert.deepEqual(alphaHandlers.handlerKeys.event, ['alpha-event']);
+  assert.deepEqual(betaHandlers.handlerKeys.event, ['beta-event']);
+
+  const ambiguousDispatch = await postDispatch(baseUrl, 'ambiguous-event');
+  const ambiguousDispatchBody = await ambiguousDispatch.json();
+  assert.equal(ambiguousDispatch.status, 409);
+  assert.equal(ambiguousDispatchBody.code, 'RUNTIME_SELECTION_REQUIRED');
+  assert.equal(alphaDispatches, 0);
+  assert.equal(betaDispatches, 0);
+
+  const dispatchResponse = await postDispatch(
+    baseUrl,
+    'beta-event',
+    [{ amount: 2 }],
+    'runtime-beta',
+  );
+  const dispatchBody = await dispatchResponse.json();
+  assert.equal(dispatchResponse.status, 200);
+  assert.equal(dispatchBody.outcome, 'succeeded');
+  assert.deepEqual(
+    [dispatchBody.runtimeId, dispatchBody.runtimeName, dispatchBody.sessionEpoch],
+    ['runtime-beta', 'Runtime Beta', 1],
+  );
+  assert.equal(alphaDispatches, 0);
+  assert.equal(betaDispatches, 1);
+
+  const evalResponse = await postEvalSub(
+    baseUrl,
+    'beta-sub',
+    [42],
+    'runtime-beta',
+  );
+  const evalBody = await evalResponse.json();
+  assert.equal(evalResponse.status, 200);
+  assert.deepEqual(evalBody.value, { owner: 'beta', args: [42] });
+  assert.equal(alphaEvals, 0);
+  assert.equal(betaEvals, 1);
+});
+
+test('same-id reconnect supersedes and clears only that runtime and only its pending actions', async () => {
+  const { baseUrl, wsUrl } = await startServer();
+  let resolveAlphaDispatch;
+  const alphaDispatchReceived = new Promise((resolve) => {
+    resolveAlphaDispatch = resolve;
+  });
+  const firstAlpha = await connectSdk(
+    wsUrl,
+    () => resolveAlphaDispatch(),
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-alpha', runtimeName: 'Runtime Alpha' },
+  );
+  let betaDispatches = 0;
+  const beta = await connectSdk(
+    wsUrl,
+    (message, socket) => {
+      betaDispatches += 1;
+      sendSdkEvent(socket, {
+        type: 'reflex-dispatch-result',
+        payload: { dispatchId: message.payload.dispatchId, reason: 'beta-observed' },
+      });
+    },
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
+  );
+  sendSdkEvent(firstAlpha, {
+    type: 'reflex-app-db',
+    payload: { owner: 'alpha-before-reconnect' },
+  });
+  sendSdkEvent(beta, {
+    type: 'reflex-app-db',
+    payload: { owner: 'beta-retained' },
+  });
+  await waitForStatus(
+    baseUrl,
+    (status) => status.stateAvailable,
+    2000,
+    'runtime-beta',
+  );
+
+  const pendingDispatch = postDispatch(
+    baseUrl,
+    'alpha-slow',
+    [],
+    'runtime-alpha',
+  );
+  await alphaDispatchReceived;
+  const firstAlphaClosed = waitForSocketClose(firstAlpha);
+  const secondAlpha = await connectSdk(
+    wsUrl,
+    () => {},
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-alpha', runtimeName: 'Runtime Alpha' },
+  );
+
+  assert.deepEqual(await firstAlphaClosed, {
+    code: 1000,
+    reason: 'Superseded by a newer authenticated runtime',
+  });
+  const pendingBody = await (await pendingDispatch).json();
+  assert.equal(pendingBody.outcome, 'unknown');
+  assert.match(pendingBody.message, /runtime session changed/);
+  assert.equal(pendingBody.runtimeId, 'runtime-alpha');
+  assert.equal(beta.readyState, WebSocket.OPEN);
+  assert.equal(secondAlpha.readyState, WebSocket.OPEN);
+
+  const alphaStatus = await getStatus(baseUrl, 'runtime-alpha');
+  const betaStatus = await getStatus(baseUrl, 'runtime-beta');
+  assert.equal(alphaStatus.sessionEpoch, 2);
+  assert.equal(alphaStatus.stateAvailable, false);
+  assert.equal(betaStatus.sessionEpoch, 1);
+  assert.equal(betaStatus.stateAvailable, true);
+  const betaState = await (
+    await authenticatedFetch(baseUrl, '/api/state?runtimeId=runtime-beta')
+  ).json();
+  assert.deepEqual(betaState.state, { owner: 'beta-retained' });
+
+  const betaDispatchResponse = await postDispatch(
+    baseUrl,
+    'beta-event',
+    [],
+    'runtime-beta',
+  );
+  const betaDispatchBody = await betaDispatchResponse.json();
+  assert.equal(betaDispatchBody.outcome, 'unknown');
+  assert.equal(betaDispatchBody.runtimeId, 'runtime-beta');
+  assert.equal(betaDispatches, 1);
+});
+
+test('UI runtime selection replays retained snapshots and filters identity-tagged live telemetry', async () => {
+  const { baseUrl, wsUrl } = await startServer();
+  let alphaUiDispatches = 0;
+  let betaUiDispatches = 0;
+  const alpha = await connectSdk(
+    wsUrl,
+    () => { alphaUiDispatches += 1; },
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-alpha', runtimeName: 'Runtime Alpha' },
+  );
+  const beta = await connectSdk(
+    wsUrl,
+    () => { betaUiDispatches += 1; },
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
+  );
+  sendSdkEvent(alpha, {
+    type: 'reflex-app-db',
+    payload: { owner: 'alpha-retained' },
+  });
+  sendSdkEvent(beta, {
+    type: 'reflex-app-db',
+    payload: { owner: 'beta-retained' },
+  });
+  await waitForStatus(
+    baseUrl,
+    (status) => status.stateAvailable,
+    2000,
+    'runtime-beta',
+  );
+
+  const ui = await connectUi(wsUrl);
+  const connected = ui.receivedMessages.find(
+    (message) => message.type === 'devtools-connected',
+  );
+  assert.equal(connected.payload.selectedRuntimeId, null);
+  assert.equal(connected.payload.runtimes.length, 2);
+
+  const alphaSelectedPromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'devtools-runtime-selected'
+      && message.payload.runtimeId === 'runtime-alpha',
+  );
+  const alphaSnapshotPromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'reflex-app-db'
+      && message.runtimeId === 'runtime-alpha'
+      && message.payload?.owner === 'alpha-retained',
+  );
+  ui.send(JSON.stringify({
+    type: 'select-runtime',
+    payload: { runtimeId: 'runtime-alpha' },
+  }));
+  const [alphaSelected, alphaSnapshot] = await Promise.all([
+    alphaSelectedPromise,
+    alphaSnapshotPromise,
+  ]);
+  assert.deepEqual(alphaSelected.payload, {
+    runtimeId: 'runtime-alpha',
+    runtimeName: 'Runtime Alpha',
+    sessionEpoch: 1,
+  });
+  assert.deepEqual(
+    [alphaSnapshot.runtimeId, alphaSnapshot.runtimeName, alphaSnapshot.sessionEpoch],
+    ['runtime-alpha', 'Runtime Alpha', 1],
+  );
+
+  const retainedAlphaReplayCount = ui.receivedMessages.filter(
+    (message) =>
+      message.type === 'reflex-app-db'
+      && message.runtimeId === 'runtime-alpha'
+      && message.payload?.owner === 'alpha-retained',
+  ).length;
+  const alphaAcknowledgementCount = ui.receivedMessages.filter(
+    (message) =>
+      message.type === 'devtools-runtime-selected'
+      && message.payload?.runtimeId === 'runtime-alpha',
+  ).length;
+  const idempotentAcknowledgementPromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'devtools-runtime-selected'
+      && message.payload?.runtimeId === 'runtime-alpha'
+      && ui.receivedMessages.filter(
+        (candidate) =>
+          candidate.type === 'devtools-runtime-selected'
+          && candidate.payload?.runtimeId === 'runtime-alpha',
+      ).length > alphaAcknowledgementCount,
+  );
+  const idempotentStatusPromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'devtools-runtime-status'
+      && message.payload?.selectedRuntimeId === 'runtime-alpha',
+  );
+  ui.send(JSON.stringify({
+    type: 'select-runtime',
+    payload: { runtimeId: 'runtime-alpha' },
+  }));
+  await Promise.all([
+    idempotentStatusPromise,
+    idempotentAcknowledgementPromise,
+  ]);
+  assert.equal(
+    ui.receivedMessages.filter(
+      (message) =>
+        message.type === 'reflex-app-db'
+        && message.runtimeId === 'runtime-alpha'
+        && message.payload?.owner === 'alpha-retained',
+    ).length,
+    retainedAlphaReplayCount,
+  );
+
+  const betaLiveMessageCount = () => ui.receivedMessages.filter(
+    (message) =>
+      message.type === 'reflex-app-db'
+      && message.runtimeId === 'runtime-beta'
+      && message.payload?.owner === 'beta-live',
+  ).length;
+  sendSdkEvent(beta, {
+    type: 'reflex-app-db',
+    payload: { owner: 'beta-live' },
+  });
+  await waitForRuntimeState(
+    baseUrl,
+    'runtime-beta',
+    (state) => state?.owner === 'beta-live',
+  );
+  assert.equal(betaLiveMessageCount(), 0);
+
+  const alphaLivePromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'reflex-app-db'
+      && message.runtimeId === 'runtime-alpha'
+      && message.payload?.owner === 'alpha-live',
+  );
+  sendSdkEvent(alpha, {
+    type: 'reflex-app-db',
+    payload: { owner: 'alpha-live' },
+  });
+  const alphaLive = await alphaLivePromise;
+  assert.equal(alphaLive.runtimeName, 'Runtime Alpha');
+  assert.equal(alphaLive.sessionEpoch, 1);
+
+  const betaSnapshotPromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'reflex-app-db'
+      && message.runtimeId === 'runtime-beta'
+      && message.payload?.owner === 'beta-live',
+  );
+  ui.send(JSON.stringify({
+    type: 'select-runtime',
+    payload: { runtimeId: 'runtime-beta' },
+  }));
+  await betaSnapshotPromise;
+
+  ui.send(JSON.stringify({
+    type: 'dispatch-to-client',
+    payload: {
+      runtimeId: 'runtime-beta',
+      eventName: 'beta-ui-event',
+      params: [],
+    },
+  }));
+  await waitForCondition(() => betaUiDispatches === 1);
+  assert.equal(alphaUiDispatches, 0);
+});
+
+test('UI runtime selection replays a minimal snapshot when MCP storage is disabled', async () => {
+  const { server, baseUrl, wsUrl } = await startServer({ enableMCP: false });
+  await connectSdk(
+    wsUrl,
+    () => {},
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-alpha', runtimeName: 'Runtime Alpha' },
+  );
+  const beta = await connectSdk(
+    wsUrl,
+    () => {},
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
+  );
+
+  sendSdkEvent(beta, {
+    type: 'reflex-app-db',
+    payload: { owner: 'beta', value: 1 },
+  });
+  sendSdkEvent(beta, {
+    type: 'reflex-active-subs',
+    payload: { '["beta-sub"]': 'beta-value' },
+  });
+  sendSdkEvent(beta, {
+    type: 'reflex-handler-keys',
+    payload: { event: ['beta-event'], fx: [], cofx: [], sub: ['beta-sub'] },
+  });
+  sendSdkEvent(beta, {
+    type: 'reflex-runtime-info',
+    payload: { runtime: 'headless', tracing: true },
+  });
+  sendSdkEvent(beta, {
+    type: 'reflex-traces',
+    payload: [{
+      id: 1,
+      start: 1,
+      operation: 'beta-event',
+      opType: 'event',
+      tags: {
+        patches: [{ op: 'replace', path: ['value'], value: 2 }],
+      },
+    }],
+  });
+  await waitForCondition(() =>
+    server.runtimes.get('runtime-beta')?.snapshot.getAppState()?.value === 2);
+
+  const ui = await connectUi(wsUrl);
+  const statePromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'reflex-app-db'
+      && message.runtimeId === 'runtime-beta'
+      && message.payload?.value === 2,
+  );
+  const handlersPromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'reflex-handler-keys'
+      && message.runtimeId === 'runtime-beta'
+      && message.payload?.event?.[0] === 'beta-event',
+  );
+  const emptyTraceReplayPromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'reflex-traces'
+      && message.runtimeId === 'runtime-beta'
+      && Array.isArray(message.payload)
+      && message.payload.length === 0,
+  );
+  ui.send(JSON.stringify({
+    type: 'select-runtime',
+    payload: { runtimeId: 'runtime-beta' },
+  }));
+  await Promise.all([
+    statePromise,
+    handlersPromise,
+    emptyTraceReplayPromise,
+  ]);
+
+  const stateResponse = await authenticatedFetch(
+    baseUrl,
+    '/api/state?runtimeId=runtime-beta',
+  );
+  assert.equal(stateResponse.status, 503);
+});
+
+test('UI snapshot replay requires inspect capability', async () => {
+  const { server, wsUrl } = await startServer({
+    capabilities: ['dispatch'],
+  });
+  const runtime = await connectSdk(
+    wsUrl,
+    () => {},
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-private', runtimeName: 'Private Runtime' },
+  );
+  sendSdkEvent(runtime, {
+    type: 'reflex-app-db',
+    payload: { secretProfile: 'must-not-replay' },
+  });
+  await waitForCondition(() =>
+    server.runtimes.get('runtime-private')?.storage?.getAppState() !== null);
+
+  const ui = await connectUi(wsUrl);
+  await waitForCondition(() => ui.receivedMessages.some(
+    (message) => message.type === 'devtools-runtime-selected',
+  ));
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(
+    ui.receivedMessages.some((message) =>
+      message.type === 'reflex-app-db'
+      || message.type === 'reflex-traces'
+      || message.type === 'reflex-active-subs'
+      || message.type === 'reflex-handler-keys'),
+    false,
+  );
+});
+
+test('UI dispatch rejects a runtime that differs from the acknowledged selection', async () => {
+  const { wsUrl } = await startServer();
+  let alphaDispatches = 0;
+  let betaDispatches = 0;
+  await connectSdk(
+    wsUrl,
+    () => { alphaDispatches += 1; },
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-alpha', runtimeName: 'Runtime Alpha' },
+  );
+  await connectSdk(
+    wsUrl,
+    () => { betaDispatches += 1; },
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
+  );
+
+  const ui = await connectUi(wsUrl);
+  const selectedPromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'devtools-runtime-selected'
+      && message.payload?.runtimeId === 'runtime-beta',
+  );
+  ui.send(JSON.stringify({
+    type: 'select-runtime',
+    payload: { runtimeId: 'runtime-beta' },
+  }));
+  await selectedPromise;
+
+  const staleErrorPromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'devtools-error'
+      && message.payload?.code === 'STALE_RUNTIME_SELECTION',
+  );
+  ui.send(JSON.stringify({
+    type: 'dispatch-to-client',
+    payload: {
+      runtimeId: 'runtime-alpha',
+      eventName: 'wrong-owner',
+      params: [],
+    },
+  }));
+  const staleError = await staleErrorPromise;
+  assert.equal(staleError.payload.selectedRuntimeId, 'runtime-beta');
+  assert.equal(alphaDispatches, 0);
+  assert.equal(betaDispatches, 0);
+
+  ui.send(JSON.stringify({
+    type: 'dispatch-to-client',
+    payload: {
+      runtimeId: 'runtime-beta',
+      eventName: 'right-owner',
+      params: [],
+    },
+  }));
+  await waitForCondition(() => betaDispatches === 1);
+  assert.equal(alphaDispatches, 0);
+});
+
+test('trace lookup rejects a stale session epoch after same-id reconnect', async () => {
+  const { baseUrl, wsUrl } = await startServer();
+  const first = await connectSdk(
+    wsUrl,
+    () => {},
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-epoch', runtimeName: 'Runtime Epoch' },
+  );
+  sendSdkEvent(first, {
+    type: 'reflex-traces',
+    payload: [{ id: 7, start: 1, operation: 'before', opType: 'event' }],
+  });
+  await waitForStatus(
+    baseUrl,
+    (status) => status.traceCount === 1,
+    2000,
+    'runtime-epoch',
+  );
+
+  const beforeResponse = await authenticatedFetch(
+    baseUrl,
+    '/api/traces/7?runtimeId=runtime-epoch&sessionEpoch=1',
+  );
+  assert.equal(beforeResponse.status, 200);
+
+  const second = await connectSdk(
+    wsUrl,
+    () => {},
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-epoch', runtimeName: 'Runtime Epoch' },
+  );
+  sendSdkEvent(second, {
+    type: 'reflex-traces',
+    payload: [{ id: 7, start: 2, operation: 'after', opType: 'event' }],
+  });
+  await waitForStatus(
+    baseUrl,
+    (status) => status.sessionEpoch === 2 && status.traceCount === 1,
+    2000,
+    'runtime-epoch',
+  );
+
+  const staleResponse = await authenticatedFetch(
+    baseUrl,
+    '/api/traces/7?runtimeId=runtime-epoch&sessionEpoch=1',
+  );
+  const stale = await staleResponse.json();
+  assert.equal(staleResponse.status, 409);
+  assert.equal(stale.code, 'SESSION_EPOCH_MISMATCH');
+  assert.equal(stale.expectedSessionEpoch, 1);
+  assert.equal(stale.sessionEpoch, 2);
+
+  const currentResponse = await authenticatedFetch(
+    baseUrl,
+    '/api/traces/7?runtimeId=runtime-epoch&sessionEpoch=2',
+  );
+  const current = await currentResponse.json();
+  assert.equal(currentResponse.status, 200);
+  assert.equal(current.trace.operation, 'after');
+});
+
+test('the bounded runtime registry rejects excess live identities and reuses disconnected capacity', async () => {
+  const { baseUrl, wsUrl } = await startServer({ maxRuntimes: 1 });
+  const alpha = await connectSdk(
+    wsUrl,
+    () => {},
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-alpha', runtimeName: 'Runtime Alpha' },
+  );
+
+  const session = sessionsByWsUrl.get(wsUrl);
+  const excess = await openWebSocket(`${wsUrl}/sdk`);
+  const excessClosed = waitForSocketClose(excess);
+  excess.send(JSON.stringify({
+    type: 'reflex-auth',
+    payload: {
+      role: 'runtime',
+      protocolVersion: 2,
+      inspectorApiVersion: 2,
+      runtimeId: 'runtime-beta',
+      runtimeName: 'Runtime Beta',
+      token: session.runtime.token,
+    },
+  }));
+  assert.deepEqual(await excessClosed, {
+    code: 1013,
+    reason: 'Too many runtime connections',
+  });
+  assert.equal(alpha.readyState, WebSocket.OPEN);
+
+  const alphaClosed = new Promise((resolve) => alpha.once('close', resolve));
+  alpha.close();
+  await alphaClosed;
+  await waitForStatus(
+    baseUrl,
+    (status) => status.appConnected === false,
+    2000,
+    'runtime-alpha',
+  );
+  await connectSdk(
+    wsUrl,
+    () => {},
+    () => {},
+    () => {},
+    { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
+  );
+  const betaStatus = await getStatus(baseUrl, 'runtime-beta');
+  assert.deepEqual(betaStatus.runtimes.map(({ runtimeId }) => runtimeId), [
+    'runtime-beta',
+  ]);
 });

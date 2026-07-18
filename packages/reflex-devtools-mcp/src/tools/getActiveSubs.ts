@@ -4,9 +4,17 @@
  */
 
 import { DevToolsAPIClient } from '../httpClient.js';
-import { serverUnavailableResult } from './errorResponse.js';
+import {
+  runtimeRoutingErrorResult,
+  serverUnavailableResult,
+} from './errorResponse.js';
+import {
+  runtimeIdInputProperty,
+  runtimeMetadata,
+  type RuntimeSelectionParams,
+} from './runtimeSelection.js';
 
-export interface GetActiveSubsParams {
+export interface GetActiveSubsParams extends RuntimeSelectionParams {
   filter?: string;
 }
 
@@ -21,13 +29,17 @@ export function getActiveSubsTool(apiClient: DevToolsAPIClient) {
           type: 'string',
           maxLength: 256,
           description: 'Optional filter to match subscription keys (case-insensitive substring match)'
-        }
+        },
+        runtimeId: runtimeIdInputProperty,
       },
       additionalProperties: false
     },
     handler: async (params: GetActiveSubsParams) => {
       try {
-        const response = await apiClient.getSubscriptions(params.filter);
+        const response = await apiClient.getSubscriptions(
+          params.filter,
+          params.runtimeId,
+        );
         const activeSubs = response.subscriptions || {};
 
         // Format subscriptions
@@ -41,6 +53,7 @@ export function getActiveSubsTool(apiClient: DevToolsAPIClient) {
             {
               type: 'text',
               text: JSON.stringify({
+                ...runtimeMetadata(response),
                 summary: {
                   total: response.total ?? Object.keys(activeSubs).length,
                   filtered: subscriptions.length
@@ -53,6 +66,12 @@ export function getActiveSubsTool(apiClient: DevToolsAPIClient) {
       } catch (error) {
         const unavailable = serverUnavailableResult(error, 'get_active_subs');
         if (unavailable) return unavailable;
+        const routing = runtimeRoutingErrorResult(
+          error,
+          'get_active_subs',
+          params.runtimeId,
+        );
+        if (routing) return routing;
 
         return {
           content: [

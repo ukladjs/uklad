@@ -1,5 +1,6 @@
 import { enableMapSet, original, current } from '../core/immer';
 import { getGlobalEqualityCheck, setGlobalEqualityCheck } from '../core/equality';
+import { createReflexRuntime, defaultRuntime } from '../runtime/runtime';
 import isEqual from 'fast-deep-equal';
 import isEqualEs6 from 'fast-deep-equal/es6/index.js';
 
@@ -7,6 +8,25 @@ describe('immer-utils', () => {
   describe('enableMapSet', () => {
     beforeEach(() => {
       setGlobalEqualityCheck(isEqual);
+    });
+
+    it('upgrades untouched explicit runtimes when the default runtime has an override', () => {
+      const runtime = createReflexRuntime({
+        initialDb: {},
+        runtimeId: 'map-set-explicit-runtime',
+      });
+      const customDefaultEquality = () => false;
+      defaultRuntime.setGlobalEqualityCheck(customDefaultEquality);
+
+      const left = new Map([['value', 1]]);
+      const right = new Map([['value', 2]]);
+      expect(runtime.getGlobalEqualityCheck()(left, right)).toBe(true);
+
+      enableMapSet();
+
+      expect(defaultRuntime.getGlobalEqualityCheck()).toBe(customDefaultEquality);
+      expect(runtime.getGlobalEqualityCheck()(left, right)).toBe(false);
+      runtime.dispose();
     });
 
     it('should update global equality check to isEqualEs6 when current check is default isEqual', () => {

@@ -16,9 +16,12 @@ const expectedRuntimeExports = [
   'clearHotReloadCallbacks',
   'clearSubs',
   'clearSubscriptionCache',
+  'createReflexHooks',
   'createReflexInspector',
+  'createReflexRuntime',
   'current',
   'debounceAndDispatch',
+  'defaultRuntime',
   'defaultErrorHandler',
   'dispatch',
   'dispatchSync',
@@ -26,6 +29,7 @@ const expectedRuntimeExports = [
   'enableMapSet',
   'enableTracePrint',
   'enableTracing',
+  'flush',
   'getAppDb',
   'getGlobalEqualityCheck',
   'getGlobalInterceptors',
@@ -41,11 +45,14 @@ const expectedRuntimeExports = [
   'regEffect',
   'regGlobalInterceptor',
   'regSub',
+  'ReflexProvider',
   'registerHotReloadCallback',
+  'registerModule',
   'registerTraceCallback',
   'registerTraceCb',
   'removeTraceCallback',
   'removeTraceCb',
+  'restoreAppDb',
   'setGlobalEqualityCheck',
   'setupSubsHotReload',
   'shallowEqual',
@@ -53,6 +60,69 @@ const expectedRuntimeExports = [
   'triggerHotReload',
   'useHotReload',
   'useHotReloadKey',
+  'useReflexRuntime',
+  'useSubscription',
+  'watchSubscription',
+].sort();
+const expectedVanillaRuntimeExports = [
+  'DISPATCH',
+  'DISPATCH_LATER',
+  'NOW',
+  'RANDOM',
+  'clearGlobalInterceptors',
+  'clearHandlers',
+  'clearSubs',
+  'clearSubscriptionCache',
+  'createReflexInspector',
+  'createReflexRuntime',
+  'current',
+  'debounceAndDispatch',
+  'defaultErrorHandler',
+  'defaultRuntime',
+  'dispatch',
+  'dispatchSync',
+  'disableTracing',
+  'enableMapSet',
+  'enableTracePrint',
+  'enableTracing',
+  'flush',
+  'getAppDb',
+  'getGlobalEqualityCheck',
+  'getGlobalInterceptors',
+  'getHandler',
+  'getHandlers',
+  'getSubscriptionDiagnostics',
+  'getSubscriptionValue',
+  'initAppDb',
+  'original',
+  'regCoeffect',
+  'regEvent',
+  'regEventErrorHandler',
+  'regEffect',
+  'regGlobalInterceptor',
+  'regSub',
+  'registerModule',
+  'registerTraceCallback',
+  'registerTraceCb',
+  'removeTraceCallback',
+  'removeTraceCb',
+  'restoreAppDb',
+  'setGlobalEqualityCheck',
+  'shallowEqual',
+  'throttleAndDispatch',
+  'watchSubscription',
+].sort();
+const expectedReactRuntimeExports = [
+  'HotReloadWrapper',
+  'ReflexProvider',
+  'clearHotReloadCallbacks',
+  'createReflexHooks',
+  'registerHotReloadCallback',
+  'setupSubsHotReload',
+  'triggerHotReload',
+  'useHotReload',
+  'useHotReloadKey',
+  'useReflexRuntime',
   'useSubscription',
 ].sort();
 const removedLegacyExports = [
@@ -97,10 +167,12 @@ describe('Package Consumption Tests', () => {
   test('Built package files exist', () => {
     const distDir = path.join(__dirname, '../dist');
 
-    expect(fs.existsSync(path.join(distDir, 'index.mjs'))).toBe(true);
-    expect(fs.existsSync(path.join(distDir, 'index.cjs'))).toBe(true);
-    expect(fs.existsSync(path.join(distDir, 'index.d.mts'))).toBe(true);
-    expect(fs.existsSync(path.join(distDir, 'index.d.cts'))).toBe(true);
+    for (const entrypoint of ['index', 'vanilla', 'react']) {
+      expect(fs.existsSync(path.join(distDir, `${entrypoint}.mjs`))).toBe(true);
+      expect(fs.existsSync(path.join(distDir, `${entrypoint}.cjs`))).toBe(true);
+      expect(fs.existsSync(path.join(distDir, `${entrypoint}.d.mts`))).toBe(true);
+      expect(fs.existsSync(path.join(distDir, `${entrypoint}.d.cts`))).toBe(true);
+    }
   });
 
   test('Package.json has correct exports', () => {
@@ -110,12 +182,40 @@ describe('Package Consumption Tests', () => {
     expect(packageJson.main).toBe('dist/index.cjs');
     expect(packageJson.module).toBe('dist/index.mjs');
     expect(packageJson.types).toBe('dist/index.d.mts');
-    expect(packageJson.exports).toBeDefined();
-    expect(packageJson.exports.import).toBeDefined();
-    expect(packageJson.exports.require).toEqual({
-      types: './dist/index.d.cts',
-      default: './dist/index.cjs',
+    expect(packageJson.exports).toEqual({
+      '.': {
+        import: {
+          types: './dist/index.d.mts',
+          default: './dist/index.mjs',
+        },
+        require: {
+          types: './dist/index.d.cts',
+          default: './dist/index.cjs',
+        },
+      },
+      './vanilla': {
+        import: {
+          types: './dist/vanilla.d.mts',
+          default: './dist/vanilla.mjs',
+        },
+        require: {
+          types: './dist/vanilla.d.cts',
+          default: './dist/vanilla.cjs',
+        },
+      },
+      './react': {
+        import: {
+          types: './dist/react.d.mts',
+          default: './dist/react.mjs',
+        },
+        require: {
+          types: './dist/react.d.cts',
+          default: './dist/react.cjs',
+        },
+      },
     });
+    expect(packageJson.files).toContain('docs');
+    expect(packageJson.peerDependenciesMeta).toEqual({ react: { optional: true } });
   });
 
   test('ESM build can be imported', () => {
@@ -131,6 +231,36 @@ describe('Package Consumption Tests', () => {
     expect(exportedKeys).toEqual(expectedRuntimeExports);
   });
 
+  test('ESM subpath builds can be imported and share the default runtime', () => {
+    const distDir = path.join(__dirname, '../dist');
+    const indexUrl = pathToFileURL(path.join(distDir, 'index.mjs')).href;
+    const vanillaUrl = pathToFileURL(path.join(distDir, 'vanilla.mjs')).href;
+    const reactUrl = pathToFileURL(path.join(distDir, 'react.mjs')).href;
+    const script = `
+      const root = await import(${JSON.stringify(indexUrl)});
+      const vanilla = await import(${JSON.stringify(vanillaUrl)});
+      const react = await import(${JSON.stringify(reactUrl)});
+      process.stdout.write(JSON.stringify({
+        vanillaKeys: Object.keys(vanilla).sort(),
+        reactKeys: Object.keys(react).sort(),
+        sameRuntime: root.defaultRuntime === vanilla.defaultRuntime,
+        sameProvider: root.ReflexProvider === react.ReflexProvider,
+      }));
+    `;
+    const result = JSON.parse(
+      execFileSync(process.execPath, ['--input-type=module', '--eval', script], {
+        encoding: 'utf8',
+      }),
+    );
+
+    expect(result).toEqual({
+      vanillaKeys: expectedVanillaRuntimeExports,
+      reactKeys: expectedReactRuntimeExports,
+      sameRuntime: true,
+      sameProvider: true,
+    });
+  });
+
   test('CommonJS build can be required', () => {
     const distDir = path.join(__dirname, '../dist');
     const api = require(path.join(distDir, 'index.cjs'));
@@ -138,6 +268,18 @@ describe('Package Consumption Tests', () => {
     removedLegacyExports.forEach((name) => {
       expect(api).not.toHaveProperty(name);
     });
+  });
+
+  test('CommonJS subpath builds can be required and share the default runtime', () => {
+    const distDir = path.join(__dirname, '../dist');
+    const root = require(path.join(distDir, 'index.cjs'));
+    const vanilla = require(path.join(distDir, 'vanilla.cjs'));
+    const react = require(path.join(distDir, 'react.cjs'));
+
+    expect(Object.keys(vanilla).sort()).toEqual(expectedVanillaRuntimeExports);
+    expect(Object.keys(react).sort()).toEqual(expectedReactRuntimeExports);
+    expect(root.defaultRuntime).toBe(vanilla.defaultRuntime);
+    expect(root.ReflexProvider).toBe(react.ReflexProvider);
   });
 
   test('Node with unset NODE_ENV warns when CJS and ESM initialize separate runtimes', () => {
@@ -162,12 +304,26 @@ describe('Package Consumption Tests', () => {
     const distDir = path.join(__dirname, '../dist');
     const dtsFile = fs.readFileSync(path.join(distDir, 'index.d.mts'), 'utf8');
     const dctsFile = fs.readFileSync(path.join(distDir, 'index.d.cts'), 'utf8');
+    const vanillaDtsFile = fs.readFileSync(path.join(distDir, 'vanilla.d.mts'), 'utf8');
+    const reactDtsFile = fs.readFileSync(path.join(distDir, 'react.d.mts'), 'utf8');
+    const allDts = fs
+      .readdirSync(distDir)
+      .filter((file) => file.endsWith('.d.mts'))
+      .map((file) => fs.readFileSync(path.join(distDir, file), 'utf8'))
+      .join('\n');
+    const allDcts = fs
+      .readdirSync(distDir)
+      .filter((file) => file.endsWith('.d.cts'))
+      .map((file) => fs.readFileSync(path.join(distDir, file), 'utf8'))
+      .join('\n');
 
-    expect(dtsFile).toContain('interface SubscriptionDiagnostic');
-    expect(dtsFile).toContain('interface EventRegistrationOptions');
-    expect(dtsFile).toContain('interface ReflexInspector');
-    expect(dctsFile).toContain('interface EventRegistrationOptions');
-    expect(dctsFile).toContain('interface ReflexInspector');
+    expect(allDts).toContain('interface SubscriptionDiagnostic');
+    expect(allDts).toContain('interface EventRegistrationOptions');
+    expect(allDts).toContain('interface ReflexInspector');
+    expect(allDcts).toContain('interface EventRegistrationOptions');
+    expect(allDcts).toContain('interface ReflexInspector');
+    expect(vanillaDtsFile).toContain('createReflexRuntime');
+    expect(reactDtsFile).toContain('ReflexProvider');
     removedLegacyExports.forEach((name) => {
       expect(dtsFile).not.toMatch(new RegExp(`\\b${name}\\b`));
       expect(dctsFile).not.toMatch(new RegExp(`\\b${name}\\b`));

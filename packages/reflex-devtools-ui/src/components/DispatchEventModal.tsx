@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSubscription, dispatch } from '@flexsurfer/reflex';
+import type { DevtoolsRuntimeSummary } from '../types/Runtime';
 
 export function DispatchEventModal() {
     const dispatchModalState = useSubscription(['dispatchModalOpenState']) as {
@@ -9,7 +10,15 @@ export function DispatchEventModal() {
     } | undefined;
     const handlerKeys = useSubscription<{ event: string[]; fx: string[]; cofx: string[]; sub: string[]; } | null>(['handlerKeys']);
     const capabilities = useSubscription<string[]>(['capabilities']) ?? [];
-    const canDispatch = capabilities.includes('dispatch');
+    const runtimes = useSubscription<DevtoolsRuntimeSummary[]>(['runtimes']) ?? [];
+    const selectedRuntimeId = useSubscription<string | null>(['selectedRuntimeId']);
+    const pendingRuntimeId = useSubscription<string | null>(['pendingRuntimeId']);
+    const selectedRuntimeConnected = runtimes.some(
+        (runtime) => runtime.runtimeId === selectedRuntimeId && runtime.connected,
+    );
+    const canDispatch = capabilities.includes('dispatch')
+        && selectedRuntimeConnected
+        && pendingRuntimeId === null;
 
     const [eventName, setEventName] = useState(dispatchModalState?.eventName || '');
     const [eventParams, setEventParams] = useState<any[]>(dispatchModalState?.initialParams || []);

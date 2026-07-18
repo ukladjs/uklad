@@ -1,8 +1,14 @@
 import isEqual from 'fast-deep-equal';
 
 import type { EqualityCheckFn } from '../types';
+import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
 
-let globalEqualityCheck: EqualityCheckFn = isEqual;
+const equalityChecks = new WeakMap<RuntimeScope, EqualityCheckFn>();
+let defaultEqualityCheck: EqualityCheckFn = isEqual;
+
+function getRuntimeEqualityCheck(runtime: RuntimeScope): EqualityCheckFn {
+  return equalityChecks.get(runtime) ?? defaultEqualityCheck;
+}
 
 /**
  * Compare primitives by identity and arrays or objects one level deep.
@@ -40,10 +46,34 @@ export const shallowEqual: EqualityCheckFn = (left: any, right: any): boolean =>
 
 /** Replace the equality function used by subscriptions without a local override. */
 export function setGlobalEqualityCheck(equalityCheck: EqualityCheckFn): void {
-  globalEqualityCheck = equalityCheck;
+  setGlobalEqualityCheckForRuntime(defaultRuntimeScope, equalityCheck);
+}
+
+/** @internal Replace the default equality function for one runtime. */
+export function setGlobalEqualityCheckForRuntime(
+  runtime: RuntimeScope,
+  equalityCheck: EqualityCheckFn,
+): void {
+  equalityChecks.set(runtime, equalityCheck);
 }
 
 /** Return the equality function used by subscriptions without a local override. */
 export function getGlobalEqualityCheck(): EqualityCheckFn {
-  return globalEqualityCheck;
+  return getGlobalEqualityCheckForRuntime(defaultRuntimeScope);
+}
+
+/** @internal Return the default equality function for one runtime. */
+export function getGlobalEqualityCheckForRuntime(runtime: RuntimeScope): EqualityCheckFn {
+  return getRuntimeEqualityCheck(runtime);
+}
+
+/** @internal Replace the framework fallback without overwriting runtime policy. */
+export function replaceDefaultEqualityCheck(
+  previous: EqualityCheckFn,
+  next: EqualityCheckFn,
+): void {
+  if (defaultEqualityCheck === previous) defaultEqualityCheck = next;
+  if (equalityChecks.get(defaultRuntimeScope) === previous) {
+    equalityChecks.set(defaultRuntimeScope, next);
+  }
 }

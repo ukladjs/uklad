@@ -2,10 +2,14 @@
 // subscription cycle against the packed tarball, not the repo sources.
 const assert = require('node:assert');
 const reflex = require('@flexsurfer/reflex');
+const reflexReact = require('@flexsurfer/reflex/react');
+const reflexVanilla = require('@flexsurfer/reflex/vanilla');
 
 assert.strictEqual(typeof reflex.dispatch, 'function');
 assert.strictEqual(typeof reflex.regEvent, 'function');
 assert.strictEqual(typeof reflex.useSubscription, 'function');
+assert.strictEqual(reflex.defaultRuntime, reflexVanilla.defaultRuntime);
+assert.strictEqual(reflex.ReflexProvider, reflexReact.ReflexProvider);
 
 reflex.initAppDb({ count: 0 });
 reflex.regEvent('inc', ({ draftDb }) => {

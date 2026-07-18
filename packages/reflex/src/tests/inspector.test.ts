@@ -34,7 +34,9 @@ describe('Reflex inspector', () => {
     const inspector = createReflexInspector();
     const snapshot = inspector.getSnapshot();
 
-    expect(inspector.apiVersion).toBe(1);
+    expect(inspector.apiVersion).toBe(2);
+    expect(inspector.runtimeId).toBe('default');
+    expect(inspector.runtimeName).toBe('Default runtime');
     expect(Object.isFrozen(inspector)).toBe(true);
     expect(snapshot.appDb).toBe(appDb);
     expect(snapshot.handlerKeys).toEqual({

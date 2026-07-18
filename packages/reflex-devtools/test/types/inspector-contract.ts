@@ -6,6 +6,18 @@ import type { ReflexInspector as DevtoolsReflexInspector } from '../../src/clien
 
 type Assert<T extends true> = T;
 
+export type InspectorApiVersionContract = Assert<
+  CoreReflexInspector['apiVersion'] extends 2 ? true : false
+>;
+
+export type InspectorRuntimeIdContract = Assert<
+  CoreReflexInspector['runtimeId'] extends string ? true : false
+>;
+
+export type InspectorRuntimeNameContract = Assert<
+  CoreReflexInspector['runtimeName'] extends string ? true : false
+>;
+
 /** Core adapters must remain assignable to the independently published DevTools port. */
 export type InspectorContract = Assert<
   CoreReflexInspector extends DevtoolsReflexInspector ? true : false

@@ -37,14 +37,14 @@ The strongest recent work is invisible: local `main` is ahead of the public repo
 These items do not win an evaluation by themselves, but each removes a common reason for an architecture or security team to reject the framework before evaluating its differentiators.
 
 - [x] **DevTools/MCP security baseline.** The server now uses generated role tokens for HTTP and WebSocket, exact browser-origin and Host checks, loopback-only binding by default, read-only MCP capabilities unless dispatch/restore are granted separately, bounded and schema-validated runtime/control data, application/server redaction hooks, mutation audit records, reconnect-safe runtime sessions, and a fail-closed runtime/DevTools/MCP protocol-version handshake. Principal-scoped capability policy and remote-deployment abuse controls remain explicitly tracked in the [DevTools roadmap](docs/devtools-roadmap.md#p2).
-- [ ] **Fail-loud dev mode.** Dispatching a typo'd event or subscribing to a missing sub currently `console.error`s and continues. In development, throw with a nearest-match suggestion ("did you mean `todos/add`?"). String IDs are only safe if mistakes surface immediately; this matters double for AI-generated code.
+- [ ] **Fail-loud dev mode.** The instance API (`runtime.dispatch`, `dispatchSync`, `getSubscriptionValue`, `watchSubscription`, and `useSubscription` through it) now throws on malformed vectors and unregistered ids in every mode. Remaining scope: the legacy facade's root functions still `console.error` and continue — make them throw in development, and add a nearest-match suggestion ("did you mean `todos/add`?") to both surfaces. String IDs are only safe if mistakes surface immediately; this matters double for AI-generated code.
 - [ ] **Release and support baseline.** Add `SECURITY.md`, `CHANGELOG.md`, a support/compatibility matrix, coordinated release automation, npm provenance/trusted publishing, and a documented deprecation policy. Define supported React, React Native, TypeScript, Node/headless, browser, Metro, and Hermes versions.
 - [ ] **Runtime performance baseline.** Add repeatable benchmarks and CI budgets for dispatch throughput, broad and deep subscription graphs, 1k/10k active subscriptions, mount/unmount churn, memory retention, large derived collections under deep versus shallow equality, React render counts, AI-token-frequency updates, Hermes performance, and bundle size.
 - [ ] **Internal agent eval baseline.** Run scripted Reflex tasks with MCP connected versus file-tools-only, scored on success rate, turns, tokens, wall time, and deterministic acceptance tests. Use this as the fitness function for DevTools work; do not publish cross-library claims yet.
 
 ## Phase 2 — Instance-scoped runtime (the quarter's architecture project, gates 1.0 RC)
 
-The database and registries are module-level globals ([app-db.ts](packages/reflex/src/runtime/app-db.ts), [handlers.ts](packages/reflex/src/runtime/handlers.ts)). That blocks or complicates SSR/per-request stores, microfrontends, embedded widgets, parallel tests, Storybook isolation — and, most on-thesis, multiple agent sandboxes running side by side. This is the last acceptable breaking change; every month of adoption makes it more expensive.
+Before this phase, the database and registries were module-level globals ([app-db.ts](packages/reflex/src/runtime/app-db.ts), [handlers.ts](packages/reflex/src/runtime/handlers.ts)). That blocked or complicated SSR/per-request stores, microfrontends, embedded widgets, parallel tests, Storybook isolation — and, most on-thesis, multiple agent sandboxes running side by side. This phase moves those owners behind explicit runtime scopes while preserving the default-runtime facade.
 
 Target shape:
 
@@ -58,16 +58,22 @@ runtime.registerModule(feature);
 </ReflexProvider>;
 ```
 
-- [ ] **Runtime RFC first.** Define ownership and lifecycle for the db heads, event queue, handler registries, event metadata, global interceptors, subscription engine/cache, tracing, schedulers, built-ins, reset behavior, and DevTools inspector. Specify compatibility and migration constraints before moving code.
-- [ ] `createReflexRuntime` + `ReflexProvider`; today's global API preserved as a compatibility facade over a default runtime so existing apps, templates, skills, and `llms.txt` keep working.
-- [ ] `@flexsurfer/reflex/vanilla` and `/react` entrypoints.
-- [ ] Store-local typed contracts as an alternative to global module augmentation.
-- [ ] Public `watchSubscription` for non-React consumers (services, headless logic).
-- [ ] Scoped feature registration returning an idempotent disposer; safe lazy loading and HMR without clearing every handler.
-- [ ] Headless-friendly primitives finished on the instance API: safe app-db restore, non-React subscription evaluation/watching, and an explicit flush contract after restore/dispatch.
-- [ ] SSR/per-request stores, with request-isolation and hydration tests.
-- [ ] **Multi-runtime DevTools routing.** Add stable `runtimeId`/runtime names, multiple simultaneous runtime sessions per server, runtime selection in the dashboard and MCP tools, and runtime-scoped state, handlers, traces, dispatch, evaluation, cursors, and reconnect semantics. The current single-session server supersedes the previous SDK client, so instance-scoping alone does not deliver parallel agent sandboxes.
+- [x] **Runtime RFC first.** Define ownership and lifecycle for the db heads, event queue, handler registries, event metadata, global interceptors, subscription engine/cache, tracing, schedulers, built-ins, reset behavior, and DevTools inspector. Specify compatibility and migration constraints before moving code.
+- [x] `createReflexRuntime` + `ReflexProvider`; today's global API preserved as a compatibility facade over a default runtime so existing apps, templates, skills, and `llms.txt` keep working.
+- [x] `@flexsurfer/reflex/vanilla` and `/react` entrypoints.
+- [x] Store-local typed contracts as an alternative to global module augmentation.
+- [x] Public `watchSubscription` for non-React consumers (services, headless logic).
+- [x] Scoped feature registration returning an idempotent disposer; safe lazy loading and HMR without clearing every handler.
+- [x] Headless-friendly primitives finished on the instance API: safe app-db restore, non-React subscription evaluation/watching, and an explicit flush contract after restore/dispatch.
+- [x] SSR/per-request stores, with request-isolation and hydration tests.
+- [x] **Multi-runtime DevTools routing.** Add stable `runtimeId`/runtime names, multiple simultaneous runtime sessions per server, runtime selection in the dashboard and MCP tools, and runtime-scoped state, handlers, traces, dispatch, evaluation, and reconnect-session semantics. The former single-session server superseded the previous SDK client, so instance-scoping alone would not have delivered parallel agent sandboxes. `sinceId` pagination remains in the Phase 3 MCP backlog.
 - [ ] **Architecture acceptance gates.** Prove two independent runtimes in one realm, parallel-test isolation, SSR request isolation, module install/dispose, compatibility-facade behavior, packed-package compatibility, and no material regression against Phase 1 performance budgets.
+  - Functional and package-consumption gates are automated and passing. The performance comparison remains blocked until the Phase 1 runtime budgets above exist.
+- [ ] **Implementation-review follow-ups (2026-07-18, non-blocking).** Logged from the instance-runtime review; none gates the RC:
+  - Document "unmount/unwatch consumers before `runtime.dispose()`" prominently. Watches created through `watchSubscription` (including every `useSubscription`) are runtime-owned, so dispose force-releases them and a still-mounted tree throws on its next render instead of failing the dispose. A dispose attempt that then fails on an externally activated graph has already torn down the runtime's own watches — retryable, but not side-effect-free.
+  - `registerTraceCallback` silently drops the callback when tracing is not yet enabled (legacy ordering foot-gun). On the instance API, store the callback and deliver once tracing activates.
+  - Per-id subscription-cache operations (`hasCachedSubscriptionForId`, clear-by-id, definition-clearable assert) are O(cache) scans. Add a `subId → keys` index if route-level module disposal becomes routine.
+  - Default-runtime built-ins register twice (module evaluation in router/pipeline/coeffects plus the `defaultRuntime` constructor). Harmless silent overwrite today; dedupe or comment so nobody "fixes" one side.
 - [ ] Publish `1.0.0-rc.1` with a migration guide and written stability/semver policy. Instance-scoping gates the release candidate, not final 1.0.
 
 ## Phase 3 — Instance-aware product proof
@@ -78,7 +84,7 @@ This phase begins once the instance API is stable enough that persistence, templ
 - [ ] **`create-reflex-app` scaffolder.** Pin the intended convention: `db.ts` / `events.ts` / `subs.ts` / `effects.ts` / `*-ids.ts`, store-local or typed payload contracts, dev-only inspector wiring, CLAUDE.md/AGENTS.md routers, pinned MCP config, and a `reflex-map` script entry.
 - [ ] **Official Expo reference app, built by agents using the Reflex toolkit.** Include Metro/Hermes CI, AsyncStorage + SecureStore adapters, hydration migrations, background transitions, reconnect handling, and an offline command outbox. Dogfood the workflow in a public demo showing an agent building and verifying the application with metrics on screen.
 - [ ] **Public agent benchmark.** Compare the same tested tasks in Reflex, Zustand, and Redux Toolkit only after the internal harness is stable. Fix model and tool versions, publish prompts and source, use identical acceptance tests and time limits, run multiple repetitions, disclose failures and variance, and make the harness reproducible.
-- [ ] **MCP backlog prioritized by harness data** (tracked in [docs/devtools-roadmap.md](docs/devtools-roadmap.md)): `get_client_logs`, `find_state_changes(path)`, `sinceId`/`sessionEpoch` cursors, `reflex-map` static manifest + source locations through MCP, shape mode, snapshot/restore, `explain_event`, deterministic replay, and runtime schema validation for external tool payloads. Predicted winners remain hypotheses until measured.
+- [ ] **MCP backlog prioritized by harness data** (tracked in [docs/devtools-roadmap.md](docs/devtools-roadmap.md)): `get_client_logs`, `find_state_changes(path)`, `sinceId` pagination with explicit cursor-reset responses, `reflex-map` static manifest + source locations through MCP, shape mode, snapshot/restore, `explain_event`, deterministic replay, and runtime schema validation for external tool payloads. Predicted winners remain hypotheses until measured.
 
 ## Phase 4 — Supervised async tasks (`@flexsurfer/reflex-tasks`)
 

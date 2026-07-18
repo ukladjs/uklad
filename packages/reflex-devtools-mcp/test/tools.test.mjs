@@ -60,7 +60,7 @@ test('app_status reports a healthy headless session without hints', async () => 
         protocol: {
           version: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
           runtimeVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
-          inspectorApiVersion: 1,
+          inspectorApiVersion: 2,
         },
         security: {
           authenticated: true,
@@ -87,6 +87,185 @@ test('app_status reports a healthy headless session without hints', async () => 
   assert.equal(body.security.authenticated, true);
   assert.equal('hints' in body, false);
   assert.equal('connectedApps' in body, false);
+});
+
+test('every MCP tool accepts runtimeId, routes it, and surfaces runtime identity', async () => {
+  const runtimeId = 'runtime-b';
+  const identity = {
+    runtimeId,
+    runtimeName: 'Checkout preview',
+    sessionEpoch: 7,
+  };
+  const apiClient = {
+    async getStatus(selected) {
+      assert.equal(selected, runtimeId);
+      return {
+        ...identity,
+        selectedRuntimeId: runtimeId,
+        runtimes: [{ ...identity, connected: true, runtime: 'browser' }],
+        appConnected: true,
+        mcpEnabled: true,
+        runtime: 'browser',
+        tracing: true,
+        handlers: { event: 1, fx: 0, cofx: 0, sub: 1 },
+        stateAvailable: true,
+        traceCount: 1,
+        capabilities: ['inspect', 'dispatch'],
+        readOnly: false,
+        protocol: { version: REFLEX_DEVTOOLS_PROTOCOL_VERSION },
+        security: { authenticated: true },
+      };
+    },
+    async getTraces(params) {
+      assert.equal(params.runtimeId, runtimeId);
+      return { ...identity, traces: [], stats: {} };
+    },
+    async getTrace(id, selected, sessionEpoch) {
+      assert.equal(id, 4);
+      assert.equal(selected, runtimeId);
+      assert.equal(sessionEpoch, identity.sessionEpoch);
+      return { ...identity, trace: { id } };
+    },
+    async getAppState(path, selected) {
+      assert.equal(path, 'cart');
+      assert.equal(selected, runtimeId);
+      return { ...identity, state: { total: 12 } };
+    },
+    async getHandlers(type, selected) {
+      assert.equal(type, 'event');
+      assert.equal(selected, runtimeId);
+      return {
+        ...identity,
+        handlerKeys: { event: ['checkout'] },
+      };
+    },
+    async getSubscriptions(filter, selected) {
+      assert.equal(filter, 'cart');
+      assert.equal(selected, runtimeId);
+      return { ...identity, total: 1, subscriptions: { '["cart"]': 12 } };
+    },
+    async evalSub(id, args, selected) {
+      assert.equal(id, 'cart');
+      assert.deepEqual(args, []);
+      assert.equal(selected, runtimeId);
+      return { ...identity, value: 12 };
+    },
+    async dispatchEvent(eventName, params, selected) {
+      assert.equal(eventName, 'checkout');
+      assert.deepEqual(params, []);
+      assert.equal(selected, runtimeId);
+      return { ...identity, outcome: 'succeeded', patches: [], effects: [] };
+    },
+  };
+
+  const tools = [
+    appStatusTool(apiClient),
+    getTracesTool(apiClient),
+    getTraceTool(apiClient),
+    getAppStateTool(apiClient),
+    getHandlersTool(apiClient),
+    getActiveSubsTool(apiClient),
+    evalSubTool(apiClient),
+    dispatchEventTool(apiClient),
+  ];
+  for (const tool of tools) {
+    assert.ok(tool.inputSchema.properties.runtimeId, `${tool.name} must expose runtimeId`);
+  }
+  assert.ok(tools[2].inputSchema.properties.sessionEpoch);
+
+  const calls = [
+    tools[0].handler({ runtimeId }),
+    tools[1].handler({ runtimeId }),
+    tools[2].handler({ id: 4, runtimeId, sessionEpoch: identity.sessionEpoch }),
+    tools[3].handler({ path: 'cart', runtimeId }),
+    tools[4].handler({ type: 'event', runtimeId }),
+    tools[5].handler({ filter: 'cart', runtimeId }),
+    tools[6].handler({ id: 'cart', runtimeId }),
+    tools[7].handler({ eventName: 'checkout', runtimeId }),
+  ];
+  for (const call of calls) {
+    const body = parseToolResult(await call);
+    assert.equal(body.runtimeId, runtimeId);
+    assert.equal(body.runtimeName, identity.runtimeName);
+    assert.equal(body.sessionEpoch, identity.sessionEpoch);
+  }
+});
+
+test('runtime selection errors preserve the available runtime list', async () => {
+  const runtimes = [
+    {
+      runtimeId: 'runtime-a',
+      runtimeName: 'Admin',
+      connected: true,
+      sessionEpoch: 2,
+      runtime: 'browser',
+    },
+    {
+      runtimeId: 'runtime-b',
+      runtimeName: 'Worker',
+      connected: true,
+      sessionEpoch: 5,
+      runtime: 'headless',
+    },
+  ];
+  const apiClient = {
+    async getStatus() {
+      const error = new Error('runtimeId is required because multiple runtimes are connected.');
+      error.code = 'RUNTIME_SELECTION_REQUIRED';
+      error.details = {
+        success: false,
+        code: error.code,
+        error: error.message,
+        selectedRuntimeId: null,
+        runtimes,
+      };
+      throw error;
+    },
+  };
+
+  const result = await appStatusTool(apiClient).handler({});
+  const body = parseToolResult(result);
+
+  assert.equal(result.isError, true);
+  assert.equal(body.code, 'RUNTIME_SELECTION_REQUIRED');
+  assert.equal(body.selectedRuntimeId, null);
+  assert.deepEqual(body.runtimes, runtimes);
+  assert.match(body.hint, /retry.*runtimeId/i);
+});
+
+test('get_trace surfaces an explicit session reset conflict', async () => {
+  const apiClient = {
+    async getTrace(id, runtimeId, sessionEpoch) {
+      assert.equal(id, 7);
+      assert.equal(runtimeId, 'runtime-a');
+      assert.equal(sessionEpoch, 2);
+      const error = new Error('Runtime runtime-a is now in session epoch 3.');
+      error.code = 'SESSION_EPOCH_MISMATCH';
+      error.details = {
+        success: false,
+        code: error.code,
+        error: error.message,
+        runtimeId,
+        runtimeName: 'Runtime A',
+        expectedSessionEpoch: sessionEpoch,
+        sessionEpoch: 3,
+      };
+      throw error;
+    },
+  };
+
+  const result = await getTraceTool(apiClient).handler({
+    id: 7,
+    runtimeId: 'runtime-a',
+    sessionEpoch: 2,
+  });
+  const body = parseToolResult(result);
+
+  assert.equal(result.isError, true);
+  assert.equal(body.code, 'SESSION_EPOCH_MISMATCH');
+  assert.equal(body.expectedSessionEpoch, 2);
+  assert.equal(body.sessionEpoch, 3);
+  assert.match(body.hint, /discard trace ids/i);
 });
 
 test('app_status explains a disconnected, read-only app and a missing --mcp flag', async () => {
@@ -186,6 +365,11 @@ test('get_traces returns compact rows without full trace tags', async () => {
       });
 
       return {
+        stats: {
+          totalTraces: 1,
+          eventTraces: 1,
+          renderTraces: 0,
+        },
         traces: [
           {
             id: 7,
@@ -203,15 +387,6 @@ test('get_traces returns compact rows without full trace tags', async () => {
             },
           },
         ],
-      };
-    },
-    async getStats() {
-      return {
-        stats: {
-          totalTraces: 1,
-          eventTraces: 1,
-          renderTraces: 0,
-        },
       };
     },
   };
@@ -363,6 +538,70 @@ test('DevToolsAPIClient refuses remote plaintext bearer-token transport', () => 
   );
 });
 
+test('DevToolsAPIClient sends runtimeId in read queries and mutation bodies', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    requests.push({
+      path: `${url.pathname}${url.search}`,
+      method: init.method ?? 'GET',
+      body: init.body ? JSON.parse(String(init.body)) : null,
+    });
+    const response = url.pathname === '/api/status'
+      ? {
+          success: true,
+          protocol: { version: REFLEX_DEVTOOLS_PROTOCOL_VERSION },
+        }
+      : { success: true };
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Reflex-DevTools-Protocol-Version': String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+      },
+    });
+  };
+
+  try {
+    const apiClient = new DevToolsAPIClient({
+      serverUrl: 'http://127.0.0.1:4000',
+      token: 'configured-token',
+    });
+    await apiClient.getStatus('runtime-b');
+    await apiClient.getTraces({ limit: 5, runtimeId: 'runtime-b' });
+    await apiClient.getTrace(8, 'runtime-b', 7);
+    await apiClient.getAppState('user.profile', 'runtime-b');
+    await apiClient.getSubscriptions('user', 'runtime-b');
+    await apiClient.getHandlers('event', 'runtime-b');
+    await apiClient.getStats('runtime-b');
+    await apiClient.dispatchEvent('save', [1], 'runtime-b');
+    await apiClient.evalSub('current-user', [1], 'runtime-b');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual(requests, [
+    { path: '/api/status?runtimeId=runtime-b', method: 'GET', body: null },
+    { path: '/api/traces?limit=5&runtimeId=runtime-b', method: 'GET', body: null },
+    { path: '/api/traces/8?runtimeId=runtime-b&sessionEpoch=7', method: 'GET', body: null },
+    { path: '/api/state?path=user.profile&runtimeId=runtime-b', method: 'GET', body: null },
+    { path: '/api/subscriptions?filter=user&runtimeId=runtime-b', method: 'GET', body: null },
+    { path: '/api/handlers?type=event&runtimeId=runtime-b', method: 'GET', body: null },
+    { path: '/api/stats?runtimeId=runtime-b', method: 'GET', body: null },
+    {
+      path: '/api/dispatch',
+      method: 'POST',
+      body: { eventName: 'save', params: [1], runtimeId: 'runtime-b' },
+    },
+    {
+      path: '/api/eval-sub',
+      method: 'POST',
+      body: { id: 'current-user', args: [1], runtimeId: 'runtime-b' },
+    },
+  ]);
+});
+
 test('DevToolsAPIClient surfaces trace lookup errors from the server body', async () => {
   const requests = [];
   const httpServer = createServer(async (req, res) => {
@@ -393,7 +632,7 @@ test('DevToolsAPIClient surfaces trace lookup errors from the server body', asyn
     }
 
     assert.equal(req.method, 'GET');
-    assert.equal(req.url, '/api/traces/99');
+    assert.equal(req.url, '/api/traces/99?runtimeId=runtime-b');
     assert.equal(req.headers.authorization, `Bearer ${SESSION_TOKEN}`);
     assert.equal(
       req.headers[PROTOCOL_HEADER],
@@ -421,7 +660,7 @@ test('DevToolsAPIClient surfaces trace lookup errors from the server body', asyn
     });
 
     await assert.rejects(
-      () => apiClient.getTrace(99),
+      () => apiClient.getTrace(99, 'runtime-b'),
       (error) => {
         assert.match(error.message, /No trace with id 99/);
         assert.equal(error.code, 'TRACE_NOT_FOUND');
@@ -431,7 +670,7 @@ test('DevToolsAPIClient surfaces trace lookup errors from the server body', asyn
     );
     assert.deepEqual(
       requests.map(({ method, url }) => `${method} ${url}`),
-      ['POST /auth/session', 'GET /api/traces/99'],
+      ['POST /auth/session', 'GET /api/traces/99?runtimeId=runtime-b'],
     );
   } finally {
     await new Promise((resolve, reject) => {
@@ -512,7 +751,9 @@ test('DevToolsAPIClient rejects incompatible protocol response headers', async (
 
     await assert.rejects(
       () => apiClient.getTrace(1),
-      /Incompatible Reflex DevTools protocol.*received 2/,
+      new RegExp(
+        `Incompatible Reflex DevTools protocol.*received ${REFLEX_DEVTOOLS_PROTOCOL_VERSION + 1}`,
+      ),
     );
   } finally {
     await new Promise((resolve, reject) => {
@@ -552,7 +793,9 @@ test('DevToolsAPIClient rejects incompatible protocol metadata in /api/status', 
 
     await assert.rejects(
       () => apiClient.getStatus(),
-      /Incompatible Reflex DevTools protocol.*received 2/,
+      new RegExp(
+        `Incompatible Reflex DevTools protocol.*received ${REFLEX_DEVTOOLS_PROTOCOL_VERSION + 1}`,
+      ),
     );
   } finally {
     await new Promise((resolve, reject) => {

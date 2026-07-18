@@ -15,7 +15,7 @@ Use this baseline structure:
 
 ```text
 src/state/
-  db.ts
+  runtime.ts
   event-ids.ts
   events.ts
   effect-ids.ts
@@ -26,15 +26,17 @@ src/state/
 
 Rules:
 - Keep IDs centralized in `event-ids.ts`, `effect-ids.ts`, `sub-ids.ts`.
-- Keep init in `db.ts` (`initAppDb(...)`).
-- Register events/effects/subscriptions via side-effect imports in app bootstrap (`main.tsx` style).
+- Create an explicit runtime in `runtime.ts` with `createReflexRuntime({ initialDb })`.
+- Express feature registrations as `runtime.registerModule((scope) => { ... })`; keep and invoke its disposer for lazy loading/HMR.
+- Mount React below `<ReflexProvider runtime={runtime}>`. The package-root API remains available only as the single-runtime compatibility facade.
+- Instance methods (`runtime.dispatch`, `dispatchSync`, `getSubscriptionValue`, `watchSubscription`, and `useSubscription` through them) throw on unregistered event/subscription ids — register before dispatching or subscribing.
 - If `events.ts` or `subs.ts` grows too large, split by feature, keep shared/global state separate.
 
 ## 2) State Shape
 
 - Grow horizontally (new top-level feature keys), avoid deep nesting.
 - Keep UI state explicit and separate from domain entities. Use a plain prefix on field names to group by domain (e.g. `uiSidebarOpen`, `uiSelectedTab`, `uiModalVisible` for UI state; `todosMap`, `todosFilter` for domain state). Avoid separators like `/` or `.` in field names — flat `camelCase` with a domain prefix keeps keys simple, grep-friendly, and avoids issues with object path accessors.
-- If using `Map`/`Set` in DB, call `enableMapSet()` before `initAppDb`.
+- If using `Map`/`Set` in DB, call `enableMapSet()` before creating the runtime.
 
 ## 3) Events `regEvent`
 
@@ -88,7 +90,7 @@ For compile-checked dispatch payloads, declare the typed payload maps (section 1
   - temporary form/input draft state before dispatch (alternative: bind the input value to a subscription and `dispatchSync` in `onChange` — the sync flush keeps the controlled input in step with the keystroke)
   - UI-only toggles scoped to one component (hover/open/focus)
   - refs, DOM measurement, animation lifecycle
-- Do not mirror Reflex global state in `useState`/`useReducer`.
+- Do not mirror runtime-owned Reflex state in `useState`/`useReducer`.
 - If state is shared, persisted, or business-relevant, keep it in Reflex DB via events/subscriptions.
 - Keep `useEffect` thin in components; business side effects belong in Reflex effects/coeffects.
 - Do not place business rules/validation pipelines in component handlers.
@@ -105,10 +107,9 @@ npm i -D @flexsurfer/reflex-devtools
 Enable in your app entry point (`main.tsx`) before dispatching any events:
 
 ```ts
-import { createReflexInspector } from '@flexsurfer/reflex';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
-enableDevtools(createReflexInspector());  // tracing is active while devtools is subscribed
+enableDevtools(runtime.createInspector());  // exact runtime identity and tracing owner
 
 ```
 
@@ -120,11 +121,11 @@ For every new feature:
 - Event tests: mutation correctness + emitted effect tuples.
 - Subscription tests: derived outputs from fixed state fixtures.
 
-Events and subscriptions are pure functions — test them by extracting the handler with `getHandler` and calling it directly with mock inputs.
+Events and subscriptions are pure functions. In explicit-runtime code, install the feature on a fresh runtime per test and extract a handler from `runtime.getHandlers()` when a focused unit test is useful. Package-root `getHandler` is the compatibility-facade equivalent.
 
 ### Testing Events
 
-Use `getHandler('event', EVENT_ID)` to get the raw handler. Build a mock `coeffects` object with `draftDb` (and any injected coeffects), call the handler, then assert mutations on `draftDb` and the returned effect tuples.
+Use `runtime.getHandlers().event[EVENT_ID]` to get the raw handler after installing the feature. Build a mock `coeffects` object with `draftDb` (and any injected coeffects), call the handler, then assert mutations on `draftDb` and the returned effect tuples.
 
 ```ts
 import { getHandler } from '@flexsurfer/reflex';
@@ -208,7 +209,7 @@ Build the map from IDs, not from code:
 Find code by exact-match grep, never by browsing:
 - Implementation: grep `regEvent(EVENT_IDS.TODOS_ADD` or `regSub(SUB_IDS.TODOS_LIST` — exactly one match.
 - Call sites: grep the constant (`EVENT_IDS.TODOS_ADD`) — its dispatch sites are the only UI triggers; `SUB_IDS.X` finds every consuming component via `useSubscription`.
-- Every ID appears in exactly three roles: definition (ids file), one registration, and call sites. There is no other wiring to trace — no providers, no middleware chains, no prop drilling.
+- Every ID appears in exactly three roles: definition (ids file), one registration, and call sites. Apart from the application-level `ReflexProvider` runtime boundary, there is no per-feature provider or middleware wiring to trace.
 
 Read only the handler, trust the contract:
 - Event handlers are pure: inputs = coeffects + event params, outputs = `draftDb` mutations + returned effect tuples. Nothing outside the function body changes its behavior, so reading the one function is sufficient to understand or safely modify it.
@@ -221,7 +222,7 @@ Bounded file sets for common tasks:
 - State shape change: `db.ts` + root subs + handlers touching that key (grep the db key).
 - State bug: reproduce → devtools event trace (event sequence + Immer patches show exactly which event wrote what) → read that one handler. Prefer the trace over reading code.
 - Failed events are visible in traces with a normalized error shape (`phase`, `message`, `stack`, plus `interceptor`/`direction` or `effect`): an event whose handler/interceptor threw carries `tags.error` with `phase: 'handler'`; dispatching an unregistered event id produces a trace with `tags.error.phase: 'missing-handler'`; effects that threw after a committed event are listed in `tags.effectErrors` with `phase: 'effect'`. Check these tags before assuming a dispatch worked.
-- If the `reflex-devtools` MCP server is connected, use it instead of reading code to inspect the running app: `get_app_state` (current db, supports path), `get_active_subs` (computed sub values), `get_handlers` (all registered event/fx/cofx/sub ids — a runtime index of the app), and `get_traces` (events, sub runs, renders, timings). Use `dispatch_event` only when it is advertised; DevTools is read-only by default and exposes mutation only after an explicit `--allow-dispatch` grant.
+- If the `reflex-devtools` MCP server is connected, call `app_status` first, select the intended `runtimeId`, and use the runtime-scoped tools instead of reading code: `get_app_state` (current db, supports path), `get_active_subs` (computed sub values), `get_handlers` (all registered event/fx/cofx/sub ids — a runtime index of the app), and `get_traces` (events, sub runs, renders, timings). Pass `runtimeId` to every call when multiple runtimes are connected. `dispatch_event` is always listed but succeeds only after an explicit `--allow-dispatch` grant; DevTools is read-only by default.
 
 Keep the index self-documenting:
 - Put a one-line signature comment on each ID so the ids file alone is enough to dispatch or subscribe correctly, without opening handlers:
@@ -240,7 +241,11 @@ export const SUB_IDS = {
 
 - When adding or changing a handler's params, update its signature comment — the ids files are the API docs that later sessions (and other agents) rely on.
 
-## 11) Starter Skeleton (copy pattern)
+## 11) Legacy compatibility starter (single default runtime)
+
+The following copy pattern is retained for existing 0.x applications using
+the package-root compatibility facade. New applications should use the
+explicit runtime/module/provider structure in section 1.
 
 ```ts
 import {

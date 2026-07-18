@@ -4,9 +4,17 @@
  */
 
 import { DevToolsAPIClient } from '../httpClient.js';
-import { serverUnavailableResult } from './errorResponse.js';
+import {
+  runtimeRoutingErrorResult,
+  serverUnavailableResult,
+} from './errorResponse.js';
+import {
+  runtimeIdInputProperty,
+  runtimeMetadata,
+  type RuntimeSelectionParams,
+} from './runtimeSelection.js';
 
-export interface DispatchEventParams {
+export interface DispatchEventParams extends RuntimeSelectionParams {
   eventName: string;
   params?: any[];
 }
@@ -31,7 +39,8 @@ export function dispatchEventTool(apiClient: DevToolsAPIClient) {
           items: {
             type: ['string', 'number', 'boolean', 'object', 'array', 'null']
           }
-        }
+        },
+        runtimeId: runtimeIdInputProperty,
       },
       required: ['eventName'],
       additionalProperties: false
@@ -39,9 +48,14 @@ export function dispatchEventTool(apiClient: DevToolsAPIClient) {
     handler: async (params: DispatchEventParams) => {
       try {
         const eventParams = params.params || [];
-        const response = await apiClient.dispatchEvent(params.eventName, eventParams);
+        const response = await apiClient.dispatchEvent(
+          params.eventName,
+          eventParams,
+          params.runtimeId,
+        );
 
         const result: Record<string, any> = {
+          ...runtimeMetadata(response),
           outcome: response.outcome,
           event: params.eventName
         };
@@ -81,6 +95,12 @@ export function dispatchEventTool(apiClient: DevToolsAPIClient) {
       } catch (error) {
         const unavailable = serverUnavailableResult(error, 'dispatch_event');
         if (unavailable) return unavailable;
+        const routing = runtimeRoutingErrorResult(
+          error,
+          'dispatch_event',
+          params.runtimeId,
+        );
+        if (routing) return routing;
 
         if ((error as any)?.code === 'CAPABILITY_DENIED') {
           return {
@@ -91,6 +111,7 @@ export function dispatchEventTool(apiClient: DevToolsAPIClient) {
                   error: 'Capability denied',
                   code: 'CAPABILITY_DENIED',
                   tool: 'dispatch_event',
+                  requestedRuntimeId: params.runtimeId ?? null,
                   event: params.eventName,
                   message:
                     'The DevTools server is running read-only, so this event ' +

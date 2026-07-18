@@ -11,6 +11,7 @@ import {
   setupSubsHotReload,
 } from '../react/hot-reload';
 import { clearSubsForHotReload } from '../runtime/subscriptions/cache';
+import { createReflexRuntime } from '../runtime/runtime';
 
 // setupSubsHotReload invokes the cache reset internally.
 jest.mock('../runtime/subscriptions/cache', () => ({
@@ -183,6 +184,22 @@ describe('Hot Reload System', () => {
 
       accept(undefined);
       expect(mockCallback).not.toHaveBeenCalled();
+    });
+
+    it('clears an explicit runtime while its current React-style graph is active', () => {
+      const runtime = createReflexRuntime({
+        initialDb: { value: 1 },
+        runtimeId: 'explicit-hmr-runtime',
+      });
+      runtime.regSub('value');
+      const unsubscribe = runtime.watchSubscription(['value'], () => {});
+      const { dispose } = setupSubsHotReload(runtime);
+
+      expect(() => dispose()).not.toThrow();
+      expect(runtime.getHandlers().sub.value).toBeUndefined();
+
+      unsubscribe();
+      runtime.dispose();
     });
   });
 

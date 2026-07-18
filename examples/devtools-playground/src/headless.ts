@@ -1,7 +1,7 @@
 /**
  * Headless runtime entry — the full Reflex state layer with no React mount.
  *
- * Imports the exact same db/events/subs modules as main.tsx; only the
+ * Installs the exact same db/events/subs modules as main.tsx; only the
  * side-effect adapters differ (effects.headless / coeffects.headless are
  * Node-safe: memory-backed or no-op). The devtools SDK connects over
  * WebSocket exactly as in the browser, so every MCP tool — app_status,
@@ -16,17 +16,30 @@
  * to the local lib sources; a scaffolded project installing from npm can
  * run the same file under tsx instead.
  */
-import { createReflexInspector, enableMapSet } from '@flexsurfer/reflex';
+import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex/vanilla';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
-import './db';
-import './events';
-import './subs';
-import { effectModes } from './effects.headless';
-import { coeffectModes } from './coeffects.headless';
+import { coeffectModes, installHeadlessCoeffects } from './coeffects.headless';
+import { createInitialAppDb, type PlaygroundContracts } from './db';
+import { effectModes, installHeadlessEffects } from './effects.headless';
+import { installPlaygroundEvents } from './events';
+import { installPlaygroundSubscriptions } from './subs';
 
 const serverUrl = process.env.REFLEX_DEVTOOLS_SERVER_URL ?? '127.0.0.1:4000';
 
-enableDevtools(createReflexInspector(), {
+enableMapSet();
+
+const headlessRuntime = createReflexRuntime<PlaygroundContracts>({
+  initialDb: createInitialAppDb(),
+  runtimeId: 'devtools-playground.headless',
+  name: 'DevTools Playground (Headless)',
+});
+
+headlessRuntime.registerModule(installPlaygroundEvents);
+headlessRuntime.registerModule(installPlaygroundSubscriptions);
+headlessRuntime.registerModule(installHeadlessEffects);
+headlessRuntime.registerModule(installHeadlessCoeffects);
+
+enableDevtools(headlessRuntime.createInspector(), {
   serverUrl,
   // runtime: 'headless' is auto-detected (no window); declare the
   // side-effect policy so app_status can report what really executes.
@@ -37,9 +50,10 @@ enableDevtools(createReflexInspector(), {
     'fake-effect': 'real',
   },
 });
-enableMapSet();
 
-console.log('[headless] DevTools playground state runtime started — no browser, no React');
+console.log(
+  `[headless] ${headlessRuntime.runtimeName} (${headlessRuntime.runtimeId}) started — no browser, no React`,
+);
 console.log(`[headless] connecting to Reflex DevTools at ${serverUrl}`);
 console.log('[headless] dispatch and inspect via the devtools MCP tools; Ctrl+C to stop');
 

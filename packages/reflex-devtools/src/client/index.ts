@@ -11,9 +11,11 @@ import {
   REFLEX_DEVTOOLS_PROTOCOL_HEADER,
   REFLEX_DEVTOOLS_PROTOCOL_VERSION,
   REFLEX_DEVTOOLS_RUNTIME_ERROR_TYPE,
+  REFLEX_DEVTOOLS_RUNTIME_ID_HEADER,
   REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER,
   REFLEX_DEVTOOLS_TELEMETRY_DROPPED_CODE,
   REFLEX_DEVTOOLS_WS_PROTOCOL,
+  type DevtoolsRuntimeKind,
   type RuntimeTelemetryDroppedPayload,
 } from '../protocol.js';
 import { diffSubscriptionDiagnostics } from './subscriptionDiagnostics.js';
@@ -44,11 +46,15 @@ export type {
 } from '../redaction.js';
 export {
   REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+  REFLEX_DEVTOOLS_RUNTIME_ID_HEADER,
 } from '../protocol.js';
 export type {
   DevtoolsCapability,
   DevtoolsClientRole,
   DevtoolsProtocolInfo,
+  DevtoolsRuntimeIdentity,
+  DevtoolsRuntimeKind,
+  DevtoolsRuntimeSummary,
 } from '../protocol.js';
 
 export interface DevtoolsConfig {
@@ -77,7 +83,7 @@ export interface DevtoolsConfig {
    * is no `window` (Node under tsx/vite-node), 'browser' otherwise.
    * Surfaced through the server's /api/status.
    */
-  runtime?: 'browser' | 'headless' | 'react-native';
+  runtime?: DevtoolsRuntimeKind;
   /**
    * Free-form label for the app's side-effect policy, e.g. 'real' in the
    * browser entry or 'safe' in a headless entry whose adapters are
@@ -108,12 +114,15 @@ const EVENT_REQUEST_TIMEOUT_MS = 5000;
 const RECONNECT_MAX_DELAY_MS = 10_000;
 const RECONNECT_STABILITY_MS = 10_000;
 const MAX_DEDUPLICATED_DIAGNOSTICS = 128;
+const RUNTIME_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const MAX_RUNTIME_NAME_LENGTH = 256;
+const MAX_RUNTIME_SESSION_ID_LENGTH = 128;
 
 // React Native must be checked before `window`: RN aliases the global object
 // to `window`, so a window check alone would mislabel it as a browser.
 // navigator.product === 'ReactNative' is RN's canonical self-identification;
 // real browsers report 'Gecko' and Node's navigator has no product at all.
-function detectRuntime(): 'browser' | 'headless' | 'react-native' {
+function detectRuntime(): DevtoolsRuntimeKind {
   if (typeof navigator !== 'undefined' && navigator.product === 'ReactNative') {
     return 'react-native';
   }
@@ -407,6 +416,8 @@ class DevtoolsClient {
               token: this.sessionToken,
               protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
               inspectorApiVersion: this.inspector.apiVersion,
+              runtimeId: this.inspector.runtimeId,
+              runtimeName: this.inspector.runtimeName,
             },
           }));
         } catch (error) {
@@ -421,10 +432,19 @@ class DevtoolsClient {
           if (message.type === 'devtools-server-hello') {
             const runtimePayloadBytes =
               message.payload?.limits?.runtimePayloadBytes;
+            const runtimeSessionId = message.payload?.runtimeSessionId;
+            const sessionEpoch = message.payload?.sessionEpoch;
             if (
               message.payload?.protocolVersion
                 !== REFLEX_DEVTOOLS_PROTOCOL_VERSION
-              || typeof message.payload?.runtimeSessionId !== 'string'
+              || !validRuntimeIdentityText(
+                runtimeSessionId,
+                MAX_RUNTIME_SESSION_ID_LENGTH,
+              )
+              || message.payload.runtimeId !== this.inspector.runtimeId
+              || message.payload.runtimeName !== this.inspector.runtimeName
+              || !Number.isSafeInteger(sessionEpoch)
+              || sessionEpoch < 1
               || !Number.isInteger(runtimePayloadBytes)
               || runtimePayloadBytes < 1
               || runtimePayloadBytes
@@ -435,7 +455,7 @@ class DevtoolsClient {
               return;
             }
             this.maxRuntimePayloadBytes = runtimePayloadBytes;
-            this.runtimeSessionId = message.payload.runtimeSessionId;
+            this.runtimeSessionId = runtimeSessionId;
             this.isConnected = true;
             this.markConnectionStableAfter(ws);
             resolveOnce();
@@ -877,6 +897,7 @@ class DevtoolsClient {
         [REFLEX_DEVTOOLS_PROTOCOL_HEADER]:
           String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
         [REFLEX_DEVTOOLS_CLIENT_HEADER]: 'reflex-devtools-runtime',
+        [REFLEX_DEVTOOLS_RUNTIME_ID_HEADER]: this.inspector.runtimeId,
         [REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER]:
           this.runtimeSessionId ?? '',
       },
@@ -932,12 +953,48 @@ class DevtoolsClient {
   }
 }
 
-let client: DevtoolsClient | null = null;
+const clientsByRuntimeId = new Map<string, DevtoolsClient>();
+let warnedAboutAmbiguousLogEvent = false;
 
-export function logEvent(event: EventPayload): void {
-  if (client) {
-    void client.sendEvent(event);
+/**
+ * Send a custom telemetry event through an enabled runtime client.
+ *
+ * The legacy one-argument form remains valid while exactly one client is
+ * enabled. Multi-runtime callers must provide a runtime id so telemetry can
+ * never cross an inspector boundary accidentally.
+ */
+export function logEvent(event: EventPayload, runtimeId?: string): void {
+  if (runtimeId !== undefined) {
+    const client = clientsByRuntimeId.get(runtimeId);
+    if (client) void client.sendEvent(event);
+    return;
   }
+
+  if (clientsByRuntimeId.size > 1) {
+    if (!warnedAboutAmbiguousLogEvent) {
+      warnedAboutAmbiguousLogEvent = true;
+      console.warn(
+        '[Reflex Devtools] logEvent() requires runtimeId when multiple runtime clients are enabled; telemetry was not sent.',
+      );
+    }
+    return;
+  }
+
+  const client = clientsByRuntimeId.values().next().value;
+  if (client) void client.sendEvent(event);
+}
+
+function registerClient(runtimeId: string, client: DevtoolsClient): void {
+  const previous = clientsByRuntimeId.get(runtimeId);
+  previous?.dispose();
+  clientsByRuntimeId.set(runtimeId, client);
+}
+
+function unregisterClient(runtimeId: string, client: DevtoolsClient): void {
+  if (clientsByRuntimeId.get(runtimeId) === client) {
+    clientsByRuntimeId.delete(runtimeId);
+  }
+  if (clientsByRuntimeId.size <= 1) warnedAboutAmbiguousLogEvent = false;
 }
 
 function utf8ByteLength(value: string): number {
@@ -1052,13 +1109,26 @@ function assertInspector(inspector: ReflexInspector): void {
     typeof candidate.subscribeTraces === 'function' &&
     typeof candidate.dispatch === 'function' &&
     typeof candidate.evaluateSubscription === 'function';
+  const hasIdentity =
+    typeof candidate?.runtimeId === 'string' &&
+    RUNTIME_ID_PATTERN.test(candidate.runtimeId) &&
+    validRuntimeIdentityText(candidate?.runtimeName, MAX_RUNTIME_NAME_LENGTH);
 
-  if (candidate?.apiVersion !== 1 || !hasMethods) {
+  if (candidate?.apiVersion !== 2 || !hasMethods || !hasIdentity) {
     throw new Error(
       '[Reflex Devtools] enableDevtools() requires a Reflex inspector as its first argument. ' +
-      'Call enableDevtools(createReflexInspector(), config) using the inspector created by the same Reflex package as the application.',
+      'Call enableDevtools(runtime.createInspector(), config), or use ' +
+      'createReflexInspector() for the default runtime, with the inspector ' +
+      'created by the same Reflex package as the application.',
     );
   }
+}
+
+function validRuntimeIdentityText(value: unknown, maxLength: number): value is string {
+  return typeof value === 'string'
+    && value.trim().length > 0
+    && value.length <= maxLength
+    && !/[\u0000-\u001F\u007F]/.test(value);
 }
 
 export function enableDevtools(
@@ -1068,14 +1138,11 @@ export function enableDevtools(
   assertInspector(inspector);
 
   const nextClient = new DevtoolsClient(inspector, config);
-  client?.dispose();
-  client = nextClient;
+  registerClient(inspector.runtimeId, nextClient);
   void nextClient.init().catch((error: unknown) => {
     console.error('[Reflex Devtools] Failed to initialize:', error);
     nextClient.dispose();
-    if (client === nextClient) {
-      client = null;
-    }
+    unregisterClient(inspector.runtimeId, nextClient);
   });
 
   let enabled = true;
@@ -1083,8 +1150,6 @@ export function enableDevtools(
     if (!enabled) return;
     enabled = false;
     nextClient.dispose();
-    if (client === nextClient) {
-      client = null;
-    }
+    unregisterClient(inspector.runtimeId, nextClient);
   };
 }

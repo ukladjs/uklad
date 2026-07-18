@@ -1,10 +1,13 @@
 // Verifies the packed tarball the way old consumer projects use it:
 //
-// 1. `npm pack` the library and install the tarball into a fresh temp project
-//    together with React 18 (the oldest supported peer line).
-// 2. Runtime smoke: a real event -> app-db -> subscription cycle via both
+// 1. `npm pack` the library.
+// 2. Install the React-free vanilla entrypoint with peer dependencies omitted
+//    and prove that it creates and runs an explicit runtime without React.
+// 3. Install the tarball into a fresh project with React 18 (the oldest
+//    supported peer line), then run an event -> app-db -> subscription cycle
+//    via both
 //    `require()` and `import`.
-// 3. Typecheck the published declarations with legacy TypeScript versions in
+// 4. Typecheck the published declarations with legacy TypeScript versions in
 //    two resolution modes: `exports`-based NodeNext and classic node10 +
 //    CommonJS (which reads the top-level `types` field).
 //
@@ -54,6 +57,37 @@ function main() {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reflex-legacy-consumer-'));
   try {
     const tarball = packLibrary(workDir);
+    const vanillaConsumerDir = path.join(workDir, 'vanilla-consumer');
+    fs.mkdirSync(vanillaConsumerDir);
+    fs.writeFileSync(
+      path.join(vanillaConsumerDir, 'package.json'),
+      `${JSON.stringify({ name: 'reflex-vanilla-consumer', version: '0.0.0', private: true }, null, 2)}\n`,
+    );
+    console.log('[legacy] installing the vanilla entrypoint without React');
+    run(
+      npm,
+      ['install', '--no-audit', '--no-fund', '--no-save', '--omit=peer', tarball],
+      vanillaConsumerDir,
+    );
+    run(
+      'node',
+      [
+        '--input-type=module',
+        '--eval',
+        `import assert from 'node:assert/strict';
+         import { createRequire } from 'node:module';
+         import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
+         const require = createRequire(import.meta.url);
+         assert.throws(() => require.resolve('react'));
+         const runtime = createReflexRuntime({ initialDb: { count: 0 }, runtimeId: 'packed-vanilla' });
+         runtime.regEvent('increment', ({ draftDb }) => { draftDb.count += 1; });
+         runtime.dispatchSync(['increment']);
+         assert.deepEqual(runtime.getAppDb(), { count: 1 });
+         runtime.dispose();`,
+      ],
+      vanillaConsumerDir,
+    );
+
     const consumerDir = path.join(workDir, 'consumer');
     fs.cpSync(fixtureSource, consumerDir, { recursive: true });
     fs.writeFileSync(

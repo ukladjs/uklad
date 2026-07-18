@@ -4,9 +4,17 @@
  */
 
 import { DevToolsAPIClient } from '../httpClient.js';
-import { serverUnavailableResult } from './errorResponse.js';
+import {
+  runtimeRoutingErrorResult,
+  serverUnavailableResult,
+} from './errorResponse.js';
+import {
+  runtimeIdInputProperty,
+  runtimeMetadata,
+  type RuntimeSelectionParams,
+} from './runtimeSelection.js';
 
-export interface GetAppStateParams {
+export interface GetAppStateParams extends RuntimeSelectionParams {
   path?: string;
 }
 
@@ -22,12 +30,16 @@ export function getAppStateTool(apiClient: DevToolsAPIClient) {
           maxLength: 512,
           description: 'JSON path for one state slice (e.g., "user.profile" or "items[0]"). Strongly prefer this over an unscoped app-db dump.'
         },
+        runtimeId: runtimeIdInputProperty,
       },
       additionalProperties: false
     },
     handler: async (params: GetAppStateParams) => {
       try {
-        const response = await apiClient.getAppState(params.path);
+        const response = await apiClient.getAppState(
+          params.path,
+          params.runtimeId,
+        );
         const state = response.state;
 
         if (state === null || state === undefined) {
@@ -49,6 +61,7 @@ export function getAppStateTool(apiClient: DevToolsAPIClient) {
             {
               type: 'text',
               text: JSON.stringify({
+                ...runtimeMetadata(response),
                 path: params.path || '(root)',
                 state
               }, null, 2)
@@ -58,6 +71,12 @@ export function getAppStateTool(apiClient: DevToolsAPIClient) {
       } catch (error) {
         const unavailable = serverUnavailableResult(error, 'get_app_state');
         if (unavailable) return unavailable;
+        const routing = runtimeRoutingErrorResult(
+          error,
+          'get_app_state',
+          params.runtimeId,
+        );
+        if (routing) return routing;
 
         return {
           content: [

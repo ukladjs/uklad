@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@flexsurfer/reflex/react';
 
 interface User {
   id: number;
@@ -28,4 +28,4 @@ const UserItem: React.FC<UserItemProps> = ({ userId, onToggle }) => {
   );
 };
 
-export default UserItem; 
+export default UserItem;

@@ -63,7 +63,7 @@ The plugin starts a version-pinned MCP bridge ([@flexsurfer/reflex-devtools-mcp]
 
 | Tool | What it answers |
 |---|---|
-| `app_status` | Is an app connected? Browser or headless? Did it restart since I last looked? |
+| `app_status` | Is an app connected? Browser or headless? Did its DevTools session change? |
 | `get_handlers` | Which event/effect/subscription ids exist? |
 | `get_app_state` | What is the state *at this path* (scoped reads, not full dumps)? |
 | `eval_sub` | What does any registered subscription return, mounted or not? |
@@ -84,11 +84,11 @@ If you're not using the agent toolkit plugin, the setup the skill automates is f
 
 2. **Enable it in development** (app entry point; adjust the env guard for non-Vite apps):
    ```typescript
-   import { createReflexInspector } from '@flexsurfer/reflex';
    import { enableDevtools } from '@flexsurfer/reflex-devtools';
+   import { runtime } from './state/runtime';
 
    if (import.meta.env.DEV) {
-     enableDevtools(createReflexInspector());
+     enableDevtools(runtime.createInspector());
    }
    ```
 
@@ -141,19 +141,72 @@ If the agent must mutate the running app, review that need and add the capabilit
 }
 ```
 
-Only then is `dispatch_event` advertised to the MCP client.
+`dispatch_event` is always advertised because MCP clients commonly snapshot the
+tool list during initialization. Without `--allow-dispatch`, calls fail with
+`CAPABILITY_DENIED`; the flag grants execution, not tool discovery.
 
 📚 **[Full MCP documentation →](https://github.com/flexsurfer/reflex/blob/main/packages/reflex-devtools-mcp/README.md)**
 
 ### Headless runtime — no browser required
 
-The Reflex state layer is React-free, so an autonomous agent doesn't need a browser tab to run your app. Add a `src/headless.ts` entry that imports the same `db`/`events`/`subs` modules as `main.tsx` plus Node-safe side-effect adapters (`effects.headless.ts` / `coeffects.headless.ts` twins of your browser adapters), calls `enableDevtools(createReflexInspector())`, and run it under `tsx watch` (or `vite-node --watch`).
+The Reflex state layer is React-free, so an autonomous agent doesn't need a
+browser tab to run your app. Add a `src/headless.ts` entry that creates an
+explicit vanilla runtime, installs the same event and subscription modules as
+`main.tsx` plus Node-safe side-effect adapters (`effects.headless.ts` /
+`coeffects.headless.ts` twins of the browser adapters), and connects that
+runtime's inspector:
 
-The SDK auto-detects `runtime: 'headless'`, connects exactly like a browser tab, and every advertised MCP tool works against it. `app_status` reports the runtime, the effect adapter modes (so the agent knows `local-storage-set` is memory-backed, not real), and a `sessionEpoch` that bumps on every reload so agents notice restarts — trace ids reset, seeded state gone.
+```ts
+import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import { enableDevtools } from '@flexsurfer/reflex-devtools';
+
+const runtime = createReflexRuntime({
+  initialDb,
+  runtimeId: 'app.headless',
+  name: 'App (Headless)',
+});
+runtime.registerModule(installEvents);
+runtime.registerModule(installSubscriptions);
+runtime.registerModule(installHeadlessEffects);
+runtime.registerModule(installHeadlessCoeffects);
+
+enableDevtools(runtime.createInspector());
+```
+
+Run the entry under `tsx watch` (or `vite-node --watch`).
+
+The SDK auto-detects `runtime: 'headless'` and connects exactly like a browser tab. `app_status` reports the runtime, the effect adapter modes (so the agent knows `local-storage-set` is memory-backed, not real), and a `sessionEpoch` for the DevTools connection. A changed epoch invalidates server-stored trace IDs; reload is one cause, while a transient SDK reconnect can leave the runtime database intact.
 
 Headless mode requires **Node.js 22+** (the SDK connects through the global `WebSocket`). On older Node it refuses loudly instead of half-working.
 
 See the [DevTools playground](https://github.com/flexsurfer/reflex/tree/main/examples/devtools-playground) for the reference scaffold (`pnpm dev:playground:headless`) and the [MCP README](https://github.com/flexsurfer/reflex/blob/main/packages/reflex-devtools-mcp/README.md#-headless-runtime-for-autonomous-agent-loops) for the adapter-split convention.
+
+### Multiple runtimes
+
+One server accepts browser, headless, SSR, widget, and agent-sandbox runtimes
+simultaneously. Give every explicit runtime a stable ID and descriptive name,
+then connect its own inspector:
+
+```ts
+import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import { enableDevtools } from '@flexsurfer/reflex-devtools';
+
+const runtime = createReflexRuntime({
+  initialDb,
+  runtimeId: 'checkout-widget',
+  name: 'Checkout widget',
+});
+
+enableDevtools(runtime.createInspector());
+```
+
+The dashboard selector changes the active runtime and replaces its retained
+state, handlers, subscriptions, and traces as one session-scoped view. MCP
+clients call `app_status` first and pass the selected `runtimeId` to later
+tools. Omitting `runtimeId` remains convenient when exactly one runtime is
+connected; ambiguous reads and mutations fail closed. Reconnecting the same
+ID replaces only that runtime's prior socket and advances its `sessionEpoch`
+while the bounded registry entry is retained.
 
 ### Security model
 
@@ -167,7 +220,7 @@ DevTools is development-only, but it still treats application state and agent ac
 - **Bounded inputs.** Control/API messages default to 64 KiB and runtime telemetry to 1024 KiB. Compressed HTTP request bodies and WebSocket compression are disabled. Oversized telemetry is diagnosed and dropped rather than silently retried indefinitely.
 - **Bounded runtime data.** Runtime messages are schema-checked before storage; trace batches, patches, handler indexes, adapter maps, and retained active subscriptions have independent count limits.
 - **Audited mutation.** Accepted, denied, succeeded, failed, effects-failed, and unknown agent/UI dispatch attempts are kept in a bounded in-memory audit ring and exposed through authenticated `GET /api/audit`.
-- **Fail-closed compatibility.** HTTP and WebSocket clients negotiate Reflex DevTools protocol version `1`; incompatible peers are rejected instead of running with a partial contract. `app_status` reports the server, runtime, and inspector protocol versions.
+- **Fail-closed compatibility.** HTTP and WebSocket clients negotiate Reflex DevTools protocol version `2`; incompatible peers are rejected instead of running with a partial contract. `app_status` reports the server, selected runtime, runtime list, and inspector protocol versions.
 
 Authentication protects the DevTools interface; it does not make arbitrary network exposure safe. Prefer loopback or an SSH tunnel. If remote access is unavoidable, use a TLS reverse proxy, explicit credentials and exact allowlists as described below.
 
@@ -305,6 +358,7 @@ Options:
   --allow-dispatch           Grant the separate dispatch capability
   --allow-restore            Grant/reserve the separate restore capability
   --max-traces <number>      Maximum stored traces (default: 1000)
+  --max-runtimes <number>    Maximum retained runtime entries (default: 16)
   --max-control-kib <number> HTTP/UI control payload limit (default: 64 KiB)
   --max-runtime-kib <number> Runtime telemetry payload limit (default: 1024 KiB)
   --allow-remote             Explicitly allow a non-loopback bind
@@ -370,8 +424,8 @@ ring retains 500 records by default. Programmatic server users can set
 `onAuditRecord`; do not put raw tokens or unredacted payloads in that sink.
 
 Every authenticated HTTP call sends
-`Reflex-DevTools-Protocol-Version: 1`. WebSockets negotiate
-`reflex-devtools.v1`, authenticate immediately, and receive the accepted
+`Reflex-DevTools-Protocol-Version: 2`. WebSockets negotiate
+`reflex-devtools.v2`, authenticate immediately, and receive the accepted
 capabilities and payload limits in the server hello. A mismatch returns HTTP
 `426` or closes the WebSocket. The MCP `app_status` response exposes the
 negotiated server/runtime/inspector versions and security posture.
@@ -423,7 +477,7 @@ We welcome contributions!
 ### Prerequisites
 
 - A Node.js version supported by the workspace (`^22.18.0` or `>=24.11.0`)
-- pnpm 10.13.1
+- pnpm 11.13.1
 
 ### Setup
 

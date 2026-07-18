@@ -4,9 +4,17 @@
  */
 
 import { DevToolsAPIClient } from '../httpClient.js';
-import { serverUnavailableResult } from './errorResponse.js';
+import {
+  runtimeRoutingErrorResult,
+  serverUnavailableResult,
+} from './errorResponse.js';
+import {
+  runtimeIdInputProperty,
+  runtimeMetadata,
+  type RuntimeSelectionParams,
+} from './runtimeSelection.js';
 
-export interface GetHandlersParams {
+export interface GetHandlersParams extends RuntimeSelectionParams {
   type?: 'event' | 'fx' | 'cofx' | 'sub';
 }
 
@@ -21,13 +29,17 @@ export function getHandlersTool(apiClient: DevToolsAPIClient) {
           type: 'string',
           description: 'Filter by handler type',
           enum: ['event', 'fx', 'cofx', 'sub']
-        }
+        },
+        runtimeId: runtimeIdInputProperty,
       },
       additionalProperties: false
     },
     handler: async (params: GetHandlersParams) => {
       try {
-        const response = await apiClient.getHandlers(params.type);
+        const response = await apiClient.getHandlers(
+          params.type,
+          params.runtimeId,
+        );
         const handlerKeys = response.handlerKeys;
 
         if (!handlerKeys) {
@@ -63,6 +75,7 @@ export function getHandlersTool(apiClient: DevToolsAPIClient) {
             {
               type: 'text',
               text: JSON.stringify({
+                ...runtimeMetadata(response),
                 handlers: result
               }, null, 2)
             }
@@ -71,6 +84,12 @@ export function getHandlersTool(apiClient: DevToolsAPIClient) {
       } catch (error) {
         const unavailable = serverUnavailableResult(error, 'get_handlers');
         if (unavailable) return unavailable;
+        const routing = runtimeRoutingErrorResult(
+          error,
+          'get_handlers',
+          params.runtimeId,
+        );
+        if (routing) return routing;
 
         return {
           content: [

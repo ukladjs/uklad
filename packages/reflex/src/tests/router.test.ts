@@ -210,11 +210,15 @@ describe('EventQueue', () => {
       expect(errorQueue.getState()).toBe('idle');
       expect(errorQueue.getQueueLength()).toBe(0);
 
-      // State-transition cleanup may add logs, so only the processing error is required.
-      expect(getTestLogCalls().error.length).toBeGreaterThanOrEqual(1);
+      expect(getTestLogCalls().error).toHaveLength(1);
       expect(
         getTestLogCalls().error.some((call) => call[0] === '[reflex] event processing exception:'),
       ).toBe(true);
+      expect(
+        getTestLogCalls().error.some((call) =>
+          String(call[0]).includes('router state transition not found'),
+        ),
+      ).toBe(false);
     });
 
     test('handles exceptions with meta events', async () => {

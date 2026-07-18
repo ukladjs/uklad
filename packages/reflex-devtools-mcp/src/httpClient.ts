@@ -4,7 +4,7 @@
 
 import { isIP } from 'node:net';
 
-export const REFLEX_DEVTOOLS_PROTOCOL_VERSION = 1;
+export const REFLEX_DEVTOOLS_PROTOCOL_VERSION = 2;
 const PROTOCOL_HEADER = 'Reflex-DevTools-Protocol-Version';
 const CLIENT_HEADER = 'X-Reflex-Client';
 
@@ -232,6 +232,7 @@ export class DevToolsAPIClient {
     eventFilter?: string;
     minDuration?: number;
     opType?: string;
+    runtimeId?: string;
   } = {}): Promise<any> {
     const queryParams = new URLSearchParams();
     if (params.limit !== undefined) {
@@ -244,33 +245,56 @@ export class DevToolsAPIClient {
       queryParams.append('minDuration', params.minDuration.toString());
     }
     if (params.opType) queryParams.append('opType', params.opType);
+    if (params.runtimeId !== undefined) {
+      queryParams.append('runtimeId', params.runtimeId);
+    }
     const suffix = queryParams.size > 0 ? `?${queryParams}` : '';
     return this.responseBody(await this.fetch(`/api/traces${suffix}`));
   }
 
-  async getTrace(id: number): Promise<any> {
-    return this.responseBody(await this.fetch(`/api/traces/${id}`));
+  async getTrace(
+    id: number,
+    runtimeId?: string,
+    sessionEpoch?: number,
+  ): Promise<any> {
+    const queryParams = new URLSearchParams();
+    if (runtimeId !== undefined) queryParams.append('runtimeId', runtimeId);
+    if (sessionEpoch !== undefined) {
+      queryParams.append('sessionEpoch', sessionEpoch.toString());
+    }
+    const suffix = queryParams.size > 0 ? `?${queryParams}` : '';
+    return this.responseBody(await this.fetch(`/api/traces/${id}${suffix}`));
   }
 
-  async getAppState(path?: string): Promise<any> {
-    const suffix = path
-      ? `?path=${encodeURIComponent(path)}`
-      : '';
+  async getAppState(path?: string, runtimeId?: string): Promise<any> {
+    const queryParams = new URLSearchParams();
+    if (path) queryParams.append('path', path);
+    if (runtimeId !== undefined) queryParams.append('runtimeId', runtimeId);
+    const suffix = queryParams.size > 0 ? `?${queryParams}` : '';
     return this.responseBody(await this.fetch(`/api/state${suffix}`));
   }
 
-  async getSubscriptions(filter?: string): Promise<any> {
-    const suffix = filter ? `?filter=${encodeURIComponent(filter)}` : '';
+  async getSubscriptions(filter?: string, runtimeId?: string): Promise<any> {
+    const queryParams = new URLSearchParams();
+    if (filter) queryParams.append('filter', filter);
+    if (runtimeId !== undefined) queryParams.append('runtimeId', runtimeId);
+    const suffix = queryParams.size > 0 ? `?${queryParams}` : '';
     return this.responseBody(await this.fetch(`/api/subscriptions${suffix}`));
   }
 
-  async getHandlers(type?: string): Promise<any> {
-    const suffix = type ? `?type=${encodeURIComponent(type)}` : '';
+  async getHandlers(type?: string, runtimeId?: string): Promise<any> {
+    const queryParams = new URLSearchParams();
+    if (type) queryParams.append('type', type);
+    if (runtimeId !== undefined) queryParams.append('runtimeId', runtimeId);
+    const suffix = queryParams.size > 0 ? `?${queryParams}` : '';
     return this.responseBody(await this.fetch(`/api/handlers${suffix}`));
   }
 
-  async getStats(): Promise<any> {
-    return this.responseBody(await this.fetch('/api/stats'));
+  async getStats(runtimeId?: string): Promise<any> {
+    const suffix = runtimeId === undefined
+      ? ''
+      : `?runtimeId=${encodeURIComponent(runtimeId)}`;
+    return this.responseBody(await this.fetch(`/api/stats${suffix}`));
   }
 
   async getAuditRecords(limit = 100): Promise<any> {
@@ -279,24 +303,39 @@ export class DevToolsAPIClient {
     );
   }
 
-  async dispatchEvent(eventName: string, params: any[] = []): Promise<any> {
+  async dispatchEvent(
+    eventName: string,
+    params: any[] = [],
+    runtimeId?: string,
+  ): Promise<any> {
     return this.responseBody(await this.fetch('/api/dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eventName, params }),
+      body: JSON.stringify({
+        eventName,
+        params,
+        ...(runtimeId === undefined ? {} : { runtimeId }),
+      }),
     }));
   }
 
-  async evalSub(id: string, args: any[] = []): Promise<any> {
+  async evalSub(id: string, args: any[] = [], runtimeId?: string): Promise<any> {
     return this.responseBody(await this.fetch('/api/eval-sub', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, args }),
+      body: JSON.stringify({
+        id,
+        args,
+        ...(runtimeId === undefined ? {} : { runtimeId }),
+      }),
     }));
   }
 
-  async getStatus(): Promise<any> {
-    const body = await this.responseBody(await this.fetch('/api/status'));
+  async getStatus(runtimeId?: string): Promise<any> {
+    const suffix = runtimeId === undefined
+      ? ''
+      : `?runtimeId=${encodeURIComponent(runtimeId)}`;
+    const body = await this.responseBody(await this.fetch(`/api/status${suffix}`));
     if (body?.protocol?.version !== REFLEX_DEVTOOLS_PROTOCOL_VERSION) {
       throw new DevToolsProtocolMismatchError(body?.protocol?.version);
     }

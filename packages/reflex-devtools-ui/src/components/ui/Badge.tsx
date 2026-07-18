@@ -25,6 +25,8 @@ const getOpTypeBadgeVariant = (opType: string | undefined): BadgeOpType => {
             return 'primary';
         case 'sub/create':
             return 'warning';
+        case 'watch':
+            return 'accent';
         case 'fx':
             return 'ghost';
         default:
@@ -41,6 +43,7 @@ export const Badge = function Badge({ label, opType, size = 'xs', style = 'soft'
         secondary: 'badge-secondary',
         primary: 'badge-primary',
         warning: 'badge-warning',
+        accent: 'badge-accent',
         ghost: 'badge-ghost',
         neutral: 'badge-neutral'
     };

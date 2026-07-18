@@ -4,7 +4,7 @@
 
 **Reactive state management for React & React Native — built for AI agentic development**
 
-Pure event handlers over one central app-db, derived subscriptions, isolated side effects. An architecture coding agents can generate, observe at runtime, and verify — and humans can still read.
+Pure event handlers over an instance-owned app-db, derived subscriptions, isolated side effects. An architecture coding agents can generate, observe at runtime, and verify — and humans can still read.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![NPM Version](https://img.shields.io/npm/v/%40flexsurfer%2Freflex)](https://www.npmjs.com/package/@flexsurfer/reflex)
@@ -42,7 +42,7 @@ The plugin ships the Reflex skill (workflow, conventions, progressive references
 
 ### Why agents are effective with Reflex
 
-- **All logic is pure functions** over one central app-db. Every change is small, isolated, and deterministic — easy to generate, easy to review.
+- **All logic is pure functions** over an instance-owned app-db. Every change is small, isolated, and deterministic — easy to generate, easy to review.
 - **Everything is addressable by id.** Events, subscriptions, and effects are registered under ids, so an agent looks up the one handler it needs instead of reading store files end-to-end.
 - **The running app is observable.** Through the DevTools MCP an agent checks app health, lists handlers, reads state by path, watches live subscription values, and inspects traces of everything that happened — including what it didn't initiate.
 - **No browser required.** The state layer is React-free: a headless entry runs the full app under Node, so autonomous agent loops and CI drive the real thing.
@@ -90,25 +90,63 @@ npm install @flexsurfer/reflex
 ```
 
 ```tsx
-import { initAppDb, regEvent, regSub, useSubscription, dispatch } from '@flexsurfer/reflex';
+import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import { ReflexProvider, useSubscription } from '@flexsurfer/reflex/react';
 
-// One central app database
-initAppDb({ counter: 0 });
-
-// Events: pure functions, the only place state changes
-regEvent('increment', ({ draftDb }) => {
-  draftDb.counter += 1;
+const runtime = createReflexRuntime({
+  initialDb: { counter: 0 },
+  runtimeId: 'counter-app',
+  name: 'Counter app',
 });
 
-// Subscriptions: derived, reactive views of the state
-regSub('counter');
+// A module owns its registrations and can be disposed safely.
+runtime.registerModule((scope) => {
+  scope.regEvent('counter/increment', ({ draftDb }) => {
+    draftDb.counter += 1;
+  });
+  scope.regSub('counter');
+});
 
-// Components: subscribe to data, dispatch intent — that's the whole contract
 function Counter() {
   const count = useSubscription(['counter']);
-  return <button onClick={() => dispatch(['increment'])}>Count: {count}</button>;
+  return <button onClick={() => runtime.dispatch(['counter/increment'])}>Count: {count}</button>;
+}
+
+function Root() {
+  return (
+    <ReflexProvider runtime={runtime}>
+      <Counter />
+    </ReflexProvider>
+  );
 }
 ```
+
+Each runtime owns its database, event queue, handlers, subscription graph,
+tracing, and inspector. Create one per browser root, SSR request, embedded
+widget, story, test, or agent sandbox whenever those worlds must be isolated.
+
+Existing applications can upgrade without migrating immediately. The package
+root remains a compatibility facade over one `defaultRuntime`, and React hooks
+fall back to it when no provider is present:
+
+```tsx
+import { dispatch, initAppDb, regEvent, regSub, useSubscription } from '@flexsurfer/reflex';
+
+initAppDb({ counter: 0 });
+regEvent('counter/increment', ({ draftDb }) => {
+  draftDb.counter += 1;
+});
+regSub('counter');
+
+function Counter() {
+  const count = useSubscription(['counter']);
+  return <button onClick={() => dispatch(['counter/increment'])}>Count: {count}</button>;
+}
+```
+
+See [Migrating from 0.x to 1.0](./docs/migration-0.x-to-1.0.md) and
+[Stability and versioning](./docs/stability-and-versioning.md) for the complete
+compatibility contract.
 
 ### Subscription runtime
 

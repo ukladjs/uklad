@@ -4,9 +4,10 @@ import { useSubscription, dispatch } from '@flexsurfer/reflex';
 interface TraceViewPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
 }
 
-export default function TraceViewPanel({ isOpen, onClose }: TraceViewPanelProps) {
+export default function TraceViewPanel({ isOpen, onClose, triggerRef }: TraceViewPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const showRenders = useSubscription<boolean>(['showRenders']);
   const showBadges = useSubscription<boolean>(['showBadges']);
@@ -15,7 +16,12 @@ export default function TraceViewPanel({ isOpen, onClose }: TraceViewPanelProps)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        panelRef.current &&
+        !panelRef.current.contains(target) &&
+        !triggerRef.current?.contains(target)
+      ) {
         onClose();
       }
     };
@@ -25,7 +31,7 @@ export default function TraceViewPanel({ isOpen, onClose }: TraceViewPanelProps)
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
     return undefined;
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, triggerRef]);
 
   const handleToggleShowRenders = useCallback(() => {
     dispatch(['toggle-show-renders']);

@@ -41,17 +41,18 @@ export interface MCPServerConfig {
 const SERVER_INSTRUCTIONS = `Reflex DevTools: inspect and drive a live Reflex app (re-frame-style — events mutate a central app-db through pure handlers, subscriptions derive values from it).
 
 Retrieval order (cheapest first):
-1. app_status — is an app connected, does it run in a browser, React Native, or headless, is tracing on, handler counts, sessionEpoch. Call it first after a cold start and after any reload; a changed sessionEpoch means the app restarted (trace ids reset, seeded state gone).
+1. app_status — discover runtimes and select one. It lists stable runtimeId values and reports whether the selected app is connected, browser/React Native/headless, tracing state, handler counts, and sessionEpoch. Call it first after a cold start and after any reload; a changed sessionEpoch means the DevTools connection session changed and server-stored trace ids were invalidated. A transient reconnect can leave the runtime database intact.
 2. get_handlers — registered event/sub/effect ids; learn what exists before reading state.
 3. get_app_state with "path" — read only the state slice you need; avoid full dumps on real apps.
 4. eval_sub — evaluate any registered subscription against live state, whether or not a component has mounted it. Use get_active_subs only when you need the current mounted-subscription set.
 5. dispatch_event — act. The response already carries the outcome (succeeded | failed | effects-failed | unknown) plus the state patches and emitted effects; verify from it instead of re-reading state.
-6. get_traces — compact rows of recent activity, including what you did not initiate (user clicks, timers, subscriptions). Drill into one trace with get_trace; never page through full trace details.
+6. get_traces — compact rows of recent activity, including what you did not initiate (user clicks, timers, subscriptions). Drill into one trace with get_trace, passing the get_traces response's runtimeId and sessionEpoch so a restart fails explicitly; never page through full trace details.
 
 Caveats:
+- Every tool accepts an optional runtimeId. Omitting it is convenient when exactly one runtime is connected. When multiple runtimes are connected, call app_status, choose a runtime from runtimes[], and pass that runtimeId to every later call; never guess which runtime should receive a mutation.
 - The app does not have to be a browser tab: a headless entry (src/headless.ts run under tsx/vite-node, no React mount) connects the same way and supports every tool here; app_status's "runtime" and effect adapter modes tell you which world you are driving.
 - The DevTools server is read-only by default. dispatch_event is always listed, but it fails with CAPABILITY_DENIED unless the server was started with --allow-dispatch. Treat that error as "ask the human to restart the DevTools server with --allow-dispatch, only if mutation is actually intended" — it is a deliberate authorization boundary, never something to work around.
-- Trace ids reset and stored traces clear when the app reloads or reconnects, so a missing trace id usually means "session reset", not a bug — app_status's sessionEpoch confirms it.
+- Server-stored traces clear when the app reloads or the SDK reconnects. Pass the sessionEpoch returned by get_traces to get_trace; SESSION_EPOCH_MISMATCH means the DevTools session changed, so discard the old ids and query get_traces again.
 - A failed dispatch or subscription evaluation with phase "missing-handler" means that exact id is not registered — check it against get_handlers.
 - "[REDACTED]" and "[REDACTED:CREDENTIAL]" values in state, traces, or subscription results are the default credential masking working as intended, not an application bug. Never disable or suggest disabling redaction; if a non-sensitive key is masked, the application owner can supply a custom key list in the redaction config.`;
 

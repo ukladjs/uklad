@@ -1,11 +1,16 @@
-import { acquireTracing, registerTraceCallback, removeTraceCallback } from './core/tracing';
+import {
+  acquireTracingForRuntime,
+  registerTraceCallbackForRuntime,
+  removeTraceCallbackForRuntime,
+} from './core/tracing';
 import { NOW, RANDOM } from './events/coeffects';
 import { DISPATCH, DISPATCH_LATER } from './events/effects';
-import { dispatch as dispatchEvent } from './events/router';
-import { getAppDb } from './runtime/app-db';
-import { getHandlers } from './runtime/handlers';
-import { getSubscriptionDiagnostics } from './runtime/subscriptions/cache';
-import { getSubscriptionValue } from './subscriptions/queries';
+import { dispatchForRuntime } from './events/router';
+import { getAppDbForRuntime } from './runtime/app-db';
+import { getHandlersForRuntime } from './runtime/handlers';
+import { defaultRuntimeScope, isRuntimeDisposed, type RuntimeScope } from './runtime/scope';
+import { getSubscriptionDiagnosticsForRuntime } from './runtime/subscriptions/cache';
+import { getSubscriptionValueForRuntime } from './subscriptions/queries';
 
 import type { TraceCallback } from './core/tracing';
 import type { SubscriptionDiagnostic } from './runtime/subscriptions/engine';
@@ -35,7 +40,9 @@ export interface ReflexInspectorSnapshot {
  * cache, and trace callback registry.
  */
 export interface ReflexInspector {
-  readonly apiVersion: 1;
+  readonly apiVersion: 2;
+  readonly runtimeId: string;
+  readonly runtimeName: string;
   getSnapshot(): ReflexInspectorSnapshot;
   /** Subscribe to trace batches and keep trace collection active until cleanup. */
   subscribeTraces(callback: TraceCallback): () => void;
@@ -43,29 +50,46 @@ export interface ReflexInspector {
   evaluateSubscription(query: SubVector): unknown;
 }
 
-let nextTraceSubscriptionId = 0;
+const nextTraceSubscriptionIds = new WeakMap<RuntimeScope, number>();
+
+function nextTraceSubscriptionId(runtime: RuntimeScope): number {
+  const next = (nextTraceSubscriptionIds.get(runtime) ?? 0) + 1;
+  nextTraceSubscriptionIds.set(runtime, next);
+  return next;
+}
 
 // Devtools is an intentionally dynamic boundary. App-level payload-map
 // augmentation must not narrow vectors arriving from an external inspector.
-const dispatchInspectorEvent = dispatchEvent as (event: EventVector) => void;
-const evaluateInspectorSubscription = getSubscriptionValue as (query: SubVector) => unknown;
-
 /** Create an inspection adapter bound to this exact Reflex module instance. */
 export function createReflexInspector(): ReflexInspector {
+  return createReflexInspectorForRuntime(defaultRuntimeScope);
+}
+
+/** @internal Create an inspection adapter bound to one explicit runtime. */
+export function createReflexInspectorForRuntime(runtime: RuntimeScope): ReflexInspector {
+  const assertRuntimeActive = () => {
+    if (isRuntimeDisposed(runtime)) {
+      throw new Error(`[reflex] Runtime '${runtime.runtimeId}' has been disposed.`);
+    }
+  };
   const inspector: ReflexInspector = {
-    apiVersion: 1,
+    apiVersion: 2,
+    runtimeId: runtime.runtimeId,
+    runtimeName: runtime.runtimeName,
     getSnapshot(): ReflexInspectorSnapshot {
+      assertRuntimeActive();
       return {
-        appDb: getAppDb(),
-        handlerKeys: getHandlerKeys(),
-        subscriptions: getSubscriptionDiagnostics(),
+        appDb: getAppDbForRuntime(runtime),
+        handlerKeys: getHandlerKeys(runtime),
+        subscriptions: getSubscriptionDiagnosticsForRuntime(runtime),
       };
     },
     subscribeTraces(callback: TraceCallback): () => void {
-      const key = `reflex-inspector-${++nextTraceSubscriptionId}`;
-      const releaseTracing = acquireTracing();
+      assertRuntimeActive();
+      const key = `reflex-inspector-${nextTraceSubscriptionId(runtime)}`;
+      const releaseTracing = acquireTracingForRuntime(runtime);
       try {
-        registerTraceCallback(key, callback);
+        registerTraceCallbackForRuntime(runtime, key, callback);
       } catch (error) {
         releaseTracing();
         throw error;
@@ -75,23 +99,25 @@ export function createReflexInspector(): ReflexInspector {
       return () => {
         if (!subscribed) return;
         subscribed = false;
-        removeTraceCallback(key);
+        removeTraceCallbackForRuntime(runtime, key);
         releaseTracing();
       };
     },
     dispatch(event: EventVector): void {
-      dispatchInspectorEvent(event);
+      assertRuntimeActive();
+      dispatchForRuntime(runtime, event as never);
     },
     evaluateSubscription(query: SubVector): unknown {
-      return evaluateInspectorSubscription(query);
+      assertRuntimeActive();
+      return getSubscriptionValueForRuntime(runtime, query);
     },
   };
 
   return Object.freeze(inspector);
 }
 
-function getHandlerKeys(): ReflexHandlerKeys {
-  const handlers = getHandlers();
+function getHandlerKeys(runtime: RuntimeScope): ReflexHandlerKeys {
+  const handlers = getHandlersForRuntime(runtime);
   return {
     event: Object.keys(handlers.event),
     fx: Object.keys(handlers.fx).filter((id) => id !== DISPATCH && id !== DISPATCH_LATER),

@@ -5,9 +5,17 @@
  */
 
 import { DevToolsAPIClient } from '../httpClient.js';
-import { serverUnavailableResult } from './errorResponse.js';
+import {
+  runtimeRoutingErrorResult,
+  serverUnavailableResult,
+} from './errorResponse.js';
+import {
+  runtimeIdInputProperty,
+  runtimeMetadata,
+  type RuntimeSelectionParams,
+} from './runtimeSelection.js';
 
-export interface GetTracesParams {
+export interface GetTracesParams extends RuntimeSelectionParams {
   limit?: number;
   eventFilter?: string;
   minDuration?: number;
@@ -41,7 +49,8 @@ export function getTracesTool(apiClient: DevToolsAPIClient) {
           type: 'string',
           description: 'Filter by operation type',
           enum: ['event', 'render', 'sub/create', 'sub/run', 'sub/dispose']
-        }
+        },
+        runtimeId: runtimeIdInputProperty,
       },
       additionalProperties: false
     },
@@ -55,7 +64,10 @@ export function getTracesTool(apiClient: DevToolsAPIClient) {
           limit,
           eventFilter: params.eventFilter,
           minDuration: params.minDuration,
-          opType: params.opType
+          opType: params.opType,
+          ...(params.runtimeId === undefined
+            ? {}
+            : { runtimeId: params.runtimeId }),
         });
 
         const traces = response.traces || [];
@@ -79,15 +91,16 @@ export function getTracesTool(apiClient: DevToolsAPIClient) {
           };
         });
 
-        // Get stats from API
-        const statsResponse = await apiClient.getStats();
-        const stats = statsResponse.stats || {};
+        // The server returns traces, stats, and runtime identity in one response
+        // so a reconnect cannot mix rows from one epoch with counts from another.
+        const stats = response.stats || {};
 
         return {
           content: [
             {
               type: 'text',
               text: JSON.stringify({
+                ...runtimeMetadata(response),
                 summary: {
                   returned: formatted.length,
                   totalStored: stats.totalTraces || 0,
@@ -102,6 +115,12 @@ export function getTracesTool(apiClient: DevToolsAPIClient) {
       } catch (error) {
         const unavailable = serverUnavailableResult(error, 'get_traces');
         if (unavailable) return unavailable;
+        const routing = runtimeRoutingErrorResult(
+          error,
+          'get_traces',
+          params.runtimeId,
+        );
+        if (routing) return routing;
 
         return {
           content: [

@@ -137,12 +137,15 @@ describe('React Hooks', () => {
       expect(result.current).toBe('Test todo');
     });
 
-    it('should handle non-existent subscription gracefully', () => {
-      const { result } = renderHook(() => useSubscription(['non-existent-sub']));
+    it('should throw for a non-existent subscription', () => {
+      // React also reports render errors via console.error; keep output clean
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-      expect(result.current).toBeUndefined();
+      expect(() => {
+        renderHook(() => useSubscription(['non-existent-sub']));
+      }).toThrow("No subscription registered for 'non-existent-sub'");
 
-      expectLogCall('error', '[reflex] no sub handler registered for: non-existent-sub');
+      consoleError.mockRestore();
     });
 
     it('should update when subscription value changes', async () => {

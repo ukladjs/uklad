@@ -36,7 +36,7 @@ Two processes, two scopes:
 
 What agents can do through it:
 
-- 🩺 **Check app health in one call** — is an app connected, browser or headless, tracing on, and did the session restart since the last look
+- 🩺 **Check app health in one call** — is an app connected, browser or headless, tracing on, and did its DevTools session change since the last look
 - 📊 **Inspect execution traces** — compact trace lists plus per-trace detail (state patches, effects, errors)
 - 🔍 **Query application state** — scoped by path, no full dumps
 - 🧮 **Evaluate subscriptions on demand** — verify derived values before any component mounts them
@@ -164,32 +164,47 @@ read state by path, evaluate derived values with `eval_sub`, then, only when
 explicitly enabled, act with `dispatch_event` and verify from its response), so
 agents get this workflow automatically — no extra prompt setup needed.
 
+Every tool accepts an optional `runtimeId`. When exactly one runtime is
+connected, omitting it preserves the familiar single-runtime workflow. When
+several runtimes coexist, call `app_status`, choose an entry from `runtimes`,
+and pass its `runtimeId` to every subsequent read or mutation. An ambiguous
+call fails with `RUNTIME_SELECTION_REQUIRED`; the bridge never guesses which
+runtime should receive an event.
+
 ### 1. `app_status`
 
-Cheap health/session check — the intended first call after a cold start and after every app reload. Reports:
+Cheap health/session and runtime-discovery check — the intended first call after a cold start and after every app reload. Reports:
 
-- `appConnected` — is any app (browser or headless) connected to the DevTools server
-- `sessionEpoch` — bumps every time the app reconnects; if it changed since your last look, the app restarted: trace ids reset, stored traces cleared, seeded state gone
+- `runtimes` and `selectedRuntimeId` — every known runtime, its stable id/name, connection state, and selected runtime
+- `appConnected` — is the selected app (browser or headless) connected to the DevTools server
+- `runtimeId`, `runtimeName`, and `sessionEpoch` — identity and DevTools connection generation for the selected runtime. A changed epoch invalidates server-stored trace IDs; an app reload is one cause, but a transient SDK reconnect can change the epoch without resetting the runtime database.
 - `runtime` — `"browser"`, `"react-native"`, or `"headless"`, plus `effectMode` and per-effect adapter modes when the app declares them
 - `tracing`, handler counts per type, `stateAvailable`, `traceCount`, `mcpEnabled`
 - `capabilities` and `readOnly` — the effective least-privilege tool surface
 - `protocol` and `security` — negotiated versions, authentication, loopback,
 redaction, and audit status
 
-Degraded setups come back with explicit hints (server started without `--mcp`, no app connected) instead of errors.
+When a runtime can be selected, degraded details such as a server started
+without `--mcp` or a disconnected selected runtime are reported as explicit
+hints. If no runtime can be selected, or several runtimes make an omitted
+selection ambiguous, `app_status` returns a structured
+`RUNTIME_SELECTION_REQUIRED` error with the available `runtimes` instead of a
+status payload.
 
-**Parameters:** none
+**Parameters:**
+
+- `runtimeId` (string, optional): Select a runtime. Required when more than one runtime is connected.
 
 **Example prompts:**
 
 - "Is my app connected and healthy?"
-- "Did the app restart since we last checked?"
+- "Did the app's DevTools session change since we last checked?"
 
 
 
 ### 2. `get_traces`
 
-List execution traces from your application as compact rows: id, operation, opType, duration, timestamp, and event args. Failed events carry an `error` summary; events whose effects threw carry an `effectErrors` count. Use `get_trace` with a row's id for full detail.
+List execution traces from your application as compact rows: id, operation, opType, duration, timestamp, and event args. Failed events carry an `error` summary; events whose effects threw carry an `effectErrors` count. The response also identifies the runtime and its `sessionEpoch`; pass those values with a row's id to `get_trace` for race-safe full detail.
 
 **Parameters:**
 
@@ -197,6 +212,7 @@ List execution traces from your application as compact rows: id, operation, opTy
 - `eventFilter` (string, optional): Filter by event/operation name (substring match)
 - `minDuration` (number, optional): Filter traces by minimum duration in milliseconds
 - `opType` (string, optional): Filter by operation type: `event`, `render`, `sub/create`, `sub/run`, `sub/dispose`
+- `runtimeId` (string, optional): Runtime selected from `app_status`
 
 **Example prompts:**
 
@@ -213,6 +229,10 @@ Get the full detail of a single trace by id: for events, the state patches commi
 **Parameters:**
 
 - `id` (number, required): The trace id, as returned by `get_traces`
+- `runtimeId` (string, optional): Runtime selected from `app_status`
+- `sessionEpoch` (integer, optional): Expected epoch from the same `get_traces`
+  response. If the DevTools session changed before lookup, `get_trace` fails explicitly
+  with `SESSION_EPOCH_MISMATCH`; discard the old ids and call `get_traces` again.
 
 **Example prompts:**
 
@@ -228,6 +248,7 @@ Retrieve the current application database state — scoped by path whenever poss
 **Parameters:**
 
 - `path` (string, optional): Path to a specific part of state (e.g., `user.profile`, `items[0]`)
+- `runtimeId` (string, optional): Runtime selected from `app_status`
 
 **Example prompts:**
 
@@ -254,6 +275,7 @@ requires `--mcp`). A denied call changes nothing and is recorded in the audit lo
 
 - `eventName` (string, required): The event ID to dispatch
 - `params` (array, optional): Parameters to pass to the event handler
+- `runtimeId` (string, optional): Runtime selected from `app_status`
 
 **Example prompts:**
 
@@ -269,6 +291,7 @@ List all registered handler ids, grouped by handler type.
 **Parameters:**
 
 - `type` (string, optional): Filter by handler type: `event`, `fx`, `cofx`, `sub`
+- `runtimeId` (string, optional): Runtime selected from `app_status`
 
 **Example prompts:**
 
@@ -285,6 +308,7 @@ mounted root subscriptions and dependencies kept active by computed subscription
 **Parameters:**
 
 - `filter` (string, optional): Filter subscriptions by key name
+- `runtimeId` (string, optional): Runtime selected from `app_status`
 
 **Example prompts:**
 
@@ -301,6 +325,7 @@ Evaluate any registered subscription against current app state. Unlike `get_acti
 
 - `id` (string, required): Registered subscription id
 - `args` (array, optional): Subscription arguments after the id
+- `runtimeId` (string, optional): Runtime selected from `app_status`
 
 **Example prompts:**
 
@@ -318,15 +343,18 @@ Reflex's state layer is React-free, so the app an agent drives does not need a b
 ```typescript
 // src/headless.ts — run under tsx (or vite-node when your project
 // resolves dependencies through vite aliases)
-import { createReflexInspector } from '@flexsurfer/reflex';
+import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
-import './db';
-import './events';
-import './subs';
-import './effects.headless';    // memory/no-op adapters instead of effects.browser
-import './coeffects.headless';
+import { headlessModule } from './module.headless';
 
-enableDevtools(createReflexInspector(), {
+const runtime = createReflexRuntime({
+  runtimeId: 'agent-headless',
+  name: 'Agent headless runtime',
+  initialDb: {},
+});
+runtime.registerModule(headlessModule); // events, subs, and Node-safe adapters
+
+enableDevtools(runtime.createInspector(), {
   // runtime: 'headless' is auto-detected (no window)
   effectMode: 'safe',
   effects: { 'local-storage-set': 'memory', 'analytics-track': 'noop' }
@@ -337,7 +365,7 @@ setInterval(() => {}, 60_000); // keep the process alive if the server is down
 
 Split runtime-specific side effects into adapter pairs so the headless world is safe by default: `effects.browser.ts` / `effects.headless.ts` and `coeffects.browser.ts` / `coeffects.headless.ts` register the **same effect ids** with different implementations (real `localStorage` vs an in-memory map, real analytics vs no-op). Handlers emit the same effect contract either way, and, when dispatch is enabled, `dispatch_event` still reports the emitted effects, so an agent can verify "the handler emitted the right effect" without touching the real world. The `effects` map passed to `enableDevtools` is surfaced through `app_status` so agents can see which effects really execute.
 
-Run it with a watcher for the edit → reload → re-verify loop (`tsx watch src/headless.ts`); each reload reconnects the SDK, which bumps `sessionEpoch` — visible in the next `app_status` call. The DevTools server enforces a single app session: a new connection supersedes the previous one, so a lingering older runtime can never double-execute dispatched events, and dispatches still in flight across a reload come back `outcome: "unknown"` ("session restarted") instead of hanging.
+Run it with a watcher for the edit → reload → re-verify loop (`tsx watch src/headless.ts`); each reload reconnects that runtime id and bumps its `sessionEpoch` — visible in the next `app_status` call. Distinct runtime ids coexist, so a browser preview and headless process can be inspected together. A new connection with the same id supersedes only its older session; dispatches still in flight across that session replacement come back `outcome: "unknown"` ("session restarted") instead of hanging.
 
 Headless mode needs **Node.js 22+** (the SDK uses the global `WebSocket`, stable since Node 22). On older Node it disables itself with an explicit warning.
 
@@ -406,6 +434,7 @@ Options:
   --allow-dispatch           Grant the separate dispatch capability
   --allow-restore            Grant/reserve the separate restore capability
   --max-traces <number>      Maximum stored traces (default: 1000)
+  --max-runtimes <number>    Maximum retained runtime entries (default: 16)
   --max-control-kib <number> HTTP/UI control payload limit (default: 64 KiB)
   --max-runtime-kib <number> Runtime telemetry payload limit (default: 1024 KiB)
   --allow-remote             Explicitly allow a non-loopback bind
@@ -566,8 +595,8 @@ MCP-role callers with `inspect` capability can read
 `GET /api/audit?limit=100` (1–500); programmatic DevTools servers can stream
 records to a durable sink through `onAuditRecord`.
 
-HTTP clients send `Reflex-DevTools-Protocol-Version: 1`; WebSockets negotiate
-`reflex-devtools.v1`, authenticate immediately, and receive the effective
+HTTP clients send `Reflex-DevTools-Protocol-Version: 2`; WebSockets negotiate
+`reflex-devtools.v2`, authenticate immediately, and receive the effective
 capabilities and payload limits in the server hello. Protocol mismatches fail
 closed with HTTP `426` or a WebSocket close. `app_status.protocol` reports the
 server, runtime, and inspector versions.
@@ -595,7 +624,7 @@ pnpm build
 
 ```bash
 # Terminal 1: Start DevTools server with MCP support
-node packages/reflex-devtools/dist/cli.js --mcp --host 127.0.0.1 --port 4000
+node packages/reflex-devtools/dist/cli.js --mcp --host 127.0.0.1 --port 4000 --allow-origin http://localhost:3000
 
 # Terminal 2: Start the DevTools playground (browser)
 pnpm dev:playground
@@ -606,7 +635,7 @@ pnpm dev:playground:headless
 pnpm test
 ```
 
-For the `AGENTS.md` guidance template shipped with Reflex, see `[packages/reflex/templates/agent/AGENTS.md](https://github.com/flexsurfer/reflex/blob/main/packages/reflex/templates/agent/AGENTS.md)`.
+For the `AGENTS.md` guidance template shipped with Reflex, see [packages/reflex/templates/agent/AGENTS.md](https://github.com/flexsurfer/reflex/blob/main/packages/reflex/templates/agent/AGENTS.md).
 
 ### Project Structure
 
@@ -668,4 +697,3 @@ Built with ❤️ for the Reflex community. Special thanks to:
   **Debug Smarter with AI! 🤖✨**
 
   Made by [@flexsurfer](https://github.com/flexsurfer)
-

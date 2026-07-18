@@ -1,23 +1,27 @@
-import { getGlobalEqualityCheck } from '../core/equality';
+import { getGlobalEqualityCheckForRuntime } from '../core/equality';
 import { consoleLog } from '../core/logging';
-import { mergeTrace, withTrace } from '../core/tracing';
+import { mergeTraceForRuntime, withTraceForRuntime } from '../core/tracing';
 import {
-  getHandler,
-  hasHandler,
+  getHandlerForRuntime,
+  hasHandlerForRuntime,
   SUB_DEPS_HANDLER_KIND,
   SUB_HANDLER_KIND,
 } from '../runtime/handlers';
+import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
 import {
-  cacheSubscription,
-  evictCachedSubscription,
-  getCachedSubscription,
-  getRootSubSourceById,
-  getSubConfig,
-  markProvisionalSubscription,
-  renewProvisionalSubscriptionTree,
-  unmarkProvisionalSubscription,
+  cacheSubscriptionForRuntime,
+  evictCachedSubscriptionForRuntime,
+  getCachedSubscriptionForRuntime,
+  getRootSubSourceByIdForRuntime,
+  getSubConfigForRuntime,
+  markProvisionalSubscriptionForRuntime,
+  renewProvisionalSubscriptionTreeForRuntime,
+  unmarkProvisionalSubscriptionForRuntime,
 } from '../runtime/subscriptions/cache';
-import { createSubscription, readSubscription } from '../runtime/subscriptions/engine';
+import {
+  createSubscriptionForRuntime,
+  readSubscriptionForRuntime,
+} from '../runtime/subscriptions/engine';
 import { getSubVectorKey } from '../runtime/subscriptions/keys';
 
 import type { SubscriptionKind, SubscriptionNode } from '../runtime/subscriptions/engine';
@@ -54,26 +58,34 @@ interface SubscriptionBuildFrame {
  * graph from the registry.
  */
 export function getOrCreateSubscription(subVector: SubVector): SubscriptionNode<any> | null {
+  return getOrCreateSubscriptionForRuntime(defaultRuntimeScope, subVector);
+}
+
+/** @internal Return the canonical subscription owned by one runtime. */
+export function getOrCreateSubscriptionForRuntime(
+  runtime: RuntimeScope,
+  subVector: SubVector,
+): SubscriptionNode<any> | null {
   const frames: SubscriptionBuildFrame[] = [];
   const buildingKeys = new Set<string>();
 
   const resolve = (query: SubVector): SubscriptionNode<any> | undefined => {
     const subId = query[0];
-    if (!hasHandler(SUB_HANDLER_KIND, subId)) {
+    if (!hasHandlerForRuntime(runtime, SUB_HANDLER_KIND, subId)) {
       consoleLog('error', `[reflex] no sub handler registered for: ${subId}`);
       return undefined;
     }
 
-    const rootSource = getRootSubSourceById(subId);
+    const rootSource = getRootSubSourceByIdForRuntime(runtime, subId);
     if (rootSource !== undefined && query.length !== 1) {
       throw new Error(`[reflex] Root subscription '${subId}' does not accept parameters.`);
     }
 
     const key = getSubVectorKey(query);
-    const existing = getCachedSubscription(key);
+    const existing = getCachedSubscriptionForRuntime(runtime, key);
     if (existing) {
-      renewProvisionalSubscriptionTree(key);
-      mergeTrace({ tags: { 'cached?': true, subscriptionKey: key } });
+      renewProvisionalSubscriptionTreeForRuntime(runtime, key);
+      mergeTraceForRuntime(runtime, { tags: { 'cached?': true, subscriptionKey: key } });
       return existing;
     }
     if (buildingKeys.has(key)) {
@@ -81,7 +93,7 @@ export function getOrCreateSubscription(subVector: SubVector): SubscriptionNode<
     }
 
     const params = query.length > 1 ? query.slice(1) : [];
-    const depsFn = getHandler(SUB_DEPS_HANDLER_KIND, subId) as SubDepsHandler;
+    const depsFn = getHandlerForRuntime(runtime, SUB_DEPS_HANDLER_KIND, subId) as SubDepsHandler;
     if (typeof depsFn !== 'function') {
       throw new Error(`[reflex] Subscription '${subId}' has no dependency handler.`);
     }
@@ -95,16 +107,22 @@ export function getOrCreateSubscription(subVector: SubVector): SubscriptionNode<
       }
     }
 
-    withTrace({ operation: subId, opType: 'sub/create', tags: { queryV: query } }, () => {});
+    withTraceForRuntime(
+      runtime,
+      { operation: subId, opType: 'sub/create', tags: { queryV: query } },
+      () => {},
+    );
     buildingKeys.add(key);
     frames.push({
       subVector: query,
       key,
       subId,
-      computeFn: getHandler(SUB_HANDLER_KIND, subId) as SubHandler,
+      computeFn: getHandlerForRuntime(runtime, SUB_HANDLER_KIND, subId) as SubHandler,
       params,
       kind: rootSource === undefined ? 'computed' : 'root',
-      equalityCheck: getSubConfig(subId)?.equalityCheck ?? getGlobalEqualityCheck(),
+      equalityCheck:
+        getSubConfigForRuntime(runtime, subId)?.equalityCheck ??
+        getGlobalEqualityCheckForRuntime(runtime),
       dependencyVectors,
       dependencies: [],
       dependencyKeys: [],
@@ -145,7 +163,7 @@ export function getOrCreateSubscription(subVector: SubVector): SubscriptionNode<
       dependencyKeys,
       subId,
     } = frame;
-    const subscription: SubscriptionNode<any> = createSubscription({
+    const subscription: SubscriptionNode<any> = createSubscriptionForRuntime(runtime, {
       key,
       query,
       kind,
@@ -155,11 +173,13 @@ export function getOrCreateSubscription(subVector: SubVector): SubscriptionNode<
           : computeFn(...dependencyValues),
       dependencies,
       equalityCheck,
-      onActive: () => unmarkProvisionalSubscription(key, subscription),
-      onUnused: () => evictCachedSubscription(key, subscription),
+      onActive: () => unmarkProvisionalSubscriptionForRuntime(runtime, key, subscription),
+      onUnused: () => evictCachedSubscriptionForRuntime(runtime, key, subscription),
     });
-    cacheSubscription(key, subscription, subId, dependencyKeys);
-    if (kind === 'computed') markProvisionalSubscription(key, subscription);
+    cacheSubscriptionForRuntime(runtime, key, subscription, subId, dependencyKeys);
+    if (kind === 'computed') {
+      markProvisionalSubscriptionForRuntime(runtime, key, subscription);
+    }
 
     frames.pop();
     buildingKeys.delete(key);
@@ -186,6 +206,11 @@ export function getSubscriptionValue<K extends keyof SubPayloads & Id>(
 ): SubResult<K>;
 export function getSubscriptionValue<T>(subVector: SubscribeVector): T;
 export function getSubscriptionValue<T>(subVector: SubVector): T {
-  const subscription = getOrCreateSubscription(subVector);
-  return subscription ? readSubscription(subscription) : (undefined as T);
+  return getSubscriptionValueForRuntime<T>(defaultRuntimeScope, subVector);
+}
+
+/** @internal Read a subscription value from one runtime. */
+export function getSubscriptionValueForRuntime<T>(runtime: RuntimeScope, subVector: SubVector): T {
+  const subscription = getOrCreateSubscriptionForRuntime(runtime, subVector);
+  return subscription ? readSubscriptionForRuntime(runtime, subscription) : (undefined as T);
 }

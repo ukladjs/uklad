@@ -1,5 +1,6 @@
 import { consoleLog } from '../../core/logging';
-import { mergeTrace, withTrace } from '../../core/tracing';
+import { mergeTraceForRuntime, withTraceForRuntime } from '../../core/tracing';
+import { defaultRuntimeScope, type RuntimeScope } from '../scope';
 
 import type { EqualityCheckFn, SubVector } from '../../types';
 
@@ -36,7 +37,13 @@ export interface SubscriptionDiagnostic {
 }
 
 type Listener = () => void;
-type ListenerRegistration = readonly [listener: Listener, componentName: string];
+/** @internal Trace classification for a subscription listener. */
+export type SubscriptionListenerKind = 'render' | 'watch';
+type ListenerRegistration = readonly [
+  listener: Listener,
+  label: string,
+  kind: SubscriptionListenerKind,
+];
 
 function formatDiagnosticError(error: unknown): string {
   try {
@@ -124,7 +131,8 @@ class SubscriptionCell<T> {
   private runComputation(compute: () => T): boolean {
     let observableChanged = false;
     try {
-      withTrace(
+      withTraceForRuntime(
+        this.engine.runtime,
         {
           operation: this.spec.query[0],
           opType: 'sub/run',
@@ -151,7 +159,9 @@ class SubscriptionCell<T> {
           observableChanged = valueChanged || recovered;
           if (observableChanged) this.outputStamp = this.engine.nextOutputStamp();
 
-          mergeTrace({ tags: { 'cached?': !observableChanged, version: this.outputStamp } });
+          mergeTraceForRuntime(this.engine.runtime, {
+            tags: { 'cached?': !observableChanged, version: this.outputStamp },
+          });
         },
       );
     } catch (error) {
@@ -173,12 +183,13 @@ class SubscriptionCell<T> {
   }
 
   publishTo(listeners: readonly ListenerRegistration[]): void {
-    for (const [listener, componentName] of listeners) {
+    for (const [listener, label, kind] of listeners) {
       try {
-        withTrace(
+        withTraceForRuntime(
+          this.engine.runtime,
           {
-            opType: 'render',
-            operation: componentName,
+            opType: kind,
+            operation: label,
             tags: { subscriptionKey: this.spec.key },
           },
           listener,
@@ -190,7 +201,8 @@ class SubscriptionCell<T> {
   }
 
   traceDispose(): void {
-    withTrace(
+    withTraceForRuntime(
+      this.engine.runtime,
       {
         operation: this.spec.query[0],
         opType: 'sub/dispose',
@@ -209,6 +221,11 @@ class SubscriptionCell<T> {
  * scheduler, so this engine deliberately owns no node tasks or notification debt.
  */
 class SubscriptionEngine {
+  readonly runtime: RuntimeScope;
+
+  constructor(runtime: RuntimeScope) {
+    this.runtime = runtime;
+  }
   /** Deduplicates cells visited during one dormant graph traversal. */
   private pullEpoch = 0;
   /** Deduplicates active cells queued during one root publication. */
@@ -264,6 +281,7 @@ class SubscriptionEngine {
     node: SubscriptionNode<T>,
     listener: Listener,
     componentName: string = 'react component',
+    listenerKind: SubscriptionListenerKind = 'render',
   ): () => void {
     if (this.phase === 'settling') {
       throw new Error('[reflex] Subscribing during subscription computation is not allowed.');
@@ -275,7 +293,7 @@ class SubscriptionEngine {
       );
     }
     const firstListener = subscription.listeners.length === 0;
-    const registration: ListenerRegistration = [listener, componentName];
+    const registration: ListenerRegistration = [listener, componentName, listenerKind];
     subscription.listeners.push(registration);
     try {
       this.activate(subscription);
@@ -549,18 +567,48 @@ class SubscriptionEngine {
   }
 }
 
-const engine = new SubscriptionEngine();
+const engines = new WeakMap<RuntimeScope, SubscriptionEngine>();
+
+function getEngine(runtime: RuntimeScope): SubscriptionEngine {
+  let engine = engines.get(runtime);
+  if (!engine) {
+    engine = new SubscriptionEngine(runtime);
+    engines.set(runtime, engine);
+  }
+  return engine;
+}
 
 export function createSubscription<T>(spec: SubscriptionSpec<T>): SubscriptionNode<T> {
-  return engine.create(spec);
+  return createSubscriptionForRuntime(defaultRuntimeScope, spec);
+}
+
+/** @internal Create a subscription owned by one runtime. */
+export function createSubscriptionForRuntime<T>(
+  runtime: RuntimeScope,
+  spec: SubscriptionSpec<T>,
+): SubscriptionNode<T> {
+  return getEngine(runtime).create(spec);
 }
 
 export function readSubscription<T>(node: SubscriptionNode<T>): T {
-  return engine.read(node);
+  return readSubscriptionForRuntime(defaultRuntimeScope, node);
+}
+
+/** @internal Read a subscription through its owning runtime. */
+export function readSubscriptionForRuntime<T>(runtime: RuntimeScope, node: SubscriptionNode<T>): T {
+  return getEngine(runtime).read(node);
 }
 
 export function getSubscriptionSnapshot<T>(node: SubscriptionNode<T>): T {
-  return engine.getSnapshot(node);
+  return getSubscriptionSnapshotForRuntime(defaultRuntimeScope, node);
+}
+
+/** @internal Read a snapshot from one runtime's subscription. */
+export function getSubscriptionSnapshotForRuntime<T>(
+  runtime: RuntimeScope,
+  node: SubscriptionNode<T>,
+): T {
+  return getEngine(runtime).getSnapshot(node);
 }
 
 export function subscribeToSubscription<T>(
@@ -568,21 +616,58 @@ export function subscribeToSubscription<T>(
   listener: () => void,
   componentName?: string,
 ): () => void {
-  return engine.subscribe(node, listener, componentName);
+  return subscribeToSubscriptionForRuntime(defaultRuntimeScope, node, listener, componentName);
+}
+
+/** @internal Subscribe to a node owned by one runtime. */
+export function subscribeToSubscriptionForRuntime<T>(
+  runtime: RuntimeScope,
+  node: SubscriptionNode<T>,
+  listener: () => void,
+  componentName?: string,
+  listenerKind?: SubscriptionListenerKind,
+): () => void {
+  return getEngine(runtime).subscribe(node, listener, componentName, listenerKind);
 }
 
 export function publishSubscriptions(roots: SubscriptionNode<any>[]): void {
-  engine.publish(roots);
+  publishSubscriptionsForRuntime(defaultRuntimeScope, roots);
+}
+
+/** @internal Publish roots through one runtime's engine. */
+export function publishSubscriptionsForRuntime(
+  runtime: RuntimeScope,
+  roots: SubscriptionNode<any>[],
+): void {
+  getEngine(runtime).publish(roots);
 }
 
 export function inspectSubscription(node: SubscriptionNode<any>): SubscriptionDiagnostic {
-  return engine.inspect(node);
+  return inspectSubscriptionForRuntime(defaultRuntimeScope, node);
+}
+
+/** @internal Inspect a node owned by one runtime. */
+export function inspectSubscriptionForRuntime(
+  runtime: RuntimeScope,
+  node: SubscriptionNode<any>,
+): SubscriptionDiagnostic {
+  return getEngine(runtime).inspect(node);
 }
 
 export function assertPublicationAllowed(): void {
-  engine.assertPublicationAllowed();
+  assertPublicationAllowedForRuntime(defaultRuntimeScope);
+}
+
+/** @internal Assert publication is safe in one runtime. */
+export function assertPublicationAllowedForRuntime(runtime: RuntimeScope): void {
+  getEngine(runtime).assertPublicationAllowed();
 }
 
 export function assertSubscriptionsCanBeCleared(): void {
-  engine.assertClearAllowed();
+  assertSubscriptionsCanBeClearedForRuntime(defaultRuntimeScope);
+}
+
+/** @internal Assert destructive subscription clears are safe in one runtime. */
+export function assertSubscriptionsCanBeClearedForRuntime(runtime: RuntimeScope): void {
+  getEngine(runtime).assertClearAllowed();
 }

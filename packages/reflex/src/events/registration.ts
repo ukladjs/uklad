@@ -1,7 +1,8 @@
 import { consoleLog } from '../core/logging';
-import { setInterceptors } from '../runtime/event-metadata';
-import { registerHandler } from '../runtime/handlers';
-import { getInjectCofxInterceptor } from './coeffects';
+import { setInterceptorsForRuntime } from '../runtime/event-metadata';
+import { registerHandlerForRuntime } from '../runtime/handlers';
+import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
+import { getInjectCofxInterceptorForRuntime } from './coeffects';
 import { isInterceptor } from './interceptors';
 
 import type {
@@ -61,8 +62,19 @@ export function regEvent<T = Record<string, any>>(
   registration?: unknown,
   legacyInterceptors?: Interceptor<T>[],
 ): void {
-  registerHandler(HANDLER_KIND, id, handler);
-  registerEventInterceptors(id, registration, legacyInterceptors);
+  regEventForRuntime(defaultRuntimeScope, id, handler, registration, legacyInterceptors);
+}
+
+/** @internal Register an event and its metadata in one runtime. */
+export function regEventForRuntime<T = Record<string, any>>(
+  runtime: RuntimeScope,
+  id: Id,
+  handler: EventHandler<T>,
+  registration?: unknown,
+  legacyInterceptors?: Interceptor<T>[],
+): void {
+  registerHandlerForRuntime(runtime, HANDLER_KIND, id, handler);
+  registerEventInterceptors(runtime, id, registration, legacyInterceptors);
 }
 
 function isCoeffectSpecificationArray(value: readonly unknown[]): boolean {
@@ -102,6 +114,7 @@ function normalizeEventRegistration(
 }
 
 function registerEventInterceptors<T = Record<string, any>>(
+  runtime: RuntimeScope,
   id: Id,
   registration: unknown,
   legacyInterceptors?: readonly Interceptor<T>[],
@@ -116,9 +129,11 @@ function registerEventInterceptors<T = Record<string, any>>(
     }
 
     if (specification.length === 1) {
-      coeffectInterceptors.push(getInjectCofxInterceptor(specification[0]));
+      coeffectInterceptors.push(getInjectCofxInterceptorForRuntime(runtime, specification[0]));
     } else if (specification.length === 2) {
-      coeffectInterceptors.push(getInjectCofxInterceptor(specification[0], specification[1]));
+      coeffectInterceptors.push(
+        getInjectCofxInterceptorForRuntime(runtime, specification[0], specification[1]),
+      );
     } else {
       consoleLog('warn', '[reflex] invalid cofx specification:', specification);
     }
@@ -140,5 +155,5 @@ function registerEventInterceptors<T = Record<string, any>>(
   }
 
   // Registration replaces metadata; an empty list must clear prior metadata.
-  setInterceptors(id, [...coeffectInterceptors, ...eventInterceptors]);
+  setInterceptorsForRuntime(runtime, id, [...coeffectInterceptors, ...eventInterceptors]);
 }

@@ -1,23 +1,48 @@
 import { useTheme } from '../contexts/ThemeContext';
 import { useCallback } from 'react';
+import { dispatch, useSubscription } from '@flexsurfer/reflex';
 import ConnectionStatus from './ConnectionStatus';
+import type { DevtoolsRuntimeSummary } from '../types/Runtime';
 
 export default function Header() {
     const { theme, setTheme } = useTheme();
+    const runtimes = useSubscription<DevtoolsRuntimeSummary[]>(['runtimes']) ?? [];
+    const selectedRuntimeId = useSubscription<string | null>(['selectedRuntimeId']);
+    const pendingRuntimeId = useSubscription<string | null>(['pendingRuntimeId']);
 
     const handleThemeChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const selectedTheme = event.target.checked ? 'light' : 'dark';
         setTheme(selectedTheme as any);
+    }, [setTheme]);
+
+    const handleRuntimeChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
+        dispatch(['select-runtime', event.target.value]);
     }, []);
 
     return (
-        <header className="bg-base-200 border-b border-base-300 shadow-lg py-2 px-4 flex items-center">
-            <div className="navbar-start gap-1">
+        <header className="bg-base-200 border-b border-base-300 shadow-lg flex items-center gap-4 px-4 py-2">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
                 <ConnectionStatus />
-                <h1 className="text-sm font-semibold">Reflex Devtools</h1>
+                <h1 className="shrink-0 whitespace-nowrap text-sm font-semibold">Reflex Devtools</h1>
+                <div className="min-w-0 flex-1 overflow-hidden">
+                    <select
+                        aria-label="Selected runtime"
+                        className="select select-bordered select-xs w-full min-w-0 max-w-none"
+                        value={pendingRuntimeId ?? selectedRuntimeId ?? ''}
+                        onChange={handleRuntimeChange}
+                        disabled={runtimes.length === 0}
+                    >
+                        {runtimes.length === 0 && <option value="">No runtimes</option>}
+                        {runtimes.map((runtime) => (
+                            <option key={runtime.runtimeId} value={runtime.runtimeId}>
+                                {runtime.runtimeName} ({runtime.runtimeId}){runtime.connected ? '' : ' — disconnected'}
+                            </option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
-            <div className="navbar-end gap-4">
+            <div className="flex shrink-0 items-center">
                 <label className="swap swap-rotate">
                     {/* this hidden checkbox controls the state */}
                     <input type="checkbox" checked={theme === 'light'} onChange={handleThemeChange} />
@@ -33,4 +58,4 @@ export default function Header() {
             </div>
         </header>
     );
-} 
+}

@@ -1,27 +1,57 @@
-import { createElement, Fragment, useEffect, useReducer, useState } from 'react';
+import { createElement, Fragment, useCallback, useSyncExternalStore } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 
 import { consoleLog } from '../core/logging';
+import {
+  clearRuntimeSubsForHotReload,
+  defaultRuntime,
+  type ReflexRuntime,
+} from '../runtime/runtime';
 import { clearSubsForHotReload } from '../runtime/subscriptions/cache';
+import { useReflexRuntime } from './context';
 
 type HotReloadCallback = () => void;
 
-const hotReloadCallbacks = new Set<HotReloadCallback>();
-let hotReloadKeyCounter = 0;
-
-/** Register a callback and return an unregister function. */
-export function registerHotReloadCallback(callback: HotReloadCallback): () => void {
-  hotReloadCallbacks.add(callback);
-  return () => {
-    hotReloadCallbacks.delete(callback);
-  };
+interface HotReloadState {
+  readonly callbacks: Set<HotReloadCallback>;
+  version: number;
 }
 
-/** Invoke every hot-reload callback, logging and isolating callback failures. */
-export function triggerHotReload(): void {
-  consoleLog('log', '[reflex] Triggering hot reload callbacks');
+const hotReloadStates = new WeakMap<object, HotReloadState>();
 
-  for (const callback of hotReloadCallbacks) {
+function getHotReloadState(runtime: ReflexRuntime<any>): HotReloadState {
+  let state = hotReloadStates.get(runtime);
+  if (!state) {
+    state = { callbacks: new Set(), version: 0 };
+    hotReloadStates.set(runtime, state);
+  }
+  return state;
+}
+
+/** Register a compatibility-runtime callback and return an unregister function. */
+export function registerHotReloadCallback(callback: HotReloadCallback): () => void {
+  return registerRuntimeHotReloadCallback(defaultRuntime, callback);
+}
+
+function registerRuntimeHotReloadCallback(
+  runtime: ReflexRuntime<any>,
+  callback: HotReloadCallback,
+): () => void {
+  const callbacks = getHotReloadState(runtime).callbacks;
+  callbacks.add(callback);
+  return () => callbacks.delete(callback);
+}
+
+/** Invoke callbacks for the compatibility runtime. */
+export function triggerHotReload(): void {
+  triggerRuntimeHotReload(defaultRuntime);
+}
+
+function triggerRuntimeHotReload(runtime: ReflexRuntime<any>): void {
+  consoleLog('log', '[reflex] Triggering hot reload callbacks');
+  const state = getHotReloadState(runtime);
+  state.version++;
+  for (const callback of state.callbacks) {
     try {
       callback();
     } catch (error) {
@@ -30,58 +60,52 @@ export function triggerHotReload(): void {
   }
 }
 
-/** Remove all registered hot-reload callbacks. */
+/** Remove compatibility-runtime callbacks. */
 export function clearHotReloadCallbacks(): void {
-  hotReloadCallbacks.clear();
+  getHotReloadState(defaultRuntime).callbacks.clear();
 }
 
-/** Re-render the calling component whenever subscription definitions are hot-reloaded. */
+/** Re-render whenever the nearest runtime's subscription definitions reload. */
 export function useHotReload(): void {
-  const [, forceUpdate] = useReducer((version: number) => version + 1, 0);
-
-  useEffect(() => registerHotReloadCallback(forceUpdate), []);
+  useHotReloadVersion();
 }
 
-/** Return a key that changes after each subscription hot reload. */
+/** Return a key that changes after the nearest runtime reloads subscriptions. */
 export function useHotReloadKey(): string {
-  const [key, setKey] = useState(() => `hot-reload-${++hotReloadKeyCounter}`);
-
-  useEffect(() => {
-    const updateKey = () => {
-      setKey(`hot-reload-${++hotReloadKeyCounter}`);
-    };
-
-    return registerHotReloadCallback(updateKey);
-  }, []);
-
-  return key;
+  const [runtime, version] = useHotReloadVersion();
+  return `${runtime.runtimeId}:hot-reload-${version}`;
 }
 
-/**
- * Create bundler-agnostic HMR hooks for a subscription module.
- *
- * Disposal clears subscription definitions and cache state. Acceptance
- * notifies mounted React consumers only when the bundler supplies a module.
- */
-export function setupSubsHotReload(): {
+function useHotReloadVersion(): readonly [ReflexRuntime<any>, number] {
+  const runtime = useReflexRuntime();
+  const subscribe = useCallback(
+    (callback: HotReloadCallback) => registerRuntimeHotReloadCallback(runtime, callback),
+    [runtime],
+  );
+  const getSnapshot = useCallback(() => getHotReloadState(runtime).version, [runtime]);
+  const version = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return [runtime, version] as const;
+}
+
+/** Create bundler-agnostic HMR hooks scoped to one runtime. */
+export function setupSubsHotReload(runtime: ReflexRuntime<any> = defaultRuntime): {
   dispose: () => void;
   accept: (newModule?: unknown) => void;
 } {
   const dispose = () => {
-    clearSubsForHotReload();
+    if (runtime === defaultRuntime) clearSubsForHotReload();
+    else clearRuntimeSubsForHotReload(runtime);
   };
-
   const accept = (newModule?: unknown) => {
     if (newModule) {
       consoleLog('log', '[reflex] Hot reloading subs module');
-      triggerHotReload();
+      triggerRuntimeHotReload(runtime);
     }
   };
-
   return { dispose, accept };
 }
 
-/** Remount descendants whenever subscription definitions are hot-reloaded. */
+/** Remount descendants whenever the nearest runtime's definitions reload. */
 export function HotReloadWrapper({ children }: { children: ReactNode }): ReactElement {
   const key = useHotReloadKey();
   return createElement(Fragment, { key }, children);

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { dispatch } from '@flexsurfer/reflex';
 import EventFilter from './TraceEventFilter';
 import TraceViewPanel from './TraceViewPanel';
@@ -6,14 +6,15 @@ import DispatchButton from '../ui/DispatchButton';
 
 export default function TracesControls() {
     const [isPanelOpen, setisPanelOpen] = useState(false);
+    const viewButtonRef = useRef<HTMLButtonElement>(null);
 
     const handleClearEvents = useCallback(() => {
         dispatch(['clear-traces']);
     }, []);
 
     const handleToggleSettings = useCallback(() => {
-        setisPanelOpen(!isPanelOpen);
-    }, [isPanelOpen]);
+        setisPanelOpen((isOpen) => !isOpen);
+    }, []);
 
     const handleDispatchClick = useCallback(() => {
         dispatch(['open-dispatch-modal', '', []]);
@@ -24,10 +25,10 @@ export default function TracesControls() {
             <div className="flex items-center gap-2 justify-between relative">
                 <div className="flex items-center gap-2">
                     <div className="relative">
-                        <button onClick={handleToggleSettings} className="btn btn-sm btn-ghost">
+                        <button ref={viewButtonRef} onClick={handleToggleSettings} className="btn btn-sm btn-ghost">
                             View
                         </button>
-                        <TraceViewPanel isOpen={isPanelOpen} onClose={() => setisPanelOpen(false)} />
+                        <TraceViewPanel isOpen={isPanelOpen} onClose={() => setisPanelOpen(false)} triggerRef={viewButtonRef} />
                     </div>
                     <DispatchButton onClick={handleDispatchClick} />
                 </div>

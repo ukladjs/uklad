@@ -48,7 +48,7 @@ The MCP earns its keep in everything that follows.
 ### 1. Launch the app
 
 ```
-Bash: node node_modules/@flexsurfer/reflex-devtools/dist/cli.js --mcp --host 127.0.0.1 --port 4000
+Bash: node node_modules/@flexsurfer/reflex-devtools/dist/cli.js --mcp --allow-dispatch --host 127.0.0.1 --port 4000
                                       # devtools server with MCP, no npx/package manager
 Bash: tsx watch src/headless.ts      # the app, headless — no browser needed
       (pnpm dev                      #  …or the vite dev server + a browser tab,
@@ -57,23 +57,25 @@ Bash: tsx watch src/headless.ts      # the app, headless — no browser needed
 
 The first wall used to be here: **the SDK runs inside the app, and the app historically ran in a browser tab** an autonomous agent doesn't have.
 
-- ✅ **Today: headless runtime.** Reflex's state layer is React-free, so the scaffolded `src/headless.ts` imports the same db/events/subs as `main.tsx` and calls `enableDevtools(createReflexInspector())` — run via `tsx`/`vite-node` with a watcher (`pnpm dev:playground:headless` in this repo) — a live, dispatchable, fully traceable app with no browser. Views are excluded, which is acceptable: the state layer is where reflex's guarantees live, and view-file correctness is covered by tsc plus the browser smoke check below. Side effects are safe by default through the adapter split (`effects.headless.ts` / `coeffects.headless.ts` register the same effect ids against memory-backed or no-op adapters; policy in [headless-state-fixtures.md](headless-state-fixtures.md)), and the declared adapter modes surface in `app_status`. The devtools server enforces a single app session — a new SDK connection supersedes the previous one — so a watcher re-running the entry in-process can never double-execute dispatches.
+- ✅ **Today: headless and parallel runtimes.** Reflex's state layer is React-free, so the scaffolded `src/headless.ts` installs the same db/events/subscriptions as `main.tsx` on an explicit runtime and calls `enableDevtools(runtime.createInspector())` — run via `tsx`/`vite-node` with a watcher (`pnpm dev:playground:headless` in this repo) — a live, dispatchable, fully traceable app with no browser. Views are excluded, which is acceptable: the state layer is where Reflex's guarantees live, and view-file correctness is covered by tsc plus the browser smoke check below. Side effects are safe by default through the adapter split (`effects.headless.ts` / `coeffects.headless.ts` install the same effect ids against memory-backed or no-op adapters; policy in [headless-state-fixtures.md](headless-state-fixtures.md)), and the declared adapter modes surface in `app_status`. Browser, headless, widget, and agent-sandbox runtimes can remain connected together under stable IDs. A reconnect supersedes only the older socket with the same `runtimeId`, preventing duplicate execution without disconnecting other sandboxes.
 
 ### 2. "Is it alive?"
 
 The first MCP call of *every* cycle — after cold start and after every reload — is a health question: did the app mount, is the SDK connected, did anything crash?
 
-- ✅ **Today: `app_status`** — one small, always-cheap response that is never a 503: a misconfigured setup (server without `--mcp`, no app connected) gets explicit hints instead of errors.
+- ✅ **Today: `app_status`** — one small, bounded health and discovery call. With one runtime (or an explicit `runtimeId`) it returns that runtime's status; with zero or multiple connected runtimes it returns a structured `RUNTIME_SELECTION_REQUIRED` result containing the known runtime list instead of guessing.
 
 ```
 app_status {}
-→ { appConnected: true, sessionEpoch: 3, runtime: "headless", effectMode: "safe",
+→ { appConnected: true, runtimeId: "expenses-headless", sessionEpoch: 3,
+    selectedRuntimeId: "expenses-headless", runtimes: [{ runtimeId: "expenses-headless", connected: true }],
+    runtime: "headless", effectMode: "safe",
     effects: { "local-storage-set": "memory", "set-document-title": "noop" },
     tracing: true, handlers: { event: 17, fx: 3, cofx: 1, sub: 8 },
     stateAvailable: true, traceCount: 0 }
 ```
 
-  The most-called tool in the set: a changed `sessionEpoch` is the restart signal feeding the reload loop below, and `runtime`/`effects` tell the agent which world (and which side-effect policy) it is driving.
+  The most-called tool in the set: select a runtime from `runtimes`, pass its `runtimeId` to later tools when more than one is connected, and treat a changed `sessionEpoch` for that ID as the DevTools-session reset signal feeding the reload loop below. `runtime`/`effects` tell the agent which world (and which side-effect policy) it is driving.
 - 🚧 **Roadmap: `get_client_logs(sinceId)`** — will add a `clientErrors.unread` counter to this response: render crashes, uncaught exceptions, React and reflex dev-mode warnings, without a browser. After a cold start with a white screen, this is the *only* tool that explains why.
 
 ### 3. Read the initial state
@@ -189,7 +191,7 @@ The agent fixes the dep array and vite reloads the app. Consequences, all invisi
 - trace ids restart at 1; server storage cleared on the SDK reconnect;
 - any held cursor or remembered `traceId` now silently points at nothing.
 
-- ✅ **Today:** `app_status` carries `sessionEpoch` — the health call after any reload says the world restarted, instead of the agent misreading empty lists as "nothing happened". 🚧 **Roadmap: `sessionEpoch` in every response** — so any tool call, not just the health check, reveals the restart. During agentic work, reload-per-edit is the common case, not the edge case.
+- ✅ **Today:** every successful runtime-scoped tool response carries `runtimeId`, `runtimeName`, and `sessionEpoch`. The epoch identifies a DevTools connection session: an app reload changes it, but so can a transient SDK reconnect that leaves the runtime database intact. Server trace storage and remembered IDs belong to that `(runtimeId, sessionEpoch)` pair, and `get_trace` can reject a stale expected epoch explicitly. 🚧 **Roadmap:** `get_traces(sinceId)` will make an epoch change an explicit cursor-reset result rather than requiring the caller to compare its saved epoch.
 - 🚧 **Lib roadmap: verify/document the HMR story** — whether handler re-registration on HMR is sound determines whether a *full* reload is even necessary per edit.
 
 ### 10. Re-seed or restore in one call
@@ -218,7 +220,7 @@ That is the orthogonal case: composing states that are tedious to reach through 
 
 ```
 dispatch_event { eventName: "expenses/set-category", params: ["transport"] }   ✅
-eval_sub { id: "expenses/category-total", params: ["transport"] }              🚧  → { value: 2.0 }
+eval_sub { id: "expenses/category-total", args: ["transport"] }                ✅  → { value: 2.0 }
 explain_event { traceId: 7 }                                                   ✳️  → subsRecomputed now includes expenses/category-total
 ```
 
@@ -262,7 +264,7 @@ Anti-patterns the API must keep unnecessary — if any of these becomes the prac
 | Inspect | what is the state? | `get_app_state(path)` · `shape: true` | ✅ · 🚧 |
 | Seed | put the app in a known state | `dispatch_event` · `replay_events` · snapshots | ✅ · ✳️ · 🚧 |
 | Act & verify | did it do what I meant? | `dispatch_event` outcome/patches/effects | ✅ |
-| Verify derived | does the sub compute right? | `eval_sub` | 🚧 |
+| Verify derived | does the sub compute right? | `eval_sub` | ✅ |
 | Explain | why did/didn't X update? | `explain_event` · `find_state_changes` | ✳️ · 🚧 |
 | UI wiring | is the component connected? | narrow browser/DOM smoke check | ✅ (browser automation) |
 | Forensics | what happened while I wasn't acting? | `get_traces(sinceId)` → `get_trace(id)` | ✅ (🚧 cursor) |
@@ -273,7 +275,7 @@ Anti-patterns the API must keep unnecessary — if any of these becomes the prac
 1. **The dispatch response is the verification.** One round trip must answer wrote-what, emitted-what, failed-how.
 2. **Every response is bounded.** The agent can always afford another scoped call; it can never un-spend a dumped context window.
 3. **The canonical questions get one-call answers.** "Why didn't the view update", "who wrote this path", "what does this sub return" are *the* questions; each deserves a dedicated bounded tool, not a derivation over raw traces.
-4. **Reload is the common case.** Session identity (`sessionEpoch`) in every response; state re-establishment (`replay_events`) as one call.
+4. **Reload is the common case.** DevTools session identity (`sessionEpoch`) in successful runtime-scoped responses; state re-establishment (`replay_events`) as one call.
 5. **The MCP starts where the compiler stops.** Phase 0–1 belongs to the scaffold, typed maps, and static manifest; runtime tools should not compensate for missing static structure.
 6. **Static before runtime, runtime before source.** Ids/map → MCP observation → the one implicated handler, by location. Never the reverse.
 7. **State layer before UI.** Prove events/effects/subscriptions in headless MCP first; use the browser only to smoke-check final component wiring.

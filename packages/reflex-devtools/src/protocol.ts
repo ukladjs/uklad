@@ -1,7 +1,8 @@
-export const REFLEX_DEVTOOLS_PROTOCOL_VERSION = 1;
+export const REFLEX_DEVTOOLS_PROTOCOL_VERSION = 2;
 export const REFLEX_DEVTOOLS_PROTOCOL_HEADER =
   'reflex-devtools-protocol-version';
 export const REFLEX_DEVTOOLS_CLIENT_HEADER = 'x-reflex-client';
+export const REFLEX_DEVTOOLS_RUNTIME_ID_HEADER = 'x-reflex-runtime-id';
 export const REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER = 'x-reflex-runtime-session';
 
 export const REFLEX_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES = 1024 * 1024;
@@ -16,9 +17,26 @@ export const REFLEX_DEVTOOLS_WS_PROTOCOL =
 
 export type DevtoolsCapability = 'inspect' | 'dispatch' | 'restore';
 export type DevtoolsClientRole = 'runtime' | 'ui' | 'mcp';
+export type DevtoolsRuntimeKind = 'browser' | 'headless' | 'react-native';
 export type RuntimeTelemetryDropReason =
   | 'redaction-failed'
   | 'retention-limit';
+
+/** Immutable identity supplied by the Reflex runtime that owns an inspector. */
+export interface DevtoolsRuntimeIdentity {
+  readonly runtimeId: string;
+  readonly runtimeName: string;
+}
+
+/**
+ * Compact runtime descriptor used by status and runtime-selection surfaces.
+ * Additional runtime diagnostics remain part of the selected runtime's status.
+ */
+export interface DevtoolsRuntimeSummary extends DevtoolsRuntimeIdentity {
+  readonly connected: boolean;
+  readonly sessionEpoch: number;
+  readonly runtime: DevtoolsRuntimeKind | null;
+}
 
 /**
  * Fixed-shape runtime notice. The server intentionally sends no rejected

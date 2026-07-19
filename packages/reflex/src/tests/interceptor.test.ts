@@ -1,4 +1,5 @@
 import { isInterceptor, execute } from '../events/interceptors';
+import { getAppDb } from '../runtime/app-db';
 import { registerHandler } from '../runtime/handlers';
 import { clearHandlers } from '../runtime/reset';
 import type { Interceptor, Context, EventVector } from '../types';
@@ -129,7 +130,7 @@ describe('interceptor', () => {
       const interceptor = createTestInterceptor('test', {
         before: (ctx) => {
           executionOrder.push('before');
-          ctx.effects = [['testEffect', 'testValue']];
+          ctx.effects.push(['testEffect', 'testValue']);
           return ctx;
         },
       });
@@ -240,6 +241,7 @@ describe('interceptor', () => {
         before: (ctx) => {
           expect(ctx.coeffects.event).toEqual(['test-event', 'param1', 'param2']);
           expect(ctx.coeffects.draftDb).toEqual({});
+          expect(ctx.previousDb).toBe(getAppDb());
           expect(ctx.effects).toEqual([]);
           // newDb stays unset until the event handler interceptor
           // runs; patches exist only as trace tags, not on context
@@ -259,6 +261,7 @@ describe('interceptor', () => {
 
       expect(result.coeffects.event).toEqual(['test-event']);
       expect(result.coeffects.draftDb).toEqual({});
+      expect(result.previousDb).toBe(getAppDb());
       expect(result.effects).toEqual([]);
       expect(result.queue).toEqual([]);
       expect(result.stack).toEqual([]);

@@ -33,6 +33,39 @@ jobs:
       - name: Run quality checks
         run: pnpm --filter @flexsurfer/reflex run check
 
+  persist-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Reflex peer
+        run: pnpm run build:reflex
+
+      - name: Check persistence package
+        run: pnpm --filter @flexsurfer/reflex-persist run check
+
+      - name: Run persistence coverage
+        run: pnpm --filter @flexsurfer/reflex-persist run test:ci
+
+      - name: Verify persistence tarball
+        run: npm pack --dry-run --json ./packages/reflex-persist
+
   typescript-compatibility:
     runs-on: ubuntu-latest
     steps:
@@ -247,6 +280,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build TodoMVC library dependencies
+        run: pnpm run build:reflex && pnpm run build:persist
+
       - name: Build TodoMVC example
         run: pnpm --filter todomvc run build
 
@@ -279,13 +315,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build library
-        run: pnpm --filter @flexsurfer/reflex run build
+        run: pnpm run build:reflex && pnpm run build:persist
 
       - name: Run tests
         run: pnpm --filter @flexsurfer/reflex run test:ci
 
       - name: Test package publication
-        run: npm pack --dry-run ./packages/reflex
+        run: >-
+          npm pack --dry-run ./packages/reflex &&
+          npm pack --dry-run ./packages/reflex-persist &&
+          npm publish --dry-run --tag beta ./packages/reflex-persist
 
       - name: Test TodoMVC example build
         run: pnpm --filter todomvc run build

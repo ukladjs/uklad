@@ -143,9 +143,18 @@ export type CoEffectHandler<T = DefaultAppDb> = (
 
 export interface Context<T = Record<string, any>> {
   coeffects: CoEffects<T>;
-  effects: Effects;
-  /** The db generation produced by the event handler; unset until it runs. */
-  newDb?: Db<T>;
+  /**
+   * The app-db generation captured before this event's interceptor chain
+   * begins. Interceptors may observe it but must not replace it.
+   */
+  readonly previousDb: Db<T>;
+  /** The shared effect list. Interceptors may append entries but must not replace it. */
+  readonly effects: Effects;
+  /**
+   * The final db generation produced by the event handler; unset until it
+   * runs. Interceptors may observe it but must not replace it.
+   */
+  readonly newDb?: Db<T>;
   queue: Interceptor<T>[];
   stack: Interceptor<T>[];
   originalException: boolean;

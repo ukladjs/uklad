@@ -21,6 +21,7 @@
   "dependencies": {
     "@flexsurfer/reflex": "workspace:*",
     "@flexsurfer/reflex-devtools": "workspace:*",
+    "@flexsurfer/reflex-persist": "workspace:*",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

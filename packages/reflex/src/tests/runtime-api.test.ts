@@ -270,12 +270,20 @@ describe('instance-scoped runtime', () => {
       initialDb: { value: 1 },
       runtimeId: 'active-module',
     });
-    const disposeFeature = runtime.registerModule((scope) => scope.regSub('value'));
+    let cleanedUp = false;
+    const disposeFeature = runtime.registerModule((scope) => {
+      scope.regSub('value');
+      return () => {
+        cleanedUp = true;
+      };
+    });
     const unwatch = runtime.watchSubscription(['value'], () => {});
 
     expect(() => disposeFeature()).toThrow('subscription graph is active');
+    expect(cleanedUp).toBe(false);
     unwatch();
     expect(() => disposeFeature()).not.toThrow();
+    expect(cleanedUp).toBe(true);
     expect(runtime.getHandlers().sub.value).toBeUndefined();
     runtime.dispose();
   });

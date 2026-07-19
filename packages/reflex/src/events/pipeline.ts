@@ -8,7 +8,6 @@ import {
   mergeTraceForRuntime,
   withTraceForRuntime,
 } from '../core/tracing';
-import { getAppDbForRuntime } from '../runtime/app-db';
 import { getInterceptorsForRuntime } from '../runtime/event-metadata';
 import {
   getHandlerForRuntime,
@@ -171,6 +170,7 @@ function createEventHandlerInterceptor(
       const event = context.coeffects.event;
       const params = event.slice(1);
       let effects: Effects = [];
+      let newDb: Db;
 
       const recipe = (draftDb: Draft<Db>) => {
         const coeffects = { ...context.coeffects, draftDb };
@@ -185,14 +185,14 @@ function createEventHandlerInterceptor(
 
       if (isTraceEnabledForRuntime(runtime)) {
         ensurePatchesEnabled();
-        const [newDb, patches, reversePatches] = produceWithPatches(
-          getAppDbForRuntime<Db>(runtime),
+        const [producedDb, patches, reversePatches] = produceWithPatches(
+          context.previousDb as Db,
           recipe,
         );
-        context.newDb = newDb;
+        newDb = producedDb;
         mergeTraceForRuntime(runtime, { tags: { patches, reversePatches, effects } });
       } else {
-        context.newDb = produce(getAppDbForRuntime<Db>(runtime), recipe);
+        newDb = produce(context.previousDb as Db, recipe);
       }
 
       if (IS_DEV) {
@@ -206,16 +206,17 @@ function createEventHandlerInterceptor(
         }
       }
 
+      let nextEffects = context.effects;
       if (!Array.isArray(effects)) {
         consoleLog('warn', `[reflex] effects expects a vector, but was given ${typeof effects}`);
       } else {
         // Untyped interceptors historically could return a context without an
         // effects field. Preserve that JS boundary fallback so the produced DB
         // still reaches the commit interceptor.
-        context.effects = [...(context.effects || []), ...effects];
+        nextEffects = [...(context.effects || []), ...effects];
       }
 
-      return context;
+      return { ...context, effects: nextEffects, newDb };
     },
   };
 }

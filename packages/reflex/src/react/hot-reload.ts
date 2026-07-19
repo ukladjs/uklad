@@ -10,6 +10,8 @@ import {
 import { clearSubsForHotReload } from '../runtime/subscriptions/cache';
 import { useReflexRuntime } from './context';
 
+import type { Id } from '../types';
+
 type HotReloadCallback = () => void;
 
 interface HotReloadState {
@@ -87,14 +89,20 @@ function useHotReloadVersion(): readonly [ReflexRuntime<any>, number] {
   return [runtime, version] as const;
 }
 
-/** Create bundler-agnostic HMR hooks scoped to one runtime. */
-export function setupSubsHotReload(runtime: ReflexRuntime<any> = defaultRuntime): {
+/**
+ * Create bundler-agnostic HMR hooks scoped to one runtime. Pass the owning
+ * module's subscription IDs to preserve unrelated definitions.
+ */
+export function setupSubsHotReload(
+  runtime: ReflexRuntime<any> = defaultRuntime,
+  subscriptionIds?: readonly Id[],
+): {
   dispose: () => void;
   accept: (newModule?: unknown) => void;
 } {
   const dispose = () => {
-    if (runtime === defaultRuntime) clearSubsForHotReload();
-    else clearRuntimeSubsForHotReload(runtime);
+    if (runtime === defaultRuntime) clearSubsForHotReload(subscriptionIds);
+    else clearRuntimeSubsForHotReload(runtime, subscriptionIds);
   };
   const accept = (newModule?: unknown) => {
     if (newModule) {

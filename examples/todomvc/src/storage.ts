@@ -1,38 +1,27 @@
-import { regCoeffect, regEffect, type CoEffects } from '@flexsurfer/reflex';
+import { defaultRuntime } from '@flexsurfer/reflex';
+import { localStorageAdapter, persist } from '@flexsurfer/reflex-persist';
 
-import { COEFFECT_IDS } from './coeffect-ids';
 import type { Todo, TodoId, Todos } from './db';
-import { EFFECT_IDS } from './effect-ids';
 
-const LOCAL_STORAGE_KEY = 'todos-reflex';
-
-export function todosToLocalStore(todos: Todos): void {
-  // JSON does not preserve Map entries, so persist an entry tuple array.
-  const todosArray = Array.from(todos.entries());
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(todosArray));
-}
-
-export function todosFromLocalStore(): Todos {
-  try {
-    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!stored) {
-      return new Map();
-    }
-
-    // This example owns the storage key, so it omits schema validation.
-    const todosArray: [TodoId, Todo][] = JSON.parse(stored);
-    return new Map(todosArray);
-  } catch (error) {
-    console.warn('Failed to load todos from localStorage:', error);
-    return new Map();
-  }
-}
-
-regCoeffect(COEFFECT_IDS.LOCAL_STORE_TODOS, (cofx: CoEffects) => {
-  cofx.localStoreTodos = todosFromLocalStore();
-  return cofx;
+// Hydration is an event and the global writer contributes a post-commit effect
+// to whichever domain event changed `todos`; event handlers never mention
+// storage. main.tsx hydrates synchronously before the first render.
+export const persistence = persist(defaultRuntime, {
+  storage: localStorageAdapter(),
+  keys: [
+    {
+      key: 'todos',
+      // JSON does not preserve Map entries, so persist an entry tuple array.
+      serialize: (todos) =>
+        Array.from((todos as Todos).entries(), ([id, todo]) => [
+          id,
+          { id: todo.id, title: todo.title, done: todo.done },
+        ]),
+      deserialize: (data) => new Map(data as [TodoId, Todo][]),
+    },
+  ],
 });
 
-regEffect(EFFECT_IDS.TODOS_TO_LOCAL_STORE, (todos) => {
-  todosToLocalStore(todos);
-});
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => persistence.dispose());
+}

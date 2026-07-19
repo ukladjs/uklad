@@ -2,66 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { getHandler, type CoEffects, type EventHandler } from '@flexsurfer/reflex';
 
-import type { Todo, TodoDb, TodoId } from './db';
-import { EFFECT_IDS } from './effect-ids';
+import type { TodoDb } from './db';
 import { EVENT_IDS } from './event-ids';
 
 import './events';
 
+// Persistence is handled by @flexsurfer/reflex-persist (see storage.ts), so
+// handlers return no storage effects — they only mutate the draft db.
+
 describe('TodoMVC Event Handlers (Pure Functions)', () => {
-  describe('INIT_APP handler', () => {
-    it('should initialize with todos from localStorage', () => {
-      const handler = getHandler('event', EVENT_IDS.INIT_APP) as EventHandler;
-      expect(handler).toBeDefined();
-
-      const mockDb: TodoDb = {
-        todos: new Map(),
-        showing: 'all',
-      };
-
-      const existingTodos = new Map<TodoId, Todo>();
-      existingTodos.set(1, { id: 1, title: 'Test Todo', done: false });
-
-      const coeffects = {
-        event: [EVENT_IDS.INIT_APP],
-        draftDb: mockDb,
-        localStoreTodos: existingTodos,
-      } as CoEffects;
-
-      handler(coeffects);
-
-      expect(mockDb.showing).toBe('all');
-      expect(mockDb.todos.size).toBe(1);
-      expect(mockDb.todos.get(1)).toEqual({ id: 1, title: 'Test Todo', done: false });
-
-      expect(Object.keys(mockDb)).toEqual(['todos', 'showing']);
-      expect(Object.keys(mockDb).length).toBe(2);
-    });
-
-    it('should not modify db when localStorage is empty', () => {
-      const handler = getHandler('event', EVENT_IDS.INIT_APP) as EventHandler;
-
-      const mockDb: TodoDb = {
-        todos: new Map(),
-        showing: 'all',
-      };
-
-      const coeffects = {
-        event: [EVENT_IDS.INIT_APP],
-        draftDb: mockDb,
-        localStoreTodos: new Map(),
-      } as CoEffects;
-
-      handler(coeffects);
-
-      expect(mockDb.todos.size).toBe(0);
-      expect(mockDb.showing).toBe('all');
-
-      expect(Object.keys(mockDb)).toEqual(['todos', 'showing']);
-      expect(Object.keys(mockDb).length).toBe(2);
-    });
-  });
-
   describe('ADD_TODO handler', () => {
     it('should add a new todo with correct properties', () => {
       const handler = getHandler('event', EVENT_IDS.ADD_TODO) as EventHandler;
@@ -128,7 +77,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
       const result = handler(coeffects, 1);
 
       expect(mockDb.todos.get(1)?.done).toBe(true);
-      expect(result).toEqual([[EFFECT_IDS.TODOS_TO_LOCAL_STORE, mockDb.todos]]);
+      expect(result).toBeUndefined();
 
       expect(Object.keys(mockDb)).toEqual(['todos', 'showing']);
       expect(Object.keys(mockDb).length).toBe(2);
@@ -174,7 +123,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
 
       expect(mockDb.todos.has(1)).toBe(false);
       expect(mockDb.todos.has(2)).toBe(true);
-      expect(result).toEqual([[EFFECT_IDS.TODOS_TO_LOCAL_STORE, mockDb.todos]]);
+      expect(result).toBeUndefined();
 
       expect(Object.keys(mockDb)).toEqual(['todos', 'showing']);
       expect(Object.keys(mockDb).length).toBe(2);
@@ -198,7 +147,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
       const result = handler(coeffects, 1, 'Updated Title');
 
       expect(mockDb.todos.get(1)?.title).toBe('Updated Titleevent2');
-      expect(result).toEqual([[EFFECT_IDS.TODOS_TO_LOCAL_STORE, mockDb.todos]]);
+      expect(result).toBeUndefined();
     });
 
     it('should trim whitespace before adding suffix', () => {
@@ -243,7 +192,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
       expect(mockDb.todos.get(1)?.done).toBe(true);
       expect(mockDb.todos.get(2)?.done).toBe(true);
       expect(mockDb.todos.get(3)?.done).toBe(true);
-      expect(result).toEqual([[EFFECT_IDS.TODOS_TO_LOCAL_STORE, mockDb.todos]]);
+      expect(result).toBeUndefined();
     });
 
     it('should mark all as incomplete when all are completed', () => {
@@ -293,7 +242,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
       expect(mockDb.todos.has(1)).toBe(false);
       expect(mockDb.todos.has(2)).toBe(true);
       expect(mockDb.todos.has(3)).toBe(false);
-      expect(result).toEqual([[EFFECT_IDS.TODOS_TO_LOCAL_STORE, mockDb.todos]]);
+      expect(result).toBeUndefined();
     });
   });
 

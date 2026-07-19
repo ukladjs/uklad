@@ -1,32 +1,48 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import {
-  createReflexInspector,
-  dispatch,
-  enableMapSet,
-  HotReloadWrapper,
-} from '@flexsurfer/reflex';
+import { createReflexInspector, enableMapSet, HotReloadWrapper } from '@flexsurfer/reflex';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
-import { EVENT_IDS } from './event-ids';
 import TodoApp from './views';
 
 import './index.css';
 
-// These side-effect imports must finish before the startup event is dispatched.
+// These side-effect imports must finish before hydration is dispatched.
 import './db';
 import './events';
 import './subs';
-import './storage';
+import { persistence } from './storage';
 
 // Immer requires an explicit plugin before it can draft the Map-backed todo collection.
 enableMapSet();
 enableDevtools(createReflexInspector());
 
-dispatch([EVENT_IDS.INIT_APP]);
+// Synchronous for localStorage: todos are in app-db before the first render.
+persistence.hydrate();
+void persistence.whenHydrated().catch(() => {
+  const warning = document.createElement('aside');
+  warning.setAttribute('role', 'alert');
+  warning.textContent = 'Saved todos could not be loaded. Persistence is paused. ';
 
-const USE_STRICT_MODE = false;
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.textContent = 'Clear saved data and continue';
+  reset.addEventListener('click', () => {
+    reset.disabled = true;
+    void persistence.purge().then(
+      () => warning.remove(),
+      () => {
+        reset.disabled = false;
+        warning.firstChild!.textContent = 'Saved data could not be cleared. Try again. ';
+      },
+    );
+  });
+  warning.append(reset);
+  document.body.prepend(warning);
+});
+
+const USE_STRICT_MODE = true;
 const app = (
   // HotReloadWrapper forces a remount when subscriptions are hot reloaded.
   <HotReloadWrapper>

@@ -10,6 +10,8 @@ import {
   removeTraceCallback,
 } from '../core/tracing';
 import { regEvent } from '../events/registration';
+import { regEffect } from '../events/effects';
+import { clearGlobalInterceptors, regGlobalInterceptor } from '../events/global-interceptors';
 import { dispatch } from '../events/router';
 import { initAppDb, getAppDb } from '../runtime/app-db';
 import { waitForScheduled } from './test-utils';
@@ -30,6 +32,7 @@ describe('Conditional patch generation', () => {
   });
 
   afterEach(() => {
+    clearGlobalInterceptors();
     removeTraceCallback('trace-patches-test');
     disableTracing();
   });
@@ -58,5 +61,27 @@ describe('Conditional patch generation', () => {
     await waitForScheduled();
 
     expect(getAppDb().value).toBe(7);
+  });
+
+  it('should trace effects contributed by after interceptors', async () => {
+    enableTracing();
+    registerTraceCallback('trace-patches-test', (traces) => {
+      collected.push(...traces);
+    });
+    regEffect('trace-after-effect', () => {});
+    regGlobalInterceptor({
+      id: 'trace-after-interceptor',
+      after: (context) => {
+        context.effects.push(['trace-after-effect', { key: 'value' }]);
+        return context;
+      },
+    });
+
+    dispatch(['tp-set-value', 9]);
+    await waitForScheduled();
+    await waitForTraceFlush();
+
+    const trace = collected.find((t) => t.operation === 'tp-set-value' && t.opType === 'event');
+    expect(trace.tags.effects).toEqual([['trace-after-effect', { key: 'value' }]]);
   });
 });

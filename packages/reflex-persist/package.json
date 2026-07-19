@@ -1,0 +1,90 @@
+{
+  "name": "@flexsurfer/reflex-persist",
+  "version": "0.1.0-beta.1",
+  "description": "Synchronous persistence for Reflex.",
+  "license": "MIT",
+  "sideEffects": false,
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^22.18.0 || >=24.11.0",
+      "onFail": "error"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flexsurfer/reflex.git",
+    "directory": "packages/reflex-persist"
+  },
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:compat": "tsc6 --noEmit -p tsconfig.json",
+    "typecheck:test": "tsc --noEmit -p tsconfig.jest.json",
+    "lint": "eslint --max-warnings=0 src tests tsdown.config.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run typecheck:compat && pnpm run typecheck:test && pnpm run build && pnpm run test:package && pnpm run test",
+    "clean": "node ../../scripts/clean.mjs dist coverage",
+    "test": "jest --passWithNoTests",
+    "test:unit": "jest --passWithNoTests",
+    "test:ci": "jest --passWithNoTests --coverage --silent",
+    "test:package": "node tests/package-consumer/run.mjs",
+    "prepack": "pnpm run build",
+    "prepublishOnly": "pnpm run check && pnpm run test:ci"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/core": "0.18.5",
+    "@eslint/js": "10.0.1",
+    "@flexsurfer/reflex": "workspace:*",
+    "@types/jest": "30.0.0",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "eslint": "10.7.0",
+    "globals": "17.7.0",
+    "jest": "30.4.2",
+    "prettier": "3.9.5",
+    "publint": "0.3.21",
+    "ts-jest": "29.4.11",
+    "tsdown": "0.22.8",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "8.64.0"
+  },
+  "peerDependencies": {
+    "@flexsurfer/reflex": "^0.1.27"
+  },
+  "keywords": [
+    "reflex",
+    "reflex.js",
+    "persistence",
+    "localStorage",
+    "hydration",
+    "state-management",
+    "re-frame"
+  ]
+}

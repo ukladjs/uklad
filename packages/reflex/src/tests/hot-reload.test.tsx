@@ -201,6 +201,24 @@ describe('Hot Reload System', () => {
       unsubscribe();
       runtime.dispose();
     });
+
+    it('can clear only module-owned subscription definitions', () => {
+      const runtime = createReflexRuntime({
+        initialDb: { value: 1, persistStatus: 'idle' },
+        runtimeId: 'scoped-hmr-runtime',
+      });
+      runtime.regSub('value');
+      runtime.regSub('persist-status', 'persistStatus');
+      const unsubscribe = runtime.watchSubscription(['value'], () => {});
+      const { dispose } = setupSubsHotReload(runtime, ['value']);
+
+      expect(() => dispose()).not.toThrow();
+      expect(runtime.getHandlers().sub.value).toBeUndefined();
+      expect(runtime.getHandlers().sub['persist-status']).toBeDefined();
+
+      unsubscribe();
+      runtime.dispose();
+    });
   });
 
   describe('Integration Test', () => {

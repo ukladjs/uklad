@@ -490,11 +490,20 @@ export function clearSubsForRuntime(runtime: RuntimeScope): void {
   clearSubscriptionDefinitionsForRuntime(runtime);
 }
 
-export function clearSubsForHotReload(): void {
-  clearSubsForHotReloadForRuntime(defaultRuntimeScope);
+export function clearSubsForHotReload(subscriptionIds?: readonly Id[]): void {
+  clearSubsForHotReloadForRuntime(defaultRuntimeScope, subscriptionIds);
 }
 
 /** @internal HMR-clear one runtime whose React tree is about to remount. */
-export function clearSubsForHotReloadForRuntime(runtime: RuntimeScope): void {
-  clearSubscriptionDefinitionsForRuntime(runtime);
+export function clearSubsForHotReloadForRuntime(
+  runtime: RuntimeScope,
+  subscriptionIds?: readonly Id[],
+): void {
+  if (subscriptionIds === undefined) {
+    clearSubscriptionDefinitionsForRuntime(runtime);
+    return;
+  }
+  for (const subscriptionId of new Set(subscriptionIds)) {
+    clearSubscriptionDefinitionsForRuntime(runtime, subscriptionId);
+  }
 }

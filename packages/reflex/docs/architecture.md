@@ -90,7 +90,7 @@ regEvent('todos/load', handler, {
 });
 ```
 
-**`events/interceptors.ts`** — `execute(eventV, interceptors)`; `Context = { coeffects, effects, queue, stack, newDb }`. `before` walks queue→stack, `after` unwinds the stack.
+**`events/interceptors.ts`** — `execute(eventV, interceptors)`; `Context = { coeffects, previousDb, effects, queue, stack, newDb }`. `previousDb` is the immutable app-db generation captured at event start; `newDb` is the final Immer generation after the handler, or unset until it runs. `before` walks queue→stack, `after` unwinds the stack. Every `after` hook may compare the read-only db generations and append to the shared `effects` list. Hooks must not replace or mutate either db generation, or replace `effects`; `doFx` is the outermost unwind step, so it commits `newDb` before running the final list. Event traces record that final list, including effects contributed by interceptors.
 
 **`events/effects.ts`** — `regEffect(id, handler)`. `doFxInterceptor` (after phase) commits `newDb` via `updateAppDb`, then invokes each effect handler; failures are isolated and tagged onto the event's trace. Built-ins: `DISPATCH`, `DISPATCH_LATER`. The router injects its `dispatch` function when composing these built-ins, so the write path has no `pipeline → effects → router → pipeline` module cycle.
 

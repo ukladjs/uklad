@@ -1,6 +1,6 @@
 {
   "name": "@flexsurfer/reflex",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "Reflex (Reflex.js) — re-frame-style reactive state management for React and React Native. Pure event handlers over one central app-db, derived subscriptions, isolated side effects. Built for AI agentic development.",
   "license": "MIT",
   "devEngines": {

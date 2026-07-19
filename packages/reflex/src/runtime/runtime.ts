@@ -506,9 +506,9 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   }
 
   /** @internal Clear definitions immediately before the owning React tree remounts. */
-  clearSubsForHotReload(): void {
+  clearSubsForHotReload(subscriptionIds?: readonly Id[]): void {
     this.assertUsable();
-    clearSubsForHotReloadForRuntime(this.scope);
+    clearSubsForHotReloadForRuntime(this.scope, subscriptionIds);
   }
 
   clearSubscriptionCache(key?: string): void {
@@ -627,9 +627,6 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   private disposeInstallation(installation: ModuleInstallation): void {
     if (installation.disposed) return;
 
-    const cleanup = installation.cleanup;
-    installation.cleanup = undefined;
-    cleanup?.();
     for (const registration of installation.registrations) {
       if (
         registration.type === 'subscription' &&
@@ -639,6 +636,10 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
         assertSubscriptionDefinitionCanBeClearedForRuntime(this.scope, registration.id);
       }
     }
+
+    const cleanup = installation.cleanup;
+    installation.cleanup = undefined;
+    cleanup?.();
 
     for (let index = installation.registrations.length - 1; index >= 0; index--) {
       const registration = installation.registrations[index]!;
@@ -702,19 +703,24 @@ export function subscribeForRender(
   componentName?: string,
 ): ReflexDisposer {
   if (!(runtime instanceof ReflexRuntimeImplementation)) {
-    throw new Error('[reflex] React subscriptions require a runtime created by createReflexRuntime().');
+    throw new Error(
+      '[reflex] React subscriptions require a runtime created by createReflexRuntime().',
+    );
   }
   return runtime.subscribeForRender(query, listener, componentName);
 }
 
 /** @internal Clear one explicit runtime's subscriptions for an imminent HMR remount. */
-export function clearRuntimeSubsForHotReload(runtime: ReflexRuntime<any>): void {
+export function clearRuntimeSubsForHotReload(
+  runtime: ReflexRuntime<any>,
+  subscriptionIds?: readonly Id[],
+): void {
   if (!(runtime instanceof ReflexRuntimeImplementation)) {
     throw new Error(
       '[reflex] setupSubsHotReload requires a runtime created by createReflexRuntime().',
     );
   }
-  runtime.clearSubsForHotReload();
+  runtime.clearSubsForHotReload(subscriptionIds);
 }
 
 export const defaultRuntime: ReflexRuntime<DefaultReflexContracts> =

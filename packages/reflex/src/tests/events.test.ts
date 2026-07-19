@@ -1,5 +1,6 @@
 import { regEvent } from '../events/registration';
 import { regCoeffect } from '../events/coeffects';
+import { regEffect } from '../events/effects';
 import { dispatch, dispatchSync } from '../events/router';
 import { initAppDb, getAppDb } from '../runtime/app-db';
 import { registerHandler } from '../runtime/handlers';
@@ -525,7 +526,7 @@ describe('regEvent with cofx', () => {
       const legacyInterceptor: Interceptor = {
         id: 'legacy-context-without-effects',
         before: (context) => {
-          delete (context as Partial<Context>).effects;
+          delete (context as unknown as { effects?: Context['effects'] }).effects;
           return context;
         },
       };
@@ -891,6 +892,31 @@ describe('regEvent with cofx', () => {
       expect(db.primaryEffectProcessed).toBe(true);
       expect(db.secondaryProcessed).toBe(true);
       expect(secondaryEventCalled).toBe(true);
+    });
+
+    it('should expose the final db to global after hooks and commit before appended effects', async () => {
+      let committedCounter: number | undefined;
+
+      regEffect('observe-committed-counter', () => {
+        committedCounter = getAppDb().counter;
+      });
+      regGlobalInterceptor({
+        id: 'append-post-commit-effect',
+        after: (context: Context) => {
+          expect(context.previousDb.counter).toBe(0);
+          expect(context.newDb?.counter).toBe(1);
+          context.effects.push(['observe-committed-counter']);
+          return context;
+        },
+      });
+      regEvent('test-post-commit-effect', ({ draftDb }) => {
+        (draftDb as any).counter += 1;
+      });
+
+      dispatch(['test-post-commit-effect']);
+      await waitForScheduled();
+
+      expect(committedCounter).toBe(1);
     });
 
     it('should work with cofx and global interceptors together', async () => {

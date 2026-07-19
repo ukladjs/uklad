@@ -5,6 +5,7 @@ This repository contains the Reflex runtime, its developer tools, the MCP bridge
 ## Workspaces
 
 - [`@flexsurfer/reflex`](packages/reflex) — the published state-management runtime.
+- [`@flexsurfer/reflex-persist`](packages/reflex-persist) — sync-safe, versioned root-key persistence for Reflex.
 - [`@flexsurfer/reflex-devtools`](packages/reflex-devtools) — the published SDK, server, and CLI.
 - [`@flexsurfer/reflex-devtools-mcp`](packages/reflex-devtools-mcp) — the published MCP bridge.
 - [`@flexsurfer/reflex-devtools-ui`](packages/reflex-devtools-ui) — the private dashboard embedded in the DevTools package.

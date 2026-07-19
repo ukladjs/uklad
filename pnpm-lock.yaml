@@ -56,6 +56,9 @@ importers:
       '@flexsurfer/reflex-devtools':
         specifier: workspace:*
         version: link:../../packages/reflex-devtools
+      '@flexsurfer/reflex-persist':
+        specifier: workspace:*
+        version: link:../../packages/reflex-persist
       react:
         specifier: ^19.2.7
         version: 19.2.7
@@ -274,6 +277,51 @@ importers:
       vite:
         specifier: ^8.1.5
         version: 8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)
+
+  packages/reflex-persist:
+    devDependencies:
+      '@arethetypeswrong/core':
+        specifier: 0.18.5
+        version: 0.18.5
+      '@eslint/js':
+        specifier: 10.0.1
+        version: 10.0.1(eslint@10.7.0(jiti@2.7.0))
+      '@flexsurfer/reflex':
+        specifier: workspace:*
+        version: link:../reflex
+      '@types/jest':
+        specifier: 30.0.0
+        version: 30.0.0
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      eslint:
+        specifier: 10.7.0
+        version: 10.7.0(jiti@2.7.0)
+      globals:
+        specifier: 17.7.0
+        version: 17.7.0
+      jest:
+        specifier: 30.4.2
+        version: 30.4.2(@types/node@24.13.3)
+      prettier:
+        specifier: 3.9.5
+        version: 3.9.5
+      publint:
+        specifier: 0.3.21
+        version: 0.3.21
+      ts-jest:
+        specifier: 29.4.11
+        version: 29.4.11(@babel/core@7.29.7)(@jest/transform@30.4.1)(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7))(jest-util@30.4.1)(jest@30.4.2(@types/node@24.13.3))
+      tsdown:
+        specifier: 0.22.8
+        version: 0.22.8(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.21)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      typescript-eslint:
+        specifier: 8.64.0
+        version: 8.64.0(@typescript/typescript6@6.0.2)(eslint@10.7.0(jiti@2.7.0))
 
 packages:
 
@@ -1140,9 +1188,6 @@ packages:
 
   '@types/connect@3.4.38':
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
-
-  '@types/cors@2.8.19':
-    resolution: {integrity: sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg==}
 
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
@@ -4742,10 +4787,6 @@ snapshots:
       assertion-error: 2.0.1
 
   '@types/connect@3.4.38':
-    dependencies:
-      '@types/node': 24.13.3
-
-  '@types/cors@2.8.19':
     dependencies:
       '@types/node': 24.13.3
 

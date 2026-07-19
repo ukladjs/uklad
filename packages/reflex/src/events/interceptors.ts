@@ -1,10 +1,12 @@
 import { mergeTraceForRuntime } from '../core/tracing';
+import { getAppDbForRuntime } from '../runtime/app-db';
 import { getHandlerForRuntime } from '../runtime/handlers';
 import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
 
 import type {
   CoEffects,
   Context,
+  Db,
   ErrorHandler,
   EventVector,
   Interceptor,
@@ -44,7 +46,7 @@ export function executeForRuntime(
   event: EventVector,
   interceptors: Interceptor[],
 ): Context {
-  const context = createContext(event, interceptors);
+  const context = createContext(event, interceptors, getAppDbForRuntime<Db>(runtime));
   const errorHandler: ErrorHandler | undefined = getHandlerForRuntime(
     runtime,
     ERROR_HANDLER_KIND,
@@ -53,7 +55,7 @@ export function executeForRuntime(
 
   if (!errorHandler) {
     try {
-      return executeInterceptors({ ...context, originalException: true });
+      return executeAndTraceFinalEffects(runtime, { ...context, originalException: true });
     } catch (error: unknown) {
       traceError(runtime, error, event);
       throw error;
@@ -61,7 +63,7 @@ export function executeForRuntime(
   }
 
   try {
-    return executeInterceptors(context);
+    return executeAndTraceFinalEffects(runtime, context);
   } catch (error: unknown) {
     const reflexError = mergeErrorData(
       isReflexError(error) ? error : toReflexError(error, { id: 'unknown-interceptor' }, 'before'),
@@ -71,6 +73,15 @@ export function executeForRuntime(
     errorHandler(reflexError.cause, reflexError);
     return context;
   }
+}
+
+function executeAndTraceFinalEffects(runtime: RuntimeScope, context: Context): Context {
+  const result = executeInterceptors(context);
+  // Event handlers publish their initial effects while patches are produced,
+  // but `after` interceptors may append or replace effects later in the same
+  // pipeline. Record the final list so traces describe what do-fx actually ran.
+  mergeTraceForRuntime(runtime, { tags: { effects: result.effects } });
+  return result;
 }
 
 function normalizeError(value: unknown): Error {
@@ -171,7 +182,7 @@ function changeDirection(context: Context): Context {
   };
 }
 
-function createContext(event: EventVector, interceptors: Interceptor[]): Context {
+function createContext(event: EventVector, interceptors: Interceptor[], previousDb: Db): Context {
   const coeffects: CoEffects<Record<string, any>> = {
     event,
     draftDb: {},
@@ -179,6 +190,7 @@ function createContext(event: EventVector, interceptors: Interceptor[]): Context
 
   return {
     coeffects,
+    previousDb,
     effects: [],
     queue: [...interceptors],
     stack: [],

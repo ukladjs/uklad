@@ -1,4 +1,4 @@
-import { regSub, setupSubsHotReload } from '@flexsurfer/reflex';
+import { defaultRuntime, regSub, setupSubsHotReload } from '@flexsurfer/reflex';
 
 import type { Showing, Todos } from './db';
 import { SUB_IDS } from './sub-ids';
@@ -44,7 +44,9 @@ regSub(
 );
 
 if (import.meta.hot) {
-  const { dispose, accept } = setupSubsHotReload();
+  // Clear only this module's definitions. The persistence status subscription
+  // and other feature-owned subscriptions remain registered across HMR.
+  const { dispose, accept } = setupSubsHotReload(defaultRuntime, Object.values(SUB_IDS));
   import.meta.hot.dispose(dispose);
   import.meta.hot.accept(accept);
 }

@@ -86,6 +86,16 @@ describe('dispatchSync', () => {
     unsubscribe();
   });
 
+  it('should not overtake accepted asynchronous work', async () => {
+    dispatch(['ds-inc']);
+
+    expect(() => dispatchSync(['ds-inc'])).toThrow(/cannot overtake/);
+    expect(getAppDb()['ds-counter']).toBe(0);
+
+    await waitForScheduled();
+    expect(getAppDb()['ds-counter']).toBe(1);
+  });
+
   it('should throw when called from within an event handler', () => {
     regEvent('ds-reentrant', () => {
       dispatchSync(['ds-inc']);

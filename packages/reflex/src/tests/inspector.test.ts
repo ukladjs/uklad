@@ -35,10 +35,13 @@ describe('Reflex inspector', () => {
     const snapshot = inspector.getSnapshot();
 
     expect(inspector.apiVersion).toBe(2);
+    expect(inspector.operationApiVersion).toBe(1);
     expect(inspector.runtimeId).toBe('default');
+    expect(inspector.runtimeInstanceId).toMatch(/^runtime-instance-/);
     expect(inspector.runtimeName).toBe('Default runtime');
     expect(Object.isFrozen(inspector)).toBe(true);
-    expect(snapshot.appDb).toBe(appDb);
+    expect(snapshot.appDb).toEqual(appDb);
+    expect(snapshot.appDb).not.toBe(appDb);
     expect(snapshot.handlerKeys).toEqual({
       event: ['inspector-event'],
       fx: ['inspector-effect'],
@@ -93,6 +96,34 @@ describe('Reflex inspector', () => {
     await waitForScheduled();
 
     expect(getAppDb<{ count: number }>().count).toBe(3);
+  });
+
+  it('executes and retrieves authoritative operations without tracing', async () => {
+    initAppDb({ count: 0 });
+    regSub('count');
+    regEvent<{ count: number }>('inspector-operation', ({ draftDb }, amount: number) => {
+      draftDb.count += amount;
+    });
+
+    const inspector = createReflexInspector();
+    const handle = inspector.startEvent(['inspector-operation', 4], {
+      idempotencyKey: 'inspector-operation-once',
+      observe: [['count']],
+    });
+    const { operation: receipt } = await handle.result;
+
+    expect(receipt).toMatchObject({
+      operationId: handle.operationId,
+      runtimeInstanceId: inspector.runtimeInstanceId,
+      status: 'completed',
+      outcome: 'succeeded',
+      observations: [{ query: ['count'], status: 'succeeded', value: 4 }],
+    });
+    expect(inspector.getOperation({ idempotencyKey: 'inspector-operation-once' })).toMatchObject({
+      operationId: receipt.operationId,
+      status: 'completed',
+    });
+    expect(isTraceEnabled()).toBe(false);
   });
 
   it('supports independent trace subscriptions with idempotent cleanup', async () => {

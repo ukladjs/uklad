@@ -14,6 +14,13 @@ import {
   registerHandlerForRuntime,
   registerSystemHandlerForRuntime,
 } from '../runtime/handlers';
+import {
+  getOperationTraceTagsForRuntime,
+  isOperationCaptureActiveForRuntime,
+  recordOperationErrorForRuntime,
+  recordOperationEffectForRuntime,
+  recordOperationPlanForRuntime,
+} from '../runtime/operations';
 import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
 import { getDoFxInterceptorForRuntime } from './effects';
 import { getGlobalInterceptorsForRuntime } from './global-interceptors';
@@ -109,9 +116,14 @@ export function handleForRuntime(runtime: RuntimeScope, event: EventVector): voi
       message: `no event handler registered for: ${eventId}`,
       eventV: event,
     };
+    recordOperationErrorForRuntime(runtime, 'missing-handler', error.message);
     withTraceForRuntime(
       runtime,
-      { operation: eventId, opType: HANDLER_KIND, tags: { event, error } },
+      {
+        operation: eventId,
+        opType: HANDLER_KIND,
+        tags: { event, error, ...getOperationTraceTagsForRuntime(runtime) },
+      },
       () => {},
     );
     return;
@@ -129,7 +141,11 @@ export function handleForRuntime(runtime: RuntimeScope, event: EventVector): voi
   try {
     withTraceForRuntime(
       runtime,
-      { operation: eventId, opType: HANDLER_KIND, tags: { event } },
+      {
+        operation: eventId,
+        opType: HANDLER_KIND,
+        tags: { event, ...getOperationTraceTagsForRuntime(runtime) },
+      },
       () => {
         executeForRuntime(runtime, event, interceptors);
       },
@@ -183,14 +199,18 @@ function createEventHandlerInterceptor(
         }
       };
 
-      if (isTraceEnabledForRuntime(runtime)) {
+      const tracingEnabled = isTraceEnabledForRuntime(runtime);
+      if (tracingEnabled || isOperationCaptureActiveForRuntime(runtime)) {
         ensurePatchesEnabled();
         const [producedDb, patches, reversePatches] = produceWithPatches(
           context.previousDb as Db,
           recipe,
         );
         newDb = producedDb;
-        mergeTraceForRuntime(runtime, { tags: { patches, reversePatches, effects } });
+        recordOperationPlanForRuntime(runtime, patches, producedDb);
+        if (tracingEnabled) {
+          mergeTraceForRuntime(runtime, { tags: { patches, reversePatches, effects } });
+        }
       } else {
         newDb = produce(context.previousDb as Db, recipe);
       }
@@ -209,6 +229,12 @@ function createEventHandlerInterceptor(
       let nextEffects = context.effects;
       if (!Array.isArray(effects)) {
         consoleLog('warn', `[reflex] effects expects a vector, but was given ${typeof effects}`);
+        recordOperationEffectForRuntime(runtime, {
+          type: '<invalid>',
+          value: effects,
+          status: 'invalid',
+          startedAtMs: Date.now(),
+        });
       } else {
         // Untyped interceptors historically could return a context without an
         // effects field. Preserve that JS boundary fallback so the produced DB

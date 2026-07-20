@@ -53,16 +53,20 @@ import {
 } from '../events/rate-limit';
 import { regEventForRuntime } from '../events/registration';
 import {
-  dispatchForRuntime,
+  dispatchAndWaitForRuntime,
+  dispatchOwnedForRuntime,
   dispatchSyncForRuntime,
   disposeEventQueueForRuntime,
   flushRuntime,
   initializeEventRouterForRuntime,
   isEventQueueIdleForRuntime,
+  isEventQueueRunningForRuntime,
+  startOperationForRuntime,
 } from '../events/router';
 import { createReflexInspectorForRuntime } from '../inspector';
 import { getAppDbForRuntime, initAppDbForRuntime } from './app-db';
 import { clearInterceptorsForRuntime } from './event-metadata';
+import { getOperationForRuntime } from './operations';
 import { isEventVector } from '../core/validation';
 import {
   clearHandlerRegistrationForRuntime,
@@ -99,8 +103,15 @@ import {
 import { regSubForRuntime } from '../subscriptions/registration';
 
 import type { TraceCallback } from '../core/tracing';
-import type { ReflexInspector } from '../inspector';
+import type { ReflexOperationInspector } from '../inspector';
 import type { HandlerKind, HandlerRegistry } from './handlers';
+import type {
+  DispatchAndWaitOptions,
+  OperationHandle,
+  OperationLookup,
+  OperationReceipt,
+  OperationWaitResult,
+} from './operations';
 import type { SubscriptionDiagnostic } from './subscriptions/engine';
 import type {
   CoEffectHandler,
@@ -129,12 +140,22 @@ export type RuntimeSubscriptionHandler<
 
 export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveReflexContracts> {
   readonly runtimeId: string;
+  readonly runtimeInstanceId: string;
   readonly runtimeName: string;
 
   getAppDb(): ContractDb<TContracts>;
   restoreAppDb(nextDb: ContractDb<TContracts>): void;
   dispatch(event: ContractDispatchVector<TContracts>): void;
+  dispatchAndWait(
+    event: ContractDispatchVector<TContracts>,
+    options?: DispatchAndWaitOptions,
+  ): Promise<OperationWaitResult>;
+  startOperation(
+    event: ContractDispatchVector<TContracts>,
+    options?: DispatchAndWaitOptions,
+  ): OperationHandle;
   dispatchSync(event: ContractDispatchVector<TContracts>): void;
+  getOperation(lookup: OperationLookup): OperationReceipt | undefined;
   flush(): Promise<void>;
 
   regEvent<TId extends ContractEventId<TContracts>>(
@@ -191,7 +212,7 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
   getSubscriptionDiagnostics(): readonly SubscriptionDiagnostic[];
 
   registerModule(module: ReflexModule<ReflexRuntime<TContracts>>): ReflexDisposer;
-  createInspector(): ReflexInspector;
+  createInspector(): ReflexOperationInspector;
   dispose(): void;
 }
 
@@ -248,6 +269,10 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return this.scope.runtimeId;
   }
 
+  get runtimeInstanceId(): string {
+    return this.scope.runtimeInstanceId;
+  }
+
   get runtimeName(): string {
     return this.scope.runtimeName;
   }
@@ -275,13 +300,35 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   dispatch(event: ContractDispatchVector<TContracts>): void {
     this.assertUsable();
     this.assertDispatchableEvent(event, 'dispatch');
-    dispatchForRuntime(this.scope, event as any);
+    dispatchOwnedForRuntime(this.scope, event as any);
+  }
+
+  dispatchAndWait(
+    event: ContractDispatchVector<TContracts>,
+    options?: DispatchAndWaitOptions,
+  ): Promise<OperationWaitResult> {
+    this.assertUsable();
+    this.assertDispatchableEvent(event, 'dispatchAndWait');
+    return dispatchAndWaitForRuntime(this.scope, event as any, options);
+  }
+
+  startOperation(
+    event: ContractDispatchVector<TContracts>,
+    options?: DispatchAndWaitOptions,
+  ): OperationHandle {
+    this.assertUsable();
+    this.assertDispatchableEvent(event, 'startOperation');
+    return startOperationForRuntime(this.scope, event as any, options);
   }
 
   dispatchSync(event: ContractDispatchVector<TContracts>): void {
     this.assertUsable();
     this.assertDispatchableEvent(event, 'dispatchSync');
     dispatchSyncForRuntime(this.scope, event as any);
+  }
+
+  getOperation(lookup: OperationLookup): OperationReceipt | undefined {
+    return getOperationForRuntime(this.scope, lookup);
   }
 
   flush(): Promise<void> {
@@ -548,7 +595,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return () => this.disposeInstallation(installation);
   }
 
-  createInspector(): ReflexInspector {
+  createInspector(): ReflexOperationInspector {
     this.assertUsable();
     return createReflexInspectorForRuntime(this.scope);
   }
@@ -557,6 +604,11 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     if (isRuntimeDisposed(this.scope)) return;
     if (this.scope === defaultRuntimeScope) {
       throw new Error('[reflex] The compatibility default runtime cannot be disposed.');
+    }
+    if (isEventQueueRunningForRuntime(this.scope)) {
+      throw new Error(
+        `[reflex] Cannot dispose runtime '${this.runtimeId}' while its event queue is synchronously running. Dispose after the current operation or runtime.flush() settles.`,
+      );
     }
 
     for (const disposeRenderSubscription of Array.from(this.renderSubscriptions)) {
@@ -585,7 +637,10 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   // The instance API fails loudly on unknown ids. The compatibility facade's
   // root functions keep the lenient 0.x console-error behavior.
-  private assertDispatchableEvent(event: unknown, api: 'dispatch' | 'dispatchSync'): void {
+  private assertDispatchableEvent(
+    event: unknown,
+    api: 'dispatch' | 'dispatchAndWait' | 'dispatchSync' | 'startOperation',
+  ): void {
     if (!isEventVector(event)) {
       throw new Error(
         `[reflex] ${api} expects a non-empty event vector starting with an event id string.`,
@@ -737,6 +792,27 @@ export function restoreAppDb(nextDb: ContractDb<DefaultReflexContracts>): void {
 /** Wait for the compatibility default runtime to reach an idle publication boundary. */
 export function flush(): Promise<void> {
   return defaultRuntime.flush();
+}
+
+/** Dispatch one tracked operation in the compatibility runtime. */
+export function dispatchAndWait(
+  event: ContractDispatchVector<DefaultReflexContracts>,
+  options?: DispatchAndWaitOptions,
+): Promise<OperationWaitResult> {
+  return defaultRuntime.dispatchAndWait(event, options);
+}
+
+/** Start one tracked operation and receive its identity immediately. */
+export function startOperation(
+  event: ContractDispatchVector<DefaultReflexContracts>,
+  options?: DispatchAndWaitOptions,
+): OperationHandle {
+  return defaultRuntime.startOperation(event, options);
+}
+
+/** Read one retained operation from the compatibility runtime. */
+export function getOperation(lookup: OperationLookup): OperationReceipt | undefined {
+  return defaultRuntime.getOperation(lookup);
 }
 
 /** Watch a subscription in the compatibility default runtime. */

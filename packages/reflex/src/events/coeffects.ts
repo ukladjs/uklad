@@ -4,6 +4,10 @@ import {
   registerHandlerForRuntime,
   registerSystemHandlerForRuntime,
 } from '../runtime/handlers';
+import {
+  isOperationCaptureActiveForRuntime,
+  recordOperationErrorForRuntime,
+} from '../runtime/operations';
 import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
 
 import type { CoEffectHandler, CoEffects, Context, Interceptor } from '../types';
@@ -45,7 +49,10 @@ export function getInjectCofxInterceptorForRuntime(
     before(context: Context): Context {
       const handler = getHandlerForRuntime(runtime, HANDLER_KIND, id);
       if (!handler) {
+        const message = `[reflex] No cofx handler registered for ${id}`;
         consoleLog('error', '[reflex] No cofx handler registered for', id);
+        recordOperationErrorForRuntime(runtime, 'missing-coeffect', message);
+        if (isOperationCaptureActiveForRuntime(runtime)) throw new Error(message);
         return context;
       }
 
@@ -53,6 +60,8 @@ export function getInjectCofxInterceptorForRuntime(
         context.coeffects = handler({ ...context.coeffects }, value);
       } catch (error: unknown) {
         consoleLog('error', `[reflex] Error in :${id} coeffect handler:`, error);
+        recordOperationErrorForRuntime(runtime, 'coeffect', error);
+        if (isOperationCaptureActiveForRuntime(runtime)) throw error;
       }
       return context;
     },

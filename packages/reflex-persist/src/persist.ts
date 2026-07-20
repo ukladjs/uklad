@@ -46,7 +46,7 @@ interface Waiter {
 }
 
 interface PurgeWaiter extends Waiter {
-  readonly request: object;
+  readonly request: string;
   accepted: boolean;
 }
 
@@ -54,6 +54,7 @@ const attachedRuntimes = new WeakSet<object>();
 const HYDRATION_ERROR = '[reflex-persist] Hydration failed.';
 const DISPOSED_ERROR = '[reflex-persist] Disposed before operation completed.';
 const PURGE_ERROR = '[reflex-persist] Purge failed.';
+const EFFECT_AUTHORIZATION = '__reflexPersistAuthorization';
 
 /** Attach one persistence module to a runtime. */
 export function persist<TContracts extends ReflexContracts>(
@@ -83,19 +84,41 @@ export function persist<TContracts extends ReflexContracts>(
   let purgeInFlight = false;
   const hydrationWaiters: Waiter[] = [];
   const purgeWaiters: PurgeWaiter[] = [];
-  const authorizedEffects = new WeakSet<object>();
-  const authorizedEvents = new WeakSet<object>();
-  const queuedHydrationRequests = new WeakSet<object>();
+  const authorizedEffects = new Set<string>();
+  const authorizedEvents = new Set<string>();
+  const queuedHydrationRequests = new Set<string>();
+  let nextAuthorization = 0;
+
+  const issueAuthorization = (): string =>
+    `${runtime.runtimeInstanceId}:${Date.now().toString(36)}:${(++nextAuthorization).toString(36)}:${Math.random().toString(36).slice(2)}`;
 
   const effect = (id: string, payload: object): PersistEffect => {
-    authorizedEffects.add(payload);
-    return [id, payload];
+    const authorization = issueAuthorization();
+    authorizedEffects.add(authorization);
+    const authorizedPayload = { ...payload };
+    // Effects execute within the current event, so this capability need not
+    // cross an event-queue boundary. Keeping it non-enumerable prevents it
+    // from becoming observable trace/effect data.
+    Object.defineProperty(authorizedPayload, EFFECT_AUTHORIZATION, {
+      value: authorization,
+      enumerable: false,
+    });
+    return [id, authorizedPayload];
   };
 
-  const consumeAuthorization = (authorizations: WeakSet<object>, value: unknown): boolean => {
-    if ((typeof value !== 'object' || value === null) && typeof value !== 'function') return false;
-    return authorizations.delete(value as object);
+  const consumeEffectAuthorization = (value: unknown): object | undefined => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+    const candidate = value as Record<string, unknown>;
+    const authorization = candidate[EFFECT_AUTHORIZATION];
+    if (typeof authorization !== 'string' || !authorizedEffects.delete(authorization))
+      return undefined;
+    const payload = { ...candidate };
+    delete payload[EFFECT_AUTHORIZATION];
+    return payload;
   };
+
+  const consumeEventAuthorization = (authorization: unknown): boolean =>
+    typeof authorization === 'string' && authorizedEvents.delete(authorization);
 
   const diagnostic = (
     code: PersistErrorCode,
@@ -115,11 +138,12 @@ export function persist<TContracts extends ReflexContracts>(
   };
 
   const dispatchSyncAuthorized = (id: string, payload: object): void => {
-    authorizedEvents.add(payload);
+    const authorization = issueAuthorization();
+    authorizedEvents.add(authorization);
     try {
-      runtime.dispatchSync([id, payload]);
+      runtime.dispatchSync([id, payload, authorization]);
     } finally {
-      authorizedEvents.delete(payload);
+      authorizedEvents.delete(authorization);
     }
   };
 
@@ -150,15 +174,16 @@ export function persist<TContracts extends ReflexContracts>(
   };
 
   const dispatchAuthorized = (id: string, payload: object, onDropped: () => void): void => {
-    authorizedEvents.add(payload);
+    const authorization = issueAuthorization();
+    authorizedEvents.add(authorization);
     try {
-      runtime.dispatch([id, payload]);
+      runtime.dispatch([id, payload, authorization]);
       void runtime.flush().catch(() => {
-        if (disposed || !authorizedEvents.delete(payload)) return;
+        if (disposed || !authorizedEvents.delete(authorization)) return;
         onDropped();
       });
     } catch {
-      authorizedEvents.delete(payload);
+      authorizedEvents.delete(authorization);
       onDropped();
     }
   };
@@ -182,7 +207,7 @@ export function persist<TContracts extends ReflexContracts>(
   };
 
   const markPurgeAccepted = (request: unknown): void => {
-    if (typeof request !== 'object' || request === null) return;
+    if (typeof request !== 'string') return;
     const waiter = purgeWaiters.find((candidate) => candidate.request === request);
     if (waiter) waiter.accepted = true;
   };
@@ -370,13 +395,16 @@ export function persist<TContracts extends ReflexContracts>(
   try {
     disposeModule = runtime.registerModule((scope) => {
       scope.regSub(PERSIST_IDS.STATUS, PERSIST_IDS.STATUS);
-      scope.regEvent(PERSIST_IDS.ATTACH, ({ draftDb }, payload: unknown) => {
-        if (!consumeAuthorization(authorizedEvents, payload)) {
-          return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
-        }
-        (draftDb as AnyDb)[PERSIST_IDS.STATUS] = 'idle';
-        return undefined;
-      });
+      scope.regEvent(
+        PERSIST_IDS.ATTACH,
+        ({ draftDb }, _payload: unknown, authorization: unknown) => {
+          if (!consumeEventAuthorization(authorization)) {
+            return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
+          }
+          (draftDb as AnyDb)[PERSIST_IDS.STATUS] = 'idle';
+          return undefined;
+        },
+      );
 
       if (isSync) {
         scope.regCoeffect(PERSIST_IDS.SNAPSHOT, (coeffects) => {
@@ -406,13 +434,14 @@ export function persist<TContracts extends ReflexContracts>(
       }
 
       scope.regEffect(PERSIST_IDS.READ, (payload: unknown) => {
-        if (!consumeAuthorization(authorizedEffects, payload)) {
+        const authorizedPayload = consumeEffectAuthorization(payload);
+        if (!authorizedPayload) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           return;
         }
-        if (typeof payload === 'object' && payload !== null) {
-          const request = Reflect.get(payload, 'request') as unknown;
-          if (typeof request === 'object' && request !== null) {
+        {
+          const request = Reflect.get(authorizedPayload, 'request') as unknown;
+          if (typeof request === 'string') {
             queuedHydrationRequests.delete(request);
           }
         }
@@ -434,24 +463,27 @@ export function persist<TContracts extends ReflexContracts>(
             }
           });
       });
-      scope.regEvent(PERSIST_IDS.LOADED, ({ draftDb }, snapshot: unknown) => {
-        if (!consumeAuthorization(authorizedEvents, snapshot)) {
-          return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
-        }
-        if (lifecycleState !== 'hydrating') {
-          return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
-        }
-        if (!isHydrationSnapshot(snapshot, keyConfigs)) {
-          (draftDb as AnyDb)[PERSIST_IDS.STATUS] = 'failed';
-          return [
-            effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle')),
-            effect(PERSIST_IDS.COMPLETE, { status: 'failed' } satisfies CompletionPayload),
-          ];
-        }
-        return applySnapshot(draftDb as AnyDb, snapshot);
-      });
-      scope.regEvent(PERSIST_IDS.FAILED, ({ draftDb }, value: unknown) => {
-        if (!consumeAuthorization(authorizedEvents, value)) {
+      scope.regEvent(
+        PERSIST_IDS.LOADED,
+        ({ draftDb }, snapshot: unknown, authorization: unknown) => {
+          if (!consumeEventAuthorization(authorization)) {
+            return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
+          }
+          if (lifecycleState !== 'hydrating') {
+            return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
+          }
+          if (!isHydrationSnapshot(snapshot, keyConfigs)) {
+            (draftDb as AnyDb)[PERSIST_IDS.STATUS] = 'failed';
+            return [
+              effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle')),
+              effect(PERSIST_IDS.COMPLETE, { status: 'failed' } satisfies CompletionPayload),
+            ];
+          }
+          return applySnapshot(draftDb as AnyDb, snapshot);
+        },
+      );
+      scope.regEvent(PERSIST_IDS.FAILED, ({ draftDb }, value: unknown, authorization: unknown) => {
+        if (!consumeEventAuthorization(authorization)) {
           return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
         }
         if (lifecycleState !== 'idle' && lifecycleState !== 'hydrating') {
@@ -482,13 +514,12 @@ export function persist<TContracts extends ReflexContracts>(
         return [effect(PERSIST_IDS.REMOVE, { request })];
       });
       scope.regEffect(PERSIST_IDS.REMOVE, (payload: unknown) => {
-        if (!consumeAuthorization(authorizedEffects, payload)) {
+        const authorizedPayload = consumeEffectAuthorization(payload);
+        if (!authorizedPayload) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           return;
         }
-        if (typeof payload === 'object' && payload !== null) {
-          markPurgeAccepted(Reflect.get(payload, 'request'));
-        }
+        markPurgeAccepted(Reflect.get(authorizedPayload, 'request'));
         if (disposed || purgeInFlight) return;
         purgeInFlight = true;
         void removeAll().then((diagnostics) => {
@@ -497,8 +528,8 @@ export function persist<TContracts extends ReflexContracts>(
           }
         });
       });
-      scope.regEvent(PERSIST_IDS.PURGED, ({ draftDb }, value: unknown) => {
-        if (!consumeAuthorization(authorizedEvents, value)) {
+      scope.regEvent(PERSIST_IDS.PURGED, ({ draftDb }, value: unknown, authorization: unknown) => {
+        if (!consumeEventAuthorization(authorization)) {
           return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
         }
         if (!purgeInFlight) {
@@ -546,30 +577,31 @@ export function persist<TContracts extends ReflexContracts>(
       });
 
       scope.regEffect(PERSIST_IDS.WRITE, (payload: unknown) => {
-        if (!consumeAuthorization(authorizedEffects, payload) || !isWritePayload(payload)) {
+        const authorizedPayload = consumeEffectAuthorization(payload);
+        if (!authorizedPayload || !isWritePayload(authorizedPayload)) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           return;
         }
-        writeKey(payload.key);
+        writeKey(authorizedPayload.key);
       });
       scope.regEffect(PERSIST_IDS.COMPLETE, (payload: unknown) => {
-        const authorized = consumeAuthorization(authorizedEffects, payload);
-        if (!authorized || !isCompletionPayload(payload)) {
+        const authorizedPayload = consumeEffectAuthorization(payload);
+        if (!authorizedPayload || !isCompletionPayload(authorizedPayload)) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
-          if (authorized) {
+          if (authorizedPayload) {
             lifecycleState = 'failed';
             settleHydrationWaiters();
           }
           return;
         }
-        lifecycleState = payload.status;
+        lifecycleState = authorizedPayload.status;
         settleHydrationWaiters();
       });
       scope.regEffect(PERSIST_IDS.COMPLETE_PURGE, (payload: unknown) => {
-        const authorized = consumeAuthorization(authorizedEffects, payload);
-        if (!authorized || !isPurgeCompletionPayload(payload)) {
+        const authorizedPayload = consumeEffectAuthorization(payload);
+        if (!authorizedPayload || !isPurgeCompletionPayload(authorizedPayload)) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
-          if (authorized) {
+          if (authorizedPayload) {
             lifecycleState = 'failed';
             purgeInFlight = false;
             settlePurgeWaiters('failed');
@@ -577,37 +609,34 @@ export function persist<TContracts extends ReflexContracts>(
           }
           return;
         }
-        lifecycleState = payload.status;
+        lifecycleState = authorizedPayload.status;
         purgeInFlight = false;
-        settlePurgeWaiters(payload.status);
+        settlePurgeWaiters(authorizedPayload.status);
         settleHydrationWaiters();
       });
       scope.regEffect(PERSIST_IDS.SETTLE, (payload: unknown) => {
-        if (!consumeAuthorization(authorizedEffects, payload)) {
+        if (!consumeEffectAuthorization(payload)) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           return;
         }
         settleHydrationWaiters();
       });
       scope.regEffect(PERSIST_IDS.REJECT_PURGE, (payload: unknown) => {
-        if (!consumeAuthorization(authorizedEffects, payload)) {
+        const authorizedPayload = consumeEffectAuthorization(payload);
+        if (!authorizedPayload) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           return;
         }
-        if (typeof payload === 'object' && payload !== null) {
-          markPurgeAccepted(Reflect.get(payload, 'request'));
-        }
+        markPurgeAccepted(Reflect.get(authorizedPayload, 'request'));
         settlePurgeWaiters('failed');
       });
       scope.regEffect(PERSIST_IDS.REPORT, (payload: unknown) => {
-        if (
-          !consumeAuthorization(authorizedEffects, payload) ||
-          !isPersistDiagnosticValue(payload)
-        ) {
+        const authorizedPayload = consumeEffectAuthorization(payload);
+        if (!authorizedPayload || !isPersistDiagnosticValue(authorizedPayload)) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           return;
         }
-        reportDiagnostic(payload);
+        reportDiagnostic(authorizedPayload);
       });
 
       return cleanup;
@@ -640,7 +669,7 @@ export function persist<TContracts extends ReflexContracts>(
           throw error;
         }
       } else {
-        const request = {};
+        const request = issueAuthorization();
         queuedHydrationRequests.add(request);
         try {
           runtime.dispatch([PERSIST_IDS.HYDRATE, request]);
@@ -672,7 +701,7 @@ export function persist<TContracts extends ReflexContracts>(
         );
       }
 
-      const request = {};
+      const request = issueAuthorization();
       let waiter: PurgeWaiter;
       const pending = new Promise<void>((resolve, reject) => {
         waiter = { resolve, reject, request, accepted: false };

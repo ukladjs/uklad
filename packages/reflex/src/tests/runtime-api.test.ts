@@ -32,6 +32,26 @@ function createCounterRuntime(runtimeId: string, count: number) {
 }
 
 describe('instance-scoped runtime', () => {
+  it('owns and freezes initial and restored state ingress', () => {
+    const initialDb = { count: 1, label: 'owned-state' };
+    const runtime = createReflexRuntime<CounterContracts>({
+      initialDb,
+      runtimeId: 'owned-state',
+    });
+    initialDb.count = 99;
+
+    expect(runtime.getAppDb()).toEqual({ count: 1, label: 'owned-state' });
+    expect(Object.isFrozen(runtime.getAppDb())).toBe(true);
+
+    const restoredDb = { count: 2, label: 'restored-owned-state' };
+    runtime.restoreAppDb(restoredDb);
+    restoredDb.count = 100;
+
+    expect(runtime.getAppDb()).toEqual({ count: 2, label: 'restored-owned-state' });
+    expect(Object.isFrozen(runtime.getAppDb())).toBe(true);
+    runtime.dispose();
+  });
+
   it('isolates db heads, handlers, queues, subscriptions, and inspectors', async () => {
     const first = createCounterRuntime('first', 1);
     const second = createCounterRuntime('second', 10);

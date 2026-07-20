@@ -5,9 +5,12 @@ export { getAppDb, initAppDb } from './runtime/app-db';
 export {
   createReflexRuntime,
   defaultRuntime,
+  dispatchAndWait,
   flush,
+  getOperation,
   registerModule,
   restoreAppDb,
+  startOperation,
   watchSubscription,
 } from './runtime/runtime';
 
@@ -85,6 +88,35 @@ export type {
   RuntimeSubscriptionHandler,
 } from './runtime/runtime';
 export type {
+  DispatchAndWaitOptions,
+  OperationCompletionBoundary,
+  OperationCompletionResult,
+  OperationEffectMode,
+  OperationEffectResult,
+  OperationEffectStatus,
+  OperationEffectsSummary,
+  OperationError,
+  OperationHandle,
+  OperationEventResult,
+  OperationEventStateResult,
+  OperationEventStateStatus,
+  OperationEventStatus,
+  OperationExecutionContext,
+  OperationExecutionContextInput,
+  OperationLookup,
+  OperationObservationResult,
+  OperationOutcome,
+  OperationPatch,
+  OperationReceipt,
+  OperationRetention,
+  OperationRevisionSummary,
+  OperationStateSummary,
+  OperationStatus,
+  OperationWaitResult,
+  OperationWaitStatus,
+  OperationDeliveryResult,
+} from './runtime/operations';
+export type {
   AppDb,
   CoEffectHandler,
   CoEffects,
@@ -126,4 +158,9 @@ export type {
 } from './runtime/handlers';
 export type { SubscriptionDiagnostic } from './runtime/subscriptions/engine';
 export type { Trace, TraceCallback, TraceId, TraceOptions, TraceTags } from './core/tracing';
-export type { ReflexHandlerKeys, ReflexInspector, ReflexInspectorSnapshot } from './inspector';
+export type {
+  ReflexHandlerKeys,
+  ReflexInspector,
+  ReflexInspectorSnapshot,
+  ReflexOperationInspector,
+} from './inspector';

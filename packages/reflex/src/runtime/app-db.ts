@@ -1,4 +1,5 @@
 import { scheduleAfterRender } from '../core/scheduling';
+import { cloneStructuredValue } from './ownership';
 import { defaultRuntimeScope, isRuntimeDisposed, type RuntimeScope } from './scope';
 import {
   getCachedSubscriptionForRuntime,
@@ -17,6 +18,15 @@ interface AppDbState {
   appDb: any;
   renderDb: any;
   flushScheduled: boolean;
+  initialized: boolean;
+  committedRevision: number;
+  publishedRevision: number;
+}
+
+/** @internal Monotonic state-generation counters owned by one runtime. */
+export interface AppDbRevisions {
+  readonly committedRevision: number;
+  readonly publishedRevision: number;
 }
 
 const appDbStates = new WeakMap<RuntimeScope, AppDbState>();
@@ -24,7 +34,14 @@ const appDbStates = new WeakMap<RuntimeScope, AppDbState>();
 function getAppDbState(runtime: RuntimeScope): AppDbState {
   let state = appDbStates.get(runtime);
   if (!state) {
-    state = { appDb: {}, renderDb: {}, flushScheduled: false };
+    state = {
+      appDb: {},
+      renderDb: {},
+      flushScheduled: false,
+      initialized: false,
+      committedRevision: 0,
+      publishedRevision: 0,
+    };
     appDbStates.set(runtime, state);
   }
   return state;
@@ -45,9 +62,14 @@ export function initAppDbForRuntime<T = DefaultAppDb>(
   assertPublicationAllowedForRuntime(runtime);
   const state = getAppDbState(runtime);
   const oldDb = state.renderDb;
-  state.appDb = value;
-  state.renderDb = value;
-  publishSubscriptionsForRuntime(runtime, collectChangedRoots(runtime, oldDb, value));
+  if (state.initialized && value !== state.appDb) state.committedRevision++;
+  const acceptedValue = value === state.appDb ? value : ownAppDbValue(value);
+  state.initialized = true;
+  state.appDb = acceptedValue;
+  state.renderDb = acceptedValue;
+  const targetRevision = state.committedRevision;
+  publishSubscriptionsForRuntime(runtime, collectChangedRoots(runtime, oldDb, acceptedValue));
+  state.publishedRevision = targetRevision;
 }
 
 /** Return the latest committed compatibility app-db. */
@@ -70,6 +92,15 @@ export function getRenderDbForRuntime<T = DefaultAppDb>(runtime: RuntimeScope): 
   return getAppDbState(runtime).renderDb as Db<T>;
 }
 
+/** @internal Return one runtime's committed and render-published generations. */
+export function getAppDbRevisionsForRuntime(runtime: RuntimeScope): AppDbRevisions {
+  const state = getAppDbState(runtime);
+  return {
+    committedRevision: state.committedRevision,
+    publishedRevision: state.publishedRevision,
+  };
+}
+
 /** Commit a compatibility db generation and schedule subscription publication. */
 export function updateAppDb<T = Record<string, any>>(newDb: Db<T>): void {
   updateAppDbForRuntime(defaultRuntimeScope, newDb);
@@ -79,17 +110,20 @@ export function updateAppDb<T = Record<string, any>>(newDb: Db<T>): void {
 export function updateAppDbForRuntime<T = Record<string, any>>(
   runtime: RuntimeScope,
   newDb: Db<T>,
-): void {
+): number {
   const state = getAppDbState(runtime);
-  if (newDb === state.appDb) return;
+  if (newDb === state.appDb) return state.committedRevision;
+  state.initialized = true;
   state.appDb = newDb;
-  if (state.flushScheduled) return;
+  state.committedRevision++;
+  if (state.flushScheduled) return state.committedRevision;
   state.flushScheduled = true;
   scheduleAfterRender(() => {
     state.flushScheduled = false;
     if (isRuntimeDisposed(runtime)) return;
     flushSubscriptionsForRuntime(runtime);
   });
+  return state.committedRevision;
 }
 
 /** Publish the compatibility runtime's latest db generation. */
@@ -100,18 +134,20 @@ export function flushSubscriptions(): void {
 /** @internal Publish one runtime's latest db generation synchronously. */
 export function flushSubscriptionsForRuntime(runtime: RuntimeScope): void {
   const state = getAppDbState(runtime);
-  if (state.renderDb === state.appDb) return;
+  if (state.renderDb === state.appDb && state.publishedRevision === state.committedRevision) return;
   assertPublicationAllowedForRuntime(runtime);
   const oldDb = state.renderDb;
   const newDb = state.appDb;
+  const targetRevision = state.committedRevision;
   state.renderDb = newDb;
   publishSubscriptionsForRuntime(runtime, collectChangedRoots(runtime, oldDb, newDb));
+  state.publishedRevision = targetRevision;
 }
 
 /** @internal Return whether one runtime still has an unflushed db generation. */
 export function hasPendingDbFlushForRuntime(runtime: RuntimeScope): boolean {
   const state = getAppDbState(runtime);
-  return state.renderDb !== state.appDb;
+  return state.publishedRevision !== state.committedRevision;
 }
 
 function collectChangedRoots(
@@ -131,4 +167,24 @@ function collectChangedRoots(
     if (subscription) dirtyRoots.push(subscription);
   }
   return dirtyRoots;
+}
+
+function ownAppDbValue<T>(value: T): T {
+  try {
+    return deepFreezeOwnedValue(cloneStructuredValue(value), new WeakSet<object>());
+  } catch (error: unknown) {
+    throw new Error(
+      '[reflex] app-db ingress must be structured-cloneable so the runtime owns its state generation.',
+      { cause: error },
+    );
+  }
+}
+
+function deepFreezeOwnedValue<T>(value: T, seen: WeakSet<object>): T {
+  if (typeof value !== 'object' || value === null || seen.has(value)) return value;
+  seen.add(value);
+  for (const key of Object.keys(value)) {
+    deepFreezeOwnedValue((value as Record<string, unknown>)[key], seen);
+  }
+  return Object.freeze(value);
 }

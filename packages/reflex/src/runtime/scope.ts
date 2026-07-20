@@ -1,11 +1,13 @@
 const RUNTIME_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 let nextRuntimeId = 0;
+let nextRuntimeInstanceId = 0;
 const disposedRuntimeScopes = new WeakSet<RuntimeScope>();
 
 /** @internal Immutable identity used as the key for instance-owned state. */
 export interface RuntimeScope {
   readonly runtimeId: string;
+  readonly runtimeInstanceId: string;
   readonly runtimeName: string;
 }
 
@@ -16,6 +18,7 @@ export interface RuntimeIdentityOptions {
 
 export const defaultRuntimeScope: RuntimeScope = Object.freeze({
   runtimeId: 'default',
+  runtimeInstanceId: createGeneratedRuntimeInstanceId(),
   runtimeName: 'Default runtime',
 });
 
@@ -33,7 +36,11 @@ export function createRuntimeScope(options: RuntimeIdentityOptions = {}): Runtim
     throw new Error('[reflex] runtime name must be between 1 and 128 characters.');
   }
 
-  return Object.freeze({ runtimeId, runtimeName });
+  return Object.freeze({
+    runtimeId,
+    runtimeInstanceId: createGeneratedRuntimeInstanceId(),
+    runtimeName,
+  });
 }
 
 function createGeneratedRuntimeId(): string {
@@ -41,6 +48,17 @@ function createGeneratedRuntimeId(): string {
   if (typeof randomUUID === 'function') return `runtime-${randomUUID.call(globalThis.crypto)}`;
   nextRuntimeId++;
   return `runtime-${Date.now().toString(36)}-${nextRuntimeId.toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
+}
+
+function createGeneratedRuntimeInstanceId(): string {
+  const randomUUID = globalThis.crypto?.randomUUID;
+  if (typeof randomUUID === 'function') {
+    return `runtime-instance-${randomUUID.call(globalThis.crypto)}`;
+  }
+  nextRuntimeInstanceId++;
+  return `runtime-instance-${Date.now().toString(36)}-${nextRuntimeInstanceId.toString(36)}-${Math.random()
     .toString(36)
     .slice(2, 10)}`;
 }

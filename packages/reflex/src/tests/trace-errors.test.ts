@@ -145,38 +145,44 @@ describe('Error tracing', () => {
   });
 });
 
-describe('Queue purge reporting', () => {
+describe('Queue failure isolation', () => {
   beforeAll(() => {
     initAppDb({});
-    // Default handler rethrows, so the exception reaches the router and purges
+    // Default handler rethrows, so the exception reaches the router.
     regEventErrorHandler(defaultErrorHandler);
   });
 
-  it('loudly reports dropped events when an exception purges the queue', async () => {
-    regEvent('purge-boom', () => {
+  it('loudly reports the exception without dropping later accepted events', async () => {
+    const processed: number[] = [];
+    regEvent('isolated-boom', () => {
       throw new Error('kaboom');
     });
-    regEvent('innocent', () => {});
+    regEvent('innocent', (_coeffects, value: number) => {
+      processed.push(value);
+    });
 
-    dispatch(['purge-boom']);
+    dispatch(['isolated-boom']);
     dispatch(['innocent', 1]);
     dispatch(['innocent', 2]);
     await waitForScheduled();
 
-    const purgeLog = getTestLogCalls().error.find(
-      (call) => typeof call[0] === 'string' && call[0].includes('event queue purged'),
-    );
-    expect(purgeLog).toBeDefined();
-    expect(purgeLog![0]).toContain("2 pending event(s) dropped because 'purge-boom' threw");
-    expect(purgeLog![1]).toEqual(['innocent', 'innocent']);
+    expect(processed).toEqual([1, 2]);
+    expect(
+      getTestLogCalls().error.some((call) => call[0] === '[reflex] event processing exception:'),
+    ).toBe(true);
+    expect(
+      getTestLogCalls().error.some(
+        (call) => typeof call[0] === 'string' && call[0].includes('event queue purged'),
+      ),
+    ).toBe(false);
 
     // The queue recovers: subsequent dispatches are processed normally
-    let processed = false;
-    regEvent('after-purge', () => {
-      processed = true;
+    let recovered = false;
+    regEvent('after-failure', () => {
+      recovered = true;
     });
-    dispatch(['after-purge']);
+    dispatch(['after-failure']);
     await waitForScheduled();
-    expect(processed).toBe(true);
+    expect(recovered).toBe(true);
   });
 });

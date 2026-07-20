@@ -1,6 +1,7 @@
 import { mergeTraceForRuntime } from '../core/tracing';
 import { getAppDbForRuntime } from '../runtime/app-db';
 import { getHandlerForRuntime } from '../runtime/handlers';
+import { recordOperationErrorForRuntime } from '../runtime/operations';
 import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
 
 import type {
@@ -112,6 +113,7 @@ function traceError(runtime: RuntimeScope, value: unknown, event: EventVector): 
     ...(reflexError ? { direction: reflexError.data.direction } : {}),
     eventV: event,
   };
+  recordOperationErrorForRuntime(runtime, 'handler', originalError);
   mergeTraceForRuntime(runtime, { tags: { error: traceErrorTag } });
 }
 

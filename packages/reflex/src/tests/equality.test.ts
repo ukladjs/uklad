@@ -1,9 +1,14 @@
 import { shallowEqual } from '../core/equality';
-import { regSub } from '../subscriptions/registration';
-import { getOrCreateSubscription } from '../subscriptions/queries';
-import { flushSubscriptions, initAppDb, updateAppDb } from '../runtime/app-db';
-import { clearSubscriptionCache } from '../runtime/subscriptions/cache';
-import { getSubscriptionSnapshot, subscribeToSubscription } from '../runtime/subscriptions/engine';
+import {
+  clearSubscriptionCache,
+  flushSubscriptions,
+  getOrCreateSubscription,
+  getSubscriptionSnapshot,
+  initAppDb,
+  regSub,
+  subscribeToSubscription,
+  updateAppDb,
+} from './runtime-test-api';
 
 describe('shallowEqual', () => {
   it('should compare primitives with Object.is semantics', () => {

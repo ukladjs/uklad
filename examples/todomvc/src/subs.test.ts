@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { getHandler, initAppDb, type SubDepsHandler, type SubHandler } from '@flexsurfer/reflex';
+import type { HandlerKind, SubDepsHandler, SubHandler } from '@flexsurfer/reflex';
 
 import type { TodoDb } from './db';
 import { SUB_IDS } from './sub-ids';
+import { todoRuntime } from './runtime';
 
 import './subs';
+
+const getHandler = (kind: HandlerKind, id: string) => todoRuntime.getHandlers()[kind][id];
+const initAppDb = (db: TodoDb) => todoRuntime.restoreAppDb(db);
 
 describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
   describe('Root Subscriptions', () => {

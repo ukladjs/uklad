@@ -1,8 +1,9 @@
 import { useTheme } from '../contexts/ThemeContext';
 import { useCallback } from 'react';
-import { dispatch, useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@flexsurfer/reflex';
 import ConnectionStatus from './ConnectionStatus';
 import type { DevtoolsRuntimeSummary } from '../types/Runtime';
+import { dispatch } from '../runtime';
 
 export default function Header() {
     const { theme, setTheme } = useTheme();

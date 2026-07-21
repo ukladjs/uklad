@@ -1,12 +1,18 @@
-import { disableTracing, enableTracing, isTraceEnabled, withTrace } from '../core/tracing';
-import { regCoeffect } from '../events/coeffects';
-import { regEffect } from '../events/effects';
-import { regEvent } from '../events/registration';
-import { getAppDb, initAppDb } from '../runtime/app-db';
-import { clearHandlers } from '../runtime/reset';
-import { regSub } from '../subscriptions/registration';
-import { createReflexInspector } from '../inspector';
 import { waitForScheduled } from './test-utils';
+import {
+  clearHandlers,
+  createReflexInspector,
+  disableTracing,
+  enableTracing,
+  getAppDb,
+  initAppDb,
+  isTraceEnabled,
+  regCoeffect,
+  regEffect,
+  regEvent,
+  regSub,
+  withTrace,
+} from './runtime-test-api';
 
 import type { Trace } from '../core/tracing';
 
@@ -35,8 +41,8 @@ describe('Reflex inspector', () => {
     const snapshot = inspector.getSnapshot();
 
     expect(inspector.apiVersion).toBe(2);
-    expect(inspector.runtimeId).toBe('default');
-    expect(inspector.runtimeName).toBe('Default runtime');
+    expect(inspector.runtimeId).toBe('reflex-unit-test-runtime');
+    expect(inspector.runtimeName).toBe('Reflex unit-test runtime');
     expect(Object.isFrozen(inspector)).toBe(true);
     expect(snapshot.appDb).toBe(appDb);
     expect(snapshot.handlerKeys).toEqual({

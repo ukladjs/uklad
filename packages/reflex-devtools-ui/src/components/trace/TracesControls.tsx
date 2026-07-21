@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { dispatch } from '@flexsurfer/reflex';
+import { dispatch } from '../../runtime';
 import EventFilter from './TraceEventFilter';
 import TraceViewPanel from './TraceViewPanel';
 import DispatchButton from '../ui/DispatchButton';

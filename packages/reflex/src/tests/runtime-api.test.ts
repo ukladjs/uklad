@@ -1,9 +1,5 @@
 import type { ReflexContracts } from '../contracts';
-import { regEvent } from '../events/registration';
-import { dispatchSync } from '../events/router';
-import { getAppDb, initAppDb } from '../runtime/app-db';
-import { clearHandlers } from '../runtime/reset';
-import { createReflexRuntime, defaultRuntime, type RuntimeEventHandler } from '../runtime/runtime';
+import { createReflexRuntime, type RuntimeEventHandler } from '../runtime/runtime';
 import { waitForScheduled } from './test-utils';
 
 interface CounterContracts extends ReflexContracts {
@@ -32,6 +28,19 @@ function createCounterRuntime(runtimeId: string, count: number) {
 }
 
 describe('instance-scoped runtime', () => {
+  it('does not expose its kernel or direct kernel state on the runtime object', () => {
+    const runtime = createCounterRuntime('private-kernel', 0);
+
+    const publicRuntime = runtime as unknown as Record<string, unknown>;
+    expect(Object.hasOwn(publicRuntime, 'kernel')).toBe(false);
+    expect(publicRuntime.kernel).toBeUndefined();
+    expect(publicRuntime.appDb).toBeUndefined();
+    expect(publicRuntime.handlers).toBeUndefined();
+    expect(publicRuntime.extensions).toBeUndefined();
+
+    runtime.dispose();
+  });
+
   it('isolates db heads, handlers, queues, subscriptions, and inspectors', async () => {
     const first = createCounterRuntime('first', 1);
     const second = createCounterRuntime('second', 10);
@@ -200,7 +209,7 @@ describe('instance-scoped runtime', () => {
     runtime.dispose();
   });
 
-  it('fails loudly on unknown ids through the instance API while the facade stays lenient', () => {
+  it('fails loudly on unknown ids through the instance API', () => {
     const runtime = createCounterRuntime('fail-loud', 0);
 
     expect(() => runtime.dispatch(['missing-event'] as never)).toThrow(
@@ -220,11 +229,6 @@ describe('instance-scoped runtime', () => {
     );
     expect(runtime.getAppDb().count).toBe(0);
     runtime.dispose();
-
-    // The legacy root functions keep the 0.x console-error behavior.
-    clearTestLogCalls();
-    dispatchSync(['legacy-missing-event'] as never);
-    expectLogCall('error', '[reflex] no event handler registered for:', 'legacy-missing-event');
   });
 
   it('rejects non-string runtime identities at the JavaScript boundary', () => {
@@ -340,23 +344,6 @@ describe('instance-scoped runtime', () => {
     second.dispose();
   });
 
-  it('keeps the legacy functions and defaultRuntime on the same owner', () => {
-    clearHandlers();
-    initAppDb({ count: 0 });
-    regEvent('legacy/increment', ({ draftDb }) => {
-      draftDb.count += 1;
-    });
-
-    defaultRuntime.dispatchSync(['legacy/increment']);
-    expect(getAppDb()).toEqual({ count: 1 });
-
-    defaultRuntime.regEvent('legacy/increment-again', ({ draftDb }) => {
-      draftDb.count += 1;
-    });
-    dispatchSync(['legacy/increment-again']);
-    expect(defaultRuntime.getAppDb()).toEqual({ count: 2 });
-  });
-
   it('terminally disposes an explicit runtime', () => {
     const runtime = createCounterRuntime('disposed', 0);
     const inspector = runtime.createInspector();
@@ -374,5 +361,20 @@ describe('instance-scoped runtime', () => {
     expect(() => inspector.dispatch(['increment', 1])).toThrow(
       "Runtime 'disposed' has been disposed",
     );
+  });
+
+  it('disposing one runtime leaves other runtime state and inspectors usable', () => {
+    const disposed = createCounterRuntime('dispose-first', 1);
+    const surviving = createCounterRuntime('dispose-second', 10);
+    const survivingInspector = surviving.createInspector();
+
+    disposed.dispose();
+
+    expect(() => disposed.getAppDb()).toThrow("Runtime 'dispose-first' has been disposed");
+    surviving.dispatchSync(['increment', 5]);
+    expect(surviving.getAppDb()).toEqual({ count: 15, label: 'dispose-second' });
+    expect(survivingInspector.getSnapshot().appDb).toEqual({ count: 15, label: 'dispose-second' });
+
+    surviving.dispose();
   });
 });

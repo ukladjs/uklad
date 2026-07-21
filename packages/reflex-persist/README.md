@@ -15,10 +15,15 @@ The package requires `@flexsurfer/reflex@^0.1.27` as a peer dependency.
 ## Usage
 
 ```ts
-import { defaultRuntime } from '@flexsurfer/reflex';
+import { createReflexRuntime } from '@flexsurfer/reflex';
 import { localStorageAdapter, persist } from '@flexsurfer/reflex-persist';
 
-const persistence = persist(defaultRuntime, {
+const runtime = createReflexRuntime({
+  initialDb: { todos: [], settings: {} },
+  runtimeId: 'my-app',
+});
+
+const persistence = persist(runtime, {
   storage: localStorageAdapter(),
   keys: ['todos', 'settings'],
 });
@@ -28,14 +33,15 @@ const persistence = persist(defaultRuntime, {
 persistence.hydrate();
 ```
 
-The runtime is explicit. Facade applications pass `defaultRuntime`; instance applications pass their `createReflexRuntime(...)` result. Attach only once per runtime. A second attachment and persistence protocol collisions fail loudly.
+The runtime is explicit. Attach only once per runtime; a second attachment and
+persistence protocol collisions fail loudly.
 
 `hydrate()` performs one attachment-scoped attempt. Repeated calls are idempotent no-ops. Status is available at `['reflex-persist']`:
 
 ```ts
 import { PERSIST_IDS } from '@flexsurfer/reflex-persist';
 
-const status = defaultRuntime.getSubscriptionValue([PERSIST_IDS.STATUS]);
+const status = runtime.getSubscriptionValue([PERSIST_IDS.STATUS]);
 // 'idle' | 'hydrating' | 'hydrated' | 'failed'
 
 await persistence.whenHydrated(); // rejects when hydration failed or was disposed
@@ -56,7 +62,7 @@ The prefix defaults to `reflex`, and the configured version defaults to `1`. Roo
 Use `prefix` to isolate applications or runtimes that share a storage backend:
 
 ```ts
-persist(defaultRuntime, {
+persist(runtime, {
   storage: localStorageAdapter(),
   prefix: 'my-app',
   keys: ['settings'],
@@ -94,7 +100,7 @@ persist(runtime, {
 Migrations receive serialized data before the current `deserialize` transform:
 
 ```ts
-persist(defaultRuntime, {
+persist(runtime, {
   storage: localStorageAdapter(),
   keys: ['todos'],
   version: 2,
@@ -109,7 +115,7 @@ Envelopes and positive integer versions are validated. Future versions are rejec
 Valid entries may still overlay their roots when another entry fails, but status becomes `failed`, all normal writes remain closed, and no migrations are rewritten. `onError` receives only sanitized key/phase/code metadata—never stored values or user-thrown error messages:
 
 ```ts
-const persistence = persist(defaultRuntime, {
+const persistence = persist(runtime, {
   storage: localStorageAdapter(),
   keys: ['todos'],
   onError: ({ key, phase, code }) => {

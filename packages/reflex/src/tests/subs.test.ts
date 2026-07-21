@@ -1,14 +1,15 @@
-import { regSub } from '../subscriptions/registration';
-import { getOrCreateSubscription, getSubscriptionValue } from '../subscriptions/queries';
-import { initAppDb } from '../runtime/app-db';
-import {
-  hasCachedSubscription,
-  clearSubscriptionCache,
-  getSubConfig,
-  sweepProvisionalSubscriptions,
-} from '../runtime/subscriptions/cache';
-import { subscribeToSubscription } from '../runtime/subscriptions/engine';
 import { hasNonSerializableSubParam } from '../runtime/subscriptions/keys';
+import {
+  clearSubscriptionCache,
+  getOrCreateSubscription,
+  getSubConfig,
+  getSubscriptionValue,
+  hasCachedSubscription,
+  initAppDb,
+  regSub,
+  subscribeToSubscription,
+  sweepProvisionalSubscriptions,
+} from './runtime-test-api';
 import { waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('Subscription registry lifecycle', () => {

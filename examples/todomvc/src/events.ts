@@ -1,9 +1,10 @@
-import { defaultRuntime, NOW } from '@flexsurfer/reflex';
+import { NOW } from '@flexsurfer/reflex';
 
 import type { Showing, Todo, TodoId, Todos } from './db';
 import { EVENT_IDS } from './event-ids';
+import { todoRuntime } from './runtime';
 
-const disposeEvents = defaultRuntime.registerModule((scope) => {
+const disposeEvents = todoRuntime.registerModule((scope) => {
   scope.regEvent(
     EVENT_IDS.ADD_TODO,
     ({ draftDb, now }, title: string) => {

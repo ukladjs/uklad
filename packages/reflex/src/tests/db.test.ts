@@ -1,5 +1,5 @@
 import { produce } from 'immer';
-import { initAppDb, getAppDb, updateAppDb as commitAppDb } from '../runtime/app-db';
+import { initAppDb, getAppDb, updateAppDb as commitAppDb } from './runtime-test-api';
 interface TestAppState {
   counter: number;
   todos: Array<{

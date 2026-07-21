@@ -1,14 +1,16 @@
 import ReactDOM from 'react-dom/client';
-import { dispatch } from '@flexsurfer/reflex';
+import { ReflexProvider } from '@flexsurfer/reflex';
 import App from './App';
 import './index.css';
-import './db';
 import './subs';
 import './events';
 import './effects';
+import { devtoolsRuntime, dispatch } from './runtime';
 
 dispatch(['init-socket']);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-    <App />
-); 
+    <ReflexProvider runtime={devtoolsRuntime}>
+        <App />
+    </ReflexProvider>
+);

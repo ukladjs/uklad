@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-import { dispatch, useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@flexsurfer/reflex';
 
 import type { Showing, Todo } from './db';
 import { EVENT_IDS } from './event-ids';
 import { SUB_IDS } from './sub-ids';
+import { dispatch } from './runtime';
 
 interface TodoInputProps {
   title?: string;

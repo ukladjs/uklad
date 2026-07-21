@@ -5,27 +5,26 @@ const reflex = require('@flexsurfer/reflex');
 const reflexReact = require('@flexsurfer/reflex/react');
 const reflexVanilla = require('@flexsurfer/reflex/vanilla');
 
-assert.strictEqual(typeof reflex.dispatch, 'function');
-assert.strictEqual(typeof reflex.regEvent, 'function');
+assert.strictEqual(typeof reflex.createReflexRuntime, 'function');
 assert.strictEqual(typeof reflex.useSubscription, 'function');
-assert.strictEqual(reflex.defaultRuntime, reflexVanilla.defaultRuntime);
+assert.strictEqual(reflex.defaultRuntime, undefined);
 assert.strictEqual(reflex.ReflexProvider, reflexReact.ReflexProvider);
 
-reflex.initAppDb({ count: 0 });
-reflex.regEvent('inc', ({ draftDb }) => {
+const runtime = reflex.createReflexRuntime({ initialDb: { count: 0 } });
+runtime.regEvent('inc', ({ draftDb }) => {
   draftDb.count += 1;
 });
-reflex.regSub('count');
-reflex.regSub(
+runtime.regSub('count');
+runtime.regSub(
   'doubled',
   (count) => count * 2,
   () => [['count']],
 );
 
-reflex.dispatchSync(['inc']);
+runtime.dispatchSync(['inc']);
 
-assert.strictEqual(reflex.getAppDb().count, 1);
-assert.strictEqual(reflex.getSubscriptionValue(['count']), 1);
-assert.strictEqual(reflex.getSubscriptionValue(['doubled']), 2);
+assert.strictEqual(runtime.getAppDb().count, 1);
+assert.strictEqual(runtime.getSubscriptionValue(['count']), 1);
+assert.strictEqual(runtime.getSubscriptionValue(['doubled']), 2);
 
-console.log('[legacy] CommonJS runtime smoke passed');
+console.log('[explicit] CommonJS runtime smoke passed');

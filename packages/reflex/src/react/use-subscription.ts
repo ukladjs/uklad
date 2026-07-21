@@ -16,7 +16,7 @@ import type { Id, SubParams, SubPayloads, SubResult, SubscribeVector, SubVector 
  * Subscribe a React component to the nearest Reflex runtime.
  *
  * A changed serialized vector or provider runtime rebinds the external store.
- * Without a provider this reads the compatibility default runtime.
+ * A provider is required so every hook reads from an explicit runtime owner.
  */
 export function useSubscription<K extends keyof SubPayloads & Id>(
   subVector: [K, ...SubParams<K>],

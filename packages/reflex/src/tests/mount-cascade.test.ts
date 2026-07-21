@@ -4,13 +4,16 @@
  * re-running them once per mount. By-id row subs over a shared sorted list is
  * the recommended pattern, so this is the hot path.
  */
-import { regEvent } from '../events/registration';
-import { dispatch } from '../events/router';
-import { initAppDb } from '../runtime/app-db';
-import { regSub } from '../subscriptions/registration';
-import { getOrCreateSubscription } from '../subscriptions/queries';
-import { clearSubscriptionCache } from '../runtime/subscriptions/cache';
-import { getSubscriptionSnapshot, subscribeToSubscription } from '../runtime/subscriptions/engine';
+import {
+  clearSubscriptionCache,
+  dispatch,
+  getOrCreateSubscription,
+  getSubscriptionSnapshot,
+  initAppDb,
+  regEvent,
+  regSub,
+  subscribeToSubscription,
+} from './runtime-test-api';
 import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('Mount recompute cascades', () => {

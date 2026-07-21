@@ -1,12 +1,12 @@
-import { defaultRuntime } from '@flexsurfer/reflex';
 import { localStorageAdapter, persist } from '@flexsurfer/reflex-persist';
 
 import type { Todo, TodoId, Todos } from './db';
+import { todoRuntime } from './runtime';
 
 // Hydration is an event and the global writer contributes a post-commit effect
 // to whichever domain event changed `todos`; event handlers never mention
 // storage. main.tsx hydrates synchronously before the first render.
-export const persistence = persist(defaultRuntime, {
+export const persistence = persist(todoRuntime, {
   storage: localStorageAdapter(),
   keys: [
     {

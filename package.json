@@ -4,7 +4,7 @@
   "license": "MIT",
   "description": "Reflex Monorepo",
   "private": true,
-  "packageManager": "pnpm@11.13.1",
+  "packageManager": "pnpm@11.13.0",
   "engines": {
     "node": "^22.18.0 || >=24.11.0"
   },

@@ -1,13 +1,11 @@
 import isEqual from 'fast-deep-equal';
 
 import type { EqualityCheckFn } from '../types';
-import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
+import { type RuntimeKernel } from '../runtime/kernel';
 
-const equalityChecks = new WeakMap<RuntimeScope, EqualityCheckFn>();
 let defaultEqualityCheck: EqualityCheckFn = isEqual;
-
-function getRuntimeEqualityCheck(runtime: RuntimeScope): EqualityCheckFn {
-  return equalityChecks.get(runtime) ?? defaultEqualityCheck;
+function getRuntimeEqualityCheck(runtime: RuntimeKernel): EqualityCheckFn {
+  return runtime.equalityCheck ?? defaultEqualityCheck;
 }
 
 /**
@@ -44,26 +42,16 @@ export const shallowEqual: EqualityCheckFn = (left: any, right: any): boolean =>
   return true;
 };
 
-/** Replace the equality function used by subscriptions without a local override. */
-export function setGlobalEqualityCheck(equalityCheck: EqualityCheckFn): void {
-  setGlobalEqualityCheckForRuntime(defaultRuntimeScope, equalityCheck);
-}
-
 /** @internal Replace the default equality function for one runtime. */
-export function setGlobalEqualityCheckForRuntime(
-  runtime: RuntimeScope,
+export function setGlobalEqualityCheckForKernel(
+  runtime: RuntimeKernel,
   equalityCheck: EqualityCheckFn,
 ): void {
-  equalityChecks.set(runtime, equalityCheck);
-}
-
-/** Return the equality function used by subscriptions without a local override. */
-export function getGlobalEqualityCheck(): EqualityCheckFn {
-  return getGlobalEqualityCheckForRuntime(defaultRuntimeScope);
+  runtime.equalityCheck = equalityCheck;
 }
 
 /** @internal Return the default equality function for one runtime. */
-export function getGlobalEqualityCheckForRuntime(runtime: RuntimeScope): EqualityCheckFn {
+export function getGlobalEqualityCheckForKernel(runtime: RuntimeKernel): EqualityCheckFn {
   return getRuntimeEqualityCheck(runtime);
 }
 
@@ -73,7 +61,4 @@ export function replaceDefaultEqualityCheck(
   next: EqualityCheckFn,
 ): void {
   if (defaultEqualityCheck === previous) defaultEqualityCheck = next;
-  if (equalityChecks.get(defaultRuntimeScope) === previous) {
-    equalityChecks.set(defaultRuntimeScope, next);
-  }
 }

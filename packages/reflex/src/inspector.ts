@@ -1,16 +1,21 @@
 import {
-  acquireTracingForRuntime,
-  registerTraceCallbackForRuntime,
-  removeTraceCallbackForRuntime,
+  acquireTracingForKernel,
+  registerTraceCallbackForKernel,
+  removeTraceCallbackForKernel,
 } from './core/tracing';
 import { NOW, RANDOM } from './events/coeffects';
 import { DISPATCH, DISPATCH_LATER } from './events/effects';
-import { dispatchForRuntime } from './events/router';
-import { getAppDbForRuntime } from './runtime/app-db';
-import { getHandlersForRuntime } from './runtime/handlers';
-import { defaultRuntimeScope, isRuntimeDisposed, type RuntimeScope } from './runtime/scope';
-import { getSubscriptionDiagnosticsForRuntime } from './runtime/subscriptions/cache';
-import { getSubscriptionValueForRuntime } from './subscriptions/queries';
+import { dispatchForKernel } from './events/router';
+import { getAppDbForKernel } from './runtime/app-db';
+import { getHandlersForKernel } from './runtime/handlers';
+import {
+  createRuntimeStateKey,
+  getOrCreateRuntimeState,
+  isRuntimeDisposed,
+  type RuntimeKernel,
+} from './runtime/kernel';
+import { getSubscriptionDiagnosticsForKernel } from './runtime/subscriptions/cache';
+import { getSubscriptionValueForKernel } from './subscriptions/queries';
 
 import type { TraceCallback } from './core/tracing';
 import type { SubscriptionDiagnostic } from './runtime/subscriptions/engine';
@@ -50,23 +55,18 @@ export interface ReflexInspector {
   evaluateSubscription(query: SubVector): unknown;
 }
 
-const nextTraceSubscriptionIds = new WeakMap<RuntimeScope, number>();
+const NEXT_TRACE_SUBSCRIPTION_ID = createRuntimeStateKey<{ value: number }>(
+  'reflex.inspector-trace-subscription-id',
+);
 
-function nextTraceSubscriptionId(runtime: RuntimeScope): number {
-  const next = (nextTraceSubscriptionIds.get(runtime) ?? 0) + 1;
-  nextTraceSubscriptionIds.set(runtime, next);
-  return next;
+function nextTraceSubscriptionId(runtime: RuntimeKernel): number {
+  return ++getOrCreateRuntimeState(runtime, NEXT_TRACE_SUBSCRIPTION_ID, () => ({ value: 0 })).value;
 }
 
 // Devtools is an intentionally dynamic boundary. App-level payload-map
 // augmentation must not narrow vectors arriving from an external inspector.
-/** Create an inspection adapter bound to this exact Reflex module instance. */
-export function createReflexInspector(): ReflexInspector {
-  return createReflexInspectorForRuntime(defaultRuntimeScope);
-}
-
 /** @internal Create an inspection adapter bound to one explicit runtime. */
-export function createReflexInspectorForRuntime(runtime: RuntimeScope): ReflexInspector {
+export function createReflexInspectorForKernel(runtime: RuntimeKernel): ReflexInspector {
   const assertRuntimeActive = () => {
     if (isRuntimeDisposed(runtime)) {
       throw new Error(`[reflex] Runtime '${runtime.runtimeId}' has been disposed.`);
@@ -79,17 +79,17 @@ export function createReflexInspectorForRuntime(runtime: RuntimeScope): ReflexIn
     getSnapshot(): ReflexInspectorSnapshot {
       assertRuntimeActive();
       return {
-        appDb: getAppDbForRuntime(runtime),
+        appDb: getAppDbForKernel(runtime),
         handlerKeys: getHandlerKeys(runtime),
-        subscriptions: getSubscriptionDiagnosticsForRuntime(runtime),
+        subscriptions: getSubscriptionDiagnosticsForKernel(runtime),
       };
     },
     subscribeTraces(callback: TraceCallback): () => void {
       assertRuntimeActive();
       const key = `reflex-inspector-${nextTraceSubscriptionId(runtime)}`;
-      const releaseTracing = acquireTracingForRuntime(runtime);
+      const releaseTracing = acquireTracingForKernel(runtime);
       try {
-        registerTraceCallbackForRuntime(runtime, key, callback);
+        registerTraceCallbackForKernel(runtime, key, callback);
       } catch (error) {
         releaseTracing();
         throw error;
@@ -99,25 +99,25 @@ export function createReflexInspectorForRuntime(runtime: RuntimeScope): ReflexIn
       return () => {
         if (!subscribed) return;
         subscribed = false;
-        removeTraceCallbackForRuntime(runtime, key);
+        removeTraceCallbackForKernel(runtime, key);
         releaseTracing();
       };
     },
     dispatch(event: EventVector): void {
       assertRuntimeActive();
-      dispatchForRuntime(runtime, event as never);
+      dispatchForKernel(runtime, event as never);
     },
     evaluateSubscription(query: SubVector): unknown {
       assertRuntimeActive();
-      return getSubscriptionValueForRuntime(runtime, query);
+      return getSubscriptionValueForKernel(runtime, query);
     },
   };
 
   return Object.freeze(inspector);
 }
 
-function getHandlerKeys(runtime: RuntimeScope): ReflexHandlerKeys {
-  const handlers = getHandlersForRuntime(runtime);
+function getHandlerKeys(runtime: RuntimeKernel): ReflexHandlerKeys {
+  const handlers = getHandlersForKernel(runtime);
   return {
     event: Object.keys(handlers.event),
     fx: Object.keys(handlers.fx).filter((id) => id !== DISPATCH && id !== DISPATCH_LATER),

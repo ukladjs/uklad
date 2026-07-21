@@ -255,18 +255,18 @@ test('uses only the injected inspector and returns idempotent cleanup', async ()
   let cleanup;
 
   try {
-    assert.throws(() => enableDevtools({ serverUrl: 'localhost:4000' }), /createReflexInspector/);
+    assert.throws(() => enableDevtools({ serverUrl: 'localhost:4000' }), /runtime\.createInspector/);
     assert.throws(
       () => enableDevtools({ ...fake.inspector, apiVersion: 1 }),
-      /createReflexInspector/,
+      /runtime\.createInspector/,
     );
     assert.throws(
       () => enableDevtools({ ...fake.inspector, runtimeName: '' }),
-      /createReflexInspector/,
+      /runtime\.createInspector/,
     );
     assert.throws(
       () => enableDevtools({ ...fake.inspector, runtimeId: ' runtime-test' }),
-      /createReflexInspector/,
+      /runtime\.createInspector/,
     );
     assert.throws(
       () => enableDevtools(fake.inspector, {

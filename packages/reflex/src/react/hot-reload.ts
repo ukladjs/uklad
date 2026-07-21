@@ -2,12 +2,7 @@ import { createElement, Fragment, useCallback, useSyncExternalStore } from 'reac
 import type { ReactElement, ReactNode } from 'react';
 
 import { consoleLog } from '../core/logging';
-import {
-  clearRuntimeSubsForHotReload,
-  defaultRuntime,
-  type ReflexRuntime,
-} from '../runtime/runtime';
-import { clearSubsForHotReload } from '../runtime/subscriptions/cache';
+import { clearRuntimeSubsForHotReload, type ReflexRuntime } from '../runtime/runtime';
 import { useReflexRuntime } from './context';
 
 import type { Id } from '../types';
@@ -30,12 +25,8 @@ function getHotReloadState(runtime: ReflexRuntime<any>): HotReloadState {
   return state;
 }
 
-/** Register a compatibility-runtime callback and return an unregister function. */
-export function registerHotReloadCallback(callback: HotReloadCallback): () => void {
-  return registerRuntimeHotReloadCallback(defaultRuntime, callback);
-}
-
-function registerRuntimeHotReloadCallback(
+/** Register a callback for one explicit runtime and return an unregister function. */
+export function registerHotReloadCallback(
   runtime: ReflexRuntime<any>,
   callback: HotReloadCallback,
 ): () => void {
@@ -44,12 +35,8 @@ function registerRuntimeHotReloadCallback(
   return () => callbacks.delete(callback);
 }
 
-/** Invoke callbacks for the compatibility runtime. */
-export function triggerHotReload(): void {
-  triggerRuntimeHotReload(defaultRuntime);
-}
-
-function triggerRuntimeHotReload(runtime: ReflexRuntime<any>): void {
+/** Invoke callbacks for one explicit runtime. */
+export function triggerHotReload(runtime: ReflexRuntime<any>): void {
   consoleLog('log', '[reflex] Triggering hot reload callbacks');
   const state = getHotReloadState(runtime);
   state.version++;
@@ -62,9 +49,9 @@ function triggerRuntimeHotReload(runtime: ReflexRuntime<any>): void {
   }
 }
 
-/** Remove compatibility-runtime callbacks. */
-export function clearHotReloadCallbacks(): void {
-  getHotReloadState(defaultRuntime).callbacks.clear();
+/** Remove callbacks for one explicit runtime. */
+export function clearHotReloadCallbacks(runtime: ReflexRuntime<any>): void {
+  getHotReloadState(runtime).callbacks.clear();
 }
 
 /** Re-render whenever the nearest runtime's subscription definitions reload. */
@@ -81,7 +68,7 @@ export function useHotReloadKey(): string {
 function useHotReloadVersion(): readonly [ReflexRuntime<any>, number] {
   const runtime = useReflexRuntime();
   const subscribe = useCallback(
-    (callback: HotReloadCallback) => registerRuntimeHotReloadCallback(runtime, callback),
+    (callback: HotReloadCallback) => registerHotReloadCallback(runtime, callback),
     [runtime],
   );
   const getSnapshot = useCallback(() => getHotReloadState(runtime).version, [runtime]);
@@ -94,20 +81,19 @@ function useHotReloadVersion(): readonly [ReflexRuntime<any>, number] {
  * module's subscription IDs to preserve unrelated definitions.
  */
 export function setupSubsHotReload(
-  runtime: ReflexRuntime<any> = defaultRuntime,
+  runtime: ReflexRuntime<any>,
   subscriptionIds?: readonly Id[],
 ): {
   dispose: () => void;
   accept: (newModule?: unknown) => void;
 } {
   const dispose = () => {
-    if (runtime === defaultRuntime) clearSubsForHotReload(subscriptionIds);
-    else clearRuntimeSubsForHotReload(runtime, subscriptionIds);
+    clearRuntimeSubsForHotReload(runtime, subscriptionIds);
   };
   const accept = (newModule?: unknown) => {
     if (newModule) {
       consoleLog('log', '[reflex] Hot reloading subs module');
-      triggerRuntimeHotReload(runtime);
+      triggerHotReload(runtime);
     }
   };
   return { dispose, accept };

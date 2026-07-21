@@ -1,7 +1,8 @@
-import { initAppDb } from "@flexsurfer/reflex";
 import { loadSettings } from "./utils/settingsStorage";
 
-initAppDb({
+/** Create fresh dashboard state for its explicitly owned Reflex runtime. */
+export function createDevtoolsDb() {
+  return {
     db: "",
     traces: [],
     isConnected: false,
@@ -16,4 +17,5 @@ initAppDb({
     handlerKeys: null,
     handlerUsage: {},
     dispatchModalOpenState: {}
-});
+  };
+}

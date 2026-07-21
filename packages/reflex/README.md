@@ -125,28 +125,9 @@ Each runtime owns its database, event queue, handlers, subscription graph,
 tracing, and inspector. Create one per browser root, SSR request, embedded
 widget, story, test, or agent sandbox whenever those worlds must be isolated.
 
-Existing applications can upgrade without migrating immediately. The package
-root remains a compatibility facade over one `defaultRuntime`, and React hooks
-fall back to it when no provider is present:
-
-```tsx
-import { dispatch, initAppDb, regEvent, regSub, useSubscription } from '@flexsurfer/reflex';
-
-initAppDb({ counter: 0 });
-regEvent('counter/increment', ({ draftDb }) => {
-  draftDb.counter += 1;
-});
-regSub('counter');
-
-function Counter() {
-  const count = useSubscription(['counter']);
-  return <button onClick={() => dispatch(['counter/increment'])}>Count: {count}</button>;
-}
-```
-
-See [Migrating from 0.x to 1.0](./docs/migration-0.x-to-1.0.md) and
-[Stability and versioning](./docs/stability-and-versioning.md) for the complete
-compatibility contract.
+There is no package-global runtime. React hooks require a `ReflexProvider`, and
+all registration, dispatch, inspection, persistence, and lifecycle work goes
+through the runtime your application explicitly created.
 
 ### Subscription runtime
 

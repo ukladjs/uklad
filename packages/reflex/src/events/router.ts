@@ -2,14 +2,14 @@ import { IS_DEV } from '../core/environment';
 import { consoleLog } from '../core/logging';
 import { scheduleAfterRender, scheduleNextTick } from '../core/scheduling';
 import { isEventVector } from '../core/validation';
-import { flushSubscriptionsForRuntime } from '../runtime/app-db';
-import { defaultRuntimeScope, isRuntimeDisposed, type RuntimeScope } from '../runtime/scope';
-import { assertPublicationAllowedForRuntime } from '../runtime/subscriptions/engine';
-import { registerBuiltInEffectsForRuntime } from './effects';
+import { flushSubscriptionsForKernel } from '../runtime/app-db';
+import { isRuntimeDisposed, type RuntimeKernel } from '../runtime/kernel';
+import { assertPublicationAllowedForKernel } from '../runtime/subscriptions/engine';
+import { registerBuiltInEffectsForKernel } from './effects';
 import {
-  getHandlingEventIdForRuntime,
-  getRunningHandlerEventIdForRuntime,
-  handleForRuntime,
+  getHandlingEventIdForKernel,
+  getRunningHandlerEventIdForKernel,
+  handleForKernel,
 } from './pipeline';
 
 import type { DispatchVector, EventVector } from '../types';
@@ -225,24 +225,12 @@ export class EventQueue {
   }
 }
 
-const eventQueues = new WeakMap<RuntimeScope, EventQueue>();
-
-function getEventQueue(runtime: RuntimeScope): EventQueue {
-  let eventQueue = eventQueues.get(runtime);
-  if (!eventQueue) {
-    eventQueue = new EventQueue((event) => handleForRuntime(runtime, event));
-    eventQueues.set(runtime, eventQueue);
-  }
-  return eventQueue;
-}
-
-/** Dispatch an event asynchronously. */
-export function dispatch(event: DispatchVector): void {
-  dispatchForRuntime(defaultRuntimeScope, event);
+function getEventQueue(runtime: RuntimeKernel): EventQueue {
+  return (runtime.eventQueue ??= new EventQueue((event) => handleForKernel(runtime, event)));
 }
 
 /** @internal Dispatch an event asynchronously in one runtime. */
-export function dispatchForRuntime(runtime: RuntimeScope, event: DispatchVector): void {
+export function dispatchForKernel(runtime: RuntimeKernel, event: DispatchVector): void {
   if (isRuntimeDisposed(runtime)) return;
   if (!isEventVector(event)) {
     consoleLog('error', '[reflex] invalid dispatch event vector.');
@@ -250,7 +238,7 @@ export function dispatchForRuntime(runtime: RuntimeScope, event: DispatchVector)
   }
 
   if (IS_DEV) {
-    const handlerId = getRunningHandlerEventIdForRuntime(runtime);
+    const handlerId = getRunningHandlerEventIdForKernel(runtime);
     if (handlerId !== null) {
       consoleLog(
         'warn',
@@ -262,18 +250,8 @@ export function dispatchForRuntime(runtime: RuntimeScope, event: DispatchVector)
   getEventQueue(runtime).push(event);
 }
 
-/**
- * Dispatch an event and publish subscription updates before returning.
- *
- * This must not be called from an event handler. Return a `dispatch` effect
- * from the handler instead.
- */
-export function dispatchSync(event: DispatchVector): void {
-  dispatchSyncForRuntime(defaultRuntimeScope, event);
-}
-
 /** @internal Dispatch and publish synchronously in one runtime. */
-export function dispatchSyncForRuntime(runtime: RuntimeScope, event: DispatchVector): void {
+export function dispatchSyncForKernel(runtime: RuntimeKernel, event: DispatchVector): void {
   if (isRuntimeDisposed(runtime)) {
     throw new Error(`[reflex] Runtime '${runtime.runtimeId}' has been disposed.`);
   }
@@ -282,40 +260,40 @@ export function dispatchSyncForRuntime(runtime: RuntimeScope, event: DispatchVec
     return;
   }
 
-  const handlingId = getHandlingEventIdForRuntime(runtime);
+  const handlingId = getHandlingEventIdForKernel(runtime);
   if (handlingId !== null) {
     const message = `[reflex] dispatchSync called for '${String(event[0])}' while event '${handlingId}' is being handled. dispatchSync must not be called from an event handler; return a ['dispatch', ...] effect instead.`;
     consoleLog('error', message);
     throw new Error(message);
   }
 
-  assertPublicationAllowedForRuntime(runtime);
-  handleForRuntime(runtime, event);
-  flushSubscriptionsForRuntime(runtime);
+  assertPublicationAllowedForKernel(runtime);
+  handleForKernel(runtime, event);
+  flushSubscriptionsForKernel(runtime);
 }
 
 /** @internal Wait for one runtime's accepted queue work and publish its db head. */
-export async function flushRuntime(runtime: RuntimeScope): Promise<void> {
+export async function flushRuntime(runtime: RuntimeKernel): Promise<void> {
   if (isRuntimeDisposed(runtime)) {
     throw new Error(`[reflex] Runtime '${runtime.runtimeId}' has been disposed.`);
   }
   await getEventQueue(runtime).whenIdle();
-  flushSubscriptionsForRuntime(runtime);
+  flushSubscriptionsForKernel(runtime);
 }
 
 /** @internal Return whether one runtime's event queue is idle. */
-export function isEventQueueIdleForRuntime(runtime: RuntimeScope): boolean {
+export function isEventQueueIdleForKernel(runtime: RuntimeKernel): boolean {
   return getEventQueue(runtime).getState() === 'idle';
 }
 
 /** @internal Stop one runtime's event queue. */
-export function disposeEventQueueForRuntime(runtime: RuntimeScope): void {
+export function disposeEventQueueForKernel(runtime: RuntimeKernel): void {
   getEventQueue(runtime).dispose();
 }
 
 /** @internal Install dispatch-dependent framework effects in one runtime. */
-export function initializeEventRouterForRuntime(runtime: RuntimeScope): void {
-  registerBuiltInEffectsForRuntime(runtime, (event) => dispatchForRuntime(runtime, event));
+export function initializeEventRouterForKernel(runtime: RuntimeKernel): void {
+  registerBuiltInEffectsForKernel(runtime, (event) => dispatchForKernel(runtime, event));
 }
 
 function getEventScheduler(event: EventVector): ScheduleFunction | undefined {
@@ -328,7 +306,3 @@ function getEventScheduler(event: EventVector): ScheduleFunction | undefined {
   }
   return undefined;
 }
-
-// Compatibility APIs can import this module without constructing defaultRuntime.
-// Install dispatch-dependent effects for the default scope after dispatch exists.
-initializeEventRouterForRuntime(defaultRuntimeScope);

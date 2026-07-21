@@ -59,21 +59,21 @@ runtime.registerModule(feature);
 ```
 
 - [x] **Runtime RFC first.** Define ownership and lifecycle for the db heads, event queue, handler registries, event metadata, global interceptors, subscription engine/cache, tracing, schedulers, built-ins, reset behavior, and DevTools inspector. Specify compatibility and migration constraints before moving code.
-- [x] `createReflexRuntime` + `ReflexProvider`; today's global API preserved as a compatibility facade over a default runtime so existing apps, templates, skills, and `llms.txt` keep working.
+- [x] `createReflexRuntime` + `ReflexProvider`; applications explicitly own their runtime and no package-global facade is created.
 - [x] `@flexsurfer/reflex/vanilla` and `/react` entrypoints.
 - [x] Store-local typed contracts as an alternative to global module augmentation.
 - [x] Public `watchSubscription` for non-React consumers (services, headless logic).
 - [x] Scoped feature registration returning an idempotent disposer; safe lazy loading and HMR without clearing every handler.
 - [x] Headless-friendly primitives finished on the instance API: safe app-db restore, non-React subscription evaluation/watching, and an explicit flush contract after restore/dispatch.
 - [x] SSR/per-request stores, with request-isolation and hydration tests.
-- [x] **Multi-runtime DevTools routing.** Add stable `runtimeId`/runtime names, multiple simultaneous runtime sessions per server, runtime selection in the dashboard and MCP tools, and runtime-scoped state, handlers, traces, dispatch, evaluation, and reconnect-session semantics. The former single-session server superseded the previous SDK client, so instance-scoping alone would not have delivered parallel agent sandboxes. `sinceId` pagination remains in the Phase 3 MCP backlog.
-- [ ] **Architecture acceptance gates.** Prove two independent runtimes in one realm, parallel-test isolation, SSR request isolation, module install/dispose, compatibility-facade behavior, packed-package compatibility, and no material regression against Phase 1 performance budgets.
+- [x] **Multi-runtime DevTools routing.** Add stable `runtimeId`/runtime names, multiple simultaneous runtime sessions per server, runtime selection in the dashboard and MCP tools, and per-runtime state, handlers, traces, dispatch, evaluation, and reconnect-session semantics. The former single-session server superseded the previous SDK client, so instance ownership alone would not have delivered parallel agent sandboxes. `sinceId` pagination remains in the Phase 3 MCP backlog.
+- [ ] **Architecture acceptance gates.** Prove two independent runtimes in one realm, parallel-test isolation, SSR request isolation, module install/dispose, explicit-runtime package consumption, and no material regression against Phase 1 performance budgets.
   - Functional and package-consumption gates are automated and passing. The performance comparison remains blocked until the Phase 1 runtime budgets above exist.
 - [ ] **Implementation-review follow-ups (2026-07-18, non-blocking).** Logged from the instance-runtime review; none gates the RC:
   - Document "unmount/unwatch consumers before `runtime.dispose()`" prominently. Watches created through `watchSubscription` (including every `useSubscription`) are runtime-owned, so dispose force-releases them and a still-mounted tree throws on its next render instead of failing the dispose. A dispose attempt that then fails on an externally activated graph has already torn down the runtime's own watches — retryable, but not side-effect-free.
   - `registerTraceCallback` silently drops the callback when tracing is not yet enabled (legacy ordering foot-gun). On the instance API, store the callback and deliver once tracing activates.
   - Per-id subscription-cache operations (`hasCachedSubscriptionForId`, clear-by-id, definition-clearable assert) are O(cache) scans. Add a `subId → keys` index if route-level module disposal becomes routine.
-  - Default-runtime built-ins register twice (module evaluation in router/pipeline/coeffects plus the `defaultRuntime` constructor). Harmless silent overwrite today; dedupe or comment so nobody "fixes" one side.
+  - Keep runtime built-ins installed only during runtime construction; module evaluation must remain free of registrations.
 - [ ] Publish `1.0.0-rc.1` with a migration guide and written stability/semver policy. Instance-scoping gates the release candidate, not final 1.0.
 
 ## Phase 3 — Instance-aware product proof

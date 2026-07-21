@@ -28,11 +28,15 @@ function createCounterRuntime(runtimeId: string, count: number) {
 }
 
 describe('instance-scoped runtime', () => {
-  it('does not expose its mutable kernel on the runtime object', () => {
+  it('does not expose its kernel or direct kernel state on the runtime object', () => {
     const runtime = createCounterRuntime('private-kernel', 0);
 
-    expect(Object.hasOwn(runtime, 'kernel')).toBe(false);
-    expect((runtime as any).kernel).toBeUndefined();
+    const publicRuntime = runtime as unknown as Record<string, unknown>;
+    expect(Object.hasOwn(publicRuntime, 'kernel')).toBe(false);
+    expect(publicRuntime.kernel).toBeUndefined();
+    expect(publicRuntime.appDb).toBeUndefined();
+    expect(publicRuntime.handlers).toBeUndefined();
+    expect(publicRuntime.extensions).toBeUndefined();
 
     runtime.dispose();
   });
@@ -357,5 +361,20 @@ describe('instance-scoped runtime', () => {
     expect(() => inspector.dispatch(['increment', 1])).toThrow(
       "Runtime 'disposed' has been disposed",
     );
+  });
+
+  it('disposing one runtime leaves other runtime state and inspectors usable', () => {
+    const disposed = createCounterRuntime('dispose-first', 1);
+    const surviving = createCounterRuntime('dispose-second', 10);
+    const survivingInspector = surviving.createInspector();
+
+    disposed.dispose();
+
+    expect(() => disposed.getAppDb()).toThrow("Runtime 'dispose-first' has been disposed");
+    surviving.dispatchSync(['increment', 5]);
+    expect(surviving.getAppDb()).toEqual({ count: 15, label: 'dispose-second' });
+    expect(survivingInspector.getSnapshot().appDb).toEqual({ count: 15, label: 'dispose-second' });
+
+    surviving.dispose();
   });
 });

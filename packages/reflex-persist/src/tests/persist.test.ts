@@ -726,7 +726,7 @@ describe('persist', () => {
     runtime.dispose();
   });
 
-  it('rejects purge when an earlier failing event drops its queued request', async () => {
+  it('processes a purge queued behind an earlier failing event', async () => {
     const memory = createMemoryStorage();
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
@@ -738,8 +738,8 @@ describe('persist', () => {
     runtime.dispatch(['boom']);
     const purge = handle.purge();
 
-    await expect(purge).rejects.toThrow('Purge failed');
-    expect(memory.removeCalls).toBe(0);
+    await expect(purge).resolves.toBeUndefined();
+    expect(memory.removeCalls).toBe(1);
     expect(statusOf(runtime)).toBe('hydrated');
     handle.dispose();
     runtime.dispose();
@@ -969,7 +969,7 @@ describe('persist', () => {
     runtime.dispose();
   });
 
-  it('fails and settles when a queue error drops an experimental read completion', async () => {
+  it('hydrates when an earlier queue error does not drop an experimental read completion', async () => {
     const runtime = makeRuntime({ count: 0 });
     runtime.regEvent('boom', () => {
       throw new Error('expected completion drop');
@@ -989,9 +989,10 @@ describe('persist', () => {
     });
 
     handle.hydrate();
-    await expect(handle.whenHydrated()).rejects.toThrow('Hydration failed');
+    await expect(handle.whenHydrated()).resolves.toBeUndefined();
 
-    expect(statusOf(runtime)).toBe('failed');
+    expect(statusOf(runtime)).toBe('hydrated');
+    expect(runtime.getAppDb().count).toBe(100);
     handle.dispose();
     runtime.dispose();
   });

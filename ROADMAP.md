@@ -13,9 +13,27 @@ When items compete, pick the one that feeds the proof or exploits the breakage w
 
 Detailed trackers this document links into:
 
-- [docs/devtools-roadmap.md](docs/devtools-roadmap.md) — DevTools + MCP tool backlog (still authoritative for that package).
+- [docs/agent-operation-rfc.md](docs/agent-operation-rfc.md) — canonical
+  architecture and phased delivery plan for authoritative agent operations.
+  Its Phases 0–6 are the current execution track and supersede this document's
+  older ordering wherever operation receipts, effect supervision, or agent
+  safety were previously deferred.
+- [docs/agent-first-priorities.md](docs/agent-first-priorities.md) — agent-first
+  priority order combining AI-native requirements with human/API work
+  re-ranked by its value to agents.
+- [docs/devtools-roadmap.md](docs/devtools-roadmap.md) — DevTools + MCP tool backlog; its non-operation backlog remains authoritative.
 - [docs/reflex-old-roadmap.md](docs/reflex-old-roadmap.md) — previous roadmap; its **agent indexing model** and **Redux/Zustand feature-parity table** remain valid reference material.
 - [docs/agent-workflow.md](docs/agent-workflow.md) — the canonical agent scenario new tools are justified against.
+
+The immediate architecture gate is no longer “more trace tooling.” It is the
+core operation spine: exact invocation/event identities, committed and
+published revisions, causal completion, structured state/effect results,
+lookup, and retry safety. Supervised async tasks follow that spine before
+Reflex makes a production-grade agent-runtime claim. Persistence,
+productization, and distribution continue in parallel where they do not freeze
+the old trace-derived completion contract.
+
+Operation-spine status: **Phase 0 and Phase 1 of the [agent-operation RFC](docs/agent-operation-rfc.md) are complete in the experimental core slice**, with package and persistence checks passing. Inspector/DevTools/MCP integration, enforced effect profiles, durable idempotency, and supervised async work remain open roadmap phases.
 
 ---
 

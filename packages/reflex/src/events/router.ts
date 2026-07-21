@@ -15,7 +15,7 @@ import {
 import type { DispatchVector, EventVector } from '../types';
 
 type FsmState = 'idle' | 'scheduled' | 'running' | 'paused';
-type FsmTrigger = 'add-event' | 'run-queue' | 'pause' | 'exception' | 'finish-run' | 'resume';
+type FsmTrigger = 'add-event' | 'run-queue' | 'pause' | 'finish-run' | 'resume';
 type ScheduleFunction = (callback: () => void) => void;
 type EventSchedulingMetadata = Partial<Record<'flush' | 'yield', boolean>>;
 type ScheduledEventVector = EventVector & { meta?: EventSchedulingMetadata };
@@ -35,6 +35,7 @@ export class EventQueue {
     reject: (error: unknown) => void;
   }> = [];
   private pendingError: unknown;
+  private runError: unknown;
   private disposed = false;
 
   constructor(eventHandler: (event: EventVector) => void) {
@@ -84,7 +85,6 @@ export class EventQueue {
 
   private fsmTrigger(trigger: 'add-event', argument: EventVector): void;
   private fsmTrigger(trigger: 'pause', argument: ScheduleFunction): void;
-  private fsmTrigger(trigger: 'exception', argument: unknown): void;
   private fsmTrigger(trigger: 'run-queue' | 'finish-run' | 'resume'): void;
   private fsmTrigger(trigger: FsmTrigger, argument?: unknown): void {
     if (this.disposed) return;
@@ -115,14 +115,10 @@ export class EventQueue {
         nextState = 'paused';
         action = () => this.pause(argument as ScheduleFunction);
         break;
-      case 'running:exception':
-        nextState = 'idle';
-        action = () => this.handleException(argument);
-        break;
       case 'running:finish-run':
         if (this.queue.length === 0) {
           nextState = 'idle';
-          action = () => this.settleIdle();
+          action = () => this.finishRun();
         } else {
           nextState = 'scheduled';
           action = () => this.runNextTick();
@@ -161,8 +157,10 @@ export class EventQueue {
       this.queue.shift();
       return true;
     } catch (error: unknown) {
-      this.fsmTrigger('exception', error);
-      return false;
+      this.queue.shift();
+      this.runError ??= error;
+      consoleLog('error', '[reflex] event processing exception:', error);
+      return true;
     }
   }
 
@@ -188,23 +186,6 @@ export class EventQueue {
     this.fsmTrigger('finish-run');
   }
 
-  private handleException(error: unknown): void {
-    const failedEvent = this.queue[0];
-    const droppedEventIds = this.queue.slice(1).map((event) => event[0]);
-    this.purge();
-    consoleLog('error', '[reflex] event processing exception:', error);
-
-    if (droppedEventIds.length > 0) {
-      consoleLog(
-        'error',
-        `[reflex] event queue purged: ${droppedEventIds.length} pending event(s) dropped because '${String(failedEvent?.[0])}' threw:`,
-        droppedEventIds,
-      );
-    }
-    this.pendingError = this.idleWaiters.length === 0 ? error : undefined;
-    this.settleIdle(error);
-  }
-
   private pause(schedule: ScheduleFunction): void {
     schedule(() => this.fsmTrigger('resume'));
   }
@@ -212,6 +193,17 @@ export class EventQueue {
   private resume(): void {
     if (!this.processFirstEvent()) return;
     this.runQueue();
+  }
+
+  private finishRun(): void {
+    const error = this.runError;
+    this.runError = undefined;
+    if (error === undefined) {
+      this.settleIdle();
+      return;
+    }
+    this.pendingError = this.idleWaiters.length === 0 ? error : undefined;
+    this.settleIdle(error);
   }
 
   private settleIdle(error?: unknown): void {
@@ -265,6 +257,11 @@ export function dispatchSyncForKernel(runtime: RuntimeKernel, event: DispatchVec
     const message = `[reflex] dispatchSync called for '${String(event[0])}' while event '${handlingId}' is being handled. dispatchSync must not be called from an event handler; return a ['dispatch', ...] effect instead.`;
     consoleLog('error', message);
     throw new Error(message);
+  }
+  if (!isEventQueueIdleForKernel(runtime)) {
+    throw new Error(
+      `[reflex] dispatchSync cannot overtake asynchronous work already accepted by runtime '${runtime.runtimeId}'. Await runtime.flush() first.`,
+    );
   }
 
   assertPublicationAllowedForKernel(runtime);

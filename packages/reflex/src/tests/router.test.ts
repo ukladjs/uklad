@@ -246,6 +246,7 @@ describe('EventQueue', () => {
 
       expect(errorQueue.getState()).toBe('idle');
       expect(errorQueue.getQueueLength()).toBe(0);
+      expect(calls).toEqual([['before-error'], ['after-error']]);
       expect(getTestLogCalls().error.length).toBeGreaterThanOrEqual(1);
     });
 
@@ -278,8 +279,8 @@ describe('EventQueue', () => {
 
       await waitForScheduled();
 
-      // The failing event begins, then purges every event remaining in the snapshot.
-      expect(calls).toEqual([['before1'], ['before2'], ['error-event']]);
+      // The failing event is isolated; later accepted events still run in FIFO order.
+      expect(calls).toEqual([['before1'], ['before2'], ['error-event'], ['after1'], ['after2']]);
       expect(errorQueue.getState()).toBe('idle');
       expect(errorQueue.getQueueLength()).toBe(0);
       expect(getTestLogCalls().error.length).toBeGreaterThanOrEqual(1);
@@ -551,5 +552,6 @@ describe('Complex Scenarios', () => {
     expect(getTestLogCalls().error.length).toBeGreaterThanOrEqual(1);
     expect(errorQueue.getState()).toBe('idle');
     expect(errorQueue.getQueueLength()).toBe(0);
+    expect(calls).toEqual([['before-error'], errorFlushEvent, ['after-error']]);
   });
 });

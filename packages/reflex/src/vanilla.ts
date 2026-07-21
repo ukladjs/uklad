@@ -44,8 +44,17 @@ export type {
 export type {
   ReflexRuntime,
   RuntimeEventHandler,
+  RuntimeStateRevisions,
   RuntimeSubscriptionHandler,
 } from './runtime/runtime';
+export type {
+  RuntimeLifecycleEffect,
+  RuntimeLifecycleEffectStatus,
+  RuntimeLifecycleErrorKind,
+  RuntimeLifecycleObserver,
+  RuntimeLifecyclePatch,
+  RuntimeLifecycleStatePlan,
+} from './runtime/lifecycle';
 export type {
   AppDb,
   CoEffectHandler,

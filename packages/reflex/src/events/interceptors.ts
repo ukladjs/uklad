@@ -2,6 +2,7 @@ import { mergeTraceForKernel } from '../core/tracing';
 import { getAppDbForKernel } from '../runtime/app-db';
 import { getHandlerForKernel } from '../runtime/handlers';
 import type { RuntimeKernel } from '../runtime/kernel';
+import { reportRuntimeLifecycleErrorForKernel } from '../runtime/lifecycle';
 
 import type {
   CoEffects,
@@ -108,6 +109,7 @@ function traceError(runtime: RuntimeKernel, value: unknown, event: EventVector):
     eventV: event,
   };
   mergeTraceForKernel(runtime, { tags: { error: traceErrorTag } });
+  reportRuntimeLifecycleErrorForKernel(runtime, 'handler', originalError);
 }
 
 function toReflexError(

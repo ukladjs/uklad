@@ -1,4 +1,5 @@
 import { type RuntimeKernel } from '../runtime/kernel';
+import { cloneStructuredValue } from '../runtime/ownership';
 import { dispatchForKernel } from './router';
 
 import type { DispatchVector, Id } from '../types';
@@ -54,12 +55,13 @@ function debounceWithDispatcher(
   dispatchEvent: (event: DispatchVector) => void,
 ): void {
   const state = getRateLimitState(runtime);
-  const eventId = event[0];
+  const acceptedEvent = cloneRateLimitedEvent(event);
+  const eventId = acceptedEvent[0];
   clearForKernel(runtime, eventId);
 
   const timeout = setTimeout(() => {
     state.debounceTimers.delete(eventId);
-    dispatchEvent(event);
+    dispatchEvent(acceptedEvent);
   }, durationMs);
 
   state.debounceTimers.set(eventId, timeout);
@@ -83,7 +85,8 @@ function throttleWithDispatcher(
   dispatchEvent: (event: DispatchVector) => void,
 ): void {
   const state = getRateLimitState(runtime);
-  const eventId = event[0];
+  const acceptedEvent = cloneRateLimitedEvent(event);
+  const eventId = acceptedEvent[0];
   if (state.throttledEventIds.has(eventId)) return;
 
   state.throttledEventIds.add(eventId);
@@ -93,5 +96,15 @@ function throttleWithDispatcher(
   }, durationMs);
   state.throttleTimers.add(timeout);
 
-  dispatchEvent(event);
+  dispatchEvent(acceptedEvent);
+}
+
+function cloneRateLimitedEvent(event: DispatchVector): DispatchVector {
+  try {
+    return cloneStructuredValue(event);
+  } catch (error: unknown) {
+    throw new Error('[reflex] Rate-limited dispatch payloads must be structured-cloneable.', {
+      cause: error,
+    });
+  }
 }

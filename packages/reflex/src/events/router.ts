@@ -4,6 +4,8 @@ import { scheduleAfterRender, scheduleNextTick } from '../core/scheduling';
 import { isEventVector } from '../core/validation';
 import { flushSubscriptionsForKernel } from '../runtime/app-db';
 import { isRuntimeDisposed, type RuntimeKernel } from '../runtime/kernel';
+import { notifyRuntimeLifecycleForKernel } from '../runtime/lifecycle';
+import { cloneStructuredValue } from '../runtime/ownership';
 import { assertPublicationAllowedForKernel } from '../runtime/subscriptions/engine';
 import { registerBuiltInEffectsForKernel } from './effects';
 import {
@@ -37,9 +39,22 @@ export class EventQueue {
   private pendingError: unknown;
   private runError: unknown;
   private disposed = false;
+  private readonly onDrop: (
+    events: readonly EventVector[],
+    reason: 'queue-dropped' | 'disposed',
+    error: unknown,
+  ) => void;
 
-  constructor(eventHandler: (event: EventVector) => void) {
+  constructor(
+    eventHandler: (event: EventVector) => void,
+    onDrop: (
+      events: readonly EventVector[],
+      reason: 'queue-dropped' | 'disposed',
+      error: unknown,
+    ) => void = () => {},
+  ) {
     this.eventHandler = eventHandler;
+    this.onDrop = onDrop;
   }
 
   push(event: EventVector): void {
@@ -47,7 +62,11 @@ export class EventQueue {
   }
 
   purge(): void {
+    const dropped = this.queue;
     this.queue = [];
+    if (dropped.length > 0) {
+      this.onDrop(dropped, 'queue-dropped', new Error('[reflex] Event queue was purged.'));
+    }
   }
 
   getState(): FsmState {
@@ -78,9 +97,12 @@ export class EventQueue {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    const dropped = this.queue;
     this.queue = [];
     this.fsmState = 'idle';
-    this.settleIdle(new Error('[reflex] Runtime disposed before its event queue became idle.'));
+    const error = new Error('[reflex] Runtime disposed before its event queue became idle.');
+    if (dropped.length > 0) this.onDrop(dropped, 'disposed', error);
+    this.settleIdle(error);
   }
 
   private fsmTrigger(trigger: 'add-event', argument: EventVector): void;
@@ -218,7 +240,11 @@ export class EventQueue {
 }
 
 function getEventQueue(runtime: RuntimeKernel): EventQueue {
-  return (runtime.eventQueue ??= new EventQueue((event) => handleForKernel(runtime, event)));
+  return (runtime.eventQueue ??= new EventQueue(
+    (event) => handleForKernel(runtime, event),
+    (events, reason, error) =>
+      notifyRuntimeLifecycleForKernel(runtime, 'onEventDropped', events, reason, error),
+  ));
 }
 
 /** @internal Dispatch an event asynchronously in one runtime. */
@@ -239,7 +265,17 @@ export function dispatchForKernel(runtime: RuntimeKernel, event: DispatchVector)
     }
   }
 
+  notifyRuntimeLifecycleForKernel(runtime, 'onEventQueued', event as EventVector);
   getEventQueue(runtime).push(event);
+}
+
+/** @internal Take ownership of caller input before accepting it into a runtime queue. */
+export function dispatchOwnedForKernel(runtime: RuntimeKernel, event: DispatchVector): void {
+  if (!isEventVector(event)) {
+    dispatchForKernel(runtime, event);
+    return;
+  }
+  dispatchForKernel(runtime, cloneAcceptedEvent(event));
 }
 
 /** @internal Dispatch and publish synchronously in one runtime. */
@@ -283,6 +319,11 @@ export function isEventQueueIdleForKernel(runtime: RuntimeKernel): boolean {
   return getEventQueue(runtime).getState() === 'idle';
 }
 
+/** @internal Return whether one runtime is synchronously processing queue work. */
+export function isEventQueueRunningForKernel(runtime: RuntimeKernel): boolean {
+  return getEventQueue(runtime).getState() === 'running';
+}
+
 /** @internal Stop one runtime's event queue. */
 export function disposeEventQueueForKernel(runtime: RuntimeKernel): void {
   getEventQueue(runtime).dispose();
@@ -290,7 +331,21 @@ export function disposeEventQueueForKernel(runtime: RuntimeKernel): void {
 
 /** @internal Install dispatch-dependent framework effects in one runtime. */
 export function initializeEventRouterForKernel(runtime: RuntimeKernel): void {
-  registerBuiltInEffectsForKernel(runtime, (event) => dispatchForKernel(runtime, event));
+  registerBuiltInEffectsForKernel(runtime, (event) => dispatchOwnedForKernel(runtime, event));
+}
+
+function cloneAcceptedEvent(event: DispatchVector): DispatchVector {
+  try {
+    const clonedEvent = cloneStructuredValue(event) as DispatchVector;
+    const metadata = (event as ScheduledEventVector).meta;
+    if (metadata !== undefined)
+      (clonedEvent as ScheduledEventVector).meta = cloneStructuredValue(metadata);
+    return clonedEvent;
+  } catch (error: unknown) {
+    throw new Error('[reflex] event input must be structured-cloneable so the runtime owns it.', {
+      cause: error,
+    });
+  }
 }
 
 function getEventScheduler(event: EventVector): ScheduleFunction | undefined {

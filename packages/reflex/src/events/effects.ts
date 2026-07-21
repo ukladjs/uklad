@@ -2,6 +2,7 @@ import { consoleLog } from '../core/logging';
 import { mergeTraceForKernel } from '../core/tracing';
 import { isEventVector } from '../core/validation';
 import { updateAppDbForKernel } from '../runtime/app-db';
+import { notifyRuntimeLifecycleForKernel } from '../runtime/lifecycle';
 import {
   getHandlerForKernel,
   registerHandlerForKernel,
@@ -63,13 +64,19 @@ function createDoFxInterceptor(runtime: RuntimeKernel): Interceptor {
       const effects = context.effects;
       if (!Array.isArray(effects)) {
         consoleLog('warn', `[reflex] effects expects a vector, but was given ${typeof effects}`);
+        notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
+          type: '<invalid>',
+          value: effects,
+          status: 'invalid',
+          startedAtMs: Date.now(),
+        });
         return context;
       }
 
+      notifyRuntimeLifecycleForKernel(runtime, 'onEffects', effects);
+
       const effectErrors: TraceErrorTag[] = [];
       for (const effect of effects as unknown[]) {
-        if (!effect) continue;
-
         if (
           !Array.isArray(effect) ||
           effect.length === 0 ||
@@ -77,6 +84,12 @@ function createDoFxInterceptor(runtime: RuntimeKernel): Interceptor {
           typeof effect[0] !== 'string'
         ) {
           consoleLog('warn', '[reflex] invalid effect in effects:', effect);
+          notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
+            type: '<invalid>',
+            value: effect,
+            status: 'invalid',
+            startedAtMs: Date.now(),
+          });
           continue;
         }
 
@@ -87,11 +100,36 @@ function createDoFxInterceptor(runtime: RuntimeKernel): Interceptor {
             'warn',
             `[reflex] in 'effects' found ${id} which has no associated handler. Ignoring.`,
           );
+          notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
+            type: id,
+            value,
+            status: 'unhandled',
+            startedAtMs: Date.now(),
+          });
           continue;
         }
 
+        const startedAtMs = Date.now();
         try {
-          handler(value);
+          const result = (handler as (effectValue: unknown) => unknown)(value);
+          const invalidDispatch =
+            (id === DISPATCH && !isEventVector(value)) ||
+            (id === DISPATCH_LATER && !isValidDispatchLaterEffect(value));
+          notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
+            type: id,
+            value,
+            status: invalidDispatch
+              ? 'failed'
+              : id === DISPATCH
+                ? 'succeeded'
+                : id === DISPATCH_LATER || isThenable(result)
+                  ? 'detached'
+                  : 'returned',
+            startedAtMs,
+            ...(invalidDispatch
+              ? { error: new Error(`[reflex] Invalid ${id} effect payload.`) }
+              : {}),
+          });
         } catch (error: unknown) {
           consoleLog('error', `[reflex] error in effects for ${id}:`, error);
           effectErrors.push({
@@ -101,6 +139,13 @@ function createDoFxInterceptor(runtime: RuntimeKernel): Interceptor {
             ...(error instanceof Error && typeof error.stack === 'string'
               ? { stack: error.stack }
               : {}),
+          });
+          notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
+            type: id,
+            value,
+            status: 'failed',
+            startedAtMs,
+            error,
           });
         }
       }
@@ -112,6 +157,21 @@ function createDoFxInterceptor(runtime: RuntimeKernel): Interceptor {
       return context;
     },
   };
+}
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    ((typeof value === 'object' && value !== null) || typeof value === 'function') &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
+}
+
+function isValidDispatchLaterEffect(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  const effect = value as Partial<DispatchLaterEffect>;
+  return (
+    typeof effect.ms === 'number' && Number.isFinite(effect.ms) && isEventVector(effect.dispatch)
+  );
 }
 
 /** @internal Install dispatch effects in one runtime. */

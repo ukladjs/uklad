@@ -4,6 +4,7 @@ import {
   registerHandlerForKernel,
   registerSystemHandlerForKernel,
 } from '../runtime/handlers';
+import { reportRuntimeLifecycleErrorForKernel } from '../runtime/lifecycle';
 import type { RuntimeKernel } from '../runtime/kernel';
 
 import type { CoEffectHandler, CoEffects, Context, Interceptor } from '../types';
@@ -33,7 +34,9 @@ export function getInjectCofxInterceptorForKernel(
     before(context: Context): Context {
       const handler = getHandlerForKernel(runtime, HANDLER_KIND, id);
       if (!handler) {
+        const error = new Error(`[reflex] No cofx handler registered for ${id}`);
         consoleLog('error', '[reflex] No cofx handler registered for', id);
+        if (reportRuntimeLifecycleErrorForKernel(runtime, 'missing-coeffect', error)) throw error;
         return context;
       }
 
@@ -41,6 +44,7 @@ export function getInjectCofxInterceptorForKernel(
         context.coeffects = handler({ ...context.coeffects }, value);
       } catch (error: unknown) {
         consoleLog('error', `[reflex] Error in :${id} coeffect handler:`, error);
+        if (reportRuntimeLifecycleErrorForKernel(runtime, 'coeffect', error)) throw error;
       }
       return context;
     },

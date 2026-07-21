@@ -90,7 +90,7 @@ export function persist<TContracts extends ReflexContracts>(
   let nextAuthorization = 0;
 
   const issueAuthorization = (): string =>
-    `${runtime.runtimeId}:${Date.now().toString(36)}:${(++nextAuthorization).toString(36)}:${Math.random().toString(36).slice(2)}`;
+    `${runtime.runtimeInstanceId}:${Date.now().toString(36)}:${(++nextAuthorization).toString(36)}:${Math.random().toString(36).slice(2)}`;
 
   const effect = (id: string, payload: object): PersistEffect => {
     const authorization = issueAuthorization();

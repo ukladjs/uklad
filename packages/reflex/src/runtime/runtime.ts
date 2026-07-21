@@ -47,15 +47,16 @@ import {
 } from '../events/rate-limit';
 import { regEventForKernel } from '../events/registration';
 import {
-  dispatchForKernel,
+  dispatchOwnedForKernel,
   dispatchSyncForKernel,
   disposeEventQueueForKernel,
   flushRuntime,
   initializeEventRouterForKernel,
   isEventQueueIdleForKernel,
+  isEventQueueRunningForKernel,
 } from '../events/router';
 import { createReflexInspectorForKernel } from '../inspector';
-import { getAppDbForKernel, initAppDbForKernel } from './app-db';
+import { getAppDbForKernel, getAppDbRevisionsForKernel, initAppDbForKernel } from './app-db';
 import { clearInterceptorsForKernel } from './event-metadata';
 import { isEventVector } from '../core/validation';
 import {
@@ -90,6 +91,11 @@ import {
   getSubscriptionValueForKernel,
 } from '../subscriptions/queries';
 import { regSubForKernel } from '../subscriptions/registration';
+import {
+  notifyRuntimeLifecycleForKernel,
+  observeRuntimeLifecycleForKernel,
+  type RuntimeLifecycleObserver,
+} from './lifecycle';
 
 import type { TraceCallback } from '../core/tracing';
 import type { ReflexInspector } from '../inspector';
@@ -116,11 +122,19 @@ export type RuntimeSubscriptionHandler<TContracts extends ReflexContracts, TId e
   ...values: any[]
 ) => ContractSubscriptionResult<TContracts, TId>;
 
+/** Monotonic committed and render-published app-db generations. */
+export interface RuntimeStateRevisions {
+  readonly committedRevision: number;
+  readonly publishedRevision: number;
+}
+
 export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveReflexContracts> {
   readonly runtimeId: string;
+  readonly runtimeInstanceId: string;
   readonly runtimeName: string;
 
   getAppDb(): ContractDb<TContracts>;
+  getStateRevisions(): RuntimeStateRevisions;
   restoreAppDb(nextDb: ContractDb<TContracts>): void;
   dispatch(event: ContractDispatchVector<TContracts>): void;
   dispatchSync(event: ContractDispatchVector<TContracts>): void;
@@ -178,6 +192,8 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
   clearSubs(): void;
   clearSubscriptionCache(key?: string): void;
   getSubscriptionDiagnostics(): readonly SubscriptionDiagnostic[];
+
+  observeLifecycle(observer: RuntimeLifecycleObserver): ReflexDisposer;
 
   registerModule(module: ReflexModule<ReflexRuntime<TContracts>>): ReflexDisposer;
   createInspector(): ReflexInspector;
@@ -243,6 +259,10 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return this.#kernel.runtimeId;
   }
 
+  get runtimeInstanceId(): string {
+    return this.#kernel.runtimeInstanceId;
+  }
+
   get runtimeName(): string {
     return this.#kernel.runtimeName;
   }
@@ -250,6 +270,11 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   getAppDb(): ContractDb<TContracts> {
     this.assertUsable();
     return getAppDbForKernel<ContractDb<TContracts>>(this.#kernel);
+  }
+
+  getStateRevisions(): RuntimeStateRevisions {
+    this.assertUsable();
+    return getAppDbRevisionsForKernel(this.#kernel);
   }
 
   restoreAppDb(nextDb: ContractDb<TContracts>): void {
@@ -270,7 +295,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   dispatch(event: ContractDispatchVector<TContracts>): void {
     this.assertUsable();
     this.assertDispatchableEvent(event, 'dispatch');
-    dispatchForKernel(this.#kernel, event as any);
+    dispatchOwnedForKernel(this.#kernel, event as any);
   }
 
   dispatchSync(event: ContractDispatchVector<TContracts>): void {
@@ -516,6 +541,11 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return getSubscriptionDiagnosticsForKernel(this.#kernel);
   }
 
+  observeLifecycle(observer: RuntimeLifecycleObserver): ReflexDisposer {
+    this.assertUsable();
+    return observeRuntimeLifecycleForKernel(this.#kernel, observer);
+  }
+
   registerModule(module: ReflexModule<ReflexRuntime<TContracts>>): ReflexDisposer {
     this.assertUsable();
     if (this.activeInstallation) {
@@ -550,6 +580,11 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   dispose(): void {
     if (isRuntimeDisposed(this.#kernel)) return;
+    if (isEventQueueRunningForKernel(this.#kernel)) {
+      throw new Error(
+        `[reflex] Cannot dispose runtime '${this.runtimeId}' while its event queue is synchronously running. Dispose after the current event or runtime.flush() settles.`,
+      );
+    }
 
     for (const disposeRenderSubscription of Array.from(this.renderSubscriptions)) {
       disposeRenderSubscription();
@@ -566,6 +601,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     disposeTracingForKernel(this.#kernel);
     clearGlobalInterceptorsForKernel(this.#kernel);
     clearHandlersForKernel(this.#kernel);
+    notifyRuntimeLifecycleForKernel(this.#kernel, 'onRuntimeDisposed');
     markRuntimeDisposed(this.#kernel);
   }
 

@@ -4,6 +4,7 @@ import { IS_DEV } from '../core/environment';
 import { ensurePatchesEnabled } from '../core/immer';
 import { consoleLog } from '../core/logging';
 import { isTraceEnabledForKernel, mergeTraceForKernel, withTraceForKernel } from '../core/tracing';
+import { getAppDbRevisionsForKernel } from '../runtime/app-db';
 import { getInterceptorsForKernel } from '../runtime/event-metadata';
 import {
   getHandlerForKernel,
@@ -15,6 +16,13 @@ import {
   getOrCreateRuntimeState,
   type RuntimeKernel,
 } from '../runtime/kernel';
+import {
+  beginRuntimeLifecycleEventForKernel,
+  getRuntimeLifecycleTraceTagsForKernel,
+  hasRuntimeLifecycleObservers,
+  notifyRuntimeLifecycleForKernel,
+  reportRuntimeLifecycleErrorForKernel,
+} from '../runtime/lifecycle';
 import { getDoFxInterceptorForKernel } from './effects';
 import { getGlobalInterceptorsForKernel } from './global-interceptors';
 import { executeForKernel } from './interceptors';
@@ -77,6 +85,16 @@ export function defaultErrorHandler(originalError: Error, reflexError: ReflexErr
 
 /** @internal Run a registered event through one runtime's pipeline. */
 export function handleForKernel(runtime: RuntimeKernel, event: EventVector): void {
+  if (
+    beginRuntimeLifecycleEventForKernel(
+      runtime,
+      event,
+      getAppDbRevisionsForKernel(runtime).committedRevision,
+    )
+  ) {
+    notifyRuntimeLifecycleForKernel(runtime, 'onEventFinished', event);
+    return;
+  }
   const eventId = event[0];
   const handler = getHandlerForKernel(runtime, HANDLER_KIND, eventId);
 
@@ -87,11 +105,17 @@ export function handleForKernel(runtime: RuntimeKernel, event: EventVector): voi
       message: `no event handler registered for: ${eventId}`,
       eventV: event,
     };
+    reportRuntimeLifecycleErrorForKernel(runtime, 'missing-handler', new Error(error.message));
     withTraceForKernel(
       runtime,
-      { operation: eventId, opType: HANDLER_KIND, tags: { event, error } },
+      {
+        operation: eventId,
+        opType: HANDLER_KIND,
+        tags: { event, error, ...getRuntimeLifecycleTraceTagsForKernel(runtime) },
+      },
       () => {},
     );
+    notifyRuntimeLifecycleForKernel(runtime, 'onEventFinished', event);
     return;
   }
 
@@ -104,16 +128,25 @@ export function handleForKernel(runtime: RuntimeKernel, event: EventVector): voi
 
   const state = getPipelineState(runtime);
   state.handlingEventId = eventId;
+  let error: unknown;
   try {
     withTraceForKernel(
       runtime,
-      { operation: eventId, opType: HANDLER_KIND, tags: { event } },
+      {
+        operation: eventId,
+        opType: HANDLER_KIND,
+        tags: { event, ...getRuntimeLifecycleTraceTagsForKernel(runtime) },
+      },
       () => {
         executeForKernel(runtime, event, interceptors);
       },
     );
+  } catch (caughtError) {
+    error = caughtError;
+    throw caughtError;
   } finally {
     state.handlingEventId = null;
+    notifyRuntimeLifecycleForKernel(runtime, 'onEventFinished', event, error);
   }
 }
 
@@ -153,14 +186,22 @@ function createEventHandlerInterceptor(
         }
       };
 
-      if (isTraceEnabledForKernel(runtime)) {
+      const tracingEnabled = isTraceEnabledForKernel(runtime);
+      if (tracingEnabled || hasRuntimeLifecycleObservers(runtime)) {
         ensurePatchesEnabled();
         const [producedDb, patches, reversePatches] = produceWithPatches(
           context.previousDb as Db,
           recipe,
         );
         newDb = producedDb;
-        mergeTraceForKernel(runtime, { tags: { patches, reversePatches, effects } });
+        notifyRuntimeLifecycleForKernel(runtime, 'onStatePlanned', {
+          previousDb: context.previousDb,
+          plannedDb: producedDb,
+          patches,
+        });
+        if (tracingEnabled) {
+          mergeTraceForKernel(runtime, { tags: { patches, reversePatches, effects } });
+        }
       } else {
         newDb = produce(context.previousDb as Db, recipe);
       }
@@ -179,6 +220,12 @@ function createEventHandlerInterceptor(
       let nextEffects = context.effects;
       if (!Array.isArray(effects)) {
         consoleLog('warn', `[reflex] effects expects a vector, but was given ${typeof effects}`);
+        notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
+          type: '<invalid>',
+          value: effects,
+          status: 'invalid',
+          startedAtMs: Date.now(),
+        });
       } else {
         // Untyped interceptors historically could return a context without an
         // effects field. Preserve that JS boundary fallback so the produced DB

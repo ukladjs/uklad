@@ -10,6 +10,7 @@ import type { SubscriptionEngine } from './subscriptions/engine';
 const RUNTIME_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 let nextRuntimeId = 0;
+let nextRuntimeInstanceId = 0;
 
 /**
  * A private key for one independently owned runtime service.
@@ -32,6 +33,8 @@ export interface RuntimeStateKey<T> {
  */
 export interface RuntimeKernel {
   readonly runtimeId: string;
+  /** Unique for this in-process runtime instance, even when runtimeId is reused. */
+  readonly runtimeInstanceId: string;
   readonly runtimeName: string;
   /** Hot-path state is typed and directly addressable. It remains lazy. */
   appDb?: AppDbState;
@@ -88,6 +91,7 @@ export function createRuntimeKernel(options: RuntimeIdentityOptions = {}): Runti
 
   return {
     runtimeId,
+    runtimeInstanceId: `${runtimeId}:instance:${++nextRuntimeInstanceId}`,
     runtimeName,
     extensions: new Map<symbol, unknown>(),
     lifecycle: { disposed: false },

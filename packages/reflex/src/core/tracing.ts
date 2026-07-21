@@ -1,5 +1,5 @@
 import { consoleLog } from './logging';
-import { type RuntimeScope } from '../runtime/scope';
+import { type RuntimeKernel } from '../runtime/kernel';
 
 export type TraceId = number;
 export type TraceTags = Record<string, unknown>;
@@ -33,7 +33,7 @@ export interface TraceState {
   flushTimer: ReturnType<typeof setTimeout> | null;
 }
 
-function getTraceState(runtime: RuntimeScope): TraceState {
+function getTraceState(runtime: RuntimeKernel): TraceState {
   return (runtime.tracing ??= {
     callbacks: new Map(),
     nextId: 1,
@@ -47,21 +47,21 @@ function getTraceState(runtime: RuntimeScope): TraceState {
 }
 
 /** @internal Enable the manual trace owner for one runtime. */
-export function enableTracingForRuntime(runtime: RuntimeScope): void {
+export function enableTracingForKernel(runtime: RuntimeKernel): void {
   const state = getTraceState(runtime);
   state.manualTraceEnabled = true;
   updateTraceEnabled(state);
 }
 
 /** @internal Release the manual trace owner for one runtime. */
-export function disableTracingForRuntime(runtime: RuntimeScope): void {
+export function disableTracingForKernel(runtime: RuntimeKernel): void {
   const state = getTraceState(runtime);
   state.manualTraceEnabled = false;
   updateTraceEnabled(state);
 }
 
 /** @internal Keep one runtime's tracing active for an integration subscriber. */
-export function acquireTracingForRuntime(runtime: RuntimeScope): () => void {
+export function acquireTracingForKernel(runtime: RuntimeKernel): () => void {
   const state = getTraceState(runtime);
   state.traceLeaseCount++;
   updateTraceEnabled(state);
@@ -88,7 +88,7 @@ function discardPendingTraces(state: TraceState): void {
 }
 
 /** @internal Return whether one runtime is collecting traces. */
-export function isTraceEnabledForRuntime(runtime: RuntimeScope): boolean {
+export function isTraceEnabledForKernel(runtime: RuntimeKernel): boolean {
   return getTraceState(runtime).traceEnabled;
 }
 
@@ -99,8 +99,8 @@ function updateTraceEnabled(state: TraceState): void {
 }
 
 /** @internal Register a keyed trace batch callback on one runtime. */
-export function registerTraceCallbackForRuntime(
-  runtime: RuntimeScope,
+export function registerTraceCallbackForKernel(
+  runtime: RuntimeKernel,
   key: string,
   callback: TraceCallback,
 ): void {
@@ -116,7 +116,7 @@ export function registerTraceCallbackForRuntime(
 }
 
 /** @internal Remove a trace callback from one runtime. */
-export function removeTraceCallbackForRuntime(runtime: RuntimeScope, key: string): void {
+export function removeTraceCallbackForKernel(runtime: RuntimeKernel, key: string): void {
   getTraceState(runtime).callbacks.delete(key);
 }
 
@@ -157,8 +157,8 @@ function finishTrace(state: TraceState, trace: Trace): void {
 }
 
 /** @internal Run `fn` inside a trace owned by one runtime. */
-export function withTraceForRuntime<T>(
-  runtime: RuntimeScope,
+export function withTraceForKernel<T>(
+  runtime: RuntimeKernel,
   options: TraceOptions,
   fn: () => T,
 ): T {
@@ -175,21 +175,21 @@ export function withTraceForRuntime<T>(
 }
 
 /** @internal Shallow-merge tags into one runtime's active trace. */
-export function mergeTraceForRuntime(runtime: RuntimeScope, update: { tags: TraceTags }): void {
+export function mergeTraceForKernel(runtime: RuntimeKernel, update: { tags: TraceTags }): void {
   const state = getTraceState(runtime);
   if (!state.traceEnabled || !state.currentTrace) return;
   state.currentTrace.tags = { ...state.currentTrace.tags, ...update.tags };
 }
 
 /** @internal Register the built-in console trace printer on one runtime. */
-export function enableTracePrintForRuntime(runtime: RuntimeScope): void {
-  registerTraceCallbackForRuntime(runtime, 'reflex-default-tracer', (batch) => {
+export function enableTracePrintForKernel(runtime: RuntimeKernel): void {
+  registerTraceCallbackForKernel(runtime, 'reflex-default-tracer', (batch) => {
     consoleLog('log', '%c[reflex] [trace] ', 'font-weight: bold; color: blue;', batch);
   });
 }
 
 /** @internal Release timers, callbacks, and leases owned by a disposed runtime. */
-export function disposeTracingForRuntime(runtime: RuntimeScope): void {
+export function disposeTracingForKernel(runtime: RuntimeKernel): void {
   const state = getTraceState(runtime);
   discardPendingTraces(state);
   state.callbacks.clear();

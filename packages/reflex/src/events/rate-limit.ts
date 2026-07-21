@@ -1,5 +1,5 @@
-import { type RuntimeScope } from '../runtime/scope';
-import { dispatchForRuntime } from './router';
+import { type RuntimeKernel } from '../runtime/kernel';
+import { dispatchForKernel } from './router';
 
 import type { DispatchVector, Id } from '../types';
 
@@ -9,7 +9,7 @@ export interface RateLimitState {
   readonly throttleTimers: Set<ReturnType<typeof setTimeout>>;
 }
 
-function getRateLimitState(runtime: RuntimeScope): RateLimitState {
+function getRateLimitState(runtime: RuntimeKernel): RateLimitState {
   return (runtime.rateLimit ??= {
     debounceTimers: new Map(),
     throttledEventIds: new Set(),
@@ -18,7 +18,7 @@ function getRateLimitState(runtime: RuntimeScope): RateLimitState {
 }
 
 /** @internal Clear a pending debounce in one runtime. */
-export function clearForRuntime(runtime: RuntimeScope, eventId: Id): void {
+export function clearForKernel(runtime: RuntimeKernel, eventId: Id): void {
   const state = getRateLimitState(runtime);
   const timeout = state.debounceTimers.get(eventId);
   if (timeout === undefined) return;
@@ -27,7 +27,7 @@ export function clearForRuntime(runtime: RuntimeScope, eventId: Id): void {
 }
 
 /** @internal Clear every rate-limit timer in one runtime. */
-export function clearAllForRuntime(runtime: RuntimeScope): void {
+export function clearAllForKernel(runtime: RuntimeKernel): void {
   const state = getRateLimitState(runtime);
   for (const timeout of state.debounceTimers.values()) clearTimeout(timeout);
   for (const timeout of state.throttleTimers) clearTimeout(timeout);
@@ -37,25 +37,25 @@ export function clearAllForRuntime(runtime: RuntimeScope): void {
 }
 
 /** @internal Debounce an event in one runtime. */
-export function debounceAndDispatchForRuntime(
-  runtime: RuntimeScope,
+export function debounceAndDispatchForKernel(
+  runtime: RuntimeKernel,
   event: DispatchVector,
   durationMs: number,
 ): void {
   debounceWithDispatcher(runtime, event, durationMs, (nextEvent) =>
-    dispatchForRuntime(runtime, nextEvent),
+    dispatchForKernel(runtime, nextEvent),
   );
 }
 
 function debounceWithDispatcher(
-  runtime: RuntimeScope,
+  runtime: RuntimeKernel,
   event: DispatchVector,
   durationMs: number,
   dispatchEvent: (event: DispatchVector) => void,
 ): void {
   const state = getRateLimitState(runtime);
   const eventId = event[0];
-  clearForRuntime(runtime, eventId);
+  clearForKernel(runtime, eventId);
 
   const timeout = setTimeout(() => {
     state.debounceTimers.delete(eventId);
@@ -66,18 +66,18 @@ function debounceWithDispatcher(
 }
 
 /** @internal Throttle an event in one runtime. */
-export function throttleAndDispatchForRuntime(
-  runtime: RuntimeScope,
+export function throttleAndDispatchForKernel(
+  runtime: RuntimeKernel,
   event: DispatchVector,
   durationMs: number,
 ): void {
   throttleWithDispatcher(runtime, event, durationMs, (nextEvent) =>
-    dispatchForRuntime(runtime, nextEvent),
+    dispatchForKernel(runtime, nextEvent),
   );
 }
 
 function throttleWithDispatcher(
-  runtime: RuntimeScope,
+  runtime: RuntimeKernel,
   event: DispatchVector,
   durationMs: number,
   dispatchEvent: (event: DispatchVector) => void,

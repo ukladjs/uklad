@@ -1,6 +1,6 @@
 import { consoleLog } from '../../core/logging';
-import { mergeTraceForRuntime, withTraceForRuntime } from '../../core/tracing';
-import { type RuntimeScope } from '../scope';
+import { mergeTraceForKernel, withTraceForKernel } from '../../core/tracing';
+import { type RuntimeKernel } from '../kernel';
 
 import type { EqualityCheckFn, SubVector } from '../../types';
 
@@ -131,7 +131,7 @@ class SubscriptionCell<T> {
   private runComputation(compute: () => T): boolean {
     let observableChanged = false;
     try {
-      withTraceForRuntime(
+      withTraceForKernel(
         this.engine.runtime,
         {
           operation: this.spec.query[0],
@@ -159,7 +159,7 @@ class SubscriptionCell<T> {
           observableChanged = valueChanged || recovered;
           if (observableChanged) this.outputStamp = this.engine.nextOutputStamp();
 
-          mergeTraceForRuntime(this.engine.runtime, {
+          mergeTraceForKernel(this.engine.runtime, {
             tags: { 'cached?': !observableChanged, version: this.outputStamp },
           });
         },
@@ -185,7 +185,7 @@ class SubscriptionCell<T> {
   publishTo(listeners: readonly ListenerRegistration[]): void {
     for (const [listener, label, kind] of listeners) {
       try {
-        withTraceForRuntime(
+        withTraceForKernel(
           this.engine.runtime,
           {
             opType: kind,
@@ -201,7 +201,7 @@ class SubscriptionCell<T> {
   }
 
   traceDispose(): void {
-    withTraceForRuntime(
+    withTraceForKernel(
       this.engine.runtime,
       {
         operation: this.spec.query[0],
@@ -221,9 +221,9 @@ class SubscriptionCell<T> {
  * scheduler, so this engine deliberately owns no node tasks or notification debt.
  */
 export class SubscriptionEngine {
-  readonly runtime: RuntimeScope;
+  readonly runtime: RuntimeKernel;
 
-  constructor(runtime: RuntimeScope) {
+  constructor(runtime: RuntimeKernel) {
     this.runtime = runtime;
   }
   /** Deduplicates cells visited during one dormant graph traversal. */
@@ -567,34 +567,34 @@ export class SubscriptionEngine {
   }
 }
 
-function getEngine(runtime: RuntimeScope): SubscriptionEngine {
+function getEngine(runtime: RuntimeKernel): SubscriptionEngine {
   return (runtime.subscriptionEngine ??= new SubscriptionEngine(runtime));
 }
 
 /** @internal Create a subscription owned by one runtime. */
-export function createSubscriptionForRuntime<T>(
-  runtime: RuntimeScope,
+export function createSubscriptionForKernel<T>(
+  runtime: RuntimeKernel,
   spec: SubscriptionSpec<T>,
 ): SubscriptionNode<T> {
   return getEngine(runtime).create(spec);
 }
 
 /** @internal Read a subscription through its owning runtime. */
-export function readSubscriptionForRuntime<T>(runtime: RuntimeScope, node: SubscriptionNode<T>): T {
+export function readSubscriptionForKernel<T>(runtime: RuntimeKernel, node: SubscriptionNode<T>): T {
   return getEngine(runtime).read(node);
 }
 
 /** @internal Read a snapshot from one runtime's subscription. */
-export function getSubscriptionSnapshotForRuntime<T>(
-  runtime: RuntimeScope,
+export function getSubscriptionSnapshotForKernel<T>(
+  runtime: RuntimeKernel,
   node: SubscriptionNode<T>,
 ): T {
   return getEngine(runtime).getSnapshot(node);
 }
 
 /** @internal Subscribe to a node owned by one runtime. */
-export function subscribeToSubscriptionForRuntime<T>(
-  runtime: RuntimeScope,
+export function subscribeToSubscriptionForKernel<T>(
+  runtime: RuntimeKernel,
   node: SubscriptionNode<T>,
   listener: () => void,
   componentName?: string,
@@ -604,27 +604,27 @@ export function subscribeToSubscriptionForRuntime<T>(
 }
 
 /** @internal Publish roots through one runtime's engine. */
-export function publishSubscriptionsForRuntime(
-  runtime: RuntimeScope,
+export function publishSubscriptionsForKernel(
+  runtime: RuntimeKernel,
   roots: SubscriptionNode<any>[],
 ): void {
   getEngine(runtime).publish(roots);
 }
 
 /** @internal Inspect a node owned by one runtime. */
-export function inspectSubscriptionForRuntime(
-  runtime: RuntimeScope,
+export function inspectSubscriptionForKernel(
+  runtime: RuntimeKernel,
   node: SubscriptionNode<any>,
 ): SubscriptionDiagnostic {
   return getEngine(runtime).inspect(node);
 }
 
 /** @internal Assert publication is safe in one runtime. */
-export function assertPublicationAllowedForRuntime(runtime: RuntimeScope): void {
+export function assertPublicationAllowedForKernel(runtime: RuntimeKernel): void {
   getEngine(runtime).assertPublicationAllowed();
 }
 
 /** @internal Assert destructive subscription clears are safe in one runtime. */
-export function assertSubscriptionsCanBeClearedForRuntime(runtime: RuntimeScope): void {
+export function assertSubscriptionsCanBeClearedForKernel(runtime: RuntimeKernel): void {
   getEngine(runtime).assertClearAllowed();
 }

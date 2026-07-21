@@ -1,17 +1,17 @@
 import { consoleLog } from '../core/logging';
-import { mergeTraceForRuntime } from '../core/tracing';
+import { mergeTraceForKernel } from '../core/tracing';
 import { isEventVector } from '../core/validation';
-import { updateAppDbForRuntime } from '../runtime/app-db';
+import { updateAppDbForKernel } from '../runtime/app-db';
 import {
-  getHandlerForRuntime,
-  registerHandlerForRuntime,
-  registerSystemHandlerForRuntime,
+  getHandlerForKernel,
+  registerHandlerForKernel,
+  registerSystemHandlerForKernel,
 } from '../runtime/handlers';
 import {
   createRuntimeStateKey,
   getOrCreateRuntimeState,
-  type RuntimeScope,
-} from '../runtime/scope';
+  type RuntimeKernel,
+} from '../runtime/kernel';
 
 import type {
   Context,
@@ -29,7 +29,7 @@ const HANDLER_KIND = 'fx';
 const DELAYED_EFFECT_TIMERS =
   createRuntimeStateKey<Set<ReturnType<typeof setTimeout>>>('reflex.delayed-effects');
 
-function getDelayedEffectTimers(runtime: RuntimeScope): Set<ReturnType<typeof setTimeout>> {
+function getDelayedEffectTimers(runtime: RuntimeKernel): Set<ReturnType<typeof setTimeout>> {
   return getOrCreateRuntimeState(runtime, DELAYED_EFFECT_TIMERS, () => new Set());
 }
 
@@ -37,27 +37,27 @@ export const DISPATCH_LATER = 'dispatch-later';
 export const DISPATCH = 'dispatch';
 
 /** @internal Register an effect handler in one runtime. */
-export function regEffectForRuntime<K extends Id = Id>(
-  runtime: RuntimeScope,
+export function regEffectForKernel<K extends Id = Id>(
+  runtime: RuntimeKernel,
   id: K,
   handler: EffectHandler<EffectParams<K>>,
 ): void {
-  registerHandlerForRuntime(runtime, HANDLER_KIND, id, handler);
+  registerHandlerForKernel(runtime, HANDLER_KIND, id, handler);
 }
 
 const DO_FX_INTERCEPTOR = createRuntimeStateKey<Interceptor>('reflex.do-fx-interceptor');
 
 /** @internal Commit event state and execute its effects. */
-export function getDoFxInterceptorForRuntime(runtime: RuntimeScope): Interceptor {
+export function getDoFxInterceptorForKernel(runtime: RuntimeKernel): Interceptor {
   return getOrCreateRuntimeState(runtime, DO_FX_INTERCEPTOR, () => createDoFxInterceptor(runtime));
 }
 
-function createDoFxInterceptor(runtime: RuntimeScope): Interceptor {
+function createDoFxInterceptor(runtime: RuntimeKernel): Interceptor {
   return {
     id: 'do-fx',
     after(context: Context): Context {
       if (context.newDb !== undefined) {
-        updateAppDbForRuntime(runtime, context.newDb);
+        updateAppDbForKernel(runtime, context.newDb);
       }
 
       const effects = context.effects;
@@ -81,7 +81,7 @@ function createDoFxInterceptor(runtime: RuntimeScope): Interceptor {
         }
 
         const [id, value] = effect;
-        const handler = getHandlerForRuntime(runtime, HANDLER_KIND, id);
+        const handler = getHandlerForKernel(runtime, HANDLER_KIND, id);
         if (!handler) {
           consoleLog(
             'warn',
@@ -106,7 +106,7 @@ function createDoFxInterceptor(runtime: RuntimeScope): Interceptor {
       }
 
       if (effectErrors.length > 0) {
-        mergeTraceForRuntime(runtime, { tags: { effectErrors } });
+        mergeTraceForKernel(runtime, { tags: { effectErrors } });
       }
 
       return context;
@@ -115,11 +115,11 @@ function createDoFxInterceptor(runtime: RuntimeScope): Interceptor {
 }
 
 /** @internal Install dispatch effects in one runtime. */
-export function registerBuiltInEffectsForRuntime(
-  runtime: RuntimeScope,
+export function registerBuiltInEffectsForKernel(
+  runtime: RuntimeKernel,
   dispatchEvent: (event: DispatchVector) => void,
 ): void {
-  registerSystemHandlerForRuntime(
+  registerSystemHandlerForKernel(
     runtime,
     HANDLER_KIND,
     DISPATCH_LATER,
@@ -128,7 +128,7 @@ export function registerBuiltInEffectsForRuntime(
     },
   );
 
-  registerSystemHandlerForRuntime(runtime, HANDLER_KIND, DISPATCH, (value: EventVector) => {
+  registerSystemHandlerForKernel(runtime, HANDLER_KIND, DISPATCH, (value: EventVector) => {
     if (!isEventVector(value)) {
       consoleLog(
         'error',
@@ -142,7 +142,7 @@ export function registerBuiltInEffectsForRuntime(
 }
 
 function dispatchLater(
-  runtime: RuntimeScope,
+  runtime: RuntimeKernel,
   effect: unknown,
   dispatchEvent: (event: DispatchVector) => void,
 ): void {
@@ -172,7 +172,7 @@ function dispatchLater(
 }
 
 /** @internal Cancel delayed dispatch effects owned by one runtime. */
-export function clearDelayedEffectsForRuntime(runtime: RuntimeScope): void {
+export function clearDelayedEffectsForKernel(runtime: RuntimeKernel): void {
   const timers = getDelayedEffectTimers(runtime);
   for (const timer of timers) clearTimeout(timer);
   timers.clear();

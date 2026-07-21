@@ -1,13 +1,13 @@
 import { clear, clearAll, debounceAndDispatch, throttleAndDispatch } from './runtime-test-api';
-import { dispatchForRuntime } from '../events/router';
+import { dispatchForKernel } from '../events/router';
 import type { EventVector } from '../types';
 
 jest.mock('../events/router', () => ({
   ...jest.requireActual('../events/router'),
-  dispatchForRuntime: jest.fn(),
+  dispatchForKernel: jest.fn(),
 }));
 
-const mockDispatch = dispatchForRuntime as jest.MockedFunction<typeof dispatchForRuntime>;
+const mockDispatch = dispatchForKernel as jest.MockedFunction<typeof dispatchForKernel>;
 
 describe('debounce', () => {
   beforeEach(() => {

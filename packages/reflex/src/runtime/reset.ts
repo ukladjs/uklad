@@ -1,28 +1,28 @@
 import { consoleLog } from '../core/logging';
-import { clearInterceptorsForRuntime } from './event-metadata';
+import { clearInterceptorsForKernel } from './event-metadata';
 import {
-  clearHandlerEntriesForRuntime,
-  hasHandlerForRuntime,
+  clearHandlerEntriesForKernel,
+  hasHandlerForKernel,
   isHandlerKind,
   isSubscriptionHandlerKind,
 } from './handlers';
-import type { RuntimeScope } from './scope';
-import { clearSubscriptionDefinitionsForRuntime } from './subscriptions/cache';
-import { assertSubscriptionsCanBeClearedForRuntime } from './subscriptions/engine';
+import type { RuntimeKernel } from './kernel';
+import { clearSubscriptionDefinitionsForKernel } from './subscriptions/cache';
+import { assertSubscriptionsCanBeClearedForKernel } from './subscriptions/engine';
 
 import type { Id } from '../types';
 import type { HandlerKind } from './handlers';
 
 /** @internal Clear registrations owned by one runtime. */
-export function clearHandlersForRuntime(runtime: RuntimeScope, kind?: HandlerKind, id?: Id): void {
+export function clearHandlersForKernel(runtime: RuntimeKernel, kind?: HandlerKind, id?: Id): void {
   if (kind === undefined || isSubscriptionHandlerKind(kind)) {
-    assertSubscriptionsCanBeClearedForRuntime(runtime);
+    assertSubscriptionsCanBeClearedForKernel(runtime);
   }
 
   if (kind === undefined) {
-    clearHandlerEntriesForRuntime(runtime);
-    clearInterceptorsForRuntime(runtime);
-    clearSubscriptionDefinitionsForRuntime(runtime);
+    clearHandlerEntriesForKernel(runtime);
+    clearInterceptorsForKernel(runtime);
+    clearSubscriptionDefinitionsForKernel(runtime);
     return;
   }
 
@@ -32,19 +32,19 @@ export function clearHandlersForRuntime(runtime: RuntimeScope, kind?: HandlerKin
   }
 
   if (id === undefined) {
-    if (isSubscriptionHandlerKind(kind)) clearSubscriptionDefinitionsForRuntime(runtime);
+    if (isSubscriptionHandlerKind(kind)) clearSubscriptionDefinitionsForKernel(runtime);
     else {
-      clearHandlerEntriesForRuntime(runtime, kind);
-      if (kind === 'event') clearInterceptorsForRuntime(runtime);
+      clearHandlerEntriesForKernel(runtime, kind);
+      if (kind === 'event') clearInterceptorsForKernel(runtime);
     }
     return;
   }
 
-  const handlerExisted = hasHandlerForRuntime(runtime, kind, id);
-  if (isSubscriptionHandlerKind(kind)) clearSubscriptionDefinitionsForRuntime(runtime, id);
+  const handlerExisted = hasHandlerForKernel(runtime, kind, id);
+  if (isSubscriptionHandlerKind(kind)) clearSubscriptionDefinitionsForKernel(runtime, id);
   else {
-    clearHandlerEntriesForRuntime(runtime, kind, id);
-    if (kind === 'event') clearInterceptorsForRuntime(runtime, id);
+    clearHandlerEntriesForKernel(runtime, kind, id);
+    if (kind === 'event') clearInterceptorsForKernel(runtime, id);
   }
 
   if (!handlerExisted) {

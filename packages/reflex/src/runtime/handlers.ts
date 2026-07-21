@@ -1,5 +1,5 @@
 import { consoleLog } from '../core/logging';
-import { type RuntimeScope } from './scope';
+import { type RuntimeKernel } from './kernel';
 
 import type {
   CoEffectHandler,
@@ -64,7 +64,7 @@ export interface HandlerState {
   nextVersion: number;
 }
 
-function getHandlerState(runtime: RuntimeScope): HandlerState {
+function getHandlerState(runtime: RuntimeKernel): HandlerState {
   return (runtime.handlers ??= {
     handlers: createHandlerRegistry(),
     systemHandlers: createHandlerRegistry(),
@@ -118,8 +118,8 @@ export function isSubscriptionHandlerKind(value: string): value is SubscriptionH
 }
 
 /** @internal Runtime-scoped handler lookup. */
-export function getHandlerForRuntime<K extends HandlerKind>(
-  runtime: RuntimeScope,
+export function getHandlerForKernel<K extends HandlerKind>(
+  runtime: RuntimeKernel,
   kind: K,
   id: Id,
 ): HandlerByKind[K] | undefined {
@@ -127,15 +127,15 @@ export function getHandlerForRuntime<K extends HandlerKind>(
 }
 
 /** @internal Runtime-scoped live registry for diagnostics. */
-export function getHandlersForRuntime(runtime: RuntimeScope): HandlerRegistry {
+export function getHandlersForKernel(runtime: RuntimeKernel): HandlerRegistry {
   return getHandlerState(runtime).handlers;
 }
 
 /** @internal Register a handler in one runtime. */
-export function registerHandlerForRuntime<
+export function registerHandlerForKernel<
   K extends HandlerKind,
   T extends HandlerByKind[K] = HandlerByKind[K],
->(runtime: RuntimeScope, kind: K, id: Id, handler: T): T {
+>(runtime: RuntimeKernel, kind: K, id: Id, handler: T): T {
   const state = getHandlerState(runtime);
   if (state.handlers[kind][id]) {
     consoleLog('warn', `[reflex] overwriting ${kind} handler for:`, id);
@@ -146,10 +146,10 @@ export function registerHandlerForRuntime<
 }
 
 /** @internal Register a framework-owned handler in one runtime. */
-export function registerSystemHandlerForRuntime<
+export function registerSystemHandlerForKernel<
   K extends HandlerKind,
   T extends HandlerByKind[K] = HandlerByKind[K],
->(runtime: RuntimeScope, kind: K, id: Id, handler: T): T {
+>(runtime: RuntimeKernel, kind: K, id: Id, handler: T): T {
   const state = getHandlerState(runtime);
   (state.systemHandlers[kind] as Partial<Record<string, RegistryHandler>>)[id] = handler;
   writeHandler(state, kind, id, handler);
@@ -158,13 +158,13 @@ export function registerSystemHandlerForRuntime<
 }
 
 /** @internal Runtime-scoped handler existence check. */
-export function hasHandlerForRuntime(runtime: RuntimeScope, kind: HandlerKind, id: Id): boolean {
+export function hasHandlerForKernel(runtime: RuntimeKernel, kind: HandlerKind, id: Id): boolean {
   return getHandlerState(runtime).handlers[kind][id] !== undefined;
 }
 
 /** @internal Reset stored handlers in one runtime without clearing feature metadata. */
-export function clearHandlerEntriesForRuntime(
-  runtime: RuntimeScope,
+export function clearHandlerEntriesForKernel(
+  runtime: RuntimeKernel,
   kind?: HandlerKind,
   id?: Id,
 ): void {
@@ -188,8 +188,8 @@ export function clearHandlerEntriesForRuntime(
 }
 
 /** @internal Remove a user handler only when it still matches an installation. */
-export function clearHandlerIfMatchesForRuntime<K extends HandlerKind>(
-  runtime: RuntimeScope,
+export function clearHandlerIfMatchesForKernel<K extends HandlerKind>(
+  runtime: RuntimeKernel,
   kind: K,
   id: Id,
   expected: HandlerByKind[K],
@@ -204,8 +204,8 @@ export function clearHandlerIfMatchesForRuntime<K extends HandlerKind>(
 }
 
 /** @internal Return the opaque generation of a handler registration. */
-export function getHandlerRegistrationVersionForRuntime(
-  runtime: RuntimeScope,
+export function getHandlerRegistrationVersionForKernel(
+  runtime: RuntimeKernel,
   kind: HandlerKind,
   id: Id,
 ): number | undefined {
@@ -216,8 +216,8 @@ export function getHandlerRegistrationVersionForRuntime(
  * @internal Remove one installation's handler without touching a newer
  * registration. Framework handlers are restored rather than deleted.
  */
-export function clearHandlerRegistrationForRuntime(
-  runtime: RuntimeScope,
+export function clearHandlerRegistrationForKernel(
+  runtime: RuntimeKernel,
   kind: HandlerKind,
   id: Id,
   version: number,

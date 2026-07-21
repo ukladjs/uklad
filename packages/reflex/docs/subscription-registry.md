@@ -146,7 +146,7 @@ Two properties matter:
   not track. The invariant they enforce: a canonical cache entry never retains
   a terminal dependency node.
 
-`evictCachedSubscriptionForRuntime` is the runtime-scoped entry point used when a
+`evictCachedSubscriptionForKernel` is the kernel-owned entry point used when a
 computed cell's last consumer leaves. It is root-guarded (roots persist) and
 identity-checked (`cache.get(key)?.node === subscription`) so a stale eviction
 request for an already-replaced key is a no-op, then delegates to the same

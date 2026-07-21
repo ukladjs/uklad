@@ -1,10 +1,10 @@
 import isEqual from 'fast-deep-equal';
 
 import type { EqualityCheckFn } from '../types';
-import { type RuntimeScope } from '../runtime/scope';
+import { type RuntimeKernel } from '../runtime/kernel';
 
 let defaultEqualityCheck: EqualityCheckFn = isEqual;
-function getRuntimeEqualityCheck(runtime: RuntimeScope): EqualityCheckFn {
+function getRuntimeEqualityCheck(runtime: RuntimeKernel): EqualityCheckFn {
   return runtime.equalityCheck ?? defaultEqualityCheck;
 }
 
@@ -43,15 +43,15 @@ export const shallowEqual: EqualityCheckFn = (left: any, right: any): boolean =>
 };
 
 /** @internal Replace the default equality function for one runtime. */
-export function setGlobalEqualityCheckForRuntime(
-  runtime: RuntimeScope,
+export function setGlobalEqualityCheckForKernel(
+  runtime: RuntimeKernel,
   equalityCheck: EqualityCheckFn,
 ): void {
   runtime.equalityCheck = equalityCheck;
 }
 
 /** @internal Return the default equality function for one runtime. */
-export function getGlobalEqualityCheckForRuntime(runtime: RuntimeScope): EqualityCheckFn {
+export function getGlobalEqualityCheckForKernel(runtime: RuntimeKernel): EqualityCheckFn {
   return getRuntimeEqualityCheck(runtime);
 }
 

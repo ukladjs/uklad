@@ -6,72 +6,69 @@
  * share one explicitly constructed runtime without reintroducing a singleton
  * into the library API.
  */
+import { getGlobalEqualityCheckForKernel, setGlobalEqualityCheckForKernel } from '../core/equality';
 import {
-  getGlobalEqualityCheckForRuntime,
-  setGlobalEqualityCheckForRuntime,
-} from '../core/equality';
-import {
-  disableTracingForRuntime,
-  enableTracingForRuntime,
-  isTraceEnabledForRuntime,
-  registerTraceCallbackForRuntime,
-  removeTraceCallbackForRuntime,
-  withTraceForRuntime,
+  disableTracingForKernel,
+  enableTracingForKernel,
+  isTraceEnabledForKernel,
+  registerTraceCallbackForKernel,
+  removeTraceCallbackForKernel,
+  withTraceForKernel,
 } from '../core/tracing';
-import { getInjectCofxInterceptorForRuntime } from '../events/coeffects';
+import { getInjectCofxInterceptorForKernel } from '../events/coeffects';
 import {
-  clearGlobalInterceptorsForRuntime,
-  getGlobalInterceptorsForRuntime,
-  regGlobalInterceptorForRuntime,
+  clearGlobalInterceptorsForKernel,
+  getGlobalInterceptorsForKernel,
+  regGlobalInterceptorForKernel,
 } from '../events/global-interceptors';
-import { executeForRuntime } from '../events/interceptors';
-import { regEventErrorHandlerForRuntime } from '../events/pipeline';
-import { clearAllForRuntime, clearForRuntime } from '../events/rate-limit';
-import { regEventForRuntime } from '../events/registration';
-import { dispatchForRuntime, dispatchSyncForRuntime } from '../events/router';
-import { createReflexInspectorForRuntime } from '../inspector';
+import { executeForKernel } from '../events/interceptors';
+import { regEventErrorHandlerForKernel } from '../events/pipeline';
+import { clearAllForKernel, clearForKernel } from '../events/rate-limit';
+import { regEventForKernel } from '../events/registration';
+import { dispatchForKernel, dispatchSyncForKernel } from '../events/router';
+import { createReflexInspectorForKernel } from '../inspector';
 import {
-  flushSubscriptionsForRuntime,
-  getAppDbForRuntime,
-  getRenderDbForRuntime,
-  hasPendingDbFlushForRuntime,
-  initAppDbForRuntime,
-  updateAppDbForRuntime,
+  flushSubscriptionsForKernel,
+  getAppDbForKernel,
+  getRenderDbForKernel,
+  hasPendingDbFlushForKernel,
+  initAppDbForKernel,
+  updateAppDbForKernel,
 } from '../runtime/app-db';
-import { getInterceptorsForRuntime, setInterceptorsForRuntime } from '../runtime/event-metadata';
+import { getInterceptorsForKernel, setInterceptorsForKernel } from '../runtime/event-metadata';
 import {
-  getHandlerForRuntime,
-  getHandlersForRuntime,
-  hasHandlerForRuntime,
-  registerHandlerForRuntime,
+  getHandlerForKernel,
+  getHandlersForKernel,
+  hasHandlerForKernel,
+  registerHandlerForKernel,
 } from '../runtime/handlers';
-import { clearHandlersForRuntime } from '../runtime/reset';
+import { clearHandlersForKernel } from '../runtime/reset';
 import { createReflexRuntime } from '../runtime/runtime';
-import type { RuntimeKernel } from '../runtime/scope';
+import type { RuntimeKernel } from '../runtime/kernel';
 import {
-  clearSubscriptionCacheForRuntime,
-  clearSubsForHotReloadForRuntime,
-  clearSubsForRuntime,
-  getRootSubSourceByIdForRuntime,
-  getSubConfigForRuntime,
-  getSubscriptionDiagnosticsForRuntime,
-  hasCachedSubscriptionForRuntime,
-  setRootSubSourceForRuntime,
-  setSubConfigForRuntime,
-  sweepProvisionalSubscriptionsForRuntime,
+  clearSubscriptionCacheForKernel,
+  clearSubsForHotReloadForKernel,
+  clearSubsForKernel,
+  getRootSubSourceByIdForKernel,
+  getSubConfigForKernel,
+  getSubscriptionDiagnosticsForKernel,
+  hasCachedSubscriptionForKernel,
+  setRootSubSourceForKernel,
+  setSubConfigForKernel,
+  sweepProvisionalSubscriptionsForKernel,
 } from '../runtime/subscriptions/cache';
 import {
-  createSubscriptionForRuntime,
-  getSubscriptionSnapshotForRuntime,
-  publishSubscriptionsForRuntime,
-  readSubscriptionForRuntime,
-  subscribeToSubscriptionForRuntime,
+  createSubscriptionForKernel,
+  getSubscriptionSnapshotForKernel,
+  publishSubscriptionsForKernel,
+  readSubscriptionForKernel,
+  subscribeToSubscriptionForKernel,
 } from '../runtime/subscriptions/engine';
 import {
-  getOrCreateSubscriptionForRuntime,
-  getSubscriptionValueForRuntime,
+  getOrCreateSubscriptionForKernel,
+  getSubscriptionValueForKernel,
 } from '../subscriptions/queries';
-import { regSubForRuntime } from '../subscriptions/registration';
+import { regSubForKernel } from '../subscriptions/registration';
 import { createElement } from 'react';
 
 import type { Trace, TraceCallback, TraceOptions } from '../core/tracing';
@@ -113,27 +110,27 @@ export function ReflexTestProvider({ children }: { children?: ReactNode }): Reac
 const kernel = (testRuntime as unknown as { readonly kernel: RuntimeKernel }).kernel;
 
 export function initAppDb<T extends Record<string, any> = DefaultAppDb>(value: Db<T>): void {
-  initAppDbForRuntime(kernel, value);
+  initAppDbForKernel(kernel, value);
 }
 
 export function getAppDb<T extends Record<string, any> = DefaultAppDb>(): Db<T> {
-  return getAppDbForRuntime<T>(kernel);
+  return getAppDbForKernel<T>(kernel);
 }
 
 export function getRenderDb<T extends Record<string, any> = DefaultAppDb>(): Db<T> {
-  return getRenderDbForRuntime<T>(kernel);
+  return getRenderDbForKernel<T>(kernel);
 }
 
 export function updateAppDb<T = Record<string, any>>(value: Db<T>): void {
-  updateAppDbForRuntime(kernel, value);
+  updateAppDbForKernel(kernel, value);
 }
 
 export function flushSubscriptions(): void {
-  flushSubscriptionsForRuntime(kernel);
+  flushSubscriptionsForKernel(kernel);
 }
 
 export function hasPendingDbFlush(): boolean {
-  return hasPendingDbFlushForRuntime(kernel);
+  return hasPendingDbFlushForKernel(kernel);
 }
 
 export function regEvent<T = DefaultAppDb>(
@@ -142,7 +139,7 @@ export function regEvent<T = DefaultAppDb>(
   registration?: EventRegistrationOptions<T> | Interceptor<T>[] | readonly unknown[],
   legacyInterceptors?: Interceptor<T>[],
 ): void {
-  regEventForRuntime(kernel, id, handler, registration, legacyInterceptors);
+  regEventForKernel(kernel, id, handler, registration, legacyInterceptors);
 }
 
 export function regEffect<K extends Id = Id>(id: K, handler: EffectHandler<EffectParams<K>>): void {
@@ -150,9 +147,9 @@ export function regEffect<K extends Id = Id>(id: K, handler: EffectHandler<Effec
 }
 
 export const regCoeffect = testRuntime.regCoeffect.bind(testRuntime);
-export const dispatch = dispatchForRuntime.bind(null, kernel);
-export const dispatchSync = dispatchSyncForRuntime.bind(null, kernel);
-export const regEventErrorHandler = regEventErrorHandlerForRuntime.bind(null, kernel);
+export const dispatch = dispatchForKernel.bind(null, kernel);
+export const dispatchSync = dispatchSyncForKernel.bind(null, kernel);
+export const regEventErrorHandler = regEventErrorHandlerForKernel.bind(null, kernel);
 
 export function regSub<R = any, K extends Id = Id>(
   id: K,
@@ -160,16 +157,16 @@ export function regSub<R = any, K extends Id = Id>(
   depsFn?: (...params: any[]) => SubVector[],
   config?: SubConfig,
 ): void {
-  regSubForRuntime(kernel, id, computeFn, depsFn, config);
+  regSubForKernel(kernel, id, computeFn, depsFn, config);
 }
 
 export function getSubscriptionValue<T>(subVector: SubVector): T {
-  return getSubscriptionValueForRuntime<T>(kernel, subVector);
+  return getSubscriptionValueForKernel<T>(kernel, subVector);
 }
 
-export const getOrCreateSubscription = getOrCreateSubscriptionForRuntime.bind(null, kernel);
+export const getOrCreateSubscription = getOrCreateSubscriptionForKernel.bind(null, kernel);
 export function getSubscriptionSnapshot<T>(node: SubscriptionNode<T>): T {
-  return getSubscriptionSnapshotForRuntime(kernel, node);
+  return getSubscriptionSnapshotForKernel(kernel, node);
 }
 
 export function subscribeToSubscription<T>(
@@ -178,39 +175,39 @@ export function subscribeToSubscription<T>(
   componentName?: string,
   listenerKind?: SubscriptionListenerKind,
 ): () => void {
-  return subscribeToSubscriptionForRuntime(kernel, node, listener, componentName, listenerKind);
+  return subscribeToSubscriptionForKernel(kernel, node, listener, componentName, listenerKind);
 }
-export const clearSubscriptionCache = clearSubscriptionCacheForRuntime.bind(null, kernel);
-export const clearSubs = clearSubsForRuntime.bind(null, kernel);
-export const clearSubsForHotReload = clearSubsForHotReloadForRuntime.bind(null, kernel);
-export const hasCachedSubscription = hasCachedSubscriptionForRuntime.bind(null, kernel);
-export const getSubscriptionDiagnostics = getSubscriptionDiagnosticsForRuntime.bind(null, kernel);
-export const getRootSubSourceById = getRootSubSourceByIdForRuntime.bind(null, kernel);
-export const getSubConfig = getSubConfigForRuntime.bind(null, kernel);
-export const setRootSubSource = setRootSubSourceForRuntime.bind(null, kernel);
-export const setSubConfig = setSubConfigForRuntime.bind(null, kernel);
-export const sweepProvisionalSubscriptions = sweepProvisionalSubscriptionsForRuntime.bind(
+export const clearSubscriptionCache = clearSubscriptionCacheForKernel.bind(null, kernel);
+export const clearSubs = clearSubsForKernel.bind(null, kernel);
+export const clearSubsForHotReload = clearSubsForHotReloadForKernel.bind(null, kernel);
+export const hasCachedSubscription = hasCachedSubscriptionForKernel.bind(null, kernel);
+export const getSubscriptionDiagnostics = getSubscriptionDiagnosticsForKernel.bind(null, kernel);
+export const getRootSubSourceById = getRootSubSourceByIdForKernel.bind(null, kernel);
+export const getSubConfig = getSubConfigForKernel.bind(null, kernel);
+export const setRootSubSource = setRootSubSourceForKernel.bind(null, kernel);
+export const setSubConfig = setSubConfigForKernel.bind(null, kernel);
+export const sweepProvisionalSubscriptions = sweepProvisionalSubscriptionsForKernel.bind(
   null,
   kernel,
 );
 export function createSubscription<T>(spec: SubscriptionSpec<T>): SubscriptionNode<T> {
-  return createSubscriptionForRuntime(kernel, spec);
+  return createSubscriptionForKernel(kernel, spec);
 }
 
 export function readSubscription<T>(node: SubscriptionNode<T>): T {
-  return readSubscriptionForRuntime(kernel, node);
+  return readSubscriptionForKernel(kernel, node);
 }
 
 export function publishSubscriptions(roots: SubscriptionNode<any>[]): void {
-  publishSubscriptionsForRuntime(kernel, roots);
+  publishSubscriptionsForKernel(kernel, roots);
 }
 
 export function getHandler<K extends HandlerKind>(kind: K, id: Id): HandlerByKind[K] | undefined {
-  return getHandlerForRuntime(kernel, kind, id);
+  return getHandlerForKernel(kernel, kind, id);
 }
 
 export function getHandlers(): HandlerRegistry {
-  return getHandlersForRuntime(kernel);
+  return getHandlersForKernel(kernel);
 }
 
 export function registerHandler<K extends HandlerKind, T extends HandlerByKind[K]>(
@@ -218,45 +215,45 @@ export function registerHandler<K extends HandlerKind, T extends HandlerByKind[K
   id: Id,
   handler: T,
 ): T {
-  return registerHandlerForRuntime(kernel, kind, id, handler);
+  return registerHandlerForKernel(kernel, kind, id, handler);
 }
 
-export const hasHandler = hasHandlerForRuntime.bind(null, kernel);
-export const clearHandlers = clearHandlersForRuntime.bind(null, kernel);
-export const getInterceptors = getInterceptorsForRuntime.bind(null, kernel);
-export const setInterceptors = setInterceptorsForRuntime.bind(null, kernel);
+export const hasHandler = hasHandlerForKernel.bind(null, kernel);
+export const clearHandlers = clearHandlersForKernel.bind(null, kernel);
+export const getInterceptors = getInterceptorsForKernel.bind(null, kernel);
+export const setInterceptors = setInterceptorsForKernel.bind(null, kernel);
 
-export const regGlobalInterceptor = regGlobalInterceptorForRuntime.bind(null, kernel);
-export const getGlobalInterceptors = getGlobalInterceptorsForRuntime.bind(null, kernel);
-export const clearGlobalInterceptors = clearGlobalInterceptorsForRuntime.bind(null, kernel);
-export const getInjectCofxInterceptor = getInjectCofxInterceptorForRuntime.bind(null, kernel);
-export const execute = executeForRuntime.bind(null, kernel) as (
+export const regGlobalInterceptor = regGlobalInterceptorForKernel.bind(null, kernel);
+export const getGlobalInterceptors = getGlobalInterceptorsForKernel.bind(null, kernel);
+export const clearGlobalInterceptors = clearGlobalInterceptorsForKernel.bind(null, kernel);
+export const getInjectCofxInterceptor = getInjectCofxInterceptorForKernel.bind(null, kernel);
+export const execute = executeForKernel.bind(null, kernel) as (
   event: Id extends never ? never : [Id, ...any[]],
   interceptors: Interceptor[],
 ) => Context;
 
-export const setGlobalEqualityCheck = setGlobalEqualityCheckForRuntime.bind(null, kernel);
-export const getGlobalEqualityCheck = getGlobalEqualityCheckForRuntime.bind(null, kernel);
+export const setGlobalEqualityCheck = setGlobalEqualityCheckForKernel.bind(null, kernel);
+export const getGlobalEqualityCheck = getGlobalEqualityCheckForKernel.bind(null, kernel);
 
-export const enableTracing = enableTracingForRuntime.bind(null, kernel);
-export const disableTracing = disableTracingForRuntime.bind(null, kernel);
-export const isTraceEnabled = isTraceEnabledForRuntime.bind(null, kernel);
-export const registerTraceCallback = registerTraceCallbackForRuntime.bind(null, kernel) as (
+export const enableTracing = enableTracingForKernel.bind(null, kernel);
+export const disableTracing = disableTracingForKernel.bind(null, kernel);
+export const isTraceEnabled = isTraceEnabledForKernel.bind(null, kernel);
+export const registerTraceCallback = registerTraceCallbackForKernel.bind(null, kernel) as (
   key: string,
   callback: TraceCallback,
 ) => void;
-export const removeTraceCallback = removeTraceCallbackForRuntime.bind(null, kernel);
+export const removeTraceCallback = removeTraceCallbackForKernel.bind(null, kernel);
 export function withTrace<T>(options: TraceOptions, fn: () => T): T {
-  return withTraceForRuntime(kernel, options, fn);
+  return withTraceForKernel(kernel, options, fn);
 }
 
-export const clear = clearForRuntime.bind(null, kernel);
-export const clearAll = clearAllForRuntime.bind(null, kernel);
+export const clear = clearForKernel.bind(null, kernel);
+export const clearAll = clearAllForKernel.bind(null, kernel);
 export const debounceAndDispatch = testRuntime.debounceAndDispatch.bind(testRuntime);
 export const throttleAndDispatch = testRuntime.throttleAndDispatch.bind(testRuntime);
 
 export function createReflexInspector() {
-  return createReflexInspectorForRuntime(kernel);
+  return createReflexInspectorForKernel(kernel);
 }
 
 export type { ErrorHandler, Trace };

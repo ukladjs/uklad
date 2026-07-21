@@ -41,7 +41,7 @@ Paths in this document are relative to `src/`.
 | `contracts.ts`                    | Store-local runtime contract extraction and vector/result types             |
 | `types.ts`                        | Public contracts and module-augmentation anchors                            |
 | `runtime/runtime.ts`              | `createReflexRuntime`, modules, watches, restore/flush                      |
-| `runtime/scope.ts`                | Instance-owned runtime kernel, identity, and terminal lifecycle             |
+| `runtime/kernel.ts`               | Instance-owned runtime kernel, identity, and terminal lifecycle             |
 | `core/*`                          | Environment, equality, Immer, logging, scheduling, tracing, and validation  |
 | `runtime/app-db.ts`               | `appDb`/`renderDb`, coalesced flush, and changed-root publication           |
 | `runtime/handlers.ts`             | Typed handler definitions and framework-owned handler baselines             |
@@ -184,7 +184,7 @@ subscription engines.
 ## Invariants
 
 - Every mutable db, queue, registry, cache, trace, and callback store is keyed
-  by an explicit runtime scope. Scheduled callbacks capture that scope.
+  by an explicit runtime kernel. Scheduled callbacks capture that kernel.
 - `renderDb` advances **only** inside a publication. The flush is the single publication boundary.
 - One canonical node per serialized query key. Duplicates are an error.
 - Roots are persistent db anchors; computed cells are terminal and evicted when unused.

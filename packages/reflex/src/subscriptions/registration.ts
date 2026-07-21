@@ -1,19 +1,19 @@
 import { consoleLog } from '../core/logging';
-import { getRenderDbForRuntime } from '../runtime/app-db';
+import { getRenderDbForKernel } from '../runtime/app-db';
 import {
-  hasHandlerForRuntime,
-  registerHandlerForRuntime,
+  hasHandlerForKernel,
+  registerHandlerForKernel,
   SUB_DEPS_HANDLER_KIND,
   SUB_HANDLER_KIND,
 } from '../runtime/handlers';
-import type { RuntimeScope } from '../runtime/scope';
+import type { RuntimeKernel } from '../runtime/kernel';
 import {
-  clearRootSubSourceForRuntime,
-  clearSubConfigsForRuntime,
-  getRootSubIdBySourceForRuntime,
-  hasCachedSubscriptionForIdForRuntime,
-  setRootSubSourceForRuntime,
-  setSubConfigForRuntime,
+  clearRootSubSourceForKernel,
+  clearSubConfigsForKernel,
+  getRootSubIdBySourceForKernel,
+  hasCachedSubscriptionForIdForKernel,
+  setRootSubSourceForKernel,
+  setSubConfigForKernel,
 } from '../runtime/subscriptions/cache';
 
 import type { Id, SubConfig, SubResult, SubVector } from '../types';
@@ -30,19 +30,19 @@ import type { Id, SubConfig, SubResult, SubVector } from '../types';
  * declared result for `K`. Explicit result generics retain the legacy contract.
  */
 /** @internal Register a root or computed subscription in one runtime. */
-export function regSubForRuntime<R = any, K extends Id = Id>(
-  runtime: RuntimeScope,
+export function regSubForKernel<R = any, K extends Id = Id>(
+  runtime: RuntimeKernel,
   id: K,
   computeFn?: ((...values: any[]) => SubResult<K, R>) | string,
   depsFn?: (...params: any[]) => SubVector[],
   config?: SubConfig,
 ): void {
-  if (hasCachedSubscriptionForIdForRuntime(runtime, id)) {
+  if (hasCachedSubscriptionForIdForKernel(runtime, id)) {
     const message = `[reflex] Cannot register subscription '${id}' while a cached query for that id exists. Clear unused subscriptions before re-registering it.`;
     consoleLog('error', message);
     throw new Error(message);
   }
-  if (hasHandlerForRuntime(runtime, SUB_HANDLER_KIND, id)) {
+  if (hasHandlerForKernel(runtime, SUB_HANDLER_KIND, id)) {
     consoleLog('warn', `[reflex] Overriding. Subscription '${id}' already registered.`);
   }
 
@@ -58,17 +58,17 @@ export function regSubForRuntime<R = any, K extends Id = Id>(
       );
       return;
     }
-    clearRootSubSourceForRuntime(runtime, id);
-    registerHandlerForRuntime(runtime, SUB_HANDLER_KIND, id, computeFn);
-    registerHandlerForRuntime(runtime, SUB_DEPS_HANDLER_KIND, id, depsFn);
+    clearRootSubSourceForKernel(runtime, id);
+    registerHandlerForKernel(runtime, SUB_HANDLER_KIND, id, computeFn);
+    registerHandlerForKernel(runtime, SUB_DEPS_HANDLER_KIND, id, depsFn);
   }
 
   // Re-registration replaces the complete definition, including its config.
   const normalizedConfig = normalizeSubConfig(id, config);
   if (normalizedConfig) {
-    setSubConfigForRuntime(runtime, id, normalizedConfig);
+    setSubConfigForKernel(runtime, id, normalizedConfig);
   } else {
-    clearSubConfigsForRuntime(runtime, id);
+    clearSubConfigsForKernel(runtime, id);
   }
 }
 
@@ -91,8 +91,8 @@ function normalizeSubConfig(id: Id, config: SubConfig | undefined): SubConfig | 
   return undefined;
 }
 
-function registerRootSubscription(runtime: RuntimeScope, id: Id, sourceKey: string): boolean {
-  const conflictingSubId = getRootSubIdBySourceForRuntime(runtime, sourceKey);
+function registerRootSubscription(runtime: RuntimeKernel, id: Id, sourceKey: string): boolean {
+  const conflictingSubId = getRootSubIdBySourceForKernel(runtime, sourceKey);
   if (conflictingSubId !== undefined && conflictingSubId !== id) {
     consoleLog(
       'error',
@@ -101,15 +101,15 @@ function registerRootSubscription(runtime: RuntimeScope, id: Id, sourceKey: stri
     return false;
   }
 
-  setRootSubSourceForRuntime(runtime, id, sourceKey);
+  setRootSubSourceForKernel(runtime, id, sourceKey);
   // Root handlers read the last flushed generation so new and cached queries
   // cannot observe different DB versions between an event and its flush.
-  registerHandlerForRuntime(
+  registerHandlerForKernel(
     runtime,
     SUB_HANDLER_KIND,
     id,
-    () => getRenderDbForRuntime<Record<string, any>>(runtime)[sourceKey],
+    () => getRenderDbForKernel<Record<string, any>>(runtime)[sourceKey],
   );
-  registerHandlerForRuntime(runtime, SUB_DEPS_HANDLER_KIND, id, () => []);
+  registerHandlerForKernel(runtime, SUB_DEPS_HANDLER_KIND, id, () => []);
   return true;
 }

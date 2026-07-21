@@ -2,8 +2,8 @@ import type { Interceptor } from '../types';
 import {
   createRuntimeStateKey,
   getOrCreateRuntimeState,
-  type RuntimeScope,
-} from '../runtime/scope';
+  type RuntimeKernel,
+} from '../runtime/kernel';
 
 interface GlobalInterceptorState {
   interceptors: Interceptor[];
@@ -15,7 +15,7 @@ const GLOBAL_INTERCEPTOR_STATE = createRuntimeStateKey<GlobalInterceptorState>(
   'reflex.global-interceptors',
 );
 
-function getInterceptorState(runtime: RuntimeScope): GlobalInterceptorState {
+function getInterceptorState(runtime: RuntimeKernel): GlobalInterceptorState {
   return getOrCreateRuntimeState(runtime, GLOBAL_INTERCEPTOR_STATE, () => ({
     interceptors: [],
     versions: new Map(),
@@ -30,8 +30,8 @@ function bumpVersion(state: GlobalInterceptorState, id: string): number {
 }
 
 /** @internal Register an interceptor in one runtime. */
-export function regGlobalInterceptorForRuntime(
-  runtime: RuntimeScope,
+export function regGlobalInterceptorForKernel(
+  runtime: RuntimeKernel,
   interceptor: Interceptor,
 ): void {
   const state = getInterceptorState(runtime);
@@ -50,12 +50,12 @@ export function regGlobalInterceptorForRuntime(
 }
 
 /** @internal Return global interceptors for one runtime. */
-export function getGlobalInterceptorsForRuntime(runtime: RuntimeScope): Interceptor[] {
+export function getGlobalInterceptorsForKernel(runtime: RuntimeKernel): Interceptor[] {
   return [...getInterceptorState(runtime).interceptors];
 }
 
 /** @internal Clear global interceptors in one runtime. */
-export function clearGlobalInterceptorsForRuntime(runtime: RuntimeScope, id?: string): void {
+export function clearGlobalInterceptorsForKernel(runtime: RuntimeKernel, id?: string): void {
   const state = getInterceptorState(runtime);
   const removedIds =
     id === undefined ? state.interceptors.map((interceptor) => interceptor.id) : [id];
@@ -65,16 +65,16 @@ export function clearGlobalInterceptorsForRuntime(runtime: RuntimeScope, id?: st
 }
 
 /** @internal Return the opaque generation for a global interceptor id. */
-export function getGlobalInterceptorRegistrationVersionForRuntime(
-  runtime: RuntimeScope,
+export function getGlobalInterceptorRegistrationVersionForKernel(
+  runtime: RuntimeKernel,
   id: string,
 ): number | undefined {
   return getInterceptorState(runtime).versions.get(id);
 }
 
 /** @internal Remove an interceptor only when it belongs to one installation. */
-export function clearGlobalInterceptorRegistrationForRuntime(
-  runtime: RuntimeScope,
+export function clearGlobalInterceptorRegistrationForKernel(
+  runtime: RuntimeKernel,
   id: string,
   version: number,
 ): boolean {

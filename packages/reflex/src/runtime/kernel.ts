@@ -49,9 +49,6 @@ export interface RuntimeKernel {
   };
 }
 
-/** @internal Transitional alias while runtime-scoped helpers are renamed. */
-export type RuntimeScope = RuntimeKernel;
-
 export interface RuntimeIdentityOptions {
   readonly runtimeId?: string;
   readonly name?: string;
@@ -96,9 +93,6 @@ export function createRuntimeKernel(options: RuntimeIdentityOptions = {}): Runti
     lifecycle: { disposed: false },
   };
 }
-
-/** @internal Backwards-compatible constructor name during the internal migration. */
-export const createRuntimeScope: typeof createRuntimeKernel = createRuntimeKernel;
 
 function createGeneratedRuntimeId(): string {
   const randomUUID = globalThis.crypto?.randomUUID;

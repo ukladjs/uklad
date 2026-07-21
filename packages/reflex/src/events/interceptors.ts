@@ -1,7 +1,7 @@
-import { mergeTraceForRuntime } from '../core/tracing';
-import { getAppDbForRuntime } from '../runtime/app-db';
-import { getHandlerForRuntime } from '../runtime/handlers';
-import type { RuntimeScope } from '../runtime/scope';
+import { mergeTraceForKernel } from '../core/tracing';
+import { getAppDbForKernel } from '../runtime/app-db';
+import { getHandlerForKernel } from '../runtime/handlers';
+import type { RuntimeKernel } from '../runtime/kernel';
 
 import type {
   CoEffects,
@@ -36,13 +36,13 @@ export function isInterceptor(value: unknown): value is Interceptor {
 }
 
 /** @internal Execute an event interceptor chain in one runtime. */
-export function executeForRuntime(
-  runtime: RuntimeScope,
+export function executeForKernel(
+  runtime: RuntimeKernel,
   event: EventVector,
   interceptors: Interceptor[],
 ): Context {
-  const context = createContext(event, interceptors, getAppDbForRuntime<Db>(runtime));
-  const errorHandler: ErrorHandler | undefined = getHandlerForRuntime(
+  const context = createContext(event, interceptors, getAppDbForKernel<Db>(runtime));
+  const errorHandler: ErrorHandler | undefined = getHandlerForKernel(
     runtime,
     ERROR_HANDLER_KIND,
     EVENT_ERROR_HANDLER_ID,
@@ -70,12 +70,12 @@ export function executeForRuntime(
   }
 }
 
-function executeAndTraceFinalEffects(runtime: RuntimeScope, context: Context): Context {
+function executeAndTraceFinalEffects(runtime: RuntimeKernel, context: Context): Context {
   const result = executeInterceptors(context);
   // Event handlers publish their initial effects while patches are produced,
   // but `after` interceptors may append or replace effects later in the same
   // pipeline. Record the final list so traces describe what do-fx actually ran.
-  mergeTraceForRuntime(runtime, { tags: { effects: result.effects } });
+  mergeTraceForKernel(runtime, { tags: { effects: result.effects } });
   return result;
 }
 
@@ -96,7 +96,7 @@ function isReflexError(value: unknown): value is ReflexError {
   return candidate.cause instanceof Error && typeof candidate.data === 'object';
 }
 
-function traceError(runtime: RuntimeScope, value: unknown, event: EventVector): void {
+function traceError(runtime: RuntimeKernel, value: unknown, event: EventVector): void {
   const reflexError = isReflexError(value) ? value : undefined;
   const originalError = reflexError?.cause ?? normalizeError(value);
   const traceErrorTag: TraceErrorTag = {
@@ -107,7 +107,7 @@ function traceError(runtime: RuntimeScope, value: unknown, event: EventVector): 
     ...(reflexError ? { direction: reflexError.data.direction } : {}),
     eventV: event,
   };
-  mergeTraceForRuntime(runtime, { tags: { error: traceErrorTag } });
+  mergeTraceForKernel(runtime, { tags: { error: traceErrorTag } });
 }
 
 function toReflexError(

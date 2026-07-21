@@ -18,12 +18,15 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:compat": "tsc6 --noEmit -p tsconfig.json",
+    "check": "pnpm run typecheck && pnpm run typecheck:compat && pnpm run build && pnpm run test",
     "test": "node --test tests/*.test.mjs",
     "test:unit": "node --test tests/*.test.mjs",
     "clean": "node ../../scripts/clean.mjs dist coverage"
   },
   "devDependencies": {
     "@flexsurfer/reflex": "workspace:*",
+    "@typescript/native": "npm:typescript@7.0.2",
     "tsdown": "0.22.8",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },

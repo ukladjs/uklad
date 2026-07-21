@@ -283,6 +283,9 @@ importers:
       '@flexsurfer/reflex':
         specifier: workspace:*
         version: link:../reflex
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
       tsdown:
         specifier: 0.22.8
         version: 0.22.8(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.21)

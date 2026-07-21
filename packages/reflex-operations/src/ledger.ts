@@ -1,4 +1,9 @@
-import type { EventVector, ReflexRuntime, RuntimeLifecycleEffect } from '@flexsurfer/reflex';
+import type {
+  EventVector,
+  ReflexRuntime,
+  RuntimeLifecycleEffect,
+  RuntimeLifecycleSubscription,
+} from '@flexsurfer/reflex';
 
 import { MAX_EFFECTS, MAX_ERRORS, MAX_EVENTS, MAX_OPERATIONS } from './limits.js';
 import { deriveOutcome } from './receipt.js';
@@ -46,6 +51,7 @@ export function createOperation(
     events: [],
     effects: [],
     observations: [],
+    recalculatedSubscriptions: [],
     errors: [],
     requestedObservations: (options.observe ?? []).map(cloneQuery),
     eventsTruncated: false,
@@ -58,6 +64,23 @@ export function createOperation(
   };
   appendEvent(operation, operation.rootEventInstanceId, null, event);
   return operation;
+}
+
+/** Record the final, fully-settled publication wave for one operation. */
+export function recordPublishedSubscriptions(
+  operation: MutableOperation,
+  recalculated: readonly RuntimeLifecycleSubscription[],
+): void {
+  operation.recalculatedSubscriptions = recalculated.map((subscription) => ({
+    key: subscription.key,
+    query: cloneQuery(subscription.query as never),
+    kind: subscription.kind,
+    active: subscription.active,
+    version: subscription.version,
+    status: subscription.status,
+    ...(subscription.status === 'value' ? { value: snapshotValue(subscription.value) } : {}),
+    ...(subscription.status === 'error' ? { error: subscription.error ?? '[Unknown subscription error]' } : {}),
+  }));
 }
 
 export function createEventInstanceId(runtime: ReflexRuntime<any>, state: OperationState): string {

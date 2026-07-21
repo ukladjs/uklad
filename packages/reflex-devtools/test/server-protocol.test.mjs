@@ -153,6 +153,12 @@ async function connectSdk(
       runtimeId: identity.runtimeId,
       runtimeName: identity.runtimeName,
       token: session.runtime.token,
+      ...(identity.operationApiVersion === 1
+        ? {
+            operationApiVersion: 1,
+            runtimeInstanceId: identity.runtimeInstanceId,
+          }
+        : {}),
     },
   }));
   await helloReceived;
@@ -334,6 +340,14 @@ function authenticatedFetch(baseUrl, path, init = {}, role = 'mcp') {
 
 function postDispatch(baseUrl, eventName, params = [], runtimeId) {
   return authenticatedFetch(baseUrl, '/api/dispatch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ eventName, params, runtimeId }),
+  });
+}
+
+function postDispatchAndWait(baseUrl, eventName, params = [], runtimeId) {
+  return authenticatedFetch(baseUrl, '/api/dispatch-and-wait', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ eventName, params, runtimeId }),
@@ -1255,6 +1269,61 @@ test('/api/dispatch resolves with the observed successful trace', async () => {
     entries: [['value', 3]],
   });
   assert.equal('reversePatches' in traceBody.trace.tags, false);
+});
+
+test('/api/dispatch-and-wait returns an operation receipt from an operation-enabled runtime', async () => {
+  const { baseUrl, wsUrl } = await startServer();
+  const receipt = {
+    operation: {
+      schemaVersion: 0,
+      operationId: 'runtime-test:instance:1:op:1',
+      outcome: 'succeeded',
+      subscriptions: {
+        status: 'settled',
+        publishedRevision: 1,
+        recalculated: [{
+          key: '["counter"]',
+          query: ['counter'],
+          kind: 'root',
+          active: true,
+          version: 1,
+          status: 'value',
+          value: 1,
+        }],
+      },
+    },
+    delivery: { status: 'settled', timeoutMs: null },
+    replayed: false,
+  };
+  const socket = await connectSdk(
+    wsUrl,
+    (message, client) => {
+      assert.equal(message.payload.operation, true);
+      sendSdkEvent(client, {
+        type: 'reflex-operation-result',
+        payload: { dispatchId: message.payload.dispatchId, result: receipt },
+      });
+    },
+    undefined,
+    undefined,
+    {
+      runtimeId: 'runtime-test',
+      runtimeName: 'Runtime test',
+      operationApiVersion: 1,
+      runtimeInstanceId: 'runtime-test:instance:1',
+    },
+  );
+
+  const response = await postDispatchAndWait(baseUrl, 'increment-counter', [], socket.runtimeId);
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.success, true);
+  assert.equal(body.receipt.operation.operationId, receipt.operation.operationId);
+  assert.deepEqual(body.receipt.operation.subscriptions.recalculated, receipt.operation.subscriptions.recalculated);
+  const status = await getStatus(baseUrl, socket.runtimeId);
+  assert.equal(status.operations.available, true);
+  assert.equal(status.operations.runtimeInstanceId, 'runtime-test:instance:1');
 });
 
 test('/api/dispatch derives failed and effects-failed outcomes from trace tags', async () => {

@@ -7,8 +7,10 @@ import type {
   OperationEffectsSummary,
   OperationObservationResult,
   OperationOutcome,
+  OperationRecalculatedSubscription,
   OperationReceipt,
   OperationStateSummary,
+  OperationSubscriptionsSummary,
 } from './types.js';
 import {
   cloneEvent,
@@ -62,6 +64,7 @@ export function snapshotOperation(
     },
     events: operation.events.map(snapshotEvent),
     state: stateSummary,
+    subscriptions: snapshotSubscriptions(operation),
     effects: effectsSummary,
     observations: operation.observations.map(snapshotObservation),
     errors: operation.errors.map(copyError),
@@ -77,6 +80,14 @@ export function snapshotOperation(
       currentlyRetained: state.operations.get(operation.operationId) === operation,
       terminalEvictionPolicy: 'oldest-terminal',
     },
+  };
+}
+
+function snapshotSubscriptions(operation: MutableOperation): OperationSubscriptionsSummary {
+  return {
+    status: 'settled',
+    publishedRevision: operation.publishedRevision,
+    recalculated: operation.recalculatedSubscriptions.map(snapshotSubscription),
   };
 }
 
@@ -182,5 +193,20 @@ function snapshotEffect(effect: OperationEffectResult): OperationEffectResult {
     ...effect,
     value: snapshotValue(effect.value),
     ...(effect.error ? { error: copyError(effect.error) } : {}),
+  };
+}
+
+function snapshotSubscription(
+  subscription: OperationRecalculatedSubscription,
+): OperationRecalculatedSubscription {
+  return {
+    key: subscription.key,
+    query: cloneQuery(subscription.query),
+    kind: subscription.kind,
+    active: subscription.active,
+    version: subscription.version,
+    status: subscription.status,
+    ...(subscription.status === 'value' ? { value: snapshotValue(subscription.value) } : {}),
+    ...(subscription.status === 'error' ? { error: subscription.error ?? '[Unknown subscription error]' } : {}),
   };
 }

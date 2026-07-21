@@ -1,6 +1,6 @@
 import { createRuntimeStateKey, getOrCreateRuntimeState, type RuntimeKernel } from './kernel';
 
-import type { EventVector } from '../types';
+import type { EventVector, SubVector } from '../types';
 
 export type RuntimeLifecycleErrorKind =
   | 'handler'
@@ -38,6 +38,23 @@ export interface RuntimeLifecyclePatch {
 }
 
 /**
+ * One subscription that was recomputed while a published DB generation
+ * settled. This is deliberately a snapshot rather than a runtime node so
+ * optional integrations (such as operation receipts) cannot retain or mutate
+ * the subscription graph.
+ */
+export interface RuntimeLifecycleSubscription {
+  readonly key: string;
+  readonly query: Readonly<SubVector>;
+  readonly kind: 'root' | 'computed';
+  readonly active: boolean;
+  readonly version: number;
+  readonly status: 'value' | 'error';
+  readonly value?: unknown;
+  readonly error?: string;
+}
+
+/**
  * Optional observer for runtime work. Observers are owned by the runtime that
  * installs them and receive no access to the runtime kernel or mutable state.
  */
@@ -57,7 +74,16 @@ export interface RuntimeLifecycleObserver {
   onEffects?(effects: readonly unknown[]): void;
   onEffect?(effect: RuntimeLifecycleEffect): void;
   onStateCommitted?(previousDb: unknown, nextDb: unknown, committedRevision: number): void;
-  onStatePublished?(db: unknown, publishedRevision: number): void;
+  /**
+   * Called only after the complete active subscription graph has settled for
+   * this published revision. `recalculated` includes subscriptions that ran
+   * even when their observable value was equal to the previous value.
+   */
+  onStatePublished?(
+    db: unknown,
+    publishedRevision: number,
+    recalculated: readonly RuntimeLifecycleSubscription[],
+  ): void;
   /** Optional correlation evidence merged into the current trace. */
   getTraceTags?(): Readonly<Record<string, unknown>>;
   onRuntimeDisposed?(): void;

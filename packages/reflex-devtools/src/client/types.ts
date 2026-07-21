@@ -48,4 +48,10 @@ export interface ReflexInspector {
   subscribeTraces(callback: ReflexTraceCallback): () => void;
   dispatch(event: [string, ...any[]]): void;
   evaluateSubscription(query: [string, ...any[]]): unknown;
+  /** Optional operation receipt capability supplied by @flexsurfer/reflex-operations. */
+  readonly operationApiVersion?: 1;
+  /** Exact runtime-instance identity for retained operation receipts. */
+  readonly runtimeInstanceId?: string;
+  executeEvent?(event: [string, ...any[]], options?: unknown): Promise<unknown>;
+  getOperation?(lookup: unknown): unknown;
 }

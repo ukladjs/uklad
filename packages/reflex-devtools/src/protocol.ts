@@ -58,4 +58,5 @@ export interface DevtoolsProtocolInfo {
   readonly version: typeof REFLEX_DEVTOOLS_PROTOCOL_VERSION;
   readonly runtimeVersion: number | null;
   readonly inspectorApiVersion: number | null;
+  readonly operationApiVersion?: number | null;
 }

@@ -20,6 +20,7 @@
     "types": ["vite/client", "node"],
     "paths": {
       "@flexsurfer/reflex-devtools": ["../../packages/reflex-devtools/src"],
+      "@flexsurfer/reflex-operations": ["../../packages/reflex-operations/src"],
       "@flexsurfer/reflex": ["../../packages/reflex/src"],
       "@flexsurfer/reflex/vanilla": ["../../packages/reflex/src/vanilla.ts"],
       "@flexsurfer/reflex/react": ["../../packages/reflex/src/react.ts"]

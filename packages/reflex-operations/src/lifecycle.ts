@@ -9,6 +9,7 @@ import {
   recordEffect,
   recordError,
   rejectOperation,
+  recordPublishedSubscriptions,
   requestFinalization,
 } from './ledger.js';
 import { MAX_PATCHES_PER_EVENT } from './limits.js';
@@ -134,7 +135,7 @@ export function observeOperationLifecycle(runtime: ReflexRuntime<any>, state: Op
         }
       }
     },
-    onStatePublished(_db, revision) {
+    onStatePublished(_db, revision, recalculated) {
       state.knownPublishedRevision = revision;
       for (const operation of state.operations.values()) {
         if (
@@ -142,6 +143,11 @@ export function observeOperationLifecycle(runtime: ReflexRuntime<any>, state: Op
           !operation.terminal &&
           (operation.lastCommittedRevision === null || revision >= operation.lastCommittedRevision)
         ) {
+          // An operation that never committed state must not claim a
+          // concurrent operation's publication wave as its own.
+          if (operation.lastCommittedRevision !== null) {
+            recordPublishedSubscriptions(operation, recalculated);
+          }
           finalizeOperation(runtime, state, operation);
         }
       }

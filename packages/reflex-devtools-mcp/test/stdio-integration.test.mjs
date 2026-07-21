@@ -63,6 +63,7 @@ async function startFakeDevtoolsServer({
   capabilities = ['inspect', 'dispatch'],
 } = {}) {
   const dispatchRequests = [];
+  const operationRequests = [];
   const evalSubRequests = [];
   const requests = [];
 
@@ -209,6 +210,48 @@ async function startFakeDevtoolsServer({
           patches: [],
           effects: [['fake-effect', 123]],
         });
+      } else if (req.method === 'POST' && url.pathname === '/api/dispatch-and-wait') {
+        assertAuthenticatedRequest(req);
+        if (!capabilities.includes('dispatch')) {
+          sendJson(res, 403, {
+            success: false,
+            code: 'CAPABILITY_DENIED',
+            error: 'The dispatch capability is not granted.',
+            requiredCapability: 'dispatch',
+          });
+          return;
+        }
+        const body = await readJson(req);
+        operationRequests.push(body);
+        sendJson(res, 200, {
+          success: true,
+          requestId: 'operation-request-1',
+          runtimeId: RUNTIME_ID,
+          runtimeName: RUNTIME_NAME,
+          sessionEpoch: 1,
+          receipt: {
+            operation: {
+              schemaVersion: 0,
+              operationId: 'integration-runtime:instance:1:op:1',
+              outcome: 'succeeded',
+              subscriptions: {
+                status: 'settled',
+                publishedRevision: 1,
+                recalculated: [{
+                  query: ['counter'],
+                  key: '["counter"]',
+                  kind: 'root',
+                  active: true,
+                  version: 1,
+                  status: 'value',
+                  value: 2,
+                }],
+              },
+            },
+            delivery: { status: 'settled', timeoutMs: null },
+            replayed: false,
+          },
+        });
       } else if (req.method === 'POST' && url.pathname === '/api/eval-sub') {
         assertAuthenticatedRequest(req);
         const body = await readJson(req);
@@ -241,6 +284,7 @@ async function startFakeDevtoolsServer({
 
   return {
     dispatchRequests,
+    operationRequests,
     evalSubRequests,
     requests,
     port: address.port,
@@ -281,6 +325,7 @@ test('stdio MCP server lists dispatch_event for a read-only session and denies t
       tools.tools.map((tool) => tool.name).sort(),
       [
         'app_status',
+        'dispatch_and_wait',
         'dispatch_event',
         'eval_sub',
         'get_active_subs',
@@ -298,7 +343,9 @@ test('stdio MCP server lists dispatch_event for a read-only session and denies t
       idempotentHint: false,
       openWorldHint: true,
     });
-    for (const tool of tools.tools.filter(({ name }) => name !== 'dispatch_event')) {
+    for (const tool of tools.tools.filter(
+      ({ name }) => name !== 'dispatch_event' && name !== 'dispatch_and_wait',
+    )) {
       assert.deepEqual(tool.annotations, {
         readOnlyHint: true,
         destructiveHint: false,
@@ -362,6 +409,7 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
       tools.tools.map((tool) => tool.name).sort(),
       [
         'app_status',
+        'dispatch_and_wait',
         'dispatch_event',
         'eval_sub',
         'get_active_subs',
@@ -380,7 +428,19 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
       openWorldHint: true,
     });
     assert.equal(dispatchTool.inputSchema.additionalProperties, false);
-    for (const tool of tools.tools.filter(({ name }) => name !== 'dispatch_event')) {
+    const dispatchAndWaitTool = tools.tools.find(({ name }) => name === 'dispatch_and_wait');
+    assert.deepEqual(dispatchAndWaitTool.annotations, {
+      title: 'Dispatch Reflex event',
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    });
+    assert.equal(dispatchAndWaitTool.inputSchema.additionalProperties, false);
+    assert.ok(dispatchAndWaitTool.outputSchema);
+    for (const tool of tools.tools.filter(
+      ({ name }) => name !== 'dispatch_event' && name !== 'dispatch_and_wait',
+    )) {
       assert.deepEqual(tool.annotations, {
         readOnlyHint: true,
         destructiveHint: false,
@@ -445,6 +505,25 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
     assert.equal(succeeded.runtimeId, RUNTIME_ID);
     assert.equal('params' in succeeded, false);
 
+    const operation = parseToolResult(await client.callTool({
+      name: 'dispatch_and_wait',
+      arguments: {
+        eventName: 'fake-event',
+        params: [2],
+        runtimeId: RUNTIME_ID,
+      },
+    }));
+    assert.equal(operation.receipt.operation.operationId, 'integration-runtime:instance:1:op:1');
+    assert.deepEqual(operation.receipt.operation.subscriptions.recalculated, [{
+      query: ['counter'],
+      key: '["counter"]',
+      kind: 'root',
+      active: true,
+      version: 1,
+      status: 'value',
+      value: 2,
+    }]);
+
     const subValue = parseToolResult(await client.callTool({
       name: 'eval_sub',
       arguments: { id: 'counter', args: [3], runtimeId: RUNTIME_ID },
@@ -473,6 +552,9 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
         runtimeId: RUNTIME_ID,
       },
       { eventName: 'missing-handler', params: [], runtimeId: RUNTIME_ID },
+    ]);
+    assert.deepEqual(fakeDevtools.operationRequests, [
+      { eventName: 'fake-event', params: [2], runtimeId: RUNTIME_ID },
     ]);
     assert.deepEqual(fakeDevtools.evalSubRequests, [
       { id: 'counter', args: [3], runtimeId: RUNTIME_ID },

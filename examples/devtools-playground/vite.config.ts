@@ -16,6 +16,9 @@ export default defineConfig({
       '@flexsurfer/reflex-devtools': fileURLToPath(
         new URL('../../packages/reflex-devtools/src', import.meta.url),
       ),
+      '@flexsurfer/reflex-operations': fileURLToPath(
+        new URL('../../packages/reflex-operations/src', import.meta.url),
+      ),
     },
   },
 });

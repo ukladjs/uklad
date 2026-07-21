@@ -409,6 +409,7 @@ class DevtoolsClient {
           return;
         }
         try {
+          const operationCapability = this.operationCapability();
           ws.send(JSON.stringify({
             type: 'reflex-auth',
             payload: {
@@ -418,6 +419,12 @@ class DevtoolsClient {
               inspectorApiVersion: this.inspector.apiVersion,
               runtimeId: this.inspector.runtimeId,
               runtimeName: this.inspector.runtimeName,
+              ...(operationCapability
+                ? {
+                    operationApiVersion: 1,
+                    runtimeInstanceId: operationCapability.runtimeInstanceId,
+                  }
+                : {}),
             },
           }));
         } catch (error) {
@@ -550,6 +557,12 @@ class DevtoolsClient {
       // Handle dispatch request from devtools UI or MCP
       const { dispatchId, eventName, params = [] } = message.payload;
 
+      const eventVector: [string, ...any[]] = [eventName, ...params];
+      if (message.payload.operation === true && dispatchId != null) {
+        void this.executeOperation(dispatchId, eventVector);
+        return;
+      }
+
       // MCP dispatches carry a dispatchId and expect the event's trace back
       // (reflex-dispatch-result). UI dispatches don't. Register the watcher
       // before dispatching so the trace can't slip past it.
@@ -572,13 +585,61 @@ class DevtoolsClient {
       }
 
       // Dispatch the event in the client app with all parameters
-      const eventVector: [string, ...any[]] = [eventName, ...params];
       if (typeof dispatchId === 'string') {
         this.dispatchCorrelations.set(eventVector, dispatchId);
       }
       this.inspector.dispatch(eventVector);
     } else if (message.type === 'eval-sub-to-client') {
       void this.evaluateSubscription(message.payload);
+    }
+  }
+
+  private operationCapability(): {
+    readonly runtimeInstanceId: string;
+    readonly executeEvent: (event: [string, ...any[]]) => Promise<unknown>;
+  } | null {
+    if (
+      this.inspector.operationApiVersion !== 1
+      || !validRuntimeIdentityText(this.inspector.runtimeInstanceId, 256)
+      || typeof this.inspector.executeEvent !== 'function'
+    ) {
+      return null;
+    }
+    return {
+      runtimeInstanceId: this.inspector.runtimeInstanceId,
+      executeEvent: (event) => this.inspector.executeEvent!(event),
+    };
+  }
+
+  private async executeOperation(
+    dispatchId: string,
+    event: [string, ...any[]],
+  ): Promise<void> {
+    const operation = this.operationCapability();
+    if (!operation) {
+      await this.sendEvent({
+        type: 'reflex-operation-result',
+        payload: {
+          dispatchId,
+          error: 'The runtime does not expose the negotiated operation receipt capability.',
+        },
+      });
+      return;
+    }
+    try {
+      const result = await operation.executeEvent(event);
+      await this.sendEvent({
+        type: 'reflex-operation-result',
+        payload: { dispatchId, result },
+      });
+    } catch (error) {
+      await this.sendEvent({
+        type: 'reflex-operation-result',
+        payload: {
+          dispatchId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 
@@ -743,6 +804,7 @@ class DevtoolsClient {
       tracing: this.isTracingEnabled,
       protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
       inspectorApiVersion: this.inspector.apiVersion,
+      ...(this.operationCapability() ? { operationApiVersion: 1 } : {}),
     };
     if (this.config.effectMode !== undefined) {
       payload.effectMode = this.config.effectMode;

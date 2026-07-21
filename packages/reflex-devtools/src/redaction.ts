@@ -482,6 +482,16 @@ export function redactDevtoolsEvent<T extends { type: string; payload?: any }>(
             payload: { ...event.payload, trace: withTrace(event.payload.trace) },
           }
         : event;
+    case 'reflex-operation-result':
+      return event.payload?.result
+        ? {
+            ...event,
+            payload: {
+              ...event.payload,
+              result: withState(event.payload.result, 'state'),
+            },
+          }
+        : event;
     case 'reflex-eval-sub-result':
       if (!event.payload || typeof event.payload !== 'object') return event;
       if ('error' in event.payload) {

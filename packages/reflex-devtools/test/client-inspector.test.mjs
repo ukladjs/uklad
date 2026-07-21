@@ -397,6 +397,75 @@ test('uses only the injected inspector and returns idempotent cleanup', async ()
   }
 });
 
+test('uses the negotiated operation capability instead of trace correlation', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWebSocket = globalThis.WebSocket;
+  FakeWebSocket.instances = [];
+  FakeWebSocket.autoOpen = true;
+  FakeWebSocket.throwOnSend = false;
+  globalThis.WebSocket = FakeWebSocket;
+  globalThis.fetch = successfulFetch;
+
+  const fake = createFakeInspector();
+  const executed = [];
+  fake.inspector.operationApiVersion = 1;
+  fake.inspector.runtimeInstanceId = 'runtime-test:instance:1';
+  fake.inspector.executeEvent = async (event) => {
+    executed.push(event);
+    return {
+      operation: {
+        operationId: 'runtime-test:instance:1:op:1',
+        outcome: 'succeeded',
+        subscriptions: { status: 'settled', publishedRevision: 1, recalculated: [] },
+      },
+      delivery: { status: 'settled', timeoutMs: null },
+      replayed: false,
+    };
+  };
+
+  const cleanup = enableDevtools(fake.inspector);
+  try {
+    await waitForTurn();
+    await waitForTurn();
+    const socket = FakeWebSocket.instances[0];
+    assert.equal(socket.sent[0].payload.operationApiVersion, 1);
+    assert.equal(socket.sent[0].payload.runtimeInstanceId, 'runtime-test:instance:1');
+
+    socket.emit({
+      type: 'dispatch-to-client',
+      payload: {
+        dispatchId: 'operation-7',
+        operation: true,
+        eventName: 'increment',
+        params: [2],
+      },
+    });
+    await waitForTurn();
+
+    assert.deepEqual(executed, [['increment', 2]]);
+    assert.deepEqual(fake.dispatches, []);
+    assert.deepEqual(
+      socket.sent.find((event) => event.type === 'reflex-operation-result')?.payload,
+      {
+        dispatchId: 'operation-7',
+        result: {
+          operation: {
+            operationId: 'runtime-test:instance:1:op:1',
+            outcome: 'succeeded',
+            subscriptions: { status: 'settled', publishedRevision: 1, recalculated: [] },
+          },
+          delivery: { status: 'settled', timeoutMs: null },
+          replayed: false,
+        },
+      },
+    );
+  } finally {
+    cleanup();
+    globalThis.fetch = originalFetch;
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
 test('cleanup prevents a late health check from opening a WebSocket', async () => {
   const originalFetch = globalThis.fetch;
   const originalWebSocket = globalThis.WebSocket;

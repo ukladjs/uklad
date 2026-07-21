@@ -9,6 +9,7 @@ import {
 } from '../dist/httpClient.js';
 import { appStatusTool } from '../dist/tools/appStatus.js';
 import { dispatchEventTool } from '../dist/tools/dispatchEvent.js';
+import { dispatchAndWaitTool } from '../dist/tools/dispatchAndWait.js';
 import { evalSubTool } from '../dist/tools/evalSub.js';
 import { getActiveSubsTool } from '../dist/tools/getActiveSubs.js';
 import { getAppStateTool } from '../dist/tools/getAppState.js';
@@ -484,6 +485,48 @@ test('dispatch_event formats failed outcomes with actionable hints', async () =>
   assert.equal(body.error.phase, 'missing-handler');
   assert.match(body.hint, /get_handlers/);
   assert.equal('params' in body, false);
+});
+
+test('dispatch_and_wait returns the complete operation receipt as structured content', async () => {
+  const apiClient = {
+    async dispatchAndWait(eventName, params, runtimeId) {
+      assert.equal(eventName, 'increment-counter');
+      assert.deepEqual(params, [2]);
+      assert.equal(runtimeId, 'headless-runtime');
+      return {
+        requestId: 'request-1',
+        runtimeId,
+        runtimeName: 'Headless runtime',
+        sessionEpoch: 4,
+        receipt: {
+          operation: {
+            operationId: 'headless-runtime:instance:1:op:1',
+            outcome: 'succeeded',
+            subscriptions: {
+              status: 'settled',
+              publishedRevision: 2,
+              recalculated: [{ query: ['counter'], value: 2 }],
+            },
+          },
+          delivery: { status: 'settled', timeoutMs: null },
+          replayed: false,
+        },
+      };
+    },
+  };
+
+  const result = await dispatchAndWaitTool(apiClient).handler({
+    eventName: 'increment-counter',
+    params: [2],
+    runtimeId: 'headless-runtime',
+  });
+  const body = parseToolResult(result);
+
+  assert.equal(body.requestId, 'request-1');
+  assert.deepEqual(body.receipt.operation.subscriptions.recalculated, [
+    { query: ['counter'], value: 2 },
+  ]);
+  assert.deepEqual(result.structuredContent, body);
 });
 
 test('eval_sub returns the value for an unmounted parameterized subscription', async () => {

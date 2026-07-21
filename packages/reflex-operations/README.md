@@ -19,6 +19,7 @@ const { operation } = await operations.dispatchAndWait(['todos/add', todo], {
 
 Each immutable receipt records the root event and its synchronous dispatch
 cascade, parentage, planned and committed Immer patches, state revisions,
+the fully settled publication wave (including every recalculated subscription),
 effect outcomes, observations, structured failures, timing, and retention
 metadata. Matching idempotency retries replay the same retained operation;
 conflicting input produces a rejected receipt.

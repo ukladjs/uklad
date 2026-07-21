@@ -24,6 +24,7 @@ import { getTracesTool } from './tools/getTraces.js';
 import { getTraceTool } from './tools/getTrace.js';
 import { getAppStateTool } from './tools/getAppState.js';
 import { dispatchEventTool } from './tools/dispatchEvent.js';
+import { dispatchAndWaitTool } from './tools/dispatchAndWait.js';
 import { getHandlersTool } from './tools/getHandlers.js';
 import { getActiveSubsTool } from './tools/getActiveSubs.js';
 import { evalSubTool } from './tools/evalSub.js';
@@ -45,7 +46,7 @@ Retrieval order (cheapest first):
 2. get_handlers — registered event/sub/effect ids; learn what exists before reading state.
 3. get_app_state with "path" — read only the state slice you need; avoid full dumps on real apps.
 4. eval_sub — evaluate any registered subscription against live state, whether or not a component has mounted it. Use get_active_subs only when you need the current mounted-subscription set.
-5. dispatch_event — act. The response already carries the outcome (succeeded | failed | effects-failed | unknown) plus the state patches and emitted effects; verify from it instead of re-reading state.
+5. dispatch_and_wait — preferred act-and-verify path for operation-enabled runtimes. It returns the full post-dispatch receipt after the joined event cascade and active subscription graph settle, including recalculated subscriptions. Use dispatch_event only with older runtimes that lack the operation capability.
 6. get_traces — compact rows of recent activity, including what you did not initiate (user clicks, timers, subscriptions). Drill into one trace with get_trace, passing the get_traces response's runtimeId and sessionEpoch so a restart fails explicitly; never page through full trace details.
 
 Caveats:
@@ -107,6 +108,7 @@ export class ReflexDevToolsMCPServer {
       getActiveSubsTool(this.apiClient),
       evalSubTool(this.apiClient),
       dispatchEventTool(this.apiClient),
+      dispatchAndWaitTool(this.apiClient),
     ];
 
     for (const tool of tools) {
@@ -125,6 +127,7 @@ export class ReflexDevToolsMCPServer {
             ...tool.inputSchema,
             additionalProperties: false,
           },
+          ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : {}),
           annotations: toolAnnotations(tool.name),
         }))
       };
@@ -212,7 +215,7 @@ export class ReflexDevToolsMCPServer {
 }
 
 function toolAnnotations(name: string) {
-  if (name === 'dispatch_event') {
+  if (name === 'dispatch_event' || name === 'dispatch_and_wait') {
     return {
       title: 'Dispatch Reflex event',
       readOnlyHint: false,

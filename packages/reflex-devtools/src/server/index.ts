@@ -146,6 +146,7 @@ interface PendingDispatch {
   readonly startedAt: number;
   readonly target: string;
   readonly client: string;
+  readonly expectsOperationReceipt: boolean;
 }
 
 interface PendingSubEval {
@@ -162,6 +163,8 @@ interface RuntimeSocketMetadata {
   readonly sessionEpoch: number;
   readonly protocolVersion: number;
   readonly inspectorApiVersion: number;
+  readonly operationApiVersion?: 1;
+  readonly runtimeInstanceId?: string;
 }
 
 interface RuntimeEntry {
@@ -701,7 +704,15 @@ export class DevtoolsServer {
               runtime.metadata?.protocolVersion ?? null,
             inspectorApiVersion:
               runtime.metadata?.inspectorApiVersion ?? null,
+            operationApiVersion:
+              runtime.metadata?.operationApiVersion ?? null,
           },
+          operations: runtime.metadata?.operationApiVersion === 1
+            ? {
+                available: true,
+                runtimeInstanceId: runtime.metadata.runtimeInstanceId,
+              }
+            : { available: false },
           security: {
             authenticated: true,
             loopbackOnly: isLoopbackHost(this.config.host),
@@ -1008,6 +1019,14 @@ export class DevtoolsServer {
       this.requireJsonContentType,
       jsonBodyParser(this.config.maxControlPayloadBytes),
       (req, res) => this.handleHttpDispatch(req, res),
+    );
+
+    this.app.post(
+      '/api/dispatch-and-wait',
+      this.authenticateHttp('mcp', 'dispatch', 'dispatch'),
+      this.requireJsonContentType,
+      jsonBodyParser(this.config.maxControlPayloadBytes),
+      (req, res) => this.handleHttpDispatch(req, res, true),
     );
 
     this.app.post(
@@ -1331,12 +1350,17 @@ export class DevtoolsServer {
         }
         const runtimeId = authMessage.payload?.runtimeId;
         const runtimeName = authMessage.payload?.runtimeName;
+        const operationApiVersion = authMessage.payload?.operationApiVersion;
+        const runtimeInstanceId = authMessage.payload?.runtimeInstanceId;
         if (
           !this.validRuntimeId(runtimeId)
           || !this.validRuntimeIdentityText(
             runtimeName,
             MAX_RUNTIME_NAME_LENGTH,
           )
+          || (operationApiVersion !== undefined && operationApiVersion !== 1)
+          || (operationApiVersion === 1 && !this.validRuntimeId(runtimeInstanceId))
+          || (operationApiVersion !== 1 && runtimeInstanceId !== undefined)
         ) {
           ws.close(1008, 'Invalid runtime identity');
           return;
@@ -1347,6 +1371,7 @@ export class DevtoolsServer {
           runtimeName,
           protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
           inspectorApiVersion,
+          ...(operationApiVersion === 1 ? { operationApiVersion, runtimeInstanceId } : {}),
         });
       });
     });
@@ -1790,7 +1815,11 @@ export class DevtoolsServer {
     ws.on('error', remove);
   }
 
-  private handleHttpDispatch(req: Request, res: Response): void {
+  private handleHttpDispatch(
+    req: Request,
+    res: Response,
+    expectsOperationReceipt = false,
+  ): void {
     const auth = res.locals.auth as AuthContext;
     const requestId = randomUUID();
     const target = this.validEventId(req.body?.eventName)
@@ -1900,6 +1929,30 @@ export class DevtoolsServer {
       });
       return;
     }
+    if (expectsOperationReceipt && runtime.metadata.operationApiVersion !== 1) {
+      this.appendAudit({
+        requestId,
+        principal: 'mcp',
+        client: auth.client,
+        transport: 'http',
+        action: 'dispatch',
+        capability: 'dispatch',
+        target,
+        runtimeId: runtime.runtimeId,
+        status: 'denied',
+        reason: 'operation-capability-unavailable',
+      });
+      res.status(409).json({
+        success: false,
+        requestId,
+        code: 'OPERATION_CAPABILITY_UNAVAILABLE',
+        error:
+          'This runtime does not expose the operation receipt capability. ' +
+          'Enable DevTools with createOperationInspector(runtime).',
+        ...this.runtimeResponseIdentity(runtime),
+      });
+      return;
+    }
 
     const dispatchId = randomUUID();
     const runtimeSessionId = runtime.metadata.sessionId;
@@ -1911,6 +1964,7 @@ export class DevtoolsServer {
         dispatchId,
         eventName: req.body.eventName,
         params: req.body.params ?? [],
+        ...(expectsOperationReceipt ? { operation: true } : {}),
       },
       timestamp: startedAt,
     });
@@ -1949,9 +2003,9 @@ export class DevtoolsServer {
 
     const timeout = setTimeout(() => {
       this.pendingDispatches.delete(dispatchId);
-      const message =
-        `Event dispatched, but the app reported no trace for it within ` +
-        `${DISPATCH_OUTCOME_TIMEOUT_MS}ms`;
+      const message = expectsOperationReceipt
+        ? `Event dispatched, but the app did not return an operation receipt within ${DISPATCH_OUTCOME_TIMEOUT_MS}ms`
+        : `Event dispatched, but the app reported no trace for it within ${DISPATCH_OUTCOME_TIMEOUT_MS}ms`;
       this.appendAudit({
         requestId,
         principal: 'mcp',
@@ -1983,6 +2037,7 @@ export class DevtoolsServer {
       startedAt,
       target: req.body.eventName,
       client: auth.client,
+      expectsOperationReceipt,
     });
   }
 
@@ -2110,6 +2165,10 @@ export class DevtoolsServer {
     try {
       if (event.type === 'reflex-dispatch-result') {
         this.resolveDispatch(event.payload, runtimeId, runtimeSessionId);
+        return { status: 'accepted' };
+      }
+      if (event.type === 'reflex-operation-result') {
+        this.resolveOperation(event.payload, runtimeId, runtimeSessionId);
         return { status: 'accepted' };
       }
       if (event.type === 'reflex-eval-sub-result') {
@@ -2247,6 +2306,64 @@ export class DevtoolsServer {
       durationMs: Date.now() - pending.startedAt,
     });
     this.sendSerialized(pending.res, body);
+  }
+
+  private resolveOperation(
+    payload: any,
+    runtimeId: string,
+    runtimeSessionId: string,
+  ): void {
+    const dispatchId = payload?.dispatchId;
+    if (typeof dispatchId !== 'string') return;
+    const pending = this.pendingDispatches.get(dispatchId);
+    if (
+      !pending
+      || !pending.expectsOperationReceipt
+      || pending.runtimeId !== runtimeId
+      || pending.runtimeSessionId !== runtimeSessionId
+    ) {
+      return;
+    }
+
+    clearTimeout(pending.timeout);
+    this.pendingDispatches.delete(dispatchId);
+    const operation = payload?.result?.operation;
+    const outcome = typeof operation?.outcome === 'string' ? operation.outcome : 'unknown';
+    const status: AuditRecord['status'] =
+      outcome === 'succeeded' || outcome === 'failed' || outcome === 'effects-failed'
+        ? outcome
+        : 'unknown';
+    this.appendAudit({
+      requestId: pending.requestId,
+      principal: 'mcp',
+      client: pending.client,
+      transport: 'http',
+      action: 'dispatch',
+      capability: 'dispatch',
+      target: pending.target,
+      runtimeId: pending.runtimeId,
+      status,
+      reason: typeof payload?.error === 'string' ? payload.error : undefined,
+      durationMs: Date.now() - pending.startedAt,
+    });
+
+    if (typeof payload?.error === 'string') {
+      pending.res.status(502).json({
+        success: false,
+        requestId: pending.requestId,
+        ...this.runtimeResponseIdentityById(pending.runtimeId),
+        code: 'OPERATION_EXECUTION_FAILED',
+        error: payload.error,
+      });
+      return;
+    }
+
+    this.sendSerialized(pending.res, {
+      success: true,
+      requestId: pending.requestId,
+      ...this.runtimeResponseIdentityById(pending.runtimeId),
+      receipt: payload.result,
+    });
   }
 
   private resolveSubEval(
@@ -2605,6 +2722,8 @@ export class DevtoolsServer {
         return this.validRuntimeInfo(event.payload);
       case 'reflex-dispatch-result':
         return this.validDispatchResult(event.payload);
+      case 'reflex-operation-result':
+        return this.validOperationResult(event.payload);
       case 'reflex-eval-sub-result':
         return this.validSubEvaluationResult(event.payload);
       default:
@@ -2719,6 +2838,9 @@ export class DevtoolsServer {
     ) {
       return false;
     }
+    if (payload.operationApiVersion !== undefined && payload.operationApiVersion !== 1) {
+      return false;
+    }
     if (payload.effects !== undefined) {
       if (!isRecord(payload.effects)) return false;
       const effects = Object.entries(payload.effects);
@@ -2749,6 +2871,20 @@ export class DevtoolsServer {
     }
     return payload.reason === undefined
       || (typeof payload.reason === 'string' && payload.reason.length <= 1024);
+  }
+
+  private validOperationResult(payload: unknown): boolean {
+    if (
+      !isRecord(payload)
+      || typeof payload.dispatchId !== 'string'
+      || payload.dispatchId.length > 128
+    ) {
+      return false;
+    }
+    return (
+      (payload.result !== undefined && isRecord(payload.result))
+      || (typeof payload.error === 'string' && payload.error.length <= 4096)
+    );
   }
 
   private validSubEvaluationResult(payload: unknown): boolean {

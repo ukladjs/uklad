@@ -121,6 +121,26 @@ export interface OperationObservationResult {
   readonly error?: OperationError;
 }
 
+/** One cached subscription recomputed while this operation's final publication settled. */
+export interface OperationRecalculatedSubscription {
+  readonly key: string;
+  readonly query: SubVector;
+  readonly kind: 'root' | 'computed';
+  readonly active: boolean;
+  readonly version: number;
+  readonly status: 'value' | 'error';
+  readonly value?: unknown;
+  readonly error?: string;
+}
+
+/** User-visible subscription evidence captured after the dispatch cascade publishes. */
+export interface OperationSubscriptionsSummary {
+  readonly status: 'settled';
+  readonly publishedRevision: number;
+  /** Includes subscriptions that recomputed to an equal value and emitted no listener update. */
+  readonly recalculated: readonly OperationRecalculatedSubscription[];
+}
+
 export interface OperationStateSummary {
   readonly status: 'unchanged' | 'committed' | 'partially-committed' | 'failed';
   readonly patches: readonly OperationPatch[];
@@ -181,6 +201,7 @@ export interface OperationReceipt {
   readonly revisions: OperationRevisionSummary;
   readonly events: readonly OperationEventResult[];
   readonly state: OperationStateSummary;
+  readonly subscriptions: OperationSubscriptionsSummary;
   readonly effects: OperationEffectsSummary;
   readonly observations: readonly OperationObservationResult[];
   readonly errors: readonly OperationError[];

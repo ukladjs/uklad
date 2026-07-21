@@ -319,6 +319,22 @@ export class DevToolsAPIClient {
     }));
   }
 
+  async dispatchAndWait(
+    eventName: string,
+    params: any[] = [],
+    runtimeId?: string,
+  ): Promise<any> {
+    return this.responseBody(await this.fetch('/api/dispatch-and-wait', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventName,
+        params,
+        ...(runtimeId === undefined ? {} : { runtimeId }),
+      }),
+    }));
+  }
+
   async evalSub(id: string, args: any[] = [], runtimeId?: string): Promise<any> {
     return this.responseBody(await this.fetch('/api/eval-sub', {
       method: 'POST',

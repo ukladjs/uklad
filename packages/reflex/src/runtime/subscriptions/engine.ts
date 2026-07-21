@@ -3,6 +3,7 @@ import { mergeTraceForKernel, withTraceForKernel } from '../../core/tracing';
 import { type RuntimeKernel } from '../kernel';
 
 import type { EqualityCheckFn, SubVector } from '../../types';
+import type { RuntimeLifecycleSubscription } from '../lifecycle';
 
 declare const subscriptionNodeType: unique symbol;
 
@@ -313,13 +314,13 @@ export class SubscriptionEngine {
     };
   }
 
-  publish(roots: SubscriptionNode<any>[]): void {
+  publish(roots: SubscriptionNode<any>[]): readonly RuntimeLifecycleSubscription[] {
     this.assertPublicationAllowed();
     const subscriptions = roots.map((root) => this.unwrap(root));
     const nonRoot = subscriptions.find((subscription) => subscription.spec.kind !== 'root');
     if (nonRoot)
       throw new Error(`[reflex] Cannot publish non-root subscription ${nonRoot.spec.key}.`);
-    this.publishWave(Array.from(new Set(subscriptions)));
+    return this.publishWave(Array.from(new Set(subscriptions)));
   }
 
   assertPublicationAllowed(): void {
@@ -403,13 +404,14 @@ export class SubscriptionEngine {
   }
 
   /** Push changed roots through active dependents in topological-rank order. */
-  private publishWave(roots: SubscriptionCell<any>[]): void {
+  private publishWave(roots: SubscriptionCell<any>[]): readonly RuntimeLifecycleSubscription[] {
     const wave = ++this.wave;
     this.publicationEpoch++;
     const buckets = new Map<number, SubscriptionCell<any>[]>();
     const ranks: number[] = [];
     let rankIndex = -1;
     const changed: SubscriptionCell<any>[] = [];
+    const recalculated: SubscriptionCell<any>[] = [];
 
     const enqueue = (subscription: SubscriptionCell<any>) => {
       if (!subscription.active || subscription.queuedWave === wave) return;
@@ -439,9 +441,12 @@ export class SubscriptionEngine {
     try {
       for (const root of roots) {
         root.validatedEpoch = this.publicationEpoch;
-        if (!root.refreshRoot()) continue;
-        if (root.listeners.length > 0) changed.push(root);
-        for (const dependent of root.dependents) enqueue(dependent);
+        const changedRoot = root.refreshRoot();
+        recalculated.push(root);
+        if (changedRoot) {
+          if (root.listeners.length > 0) changed.push(root);
+          for (const dependent of root.dependents) enqueue(dependent);
+        }
       }
 
       ranks.sort((left, right) => left - right);
@@ -450,7 +455,13 @@ export class SubscriptionEngine {
         if (!bucket) continue;
         for (const subscription of bucket) {
           subscription.validatedEpoch = this.publicationEpoch;
-          if (!subscription.active || !subscription.refreshComputed(false)) continue;
+          if (!subscription.active) continue;
+          const changedSubscription = subscription.refreshComputed(false);
+          // A cell enters a publication bucket only after an upstream
+          // observable change, so this refresh evaluates (or propagates an
+          // upstream error) even if its own result compares equal.
+          recalculated.push(subscription);
+          if (!changedSubscription) continue;
           if (subscription.listeners.length > 0) changed.push(subscription);
           for (const dependent of subscription.dependents) enqueue(dependent);
         }
@@ -468,6 +479,21 @@ export class SubscriptionEngine {
       this.phase = 'idle';
       this.drainDeferredReleases();
     }
+    return recalculated.map((subscription) => this.snapshotRecalculated(subscription));
+  }
+
+  private snapshotRecalculated(
+    subscription: SubscriptionCell<any>,
+  ): RuntimeLifecycleSubscription {
+    return {
+      key: subscription.spec.key,
+      query: [...subscription.spec.query] as SubVector,
+      kind: subscription.spec.kind,
+      active: subscription.active,
+      version: subscription.outputStamp,
+      status: subscription.hasError ? 'error' : 'value',
+      ...(subscription.hasError ? { error: formatDiagnosticError(subscription.error) } : { value: subscription.value }),
+    };
   }
 
   /** Activate dependencies before dependents and roll back atomically on error. */
@@ -607,8 +633,8 @@ export function subscribeToSubscriptionForKernel<T>(
 export function publishSubscriptionsForKernel(
   runtime: RuntimeKernel,
   roots: SubscriptionNode<any>[],
-): void {
-  getEngine(runtime).publish(roots);
+): readonly RuntimeLifecycleSubscription[] {
+  return getEngine(runtime).publish(roots);
 }
 
 /** @internal Inspect a node owned by one runtime. */

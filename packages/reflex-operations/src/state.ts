@@ -10,6 +10,7 @@ import type {
   OperationObservationResult,
   OperationOutcome,
   OperationPatch,
+  OperationRecalculatedSubscription,
   OperationStatus,
 } from './types.js';
 
@@ -57,6 +58,7 @@ export interface MutableOperation {
   events: MutableEvent[];
   effects: OperationEffectResult[];
   observations: OperationObservationResult[];
+  recalculatedSubscriptions: OperationRecalculatedSubscription[];
   errors: OperationError[];
   requestedObservations: readonly SubVector[];
   eventsTruncated: boolean;

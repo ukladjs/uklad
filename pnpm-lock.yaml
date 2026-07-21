@@ -16,6 +16,9 @@ importers:
       '@flexsurfer/reflex-devtools':
         specifier: workspace:*
         version: link:../../packages/reflex-devtools
+      '@flexsurfer/reflex-operations':
+        specifier: workspace:*
+        version: link:../../packages/reflex-operations
       react:
         specifier: ^19.2.7
         version: 19.2.7

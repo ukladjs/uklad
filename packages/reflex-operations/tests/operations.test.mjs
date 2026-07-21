@@ -35,6 +35,77 @@ test('records a runtime-local receipt after the queue publishes', async () => {
   runtime.dispose();
 });
 
+test('returns the fully settled subscription wave, including equal-value recomputations', async () => {
+  const runtime = createReflexRuntime({
+    runtimeId: 'operations-subscriptions',
+    initialDb: { count: 0, label: 'initial' },
+  });
+  runtime.regEvent('increment', ({ draftDb }) => {
+    draftDb.count += 1;
+  });
+  runtime.regSub('count');
+  runtime.regSub(
+    'count-label',
+    (count) => `count:${count}`,
+    () => [['count']],
+  );
+  const unwatch = runtime.watchSubscription(['count-label'], () => {});
+
+  const { operation } = await createOperationClient(runtime).dispatchAndWait(['increment']);
+
+  assert.equal(operation.subscriptions.status, 'settled');
+  assert.equal(operation.subscriptions.publishedRevision, 1);
+  assert.deepEqual(
+    operation.subscriptions.recalculated.map(({ version: _version, ...subscription }) => subscription),
+    [
+      {
+        key: '["count"]',
+        query: ['count'],
+        kind: 'root',
+        active: true,
+        status: 'value',
+        value: 1,
+      },
+      {
+        key: '["count-label"]',
+        query: ['count-label'],
+        kind: 'computed',
+        active: true,
+        status: 'value',
+        value: 'count:1',
+      },
+    ],
+  );
+  assert.ok(operation.subscriptions.recalculated.every(({ version }) => version > 0));
+
+  unwatch();
+  runtime.dispose();
+});
+
+test('does not attribute another operation’s publication wave to an unchanged operation', async () => {
+  const runtime = createReflexRuntime({
+    runtimeId: 'operations-unrelated-publication',
+    initialDb: { count: 0 },
+  });
+  runtime.regEvent('noop', () => {});
+  runtime.regEvent('increment', ({ draftDb }) => {
+    draftDb.count += 1;
+  });
+  runtime.regSub('count');
+  const unwatch = runtime.watchSubscription(['count'], () => {});
+  const operations = createOperationClient(runtime);
+
+  const unchanged = operations.dispatchAndWait(['noop']);
+  runtime.dispatch(['increment']);
+
+  const { operation } = await unchanged;
+  assert.equal(operation.state.status, 'unchanged');
+  assert.deepEqual(operation.subscriptions.recalculated, []);
+
+  unwatch();
+  runtime.dispose();
+});
+
 test('captures a dispatch-effect cascade, effects, and committed patches', async () => {
   const runtime = createReflexRuntime({ runtimeId: 'operations-cascade', initialDb: { count: 0 } });
   runtime.regEvent('root', () => [['dispatch', ['child', 3]]]);

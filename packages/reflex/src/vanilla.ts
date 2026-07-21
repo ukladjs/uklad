@@ -54,6 +54,7 @@ export type {
   RuntimeLifecycleObserver,
   RuntimeLifecyclePatch,
   RuntimeLifecycleStatePlan,
+  RuntimeLifecycleSubscription,
 } from './runtime/lifecycle';
 export type {
   AppDb,

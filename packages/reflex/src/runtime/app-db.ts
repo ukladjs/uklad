@@ -56,13 +56,17 @@ export function initAppDbForKernel<T = DefaultAppDb>(
   state.initialized = true;
   state.appDb = acceptedValue;
   state.renderDb = acceptedValue;
-  publishSubscriptionsForKernel(runtime, collectChangedRoots(runtime, oldDb, acceptedValue));
+  const recalculated = publishSubscriptionsForKernel(
+    runtime,
+    collectChangedRoots(runtime, oldDb, acceptedValue),
+  );
   state.publishedRevision = state.committedRevision;
   notifyRuntimeLifecycleForKernel(
     runtime,
     'onStatePublished',
     acceptedValue,
     state.publishedRevision,
+    recalculated,
   );
 }
 
@@ -122,9 +126,18 @@ export function flushSubscriptionsForKernel(runtime: RuntimeKernel): void {
   const newDb = state.appDb;
   const targetRevision = state.committedRevision;
   state.renderDb = newDb;
-  publishSubscriptionsForKernel(runtime, collectChangedRoots(runtime, oldDb, newDb));
+  const recalculated = publishSubscriptionsForKernel(
+    runtime,
+    collectChangedRoots(runtime, oldDb, newDb),
+  );
   state.publishedRevision = targetRevision;
-  notifyRuntimeLifecycleForKernel(runtime, 'onStatePublished', newDb, targetRevision);
+  notifyRuntimeLifecycleForKernel(
+    runtime,
+    'onStatePublished',
+    newDb,
+    targetRevision,
+    recalculated,
+  );
 }
 
 /** @internal Return whether one runtime still has an unflushed db generation. */

@@ -59,6 +59,7 @@
     "immer": "^11.1.11"
   },
   "devDependencies": {
+    "@flexsurfer/reflex": "workspace:*",
     "@types/express": "^5.0.6",
     "@types/ws": "^8.18.1",
     "@types/node": "^24.13.3",

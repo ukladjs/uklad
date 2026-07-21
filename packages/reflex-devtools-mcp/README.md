@@ -110,18 +110,18 @@ Restart the client and the inspection tools appear.
 
 The bridge needs a DevTools server with a connected app to talk to. In the project (the agent toolkit skill does all of this automatically):
 
-1. **Install DevTools and the optional operation receipt adapter:**
+1. **Install DevTools:**
   ```bash
    npm install --save-dev @flexsurfer/reflex-devtools
-   npm install @flexsurfer/reflex-operations
   ```
 2. **Enable it in development** (app entry point):
   ```typescript
-   import { createReflexInspector } from '@flexsurfer/reflex';
    import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
    if (import.meta.env.DEV) {
-     enableDevtools(createReflexInspector());
+     enableDevtools(runtime, {
+       operations: {},
+     });
    }
   ```
 3. **Add and run the project-local server script.** The `--mcp` flag enables authenticated inspection and trace storage, but remains read-only:
@@ -262,7 +262,7 @@ Retrieve the current application database state — scoped by path whenever poss
 ### 5. `dispatch_and_wait`
 
 The preferred development action for a runtime enabled with
-`createOperationInspector(runtime)`. It waits for the root event and all joined
+`enableDevtools(runtime, { operations: {} })`. It waits for the root event and all joined
 synchronous descendants, effect dispositions, and the final subscription
 publication. Its structured receipt includes state patches, revisions, effects,
 requested observations, and the subscriptions recalculated in the settled
@@ -276,8 +276,8 @@ publication wave. It is authoritative even when tracing is off.
 
 Use `dispatch_event` only as the trace-derived compatibility path for older
 runtimes. `dispatch_and_wait` returns an explicit
-`OPERATION_CAPABILITY_UNAVAILABLE` response when the app has not installed the
-operation inspector.
+`OPERATION_CAPABILITY_UNAVAILABLE` response when the app has not enabled
+DevTools operations.
 
 ### 6. `dispatch_event`
 
@@ -367,7 +367,6 @@ Reflex's state layer is React-free, so the app an agent drives does not need a b
 // resolves dependencies through vite aliases)
 import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
-import { createOperationInspector } from '@flexsurfer/reflex-operations';
 import { headlessModule } from './module.headless';
 
 const runtime = createReflexRuntime({
@@ -377,7 +376,13 @@ const runtime = createReflexRuntime({
 });
 runtime.registerModule(headlessModule); // events, subs, and Node-safe adapters
 
-enableDevtools(createOperationInspector(runtime), {
+enableDevtools(runtime, {
+  operations: {
+    executionContext: {
+      profile: 'headless',
+      defaultEffectMode: 'suppressed',
+    },
+  },
   // runtime: 'headless' is auto-detected (no window)
   effectMode: 'safe',
   effects: { 'local-storage-set': 'memory', 'analytics-track': 'noop' }
@@ -386,7 +391,7 @@ enableDevtools(createOperationInspector(runtime), {
 setInterval(() => {}, 60_000); // keep the process alive if the server is down
 ```
 
-Split runtime-specific side effects into adapter pairs so the headless world is safe by default: `effects.browser.ts` / `effects.headless.ts` and `coeffects.browser.ts` / `coeffects.headless.ts` register the **same effect ids** with different implementations (real `localStorage` vs an in-memory map, real analytics vs no-op). Handlers emit the same effect contract either way. With the operation inspector installed, `dispatch_and_wait` also reports the full settled state transition and subscriptions recalculated by the dispatch; the `effects` map passed to `enableDevtools` tells agents which effects really execute.
+Split runtime-specific side effects into adapter pairs so the headless world is safe by default: `effects.browser.ts` / `effects.headless.ts` and `coeffects.browser.ts` / `coeffects.headless.ts` register the **same effect ids** with different implementations (real `localStorage` vs an in-memory map, real analytics vs no-op). Handlers emit the same effect contract either way. With DevTools operations enabled, `dispatch_and_wait` also reports the full settled state transition and subscriptions recalculated by the dispatch; the `effects` map passed to `enableDevtools` tells agents which effects really execute.
 
 Run it with a watcher for the edit → reload → re-verify loop (`tsx watch src/headless.ts`); each reload reconnects that runtime id and bumps its `sessionEpoch` — visible in the next `app_status` call. Distinct runtime ids coexist, so a browser preview and headless process can be inspected together. A new connection with the same id supersedes only its older session; dispatches still in flight across that session replacement come back `outcome: "unknown"` ("session restarted") instead of hanging.
 

@@ -1,4 +1,4 @@
-import type { ReflexRuntime } from '@flexsurfer/reflex';
+import type { DevtoolsOperationRuntime } from './runtime.js';
 
 import { MAX_OPERATIONS, MAX_PATCHES_PER_EVENT } from './limits.js';
 import type { MutableEvent, MutableOperation, OperationState } from './state.js';
@@ -22,7 +22,7 @@ import {
 } from './values.js';
 
 export function snapshotOperation(
-  runtime: ReflexRuntime<any>,
+  runtime: DevtoolsOperationRuntime,
   state: OperationState,
   operation: MutableOperation,
 ): OperationReceipt {

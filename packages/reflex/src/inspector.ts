@@ -5,8 +5,8 @@ import {
 } from './core/tracing';
 import { NOW, RANDOM } from './events/coeffects';
 import { DISPATCH, DISPATCH_LATER } from './events/effects';
-import { dispatchForKernel } from './events/router';
-import { getAppDbForKernel } from './runtime/app-db';
+import { dispatchForKernel, flushRuntime } from './events/router';
+import { getAppDbForKernel, getAppDbRevisionsForKernel } from './runtime/app-db';
 import { getHandlersForKernel } from './runtime/handlers';
 import {
   createRuntimeStateKey,
@@ -14,6 +14,10 @@ import {
   isRuntimeDisposed,
   type RuntimeKernel,
 } from './runtime/kernel';
+import {
+  observeRuntimeLifecycleForKernel,
+  type RuntimeLifecycleObserver,
+} from './runtime/lifecycle';
 import { getSubscriptionDiagnosticsForKernel } from './runtime/subscriptions/cache';
 import { getSubscriptionValueForKernel } from './subscriptions/queries';
 
@@ -37,6 +41,17 @@ export interface ReflexInspectorSnapshot {
   readonly subscriptions: readonly SubscriptionDiagnostic[];
 }
 
+/** @internal Structural runtime port consumed by the optional DevTools operation ledger. */
+export interface ReflexDevtoolsOperationRuntime {
+  readonly runtimeId: string;
+  readonly runtimeInstanceId: string;
+  getStateRevisions(): { readonly committedRevision: number; readonly publishedRevision: number };
+  dispatch(event: never): void;
+  flush(): Promise<void>;
+  getSubscriptionValue(query: never): unknown;
+  observeLifecycle(observer: RuntimeLifecycleObserver): () => void;
+}
+
 /**
  * The Reflex-owned side of a development-tools integration.
  *
@@ -53,6 +68,8 @@ export interface ReflexInspector {
   subscribeTraces(callback: TraceCallback): () => void;
   dispatch(event: EventVector): void;
   evaluateSubscription(query: SubVector): unknown;
+  /** @internal Runtime port for optional DevTools operation receipts. */
+  getOperationRuntime(): ReflexDevtoolsOperationRuntime;
 }
 
 const NEXT_TRACE_SUBSCRIPTION_ID = createRuntimeStateKey<{ value: number }>(
@@ -71,6 +88,30 @@ export function createReflexInspectorForKernel(runtime: RuntimeKernel): ReflexIn
     if (isRuntimeDisposed(runtime)) {
       throw new Error(`[reflex] Runtime '${runtime.runtimeId}' has been disposed.`);
     }
+  };
+  const operationRuntime: ReflexDevtoolsOperationRuntime = {
+    runtimeId: runtime.runtimeId,
+    runtimeInstanceId: runtime.runtimeInstanceId,
+    getStateRevisions() {
+      assertRuntimeActive();
+      return getAppDbRevisionsForKernel(runtime);
+    },
+    dispatch(event: never) {
+      assertRuntimeActive();
+      dispatchForKernel(runtime, event);
+    },
+    flush() {
+      assertRuntimeActive();
+      return flushRuntime(runtime);
+    },
+    getSubscriptionValue(query: never) {
+      assertRuntimeActive();
+      return getSubscriptionValueForKernel(runtime, query);
+    },
+    observeLifecycle(observer: RuntimeLifecycleObserver) {
+      assertRuntimeActive();
+      return observeRuntimeLifecycleForKernel(runtime, observer);
+    },
   };
   const inspector: ReflexInspector = {
     apiVersion: 2,
@@ -110,6 +151,10 @@ export function createReflexInspectorForKernel(runtime: RuntimeKernel): ReflexIn
     evaluateSubscription(query: SubVector): unknown {
       assertRuntimeActive();
       return getSubscriptionValueForKernel(runtime, query);
+    },
+    getOperationRuntime(): ReflexDevtoolsOperationRuntime {
+      assertRuntimeActive();
+      return operationRuntime;
     },
   };
 

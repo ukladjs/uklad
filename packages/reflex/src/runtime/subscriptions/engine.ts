@@ -482,9 +482,7 @@ export class SubscriptionEngine {
     return recalculated.map((subscription) => this.snapshotRecalculated(subscription));
   }
 
-  private snapshotRecalculated(
-    subscription: SubscriptionCell<any>,
-  ): RuntimeLifecycleSubscription {
+  private snapshotRecalculated(subscription: SubscriptionCell<any>): RuntimeLifecycleSubscription {
     return {
       key: subscription.spec.key,
       query: [...subscription.spec.query] as SubVector,
@@ -492,7 +490,9 @@ export class SubscriptionEngine {
       active: subscription.active,
       version: subscription.outputStamp,
       status: subscription.hasError ? 'error' : 'value',
-      ...(subscription.hasError ? { error: formatDiagnosticError(subscription.error) } : { value: subscription.value }),
+      ...(subscription.hasError
+        ? { error: formatDiagnosticError(subscription.error) }
+        : { value: subscription.value }),
     };
   }
 

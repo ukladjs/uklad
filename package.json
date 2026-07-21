@@ -9,10 +9,9 @@
     "node": "^22.18.0 || >=24.11.0"
   },
   "scripts": {
-    "build": "pnpm run build:reflex && pnpm run build:persist && pnpm run build:operations && pnpm run build:devtools-ui && pnpm run build:devtools-package && pnpm run build:mcp && pnpm run build:examples",
+    "build": "pnpm run build:reflex && pnpm run build:persist && pnpm run build:devtools-ui && pnpm run build:devtools-package && pnpm run build:mcp && pnpm run build:examples",
     "build:reflex": "pnpm --filter @flexsurfer/reflex build",
     "build:persist": "pnpm --filter @flexsurfer/reflex-persist build",
-    "build:operations": "pnpm --filter @flexsurfer/reflex-operations build",
     "build:devtools-ui": "pnpm --filter @flexsurfer/reflex-devtools-ui build",
     "build:devtools-package": "pnpm --filter @flexsurfer/reflex-devtools build:package",
     "build:devtools": "pnpm run build:reflex && pnpm run build:devtools-ui && pnpm run build:devtools-package",

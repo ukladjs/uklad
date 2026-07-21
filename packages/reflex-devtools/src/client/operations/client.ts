@@ -1,4 +1,4 @@
-import type { ReflexContracts, ReflexRuntime } from '@flexsurfer/reflex';
+import type { DevtoolsOperationRuntime } from './runtime.js';
 
 import {
   createOperation,
@@ -25,12 +25,12 @@ import { cloneEvent, timestamp } from './values.js';
 /**
  * Attach the operation ledger to one explicit runtime.
  *
- * The package owns receipt retention and its lifecycle observer. Reflex's
- * kernel only supplies generic queue, state, and effect evidence, so an
- * application can omit this package without changing normal runtime behavior.
+ * DevTools owns receipt retention and its lifecycle observer. Reflex's kernel
+ * only supplies generic queue, state, and effect evidence, so applications
+ * that do not enable DevTools operations retain normal runtime behavior.
  */
-export function createOperationClient<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntime<TContracts>,
+export function createOperationClient(
+  runtime: DevtoolsOperationRuntime,
 ): OperationClient {
   const state = getState(runtime);
   if (state.client) return state.client;
@@ -111,7 +111,7 @@ export function createOperationClient<TContracts extends ReflexContracts>(
 }
 
 function operationHandle(
-  runtime: ReflexRuntime<any>,
+  runtime: DevtoolsOperationRuntime,
   state: OperationState,
   operation: MutableOperation,
   replayed: boolean,
@@ -125,7 +125,7 @@ function operationHandle(
 }
 
 async function waitForOperation(
-  runtime: ReflexRuntime<any>,
+  runtime: DevtoolsOperationRuntime,
   state: OperationState,
   operation: MutableOperation,
   replayed: boolean,
@@ -144,7 +144,7 @@ async function waitForOperation(
 }
 
 function waitResult(
-  runtime: ReflexRuntime<any>,
+  runtime: DevtoolsOperationRuntime,
   state: OperationState,
   operation: MutableOperation,
   replayed: boolean,

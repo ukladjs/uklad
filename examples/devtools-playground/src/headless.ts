@@ -18,7 +18,6 @@
  */
 import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex/vanilla';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
-import { createOperationInspector } from '@flexsurfer/reflex-operations';
 import { coeffectModes, installHeadlessCoeffects } from './coeffects.headless';
 import { createInitialAppDb, type PlaygroundContracts } from './db';
 import { effectModes, installHeadlessEffects } from './effects.headless';
@@ -46,8 +45,14 @@ headlessRuntime.registerModule(installHeadlessCoeffects);
 // dispatch_and_wait demonstrate its settled subscription evidence.
 headlessRuntime.watchSubscription(['counter'], () => {});
 
-enableDevtools(createOperationInspector(headlessRuntime), {
+enableDevtools(headlessRuntime, {
   serverUrl,
+  operations: {
+    executionContext: {
+      profile: 'headless',
+      defaultEffectMode: 'suppressed',
+    },
+  },
   // runtime: 'headless' is auto-detected (no window); declare the
   // side-effect policy so app_status can report what really executes.
   effectMode: 'safe',

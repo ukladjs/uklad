@@ -1,4 +1,4 @@
-import type { EventVector, ReflexRuntime, SubVector } from '@flexsurfer/reflex';
+import type { DevtoolsOperationRuntime, OperationEventVector, OperationSubVector } from './runtime.js';
 
 import type {
   OperationClient,
@@ -17,7 +17,7 @@ import type {
 export interface MutableEvent {
   eventInstanceId: string;
   parentEventInstanceId: string | null;
-  event: EventVector;
+  event: OperationEventVector;
   status: OperationEventStatus;
   queuedAt: string;
   startedAt: string | null;
@@ -60,7 +60,7 @@ export interface MutableOperation {
   observations: OperationObservationResult[];
   recalculatedSubscriptions: OperationRecalculatedSubscription[];
   errors: OperationError[];
-  requestedObservations: readonly SubVector[];
+  requestedObservations: readonly OperationSubVector[];
   eventsTruncated: boolean;
   effectsTruncated: boolean;
   errorsTruncated: boolean;
@@ -83,7 +83,7 @@ export interface OperationState {
   knownPublishedRevision: number;
   operations: Map<string, MutableOperation>;
   idempotencyKeys: Map<string, string>;
-  eventMetadata: WeakMap<EventVector, EventMetadata>;
+  eventMetadata: WeakMap<OperationEventVector, EventMetadata>;
   currentEvent: EventMetadata | null;
   pendingRoot: EventMetadata | null;
   client: OperationClient | undefined;
@@ -91,7 +91,7 @@ export interface OperationState {
 
 const states = new WeakMap<object, OperationState>();
 
-export function getState(runtime: ReflexRuntime<any>): OperationState {
+export function getState(runtime: DevtoolsOperationRuntime): OperationState {
   let state = states.get(runtime);
   if (!state) {
     const revisions = runtime.getStateRevisions();

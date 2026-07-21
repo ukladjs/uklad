@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createReflexRuntime } from '@flexsurfer/reflex';
-import { createOperationClient, createOperationInspector } from '../dist/index.mjs';
+import { createOperationClient } from '../dist/client/operations/client.js';
+import { createOperationInspector } from '../dist/client/operations/inspector.js';
 
 test('records a runtime-local receipt after the queue publishes', async () => {
   const runtime = createReflexRuntime({
@@ -287,7 +288,7 @@ test('owns caller input, settles disposal, and exposes the optional inspector ad
   assert.equal(result.operation.events[0].event[1].amount, 2);
   assert.equal(runtime.getAppDb().count, 2);
 
-  const inspector = createOperationInspector(runtime);
+  const inspector = createOperationInspector(runtime.createInspector());
   assert.equal(inspector.operationApiVersion, 1);
   assert.equal(inspector.runtimeInstanceId, runtime.runtimeInstanceId);
   const fromInspector = await inspector.executeEvent(['from-input', { amount: 3 }]);

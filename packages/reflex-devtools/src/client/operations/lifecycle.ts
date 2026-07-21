@@ -1,4 +1,4 @@
-import type { ReflexRuntime } from '@flexsurfer/reflex';
+import type { DevtoolsOperationRuntime } from './runtime.js';
 
 import {
   appendEvent,
@@ -18,7 +18,7 @@ import type { OperationState } from './state.js';
 import { copyOperationPatch, copyPatch, snapshotValue, timestamp } from './values.js';
 
 /** Translate generic runtime lifecycle evidence into mutable operation ledger records. */
-export function observeOperationLifecycle(runtime: ReflexRuntime<any>, state: OperationState): void {
+export function observeOperationLifecycle(runtime: DevtoolsOperationRuntime, state: OperationState): void {
   runtime.observeLifecycle({
     onEventQueued(event) {
       const root = state.pendingRoot;

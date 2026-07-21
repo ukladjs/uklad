@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client';
 import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex/vanilla';
 import { ReflexProvider } from '@flexsurfer/reflex/react';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
-import { createOperationInspector } from '@flexsurfer/reflex-operations';
 import './index.css';
 import App from './App';
 import { coeffectModes, installBrowserCoeffects } from './coeffects.browser';
@@ -25,7 +24,13 @@ browserRuntime.registerModule(installPlaygroundSubscriptions);
 browserRuntime.registerModule(installBrowserEffects);
 browserRuntime.registerModule(installBrowserCoeffects);
 
-enableDevtools(createOperationInspector(browserRuntime), {
+enableDevtools(browserRuntime, {
+  operations: {
+    executionContext: {
+      profile: 'browser',
+      defaultEffectMode: 'real',
+    },
+  },
   runtime: 'browser',
   effectMode: 'real',
   effects: {

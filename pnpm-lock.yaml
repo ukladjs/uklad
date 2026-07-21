@@ -16,9 +16,6 @@ importers:
       '@flexsurfer/reflex-devtools':
         specifier: workspace:*
         version: link:../../packages/reflex-devtools
-      '@flexsurfer/reflex-operations':
-        specifier: workspace:*
-        version: link:../../packages/reflex-operations
       react:
         specifier: ^19.2.7
         version: 19.2.7
@@ -197,6 +194,9 @@ importers:
         specifier: ^8.21.1
         version: 8.21.1
     devDependencies:
+      '@flexsurfer/reflex':
+        specifier: workspace:*
+        version: link:../reflex
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -280,21 +280,6 @@ importers:
       vite:
         specifier: ^8.1.5
         version: 8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)
-
-  packages/reflex-operations:
-    devDependencies:
-      '@flexsurfer/reflex':
-        specifier: workspace:*
-        version: link:../reflex
-      '@typescript/native':
-        specifier: npm:typescript@7.0.2
-        version: typescript@7.0.2
-      tsdown:
-        specifier: 0.22.8
-        version: 0.22.8(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.21)
-      typescript:
-        specifier: npm:@typescript/typescript6@6.0.2
-        version: '@typescript/typescript6@6.0.2'
 
   packages/reflex-persist:
     devDependencies:

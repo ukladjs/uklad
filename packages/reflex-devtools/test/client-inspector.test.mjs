@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { createReflexRuntime } from '@flexsurfer/reflex';
 import { enableDevtools, logEvent } from '../dist/client/index.js';
 
 const waitForTurn = () => new Promise((resolve) => setImmediate(resolve));
@@ -173,6 +174,11 @@ function createFakeInspector(
 
   return {
     inspector,
+    runtime: {
+      createInspector() {
+        return inspector;
+      },
+    },
     dispatches,
     evaluations,
     get snapshotCount() {
@@ -184,6 +190,24 @@ function createFakeInspector(
     async emitTraces(traces) {
       assert.ok(traceCallback, 'trace callback should be subscribed');
       await traceCallback(traces);
+    },
+  };
+}
+
+function createOperationRuntime(runtimeId = 'runtime-test') {
+  return {
+    runtimeId,
+    runtimeInstanceId: `${runtimeId}:instance:1`,
+    getStateRevisions() {
+      return { committedRevision: 0, publishedRevision: 0 };
+    },
+    dispatch() {},
+    async flush() {},
+    getSubscriptionValue() {
+      return undefined;
+    },
+    observeLifecycle() {
+      return () => {};
     },
   };
 }
@@ -200,7 +224,7 @@ async function runtimeInfoPayloadFor(config) {
   const fake = createFakeInspector();
   let cleanup;
   try {
-    cleanup = enableDevtools(fake.inspector, { serverUrl: '127.0.0.1:4000', ...config });
+    cleanup = enableDevtools(fake.runtime, { serverUrl: '127.0.0.1:4000', ...config });
     await waitForTurn();
     await waitForTurn();
     const socket = FakeWebSocket.instances[0];
@@ -242,7 +266,7 @@ test('runtime-info includes effects and effectMode when configured', async () =>
   assert.deepEqual(payload.effects, { 'local-storage-set': 'memory' });
 });
 
-test('uses only the injected inspector and returns idempotent cleanup', async () => {
+test('uses only the injected runtime inspector and returns idempotent cleanup', async () => {
   const originalFetch = globalThis.fetch;
   const originalWebSocket = globalThis.WebSocket;
   FakeWebSocket.instances = [];
@@ -255,27 +279,28 @@ test('uses only the injected inspector and returns idempotent cleanup', async ()
   let cleanup;
 
   try {
-    assert.throws(() => enableDevtools({ serverUrl: 'localhost:4000' }), /runtime\.createInspector/);
+    assert.throws(() => enableDevtools({ serverUrl: 'localhost:4000' }), /requires a Reflex runtime/);
+    assert.throws(() => enableDevtools(fake.inspector), /requires a Reflex runtime/);
     assert.throws(
-      () => enableDevtools({ ...fake.inspector, apiVersion: 1 }),
-      /runtime\.createInspector/,
+      () => enableDevtools({ createInspector: () => ({ ...fake.inspector, apiVersion: 1 }) }),
+      /runtime\.createInspector\(\) must return/,
     );
     assert.throws(
-      () => enableDevtools({ ...fake.inspector, runtimeName: '' }),
-      /runtime\.createInspector/,
+      () => enableDevtools({ createInspector: () => ({ ...fake.inspector, runtimeName: '' }) }),
+      /runtime\.createInspector\(\) must return/,
     );
     assert.throws(
-      () => enableDevtools({ ...fake.inspector, runtimeId: ' runtime-test' }),
-      /runtime\.createInspector/,
+      () => enableDevtools({ createInspector: () => ({ ...fake.inspector, runtimeId: ' runtime-test' }) }),
+      /runtime\.createInspector\(\) must return/,
     );
     assert.throws(
-      () => enableDevtools(fake.inspector, {
+      () => enableDevtools(fake.runtime, {
         serverUrl: 'http://devtools.test:4000',
       }),
       /remote plaintext HTTP/,
     );
 
-    cleanup = enableDevtools(fake.inspector, {
+    cleanup = enableDevtools(fake.runtime, {
       serverUrl: 'devtools.test',
       allowInsecureRemote: true,
     });
@@ -397,6 +422,105 @@ test('uses only the injected inspector and returns idempotent cleanup', async ()
   }
 });
 
+test('enables retained operation receipts through the DevTools configuration', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWebSocket = globalThis.WebSocket;
+  FakeWebSocket.instances = [];
+  FakeWebSocket.autoOpen = true;
+  FakeWebSocket.throwOnSend = false;
+  globalThis.WebSocket = FakeWebSocket;
+  globalThis.fetch = successfulFetch;
+
+  const fake = createFakeInspector();
+  const operationRuntime = createOperationRuntime();
+  fake.inspector.getOperationRuntime = () => operationRuntime;
+  let cleanup;
+  try {
+    cleanup = enableDevtools(fake.runtime, {
+      operations: {},
+    });
+    await waitForTurn();
+    await waitForTurn();
+    const socket = FakeWebSocket.instances[0];
+    assert.equal(socket.sent[0].payload.operationApiVersion, 1);
+    assert.equal(socket.sent[0].payload.runtimeInstanceId, 'runtime-test:instance:1');
+
+    const unsupported = createFakeInspector();
+    assert.throws(
+      () => enableDevtools(unsupported.runtime, { operations: {} }),
+      /requires runtime\.createInspector\(\) to expose operation support/,
+    );
+  } finally {
+    cleanup?.();
+    globalThis.fetch = originalFetch;
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
+test('executes a retained operation through a runtime inspector configured in DevTools', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWebSocket = globalThis.WebSocket;
+  FakeWebSocket.instances = [];
+  FakeWebSocket.autoOpen = true;
+  FakeWebSocket.throwOnSend = false;
+  globalThis.WebSocket = FakeWebSocket;
+  globalThis.fetch = successfulFetch;
+
+  const runtime = createReflexRuntime({
+    runtimeId: 'configured-operations',
+    initialDb: { count: 0 },
+  });
+  runtime.regEvent('increment', ({ draftDb }, amount) => {
+    draftDb.count += amount;
+  });
+  let cleanup;
+  try {
+    cleanup = enableDevtools(runtime, {
+      operations: {
+        executionContext: {
+          profile: 'test',
+          defaultEffectMode: 'fixture-backed',
+        },
+      },
+    });
+    await waitForTurn();
+    await waitForTurn();
+    const socket = FakeWebSocket.instances[0];
+    socket.emit({
+      type: 'dispatch-to-client',
+      payload: {
+        dispatchId: 'configured-operation-1',
+        operation: true,
+        eventName: 'increment',
+        params: [2],
+      },
+    });
+    await runtime.flush();
+    await waitForTurn();
+
+    assert.equal(runtime.getAppDb().count, 2);
+    const result = socket.sent.find((event) => event.type === 'reflex-operation-result')?.payload;
+    assert.equal(result?.dispatchId, 'configured-operation-1');
+    assert.equal(result?.result.operation.status, 'completed');
+    assert.equal(result?.result.operation.outcome, 'succeeded');
+    assert.deepEqual(result?.result.operation.executionContext, {
+      profile: 'test',
+      source: 'caller-declared',
+      enforced: false,
+      defaultEffectMode: 'fixture-backed',
+    });
+    assert.deepEqual(result?.result.operation.state.patches, [
+      { op: 'replace', path: ['count'], value: 2 },
+    ]);
+    assert.deepEqual(result?.result.delivery, { status: 'settled', timeoutMs: null });
+  } finally {
+    cleanup?.();
+    runtime.dispose();
+    globalThis.fetch = originalFetch;
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
 test('uses the negotiated operation capability instead of trace correlation', async () => {
   const originalFetch = globalThis.fetch;
   const originalWebSocket = globalThis.WebSocket;
@@ -423,7 +547,7 @@ test('uses the negotiated operation capability instead of trace correlation', as
     };
   };
 
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
   try {
     await waitForTurn();
     await waitForTurn();
@@ -481,7 +605,7 @@ test('cleanup prevents a late health check from opening a WebSocket', async () =
     });
 
   const fake = createFakeInspector();
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
 
   try {
     cleanup();
@@ -516,7 +640,7 @@ test('fails closed when session bootstrap omits the protocol response header', a
   };
 
   const fake = createFakeInspector();
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
 
   try {
     await waitForTurn();
@@ -548,7 +672,7 @@ test('fails closed when the server hello has the wrong runtime identity or epoch
       FakeWebSocket.instances = [];
       FakeWebSocket.serverHelloOverride = invalidHello;
       const fake = createFakeInspector();
-      const cleanup = enableDevtools(fake.inspector);
+      const cleanup = enableDevtools(fake.runtime);
       try {
         await waitForTurn();
         await waitForTurn();
@@ -588,7 +712,7 @@ test('simultaneous runtime clients connect and clean up independently', async ()
     { count: 2 },
     { runtimeId: 'runtime-second', runtimeName: 'Runtime second' },
   );
-  const cleanupFirst = enableDevtools(first.inspector);
+  const cleanupFirst = enableDevtools(first.runtime);
   let cleanupSecond;
 
   try {
@@ -600,7 +724,7 @@ test('simultaneous runtime clients connect and clean up independently', async ()
       payload: { connectedUIs: 1 },
     });
 
-    cleanupSecond = enableDevtools(second.inspector);
+    cleanupSecond = enableDevtools(second.runtime);
     assert.equal(first.unsubscribeCount, 0);
     assert.equal(firstSocket.readyState, FakeWebSocket.OPEN);
 
@@ -675,7 +799,7 @@ test('enabling the same runtime replaces only that runtime client', async () => 
     { count: 2 },
     { runtimeId: 'runtime-test', runtimeName: 'Runtime test' },
   );
-  const cleanupFirst = enableDevtools(first.inspector);
+  const cleanupFirst = enableDevtools(first.runtime);
   let cleanupSecond;
 
   try {
@@ -687,7 +811,7 @@ test('enabling the same runtime replaces only that runtime client', async () => 
       payload: { connectedUIs: 1 },
     });
 
-    cleanupSecond = enableDevtools(second.inspector);
+    cleanupSecond = enableDevtools(second.runtime);
     assert.equal(first.unsubscribeCount, 1);
     assert.equal(firstSocket.readyState, FakeWebSocket.CLOSED);
 
@@ -733,7 +857,7 @@ test('cleanup closes a WebSocket that has not opened yet', async () => {
   globalThis.fetch = successfulFetch;
 
   const fake = createFakeInspector();
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
 
   try {
     await waitForTurn();
@@ -766,7 +890,7 @@ test('reconnects with a fresh loopback session after the server socket closes', 
   };
 
   const fake = createFakeInspector();
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
 
   try {
     await waitForTurn();
@@ -805,7 +929,7 @@ test('correlates concurrent same-name dispatch outcomes by opaque runtime id', a
   globalThis.fetch = successfulFetch;
 
   const fake = createFakeInspector();
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
 
   try {
     await waitForTurn();
@@ -901,7 +1025,7 @@ test('cleanup aborts in-flight HTTP fallback events', async () => {
   };
 
   const fake = createFakeInspector();
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
 
   try {
     await waitForTurn();
@@ -946,7 +1070,7 @@ test('redacts common secret keys before state and traces leave the runtime', asy
       displayName: 'Ada',
     },
   });
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
 
   try {
     await waitForTurn();
@@ -1009,7 +1133,7 @@ test('applies subscription-result redaction to evaluation errors before transpor
   globalThis.fetch = successfulFetch;
 
   const fake = createFakeInspector();
-  const cleanup = enableDevtools(fake.inspector, {
+  const cleanup = enableDevtools(fake.runtime, {
     redaction: {
       state(value, context) {
         if (
@@ -1076,7 +1200,7 @@ test('drops oversized telemetry before either transport and warns only once', as
     marker,
     data: 'ä'.repeat(1024),
   });
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
 
   try {
     await waitForTurn();
@@ -1132,7 +1256,7 @@ test('deduplicates bounded server telemetry-drop notices', async () => {
   console.warn = (...args) => warnings.push(args.map(String).join(' '));
 
   const fake = createFakeInspector();
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
 
   try {
     await waitForTurn();
@@ -1194,7 +1318,7 @@ test('handles typed retention rejection from the HTTP fallback without reconnect
   };
 
   const fake = createFakeInspector();
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
 
   try {
     await waitForTurn();
@@ -1249,7 +1373,7 @@ test('reports abnormal closes and preserves exponential reconnect backoff until 
   console.warn = (...args) => warnings.push(args.map(String).join(' '));
 
   const fake = createFakeInspector();
-  const cleanup = enableDevtools(fake.inspector);
+  const cleanup = enableDevtools(fake.runtime);
 
   try {
     await waitForTurn();

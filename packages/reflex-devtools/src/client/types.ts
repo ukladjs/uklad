@@ -1,3 +1,5 @@
+import type { DevtoolsOperationRuntime } from './operations/runtime.js';
+
 export interface ReflexSubscriptionDiagnostic {
   readonly key: string;
   readonly query: readonly [string, ...any[]];
@@ -32,7 +34,7 @@ export interface ReflexInspectorSnapshot {
 }
 
 /**
- * Structural boundary implemented by `createReflexInspector()` in Reflex.
+ * Structural boundary implemented by `runtime.createInspector()` in Reflex.
  *
  * DevTools deliberately owns this small protocol instead of importing the
  * Reflex runtime, so package resolution can never make it inspect another
@@ -48,10 +50,17 @@ export interface ReflexInspector {
   subscribeTraces(callback: ReflexTraceCallback): () => void;
   dispatch(event: [string, ...any[]]): void;
   evaluateSubscription(query: [string, ...any[]]): unknown;
-  /** Optional operation receipt capability supplied by @flexsurfer/reflex-operations. */
+  /** Optional internal port exposed by Reflex inspectors for operation receipts. */
+  getOperationRuntime?(): DevtoolsOperationRuntime;
+  /** Optional retained-operation receipt capability enabled through DevtoolsConfig. */
   readonly operationApiVersion?: 1;
   /** Exact runtime-instance identity for retained operation receipts. */
   readonly runtimeInstanceId?: string;
   executeEvent?(event: [string, ...any[]], options?: unknown): Promise<unknown>;
   getOperation?(lookup: unknown): unknown;
+}
+
+/** A Reflex runtime capable of creating an inspector for DevTools. */
+export interface ReflexDevtoolsRuntime {
+  createInspector(): ReflexInspector;
 }

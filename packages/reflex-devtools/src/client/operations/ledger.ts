@@ -1,9 +1,9 @@
 import type {
-  EventVector,
-  ReflexRuntime,
+  DevtoolsOperationRuntime,
+  OperationEventVector,
   RuntimeLifecycleEffect,
   RuntimeLifecycleSubscription,
-} from '@flexsurfer/reflex';
+} from './runtime.js';
 
 import { MAX_EFFECTS, MAX_ERRORS, MAX_EVENTS, MAX_OPERATIONS } from './limits.js';
 import { deriveOutcome } from './receipt.js';
@@ -17,9 +17,9 @@ import { getEffectMode, normalizeExecutionContext } from './validation.js';
 import { cloneEvent, cloneQuery, safeString, snapshotValue, timestamp } from './values.js';
 
 export function createOperation(
-  runtime: ReflexRuntime<any>,
+  runtime: DevtoolsOperationRuntime,
   state: OperationState,
-  event: EventVector,
+  event: OperationEventVector,
   options: OperationOptions,
   fingerprint: string,
 ): MutableOperation {
@@ -83,7 +83,7 @@ export function recordPublishedSubscriptions(
   }));
 }
 
-export function createEventInstanceId(runtime: ReflexRuntime<any>, state: OperationState): string {
+export function createEventInstanceId(runtime: DevtoolsOperationRuntime, state: OperationState): string {
   return `${runtime.runtimeInstanceId}:event:${++state.nextEventInstanceId}`;
 }
 
@@ -91,7 +91,7 @@ export function appendEvent(
   operation: MutableOperation,
   eventInstanceId: string,
   parentEventInstanceId: string | null,
-  event: EventVector,
+  event: OperationEventVector,
 ): MutableEvent | null {
   if (operation.events.length >= MAX_EVENTS) {
     operation.eventsTruncated = true;
@@ -122,7 +122,7 @@ export function appendEvent(
 }
 
 export function requestFinalization(
-  runtime: ReflexRuntime<any>,
+  runtime: DevtoolsOperationRuntime,
   state: OperationState,
   operation: MutableOperation,
 ): void {
@@ -141,7 +141,7 @@ export function requestFinalization(
 }
 
 export function finalizeOperation(
-  runtime: ReflexRuntime<any>,
+  runtime: DevtoolsOperationRuntime,
   state: OperationState,
   operation: MutableOperation,
 ): void {
@@ -188,7 +188,7 @@ export function failDisposed(operation: MutableOperation): void {
 }
 
 export function recordEffect(
-  runtime: ReflexRuntime<any>,
+  runtime: DevtoolsOperationRuntime,
   state: OperationState,
   metadata: EventMetadata,
   input: RuntimeLifecycleEffect,

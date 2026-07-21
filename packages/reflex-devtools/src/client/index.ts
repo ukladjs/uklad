@@ -19,16 +19,23 @@ import {
   type RuntimeTelemetryDroppedPayload,
 } from '../protocol.js';
 import { diffSubscriptionDiagnostics } from './subscriptionDiagnostics.js';
+import { createOperationInspector } from './operations/inspector.js';
 import type {
   ReflexInspector,
   ReflexInspectorSnapshot,
+  ReflexDevtoolsRuntime,
   ReflexTrace,
 } from './types.js';
+import type {
+  OperationCompletionBoundary,
+  OperationExecutionContextInput,
+} from './operations/types.js';
 
 export type {
   ReflexHandlerKeys,
   ReflexInspector,
   ReflexInspectorSnapshot,
+  ReflexDevtoolsRuntime,
   ReflexSubscriptionDiagnostic,
   ReflexTrace,
   ReflexTraceCallback,
@@ -96,6 +103,21 @@ export interface DevtoolsConfig {
    * Purely informational — tells agents which effects really execute.
    */
   effects?: Record<string, string>;
+  /**
+   * Enable retained operation receipts for the target runtime. Normal
+   * DevTools clients still never import or bundle Reflex.
+   */
+  operations?: DevtoolsOperationsConfig;
+}
+
+export interface DevtoolsOperationsConfig {
+  /**
+   * Informational defaults declared by the application for agent-executed
+   * operations. They are attached to every server-initiated operation.
+   */
+  executionContext?: OperationExecutionContextInput;
+  /** Completion boundary used for server-initiated operations. */
+  completion?: OperationCompletionBoundary;
 }
 
 export interface EventPayload {
@@ -607,7 +629,19 @@ class DevtoolsClient {
     }
     return {
       runtimeInstanceId: this.inspector.runtimeInstanceId,
-      executeEvent: (event) => this.inspector.executeEvent!(event),
+      executeEvent: (event) => this.inspector.executeEvent!(event, this.operationOptions()),
+    };
+  }
+
+  private operationOptions(): {
+    completion?: OperationCompletionBoundary;
+    executionContext?: OperationExecutionContextInput;
+  } | undefined {
+    const operations = this.config.operations;
+    if (!operations) return undefined;
+    return {
+      ...(operations.completion ? { completion: operations.completion } : {}),
+      ...(operations.executionContext ? { executionContext: operations.executionContext } : {}),
     };
   }
 
@@ -1164,6 +1198,16 @@ function isLoopbackHostname(hostname: string): boolean {
       && Number(octet) <= 255);
 }
 
+function assertRuntime(runtime: ReflexDevtoolsRuntime): void {
+  const candidate = runtime as Partial<ReflexDevtoolsRuntime> | null | undefined;
+  if (typeof candidate?.createInspector !== 'function') {
+    throw new Error(
+      '[Reflex Devtools] enableDevtools() requires a Reflex runtime as its first argument. ' +
+      'Call enableDevtools(runtime, config).',
+    );
+  }
+}
+
 function assertInspector(inspector: ReflexInspector): void {
   const candidate = inspector as Partial<ReflexInspector> | null | undefined;
   const hasMethods =
@@ -1178,10 +1222,7 @@ function assertInspector(inspector: ReflexInspector): void {
 
   if (candidate?.apiVersion !== 2 || !hasMethods || !hasIdentity) {
     throw new Error(
-      '[Reflex Devtools] enableDevtools() requires a Reflex inspector as its first argument. ' +
-      'Call enableDevtools(runtime.createInspector(), config), or use ' +
-      'runtime.createInspector(), with the inspector ' +
-      'created by the same Reflex package as the application.',
+      '[Reflex Devtools] runtime.createInspector() must return a compatible Reflex inspector.',
     );
   }
 }
@@ -1194,12 +1235,21 @@ function validRuntimeIdentityText(value: unknown, maxLength: number): value is s
 }
 
 export function enableDevtools(
-  inspector: ReflexInspector,
+  runtime: ReflexDevtoolsRuntime,
+  config?: DevtoolsConfig,
+): () => void;
+export function enableDevtools(
+  runtime: ReflexDevtoolsRuntime,
   config: DevtoolsConfig = {},
 ): () => void {
+  assertRuntime(runtime);
+  const inspector = runtime.createInspector();
   assertInspector(inspector);
 
-  const nextClient = new DevtoolsClient(inspector, config);
+  const operationInspector = config.operations && config.enabled !== false
+    ? createOperationInspector(inspector)
+    : inspector;
+  const nextClient = new DevtoolsClient(operationInspector, config);
   registerClient(inspector.runtimeId, nextClient);
   void nextClient.init().catch((error: unknown) => {
     console.error('[Reflex Devtools] Failed to initialize:', error);

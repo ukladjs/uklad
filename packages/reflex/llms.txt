@@ -109,7 +109,7 @@ Enable in your app entry point (`main.tsx`) before dispatching any events:
 ```ts
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
-enableDevtools(runtime.createInspector());  // exact runtime identity and tracing owner
+enableDevtools(runtime);  // exact runtime identity and tracing owner
 
 ```
 

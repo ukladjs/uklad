@@ -16,7 +16,7 @@ import { todoRuntime } from './runtime';
 
 // Immer requires an explicit plugin before it can draft the Map-backed todo collection.
 enableMapSet();
-enableDevtools(todoRuntime.createInspector());
+enableDevtools(todoRuntime);
 
 // Synchronous for localStorage: todos are in app-db before the first render.
 persistence.hydrate();

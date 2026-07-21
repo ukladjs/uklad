@@ -131,13 +131,7 @@ export function flushSubscriptionsForKernel(runtime: RuntimeKernel): void {
     collectChangedRoots(runtime, oldDb, newDb),
   );
   state.publishedRevision = targetRevision;
-  notifyRuntimeLifecycleForKernel(
-    runtime,
-    'onStatePublished',
-    newDb,
-    targetRevision,
-    recalculated,
-  );
+  notifyRuntimeLifecycleForKernel(runtime, 'onStatePublished', newDb, targetRevision, recalculated);
 }
 
 /** @internal Return whether one runtime still has an unflushed db generation. */

@@ -1948,7 +1948,7 @@ export class DevtoolsServer {
         code: 'OPERATION_CAPABILITY_UNAVAILABLE',
         error:
           'This runtime does not expose the operation receipt capability. ' +
-          'Enable DevTools with createOperationInspector(runtime).',
+          'Enable DevTools with enableDevtools(runtime, { operations: {} }).',
         ...this.runtimeResponseIdentity(runtime),
       });
       return;

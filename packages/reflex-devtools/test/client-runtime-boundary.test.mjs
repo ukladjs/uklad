@@ -44,11 +44,11 @@ test('built DevTools client has no runtime import of Reflex', async () => {
   }
 });
 
-test('DevTools package does not install Reflex as a dependency or peer', async () => {
+test('DevTools package keeps Reflex out of its published runtime dependencies', async () => {
   const packageJson = JSON.parse(await readFile(path.join(packageDir, 'package.json'), 'utf8'));
 
   assert.equal(packageJson.dependencies?.['@flexsurfer/reflex'], undefined);
-  assert.equal(packageJson.devDependencies?.['@flexsurfer/reflex'], undefined);
+  assert.equal(packageJson.devDependencies?.['@flexsurfer/reflex'], 'workspace:*');
   assert.equal(packageJson.peerDependencies?.['@flexsurfer/reflex'], undefined);
 });
 

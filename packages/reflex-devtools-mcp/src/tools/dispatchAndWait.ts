@@ -1,6 +1,6 @@
 /**
  * MCP Tool: dispatch_and_wait
- * Dispatch through the optional operation inspector and return its authoritative receipt.
+ * Dispatch through the optional DevTools operation ledger and return its authoritative receipt.
  */
 
 import { DevToolsAPIClient } from '../httpClient.js';
@@ -22,7 +22,7 @@ export interface DispatchAndWaitParams extends RuntimeSelectionParams {
 export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'dispatch_and_wait',
-    description: 'Dispatch an event through Reflex Operations and wait until its full synchronous cascade has completed, the subscription graph has settled, and the authoritative post-dispatch receipt is available. The receipt includes every joined event, committed state patches, effect dispositions, state revisions, requested observations, and each subscription recalculated in the final publication wave. Requires the application to enable DevTools with createOperationInspector(runtime).',
+    description: 'Dispatch an event through the DevTools operation ledger and wait until its full synchronous cascade has completed, the subscription graph has settled, and the authoritative post-dispatch receipt is available. The receipt includes every joined event, committed state patches, effect dispositions, state revisions, requested observations, and each subscription recalculated in the final publication wave. Requires enableDevtools(runtime, { operations: {} }).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -89,7 +89,7 @@ export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
               message: details.error ?? (error instanceof Error ? error.message : 'Unknown error'),
               event: params.eventName,
               hint: unavailableCapability
-                ? 'Enable DevTools with createOperationInspector(runtime), then reconnect the runtime and retry.'
+                ? 'Enable DevTools with enableDevtools(runtime, { operations: {} }), then reconnect the runtime and retry.'
                 : 'Make sure the DevTools server and operation-enabled app are running.',
             }, null, 2),
           }],

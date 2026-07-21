@@ -1,4 +1,4 @@
-import type { EventVector, RuntimeLifecyclePatch, SubVector } from '@flexsurfer/reflex';
+import type { OperationEventVector, OperationSubVector, RuntimeLifecyclePatch } from './runtime.js';
 
 import type {
   OperationError,
@@ -6,11 +6,11 @@ import type {
   OperationPatch,
 } from './types.js';
 
-export function cloneEvent(event: EventVector): EventVector {
+export function cloneEvent(event: OperationEventVector): OperationEventVector {
   return snapshotValue(event);
 }
 
-export function cloneQuery(query: SubVector): SubVector {
+export function cloneQuery(query: OperationSubVector): OperationSubVector {
   return snapshotValue(query);
 }
 

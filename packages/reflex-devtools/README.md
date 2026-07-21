@@ -88,7 +88,7 @@ If you're not using the agent toolkit plugin, the setup the skill automates is f
    import { runtime } from './state/runtime';
 
    if (import.meta.env.DEV) {
-     enableDevtools(runtime.createInspector());
+     enableDevtools(runtime);
    }
    ```
 
@@ -170,7 +170,7 @@ runtime.registerModule(installSubscriptions);
 runtime.registerModule(installHeadlessEffects);
 runtime.registerModule(installHeadlessCoeffects);
 
-enableDevtools(runtime.createInspector());
+enableDevtools(runtime);
 ```
 
 Run the entry under `tsx watch` (or `vite-node --watch`).
@@ -197,7 +197,7 @@ const runtime = createReflexRuntime({
   name: 'Checkout widget',
 });
 
-enableDevtools(runtime.createInspector());
+enableDevtools(runtime);
 ```
 
 The dashboard selector changes the active runtime and replaces its retained
@@ -246,10 +246,10 @@ npm install --save-dev @flexsurfer/reflex-devtools
 
 ```typescript
 // app entry point
-import { createReflexInspector } from '@flexsurfer/reflex';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
+import { runtime } from './state/runtime';
 
-enableDevtools(createReflexInspector()); // defaults to 127.0.0.1:4000
+enableDevtools(runtime); // defaults to 127.0.0.1:4000
 ```
 
 ```json
@@ -275,7 +275,7 @@ server. A headless runtime does not send an Origin header and needs no entry.
 ### Client (`enableDevtools`)
 
 ```typescript
-const disableDevtools = enableDevtools(createReflexInspector(), {
+const disableDevtools = enableDevtools(runtime, {
   serverUrl: '127.0.0.1:4000',
 });
 
@@ -304,8 +304,37 @@ interface DevtoolsConfig {
   effectMode?: string;
   // Adapter mode per effect/coeffect id, e.g. { 'local-storage-set': 'memory' }
   effects?: Record<string, string>;
+  // Enables MCP dispatch_and_wait receipts for this runtime.
+  operations?: {
+    completion?: 'cascade-published';
+    executionContext?: {
+      profile: string;
+      defaultEffectMode?: 'runtime-defined' | 'real' | 'stubbed' | 'fixture-backed' | 'suppressed';
+    };
+  };
 }
 ```
+
+### Retained operation receipts
+
+Enable authoritative `dispatch_and_wait` receipts on the same DevTools call;
+no additional package or inspector wrapper is required:
+
+```ts
+enableDevtools(runtime, {
+  operations: {
+    executionContext: {
+      profile: 'browser',
+      defaultEffectMode: 'real',
+    },
+  },
+});
+```
+
+DevTools creates the inspector from the supplied runtime automatically. When
+enabled, it advertises the capability to the server and MCP bridge.
+`executionContext` and `completion` are defaults applied to agent-initiated
+operations.
 
 Add application-specific PII keys by composing the exported default masker:
 
@@ -315,12 +344,13 @@ import {
   DEFAULT_SENSITIVE_KEYS,
   enableDevtools,
 } from '@flexsurfer/reflex-devtools';
+import { runtime } from './state/runtime';
 
 const redact = createKeyRedactor({
   keys: [...DEFAULT_SENSITIVE_KEYS, /^email$/i, /^phone$/i, /^dateOfBirth$/i],
 });
 
-enableDevtools(createReflexInspector(), {
+enableDevtools(runtime, {
   redaction: {
     state: redact,
     trace: redact,

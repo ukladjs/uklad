@@ -1,9 +1,5 @@
-import type {
-  EventVector,
-  ReflexInspector,
-  RuntimeLifecycleErrorKind,
-  SubVector,
-} from '@flexsurfer/reflex';
+import type { ReflexInspector } from '../types.js';
+import type { OperationEventVector, OperationSubVector, RuntimeLifecycleErrorKind } from './runtime.js';
 
 export type OperationCompletionBoundary = 'cascade-published';
 export type OperationStatus = 'queued' | 'running' | 'completed' | 'failed' | 'rejected';
@@ -49,7 +45,7 @@ export interface OperationOptions {
   readonly timeoutMs?: number;
   readonly idempotencyKey?: string;
   readonly expectedRevision?: number;
-  readonly observe?: readonly SubVector[];
+  readonly observe?: readonly OperationSubVector[];
   readonly executionContext?: OperationExecutionContextInput;
 }
 
@@ -91,7 +87,7 @@ export interface OperationEventStateResult {
 export interface OperationEventResult {
   readonly eventInstanceId: string;
   readonly parentEventInstanceId: string | null;
-  readonly event: EventVector;
+  readonly event: OperationEventVector;
   readonly status: OperationEventStatus;
   readonly queuedAt: string;
   readonly startedAt: string | null;
@@ -115,7 +111,7 @@ export interface OperationEffectResult {
 }
 
 export interface OperationObservationResult {
-  readonly query: SubVector;
+  readonly query: OperationSubVector;
   readonly status: 'succeeded' | 'failed';
   readonly value?: unknown;
   readonly error?: OperationError;
@@ -124,7 +120,7 @@ export interface OperationObservationResult {
 /** One cached subscription recomputed while this operation's final publication settled. */
 export interface OperationRecalculatedSubscription {
   readonly key: string;
-  readonly query: SubVector;
+  readonly query: OperationSubVector;
   readonly kind: 'root' | 'computed';
   readonly active: boolean;
   readonly version: number;
@@ -222,16 +218,16 @@ export interface OperationHandle {
 }
 
 export interface OperationClient {
-  start(event: EventVector, options?: OperationOptions): OperationHandle;
-  dispatchAndWait(event: EventVector, options?: OperationOptions): Promise<OperationWaitResult>;
+  start(event: OperationEventVector, options?: OperationOptions): OperationHandle;
+  dispatchAndWait(event: OperationEventVector, options?: OperationOptions): Promise<OperationWaitResult>;
   get(lookup: string | OperationLookup): OperationReceipt | undefined;
 }
 
-/** The optional inspector capability formerly supplied directly by Reflex. */
+/** The optional inspector capability supplied by the DevTools operation ledger. */
 export interface ReflexOperationInspector extends ReflexInspector {
   readonly operationApiVersion: 1;
   readonly runtimeInstanceId: string;
-  startEvent(event: EventVector, options?: OperationOptions): OperationHandle;
-  executeEvent(event: EventVector, options?: OperationOptions): Promise<OperationWaitResult>;
+  startEvent(event: OperationEventVector, options?: OperationOptions): OperationHandle;
+  executeEvent(event: OperationEventVector, options?: OperationOptions): Promise<OperationWaitResult>;
   getOperation(lookup: string | OperationLookup): OperationReceipt | undefined;
 }

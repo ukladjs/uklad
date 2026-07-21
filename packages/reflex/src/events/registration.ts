@@ -1,18 +1,11 @@
 import { consoleLog } from '../core/logging';
-import { setInterceptorsForRuntime } from '../runtime/event-metadata';
-import { registerHandlerForRuntime } from '../runtime/handlers';
-import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
-import { getInjectCofxInterceptorForRuntime } from './coeffects';
+import { setInterceptorsForKernel } from '../runtime/event-metadata';
+import { registerHandlerForKernel } from '../runtime/handlers';
+import type { RuntimeKernel } from '../runtime/kernel';
+import { getInjectCofxInterceptorForKernel } from './coeffects';
 import { isInterceptor } from './interceptors';
 
-import type {
-  DefaultAppDb,
-  EventHandler,
-  EventParams,
-  EventRegistrationOptions,
-  Id,
-  Interceptor,
-} from '../types';
+import type { EventHandler, Id, Interceptor } from '../types';
 
 const HANDLER_KIND = 'event';
 
@@ -26,54 +19,15 @@ interface NormalizedEventRegistration {
   interceptors: readonly unknown[];
 }
 
-/** Register an event handler. */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(
-  id: K,
-  handler: EventHandler<T, EventParams<K>>,
-): void;
-/** Register an event handler with explicit coeffects and interceptors. */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(
-  id: K,
-  handler: EventHandler<T, EventParams<K>>,
-  options: EventRegistrationOptions<T>,
-): void;
-/** Register an event handler with interceptors using the legacy positional form. */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(
-  id: K,
-  handler: EventHandler<T, EventParams<K>>,
-  interceptors: Interceptor<T>[],
-): void;
-/** Register an event handler with coeffects using the legacy positional form. */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(
-  id: K,
-  handler: EventHandler<T, EventParams<K>>,
-  coeffects: [Id, ...any[]][],
-): void;
-/** Register an event handler with coeffects and interceptors using the legacy positional form. */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(
-  id: K,
-  handler: EventHandler<T, EventParams<K>>,
-  coeffects: [Id, ...any[]][],
-  interceptors: Interceptor<T>[],
-): void;
-export function regEvent<T = Record<string, any>>(
-  id: Id,
-  handler: EventHandler<T>,
-  registration?: unknown,
-  legacyInterceptors?: Interceptor<T>[],
-): void {
-  regEventForRuntime(defaultRuntimeScope, id, handler, registration, legacyInterceptors);
-}
-
 /** @internal Register an event and its metadata in one runtime. */
-export function regEventForRuntime<T = Record<string, any>>(
-  runtime: RuntimeScope,
+export function regEventForKernel<T = Record<string, any>>(
+  runtime: RuntimeKernel,
   id: Id,
   handler: EventHandler<T>,
   registration?: unknown,
   legacyInterceptors?: Interceptor<T>[],
 ): void {
-  registerHandlerForRuntime(runtime, HANDLER_KIND, id, handler);
+  registerHandlerForKernel(runtime, HANDLER_KIND, id, handler);
   registerEventInterceptors(runtime, id, registration, legacyInterceptors);
 }
 
@@ -114,7 +68,7 @@ function normalizeEventRegistration(
 }
 
 function registerEventInterceptors<T = Record<string, any>>(
-  runtime: RuntimeScope,
+  runtime: RuntimeKernel,
   id: Id,
   registration: unknown,
   legacyInterceptors?: readonly Interceptor<T>[],
@@ -129,10 +83,10 @@ function registerEventInterceptors<T = Record<string, any>>(
     }
 
     if (specification.length === 1) {
-      coeffectInterceptors.push(getInjectCofxInterceptorForRuntime(runtime, specification[0]));
+      coeffectInterceptors.push(getInjectCofxInterceptorForKernel(runtime, specification[0]));
     } else if (specification.length === 2) {
       coeffectInterceptors.push(
-        getInjectCofxInterceptorForRuntime(runtime, specification[0], specification[1]),
+        getInjectCofxInterceptorForKernel(runtime, specification[0], specification[1]),
       );
     } else {
       consoleLog('warn', '[reflex] invalid cofx specification:', specification);
@@ -155,5 +109,5 @@ function registerEventInterceptors<T = Record<string, any>>(
   }
 
   // Registration replaces metadata; an empty list must clear prior metadata.
-  setInterceptorsForRuntime(runtime, id, [...coeffectInterceptors, ...eventInterceptors]);
+  setInterceptorsForKernel(runtime, id, [...coeffectInterceptors, ...eventInterceptors]);
 }

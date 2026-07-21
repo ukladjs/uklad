@@ -1,12 +1,18 @@
-import { disableTracing, enableTracing, isTraceEnabled, withTrace } from '../core/tracing';
-import { regCoeffect } from '../events/coeffects';
-import { regEffect } from '../events/effects';
-import { regEvent } from '../events/registration';
-import { getAppDb, initAppDb } from '../runtime/app-db';
-import { clearHandlers } from '../runtime/reset';
-import { regSub } from '../subscriptions/registration';
-import { createReflexInspector } from '../inspector';
 import { waitForScheduled } from './test-utils';
+import {
+  clearHandlers,
+  createReflexInspector,
+  disableTracing,
+  enableTracing,
+  getAppDb,
+  initAppDb,
+  isTraceEnabled,
+  regCoeffect,
+  regEffect,
+  regEvent,
+  regSub,
+  withTrace,
+} from './runtime-test-api';
 
 import type { Trace } from '../core/tracing';
 
@@ -35,13 +41,10 @@ describe('Reflex inspector', () => {
     const snapshot = inspector.getSnapshot();
 
     expect(inspector.apiVersion).toBe(2);
-    expect(inspector.operationApiVersion).toBe(1);
-    expect(inspector.runtimeId).toBe('default');
-    expect(inspector.runtimeInstanceId).toMatch(/^runtime-instance-/);
-    expect(inspector.runtimeName).toBe('Default runtime');
+    expect(inspector.runtimeId).toBe('reflex-unit-test-runtime');
+    expect(inspector.runtimeName).toBe('Reflex unit-test runtime');
     expect(Object.isFrozen(inspector)).toBe(true);
-    expect(snapshot.appDb).toEqual(appDb);
-    expect(snapshot.appDb).not.toBe(appDb);
+    expect(snapshot.appDb).toBe(appDb);
     expect(snapshot.handlerKeys).toEqual({
       event: ['inspector-event'],
       fx: ['inspector-effect'],
@@ -96,34 +99,6 @@ describe('Reflex inspector', () => {
     await waitForScheduled();
 
     expect(getAppDb<{ count: number }>().count).toBe(3);
-  });
-
-  it('executes and retrieves authoritative operations without tracing', async () => {
-    initAppDb({ count: 0 });
-    regSub('count');
-    regEvent<{ count: number }>('inspector-operation', ({ draftDb }, amount: number) => {
-      draftDb.count += amount;
-    });
-
-    const inspector = createReflexInspector();
-    const handle = inspector.startEvent(['inspector-operation', 4], {
-      idempotencyKey: 'inspector-operation-once',
-      observe: [['count']],
-    });
-    const { operation: receipt } = await handle.result;
-
-    expect(receipt).toMatchObject({
-      operationId: handle.operationId,
-      runtimeInstanceId: inspector.runtimeInstanceId,
-      status: 'completed',
-      outcome: 'succeeded',
-      observations: [{ query: ['count'], status: 'succeeded', value: 4 }],
-    });
-    expect(inspector.getOperation({ idempotencyKey: 'inspector-operation-once' })).toMatchObject({
-      operationId: receipt.operationId,
-      status: 'completed',
-    });
-    expect(isTraceEnabled()).toBe(false);
   });
 
   it('supports independent trace subscriptions with idempotent cleanup', async () => {

@@ -35,7 +35,7 @@ export interface PermissiveReflexContracts extends ReflexContracts {
 }
 
 /**
- * Contract used by the compatibility runtime.
+ * Contract derived from the legacy module-augmentation anchors.
  *
  * Its sections point at the existing module-augmentation anchors. Empty
  * payload maps are normalized to permissive maps by the extraction helpers.

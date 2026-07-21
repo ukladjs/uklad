@@ -6,11 +6,14 @@
 jest.mock('../core/environment', () => ({ IS_DEV: true }));
 
 import { renderHook } from '@testing-library/react';
-import { regSub } from '../subscriptions/registration';
-import { getOrCreateSubscription } from '../subscriptions/queries';
 import { useSubscription } from '../react/use-subscription';
-import { initAppDb } from '../runtime/app-db';
-import { clearSubscriptionCache } from '../runtime/subscriptions/cache';
+import {
+  clearSubscriptionCache,
+  getOrCreateSubscription,
+  initAppDb,
+  ReflexTestProvider,
+  regSub,
+} from './runtime-test-api';
 
 describe('Dev warnings for non-serializable subscription params', () => {
   regSub('warn-items');
@@ -73,7 +76,9 @@ describe('Dev warnings for non-serializable subscription params', () => {
     // Key generation still throws (fail fast on a programming error), but
     // the actionable dev warning must fire first
     expect(() => {
-      renderHook(() => useSubscription(['warn-hook-circular', circular]));
+      renderHook(() => useSubscription(['warn-hook-circular', circular]), {
+        wrapper: ReflexTestProvider,
+      });
     }).toThrow();
     expect(warnCallsContaining("subscription 'warn-hook-circular'")).toHaveLength(1);
 
@@ -84,7 +89,9 @@ describe('Dev warnings for non-serializable subscription params', () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(() => {
-      renderHook(() => useSubscription(['warn-hook-bigint', BigInt(1) as any]));
+      renderHook(() => useSubscription(['warn-hook-bigint', BigInt(1) as any]), {
+        wrapper: ReflexTestProvider,
+      });
     }).toThrow();
     expect(warnCallsContaining("subscription 'warn-hook-bigint'")).toHaveLength(1);
 

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { TraceItem } from '../../types/Trace';
-import { dispatch } from '@flexsurfer/reflex';
+import { dispatch } from '../../runtime';
 import { Badge } from '../ui/Badge';
 
 function formatTimestamp(timestamp: number): string {
@@ -99,4 +99,4 @@ export default function TraceListItem({ item, selected, showBadges, showParams, 
       )}
     </li>
   );
-} 
+}

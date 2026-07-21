@@ -11,112 +11,32 @@ const expectedRuntimeExports = [
   'HotReloadWrapper',
   'NOW',
   'RANDOM',
-  'clearGlobalInterceptors',
-  'clearHandlers',
   'clearHotReloadCallbacks',
-  'clearSubs',
-  'clearSubscriptionCache',
   'createReflexHooks',
-  'createReflexInspector',
   'createReflexRuntime',
   'current',
-  'debounceAndDispatch',
-  'defaultRuntime',
-  'defaultErrorHandler',
-  'dispatch',
-  'dispatchAndWait',
-  'dispatchSync',
-  'disableTracing',
   'enableMapSet',
-  'enableTracePrint',
-  'enableTracing',
-  'flush',
-  'getAppDb',
-  'getGlobalEqualityCheck',
-  'getGlobalInterceptors',
-  'getHandler',
-  'getHandlers',
-  'getOperation',
-  'getSubscriptionDiagnostics',
-  'getSubscriptionValue',
-  'initAppDb',
   'original',
-  'regCoeffect',
-  'regEvent',
-  'regEventErrorHandler',
-  'regEffect',
-  'regGlobalInterceptor',
-  'regSub',
   'ReflexProvider',
   'registerHotReloadCallback',
-  'registerModule',
-  'registerTraceCallback',
-  'registerTraceCb',
-  'removeTraceCallback',
-  'removeTraceCb',
-  'restoreAppDb',
-  'setGlobalEqualityCheck',
   'setupSubsHotReload',
   'shallowEqual',
-  'startOperation',
-  'throttleAndDispatch',
   'triggerHotReload',
   'useHotReload',
   'useHotReloadKey',
   'useReflexRuntime',
   'useSubscription',
-  'watchSubscription',
 ].sort();
 const expectedVanillaRuntimeExports = [
   'DISPATCH',
   'DISPATCH_LATER',
   'NOW',
   'RANDOM',
-  'clearGlobalInterceptors',
-  'clearHandlers',
-  'clearSubs',
-  'clearSubscriptionCache',
-  'createReflexInspector',
   'createReflexRuntime',
   'current',
-  'debounceAndDispatch',
-  'defaultErrorHandler',
-  'defaultRuntime',
-  'dispatch',
-  'dispatchAndWait',
-  'dispatchSync',
-  'disableTracing',
   'enableMapSet',
-  'enableTracePrint',
-  'enableTracing',
-  'flush',
-  'getAppDb',
-  'getGlobalEqualityCheck',
-  'getGlobalInterceptors',
-  'getHandler',
-  'getHandlers',
-  'getOperation',
-  'getSubscriptionDiagnostics',
-  'getSubscriptionValue',
-  'initAppDb',
   'original',
-  'regCoeffect',
-  'regEvent',
-  'regEventErrorHandler',
-  'regEffect',
-  'regGlobalInterceptor',
-  'regSub',
-  'registerModule',
-  'registerTraceCallback',
-  'registerTraceCb',
-  'removeTraceCallback',
-  'removeTraceCb',
-  'restoreAppDb',
-  'setGlobalEqualityCheck',
   'shallowEqual',
-  'startOperation',
-  'throttleAndDispatch',
-  'watchSubscription',
 ].sort();
 const expectedReactRuntimeExports = [
   'HotReloadWrapper',
@@ -237,7 +157,7 @@ describe('Package Consumption Tests', () => {
     expect(exportedKeys).toEqual(expectedRuntimeExports);
   });
 
-  test('ESM subpath builds can be imported and share the default runtime', () => {
+  test('ESM subpath builds can be imported without creating an application runtime', () => {
     const distDir = path.join(__dirname, '../dist');
     const indexUrl = pathToFileURL(path.join(distDir, 'index.mjs')).href;
     const vanillaUrl = pathToFileURL(path.join(distDir, 'vanilla.mjs')).href;
@@ -249,7 +169,6 @@ describe('Package Consumption Tests', () => {
       process.stdout.write(JSON.stringify({
         vanillaKeys: Object.keys(vanilla).sort(),
         reactKeys: Object.keys(react).sort(),
-        sameRuntime: root.defaultRuntime === vanilla.defaultRuntime,
         sameProvider: root.ReflexProvider === react.ReflexProvider,
       }));
     `;
@@ -262,7 +181,6 @@ describe('Package Consumption Tests', () => {
     expect(result).toEqual({
       vanillaKeys: expectedVanillaRuntimeExports,
       reactKeys: expectedReactRuntimeExports,
-      sameRuntime: true,
       sameProvider: true,
     });
   });
@@ -276,7 +194,7 @@ describe('Package Consumption Tests', () => {
     });
   });
 
-  test('CommonJS subpath builds can be required and share the default runtime', () => {
+  test('CommonJS subpath builds can be required without creating an application runtime', () => {
     const distDir = path.join(__dirname, '../dist');
     const root = require(path.join(distDir, 'index.cjs'));
     const vanilla = require(path.join(distDir, 'vanilla.cjs'));
@@ -284,7 +202,6 @@ describe('Package Consumption Tests', () => {
 
     expect(Object.keys(vanilla).sort()).toEqual(expectedVanillaRuntimeExports);
     expect(Object.keys(react).sort()).toEqual(expectedReactRuntimeExports);
-    expect(root.defaultRuntime).toBe(vanilla.defaultRuntime);
     expect(root.ReflexProvider).toBe(react.ReflexProvider);
   });
 

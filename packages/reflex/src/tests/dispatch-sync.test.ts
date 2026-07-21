@@ -1,12 +1,19 @@
-import { defaultErrorHandler, regEventErrorHandler } from '../events/pipeline';
-import { regEvent } from '../events/registration';
-import { regEffect } from '../events/effects';
-import { dispatch, dispatchSync } from '../events/router';
-import { initAppDb, getAppDb } from '../runtime/app-db';
-import { regSub } from '../subscriptions/registration';
-import { getOrCreateSubscription, getSubscriptionValue } from '../subscriptions/queries';
-import { clearSubscriptionCache } from '../runtime/subscriptions/cache';
-import { getSubscriptionSnapshot, subscribeToSubscription } from '../runtime/subscriptions/engine';
+import { defaultErrorHandler } from '../events/pipeline';
+import {
+  clearSubscriptionCache,
+  dispatch,
+  dispatchSync,
+  getAppDb,
+  getOrCreateSubscription,
+  getSubscriptionSnapshot,
+  getSubscriptionValue,
+  initAppDb,
+  regEffect,
+  regEvent,
+  regEventErrorHandler,
+  regSub,
+  subscribeToSubscription,
+} from './runtime-test-api';
 import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('dispatchSync', () => {

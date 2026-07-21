@@ -1118,7 +1118,7 @@ function assertInspector(inspector: ReflexInspector): void {
     throw new Error(
       '[Reflex Devtools] enableDevtools() requires a Reflex inspector as its first argument. ' +
       'Call enableDevtools(runtime.createInspector(), config), or use ' +
-      'createReflexInspector() for the default runtime, with the inspector ' +
+      'runtime.createInspector(), with the inspector ' +
       'created by the same Reflex package as the application.',
     );
   }

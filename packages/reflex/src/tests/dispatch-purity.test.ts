@@ -8,9 +8,7 @@
 // takes its development-only branch in this suite.
 jest.mock('../core/environment', () => ({ IS_DEV: true }));
 
-import { regEvent } from '../events/registration';
-import { dispatch, dispatchSync } from '../events/router';
-import { initAppDb, getAppDb } from '../runtime/app-db';
+import { dispatch, dispatchSync, getAppDb, initAppDb, regEvent } from './runtime-test-api';
 import { waitForScheduled } from './test-utils';
 
 const purityWarnings = () =>

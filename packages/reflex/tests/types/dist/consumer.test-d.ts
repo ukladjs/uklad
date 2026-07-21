@@ -9,77 +9,82 @@
  * Run with `npm run test:types:dist` (requires a fresh `npm run build`);
  * wired into prepublishOnly after the build step.
  */
-import { dispatch, dispatchSync, regEvent, useSubscription, getAppDb } from '@flexsurfer/reflex';
-import type { EventRegistrationOptions, SubscriptionDiagnostic } from '@flexsurfer/reflex';
+import { createReflexRuntime } from '@flexsurfer/reflex';
+import type {
+  EventRegistrationOptions,
+  ReflexContracts,
+  SubscriptionDiagnostic,
+} from '@flexsurfer/reflex';
 
 interface Todo { id: number; title: string; done: boolean }
 
-declare module '@flexsurfer/reflex' {
-  interface EventPayloads {
+interface TestContracts extends ReflexContracts {
+  readonly db: {
+    todos: Todo[];
+  };
+  readonly events: {
     'todos/add': [title: string];
     'app/init': [];
-  }
-  interface SubPayloads {
+  };
+  readonly subscriptions: {
     'todos/all': { params: []; result: Todo[] };
-  }
-  interface EffectPayloads {
+  };
+  readonly effects: {
     'storage/set-todos': Todo[];
     'dispatch': number;
     'dispatch-later': string;
-  }
-  interface AppDb {
-    todos: Todo[];
-  }
+  };
 }
 
-dispatch(['todos/add', 'buy milk']);
-dispatch(['app/init']);
+const runtime = createReflexRuntime<TestContracts>({ initialDb: { todos: [] as Todo[] } });
+runtime.dispatch(['todos/add', 'buy milk']);
+runtime.dispatch(['app/init']);
 // @ts-expect-error unknown event id
-dispatch(['todos/oops']);
+runtime.dispatch(['todos/oops']);
 // @ts-expect-error wrong payload type
-dispatch(['todos/add', 1]);
+runtime.dispatch(['todos/add', 1]);
 // @ts-expect-error missing payload
-dispatch(['todos/add']);
+runtime.dispatch(['todos/add']);
 
 // dispatchSync shares the dispatch typing
-dispatchSync(['todos/add', 'buy milk']);
+runtime.dispatchSync(['todos/add', 'buy milk']);
 // @ts-expect-error unknown event id
-dispatchSync(['todos/oops']);
+runtime.dispatchSync(['todos/oops']);
 
-regEvent('todos/add', ({ draftDb }, title) => {
+runtime.regEvent('todos/add', ({ draftDb }, title) => {
   const _title: string = title;
   const _first: string | undefined = draftDb.todos[0]?.title;
   void _title; void _first;
 });
-const registrationOptions: EventRegistrationOptions = {
+const registrationOptions: EventRegistrationOptions<{ todos: Todo[] }> = {
   coeffects: [['now']],
   interceptors: [{ id: 'dist-options', before: (context) => context }],
 };
-regEvent('app/init', () => undefined, registrationOptions);
+runtime.regEvent('app/init', () => undefined, registrationOptions);
 // @ts-expect-error unknown db key
-regEvent('app/init', ({ draftDb }) => { draftDb.nope = 1; });
+runtime.regEvent('app/init', ({ draftDb }) => { draftDb.nope = 1; });
 
 // effect tuples are checked, including events embedded in dispatch effects
-regEvent('app/init', ({ draftDb }) => [
+runtime.regEvent('app/init', ({ draftDb }) => [
   ['storage/set-todos', draftDb.todos],
   ['dispatch', ['todos/add', 'from effect']]
 ]);
 // @ts-expect-error wrong payload inside a dispatch effect
-regEvent('app/init', () => [['dispatch', ['todos/add', 1]]]);
+runtime.regEvent('app/init', () => [['dispatch', ['todos/add', 1]]]);
 // @ts-expect-error undeclared effect id
-regEvent('app/init', () => [['storage/unknown', 1]]);
+runtime.regEvent('app/init', () => [['storage/unknown', 1]]);
 // @ts-expect-error built-in dispatch payload still wins over accidental EffectPayloads declaration
-regEvent('app/init', () => [['dispatch', 1]]);
+runtime.regEvent('app/init', () => [['dispatch', 1]]);
 // @ts-expect-error built-in dispatch-later payload still wins over accidental EffectPayloads declaration
-regEvent('app/init', () => [['dispatch-later', 'not-a-dispatch-later-payload']]);
+runtime.regEvent('app/init', () => [['dispatch-later', 'not-a-dispatch-later-payload']]);
 
-const todos = useSubscription(['todos/all']);
+const todos = runtime.getSubscriptionValue(['todos/all']);
 const _check: Todo[] = todos;
 void _check;
 // @ts-expect-error unknown sub id
 useSubscription(['todos/nope']);
 
-const db = getAppDb();
+const db = runtime.getAppDb();
 const _all: Todo[] = db.todos;
 void _all;
 

@@ -3,8 +3,8 @@
 Each `ReflexRuntime` owns one central db. Events are pure functions that
 describe a new db plus effects. Effects are the only side effects.
 Subscriptions are a cached, reactive DAG derived from that runtime's db. React
-reads subscriptions through `useSyncExternalStore` and the nearest
-`ReflexProvider` (or the compatibility `defaultRuntime`).
+reads subscriptions through `useSyncExternalStore` and the nearest explicit
+`ReflexProvider`.
 
 ## End-to-end flow
 
@@ -34,26 +34,26 @@ dispatch(['todos/add', 'milk'])
 
 Paths in this document are relative to `src/`.
 
-| Path                              | Responsibility                                                               |
-| --------------------------------- | ---------------------------------------------------------------------------- |
-| `index.ts`                        | Combined compatibility entrypoint                                            |
-| `vanilla.ts` / `react.ts`         | React-free runtime and React-only public entrypoints                         |
-| `contracts.ts`                    | Store-local runtime contract extraction and vector/result types              |
-| `types.ts`                        | Public contracts and module-augmentation anchors                             |
-| `runtime/runtime.ts`              | `createReflexRuntime`, default facade owner, modules, watches, restore/flush |
-| `runtime/scope.ts`                | Immutable runtime identity and terminal lifecycle marker                     |
-| `core/*`                          | Environment, equality, Immer, logging, scheduling, tracing, and validation   |
-| `runtime/app-db.ts`               | `appDb`/`renderDb`, coalesced flush, and changed-root publication            |
-| `runtime/handlers.ts`             | Typed handler definitions and framework-owned handler baselines              |
-| `runtime/event-metadata.ts`       | Per-event interceptor metadata                                               |
-| `runtime/reset.ts`                | Cross-store clear coordination                                               |
-| `runtime/subscriptions/engine.ts` | Reactive graph semantics: push waves, pull reads, and live lifecycle         |
-| `runtime/subscriptions/cache.ts`  | Root metadata, canonical instances, reverse edges, leases, and sub config    |
-| `runtime/subscriptions/keys.ts`   | Canonical query-key serialization and development validation                 |
-| `events/*`                        | Event registration/pipeline, routing, interceptors, effects, and coeffects   |
-| `subscriptions/registration.ts`   | Root and computed subscription definitions                                   |
-| `subscriptions/queries.ts`        | Graph construction, cache lookup, and imperative reads                       |
-| `react/*`                         | `useSubscription` and hot-reload bindings; the only React-dependent modules  |
+| Path                              | Responsibility                                                              |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| `index.ts`                        | Combined explicit-runtime entrypoint                                        |
+| `vanilla.ts` / `react.ts`         | React-free runtime and React-only public entrypoints                        |
+| `contracts.ts`                    | Store-local runtime contract extraction and vector/result types             |
+| `types.ts`                        | Public contracts and module-augmentation anchors                            |
+| `runtime/runtime.ts`              | `createReflexRuntime`, modules, watches, restore/flush                      |
+| `runtime/kernel.ts`               | Instance-owned runtime kernel, identity, and terminal lifecycle             |
+| `core/*`                          | Environment, equality, Immer, logging, scheduling, tracing, and validation  |
+| `runtime/app-db.ts`               | `appDb`/`renderDb`, coalesced flush, and changed-root publication           |
+| `runtime/handlers.ts`             | Typed handler definitions and framework-owned handler baselines             |
+| `runtime/event-metadata.ts`       | Per-event interceptor metadata                                              |
+| `runtime/reset.ts`                | Cross-store clear coordination                                              |
+| `runtime/subscriptions/engine.ts` | Reactive graph semantics: push waves, pull reads, and live lifecycle        |
+| `runtime/subscriptions/cache.ts`  | Root metadata, canonical instances, reverse edges, leases, and sub config   |
+| `runtime/subscriptions/keys.ts`   | Canonical query-key serialization and development validation                |
+| `events/*`                        | Event registration/pipeline, routing, interceptors, effects, and coeffects  |
+| `subscriptions/registration.ts`   | Root and computed subscription definitions                                  |
+| `subscriptions/queries.ts`        | Graph construction, cache lookup, and imperative reads                      |
+| `react/*`                         | `useSubscription` and hot-reload bindings; the only React-dependent modules |
 
 See [`code-conventions.md`](./code-conventions.md) for ownership and dependency
 rules for this tree.
@@ -98,8 +98,8 @@ regEvent('todos/load', handler, {
 
 ## State
 
-**`runtime/app-db.ts`** — every operation receives an explicit runtime scope;
-the package-root functions pass `defaultRuntime`'s scope.
+**`runtime/app-db.ts`** — every operation receives the explicit runtime kernel
+that owns its state.
 
 | Item                                                | What / why                                                                      |
 | --------------------------------------------------- | ------------------------------------------------------------------------------- |
@@ -184,7 +184,7 @@ subscription engines.
 ## Invariants
 
 - Every mutable db, queue, registry, cache, trace, and callback store is keyed
-  by an explicit runtime scope. Scheduled callbacks capture that scope.
+  by an explicit runtime kernel. Scheduled callbacks capture that kernel.
 - `renderDb` advances **only** inside a publication. The flush is the single publication boundary.
 - One canonical node per serialized query key. Duplicates are an error.
 - Roots are persistent db anchors; computed cells are terminal and evicted when unused.

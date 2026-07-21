@@ -3,23 +3,23 @@
  * coalescing, and db generation reads (subscriptions serve the last flushed
  * generation, not the live db).
  */
-import { regEvent } from '../events/registration';
-import { dispatch } from '../events/router';
 import {
-  initAppDb,
-  getAppDb,
-  updateAppDb,
+  clearHandlers,
+  clearSubscriptionCache,
+  clearSubs,
+  dispatch,
   flushSubscriptions,
+  getAppDb,
+  getOrCreateSubscription,
   getRenderDb,
-  getAppDbRevisionsForRuntime,
-  initAppDbForRuntime,
-} from '../runtime/app-db';
-import { createRuntimeScope, defaultRuntimeScope } from '../runtime/scope';
-import { regSub } from '../subscriptions/registration';
-import { getOrCreateSubscription, getSubscriptionValue } from '../subscriptions/queries';
-import { clearHandlers } from '../runtime/reset';
-import { clearSubscriptionCache, clearSubs } from '../runtime/subscriptions/cache';
-import { getSubscriptionSnapshot, subscribeToSubscription } from '../runtime/subscriptions/engine';
+  getSubscriptionSnapshot,
+  getSubscriptionValue,
+  initAppDb,
+  regEvent,
+  regSub,
+  subscribeToSubscription,
+  updateAppDb,
+} from './runtime-test-api';
 import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './test-utils';
 import { produce } from 'immer';
 
@@ -51,42 +51,6 @@ describe('Subscription flush', () => {
   });
 
   describe('db generation reads', () => {
-    it('starts a runtime baseline at revision zero and advances replacements', () => {
-      const runtime = createRuntimeScope();
-
-      initAppDbForRuntime(runtime, { count: 0 });
-      expect(getAppDbRevisionsForRuntime(runtime)).toEqual({
-        committedRevision: 0,
-        publishedRevision: 0,
-      });
-
-      initAppDbForRuntime(runtime, { count: 1 });
-      expect(getAppDbRevisionsForRuntime(runtime)).toEqual({
-        committedRevision: 1,
-        publishedRevision: 1,
-      });
-    });
-
-    it('tracks committed and published revisions independently', () => {
-      const initialDb = getAppDb();
-      const initial = getAppDbRevisionsForRuntime(defaultRuntimeScope);
-
-      updateAppDb(initialDb);
-      expect(getAppDbRevisionsForRuntime(defaultRuntimeScope)).toEqual(initial);
-
-      updateAppDb({ ...initialDb, 'flush-counter': 1 });
-      expect(getAppDbRevisionsForRuntime(defaultRuntimeScope)).toEqual({
-        committedRevision: initial.committedRevision + 1,
-        publishedRevision: initial.publishedRevision,
-      });
-
-      flushSubscriptions();
-      expect(getAppDbRevisionsForRuntime(defaultRuntimeScope)).toEqual({
-        committedRevision: initial.committedRevision + 1,
-        publishedRevision: initial.committedRevision + 1,
-      });
-    });
-
     it('should reject registry clearing while a mounted graph is active', () => {
       const subscription = getOrCreateSubscription(['flush-counter'])!;
       const callback = jest.fn();
@@ -269,7 +233,6 @@ describe('Subscription flush', () => {
 
     it('should guard renderDb before a reentrant direct flush can promote it', () => {
       const subscription = getOrCreateSubscription(['flush-counter'])!;
-      const initialRevision = getAppDbRevisionsForRuntime(defaultRuntimeScope).committedRevision;
       let nestedError: Error | undefined;
       let attempted = false;
       const unsubscribe = subscribeToSubscription(subscription, () => {
@@ -298,18 +261,10 @@ describe('Subscription flush', () => {
       expect(nestedError?.message).toMatch(/publication is not allowed/);
       expect(getRenderDb()['flush-counter']).toBe(1);
       expect(getSubscriptionSnapshot(subscription)).toBe(1);
-      expect(getAppDbRevisionsForRuntime(defaultRuntimeScope)).toEqual({
-        committedRevision: initialRevision + 2,
-        publishedRevision: initialRevision + 1,
-      });
 
       flushSubscriptions();
       expect(getRenderDb()['flush-counter']).toBe(5);
       expect(getSubscriptionSnapshot(subscription)).toBe(5);
-      expect(getAppDbRevisionsForRuntime(defaultRuntimeScope)).toEqual({
-        committedRevision: initialRevision + 2,
-        publishedRevision: initialRevision + 2,
-      });
       unsubscribe();
     });
   });

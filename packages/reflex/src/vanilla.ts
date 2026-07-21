@@ -1,54 +1,13 @@
 // Detect separately initialized package copies before exposing public state.
 import './runtime/instance';
 
-export { getAppDb, initAppDb } from './runtime/app-db';
-export {
-  createReflexRuntime,
-  defaultRuntime,
-  dispatchAndWait,
-  flush,
-  getOperation,
-  registerModule,
-  restoreAppDb,
-  startOperation,
-  watchSubscription,
-} from './runtime/runtime';
+/** Create the explicit owner of one Reflex application. */
+export { createReflexRuntime } from './runtime/runtime';
 
-export { defaultErrorHandler, regEventErrorHandler } from './events/pipeline';
-export { regEvent } from './events/registration';
-export { dispatch, dispatchSync } from './events/router';
-export { debounceAndDispatch, throttleAndDispatch } from './events/rate-limit';
-export { DISPATCH, DISPATCH_LATER, regEffect } from './events/effects';
-export { NOW, RANDOM, regCoeffect } from './events/coeffects';
-export {
-  clearGlobalInterceptors,
-  getGlobalInterceptors,
-  regGlobalInterceptor,
-} from './events/global-interceptors';
-
-export { regSub } from './subscriptions/registration';
-export { getSubscriptionValue } from './subscriptions/queries';
-
-export { getGlobalEqualityCheck, setGlobalEqualityCheck, shallowEqual } from './core/equality';
+export { DISPATCH, DISPATCH_LATER } from './events/effects';
+export { NOW, RANDOM } from './events/coeffects';
+export { shallowEqual } from './core/equality';
 export { current, enableMapSet, original } from './core/immer';
-export {
-  disableTracing,
-  enableTracePrint,
-  enableTracing,
-  registerTraceCallback,
-  registerTraceCb,
-  removeTraceCallback,
-  removeTraceCb,
-} from './core/tracing';
-export { createReflexInspector } from './inspector';
-
-export { getHandler, getHandlers } from './runtime/handlers';
-export { clearHandlers } from './runtime/reset';
-export {
-  clearSubs,
-  clearSubscriptionCache,
-  getSubscriptionDiagnostics,
-} from './runtime/subscriptions/cache';
 
 export type {
   ContractAllEffectPayloads,
@@ -87,35 +46,6 @@ export type {
   RuntimeEventHandler,
   RuntimeSubscriptionHandler,
 } from './runtime/runtime';
-export type {
-  DispatchAndWaitOptions,
-  OperationCompletionBoundary,
-  OperationCompletionResult,
-  OperationEffectMode,
-  OperationEffectResult,
-  OperationEffectStatus,
-  OperationEffectsSummary,
-  OperationError,
-  OperationHandle,
-  OperationEventResult,
-  OperationEventStateResult,
-  OperationEventStateStatus,
-  OperationEventStatus,
-  OperationExecutionContext,
-  OperationExecutionContextInput,
-  OperationLookup,
-  OperationObservationResult,
-  OperationOutcome,
-  OperationPatch,
-  OperationReceipt,
-  OperationRetention,
-  OperationRevisionSummary,
-  OperationStateSummary,
-  OperationStatus,
-  OperationWaitResult,
-  OperationWaitStatus,
-  OperationDeliveryResult,
-} from './runtime/operations';
 export type {
   AppDb,
   CoEffectHandler,
@@ -158,9 +88,4 @@ export type {
 } from './runtime/handlers';
 export type { SubscriptionDiagnostic } from './runtime/subscriptions/engine';
 export type { Trace, TraceCallback, TraceId, TraceOptions, TraceTags } from './core/tracing';
-export type {
-  ReflexHandlerKeys,
-  ReflexInspector,
-  ReflexInspectorSnapshot,
-  ReflexOperationInspector,
-} from './inspector';
+export type { ReflexHandlerKeys, ReflexInspector, ReflexInspectorSnapshot } from './inspector';

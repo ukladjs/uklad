@@ -1,11 +1,16 @@
-import { regEvent } from '../events/registration';
-import { regCoeffect } from '../events/coeffects';
-import { regEffect } from '../events/effects';
-import { dispatch, dispatchSync } from '../events/router';
-import { initAppDb, getAppDb } from '../runtime/app-db';
-import { registerHandler } from '../runtime/handlers';
-import { regGlobalInterceptor, clearGlobalInterceptors } from '../events/global-interceptors';
 import type { CoEffects, EventRegistrationOptions, Interceptor, Context } from '../types';
+import {
+  clearGlobalInterceptors,
+  dispatch,
+  dispatchSync,
+  getAppDb,
+  initAppDb,
+  regCoeffect,
+  regEffect,
+  regEvent,
+  regGlobalInterceptor,
+  registerHandler,
+} from './runtime-test-api';
 import { waitForScheduled } from './test-utils';
 
 interface EventTestState {
@@ -694,8 +699,7 @@ describe('regEvent with cofx', () => {
     });
 
     it('should work with custom cofx with values', async () => {
-      const cofxModule = await import('../events/coeffects');
-      cofxModule.regCoeffect('custom-with-value', (coeffects: any, value: any) => ({
+      regCoeffect('custom-with-value', (coeffects: any, value: any) => ({
         ...coeffects,
         customValue: `processed-${value}`,
       }));

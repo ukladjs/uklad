@@ -79,20 +79,13 @@ When existing applications could reasonably depend on the behavior, release
 notes must still describe the impact and a minor or major release may be more
 appropriate.
 
-## Compatibility facade
+## Explicit-runtime API
 
-The package-root functions are a supported facade over the exported
-`defaultRuntime`, not a separate legacy implementation. Their existing
-signatures, global module-augmentation support, scheduling behavior, and
-framework built-ins remain part of the public 1.x contract.
-
-`useSubscription` without a provider continues to select `defaultRuntime`.
-Legacy root calls and instance calls made directly on `defaultRuntime`
-interoperate. Other runtime instances remain isolated.
-
-The compatibility facade is not scheduled for removal during 1.x. If a future
-major version proposes its removal, it must first follow the deprecation policy
-below and retain an incremental migration path.
+The public API creates no package-global runtime. Applications construct a
+runtime with `createReflexRuntime`, register behavior on that instance, and
+provide it to React through `ReflexProvider`. `useSubscription` without a
+provider throws. Runtime identity, scheduling, contracts, and lifecycle are
+therefore local to the application-owned instance.
 
 ## Instance-runtime guarantees
 

@@ -2,6 +2,8 @@
  * @jest-environment jsdom
  */
 import { renderHook, cleanup, act } from '@testing-library/react';
+import { createElement, type ComponentType, type PropsWithChildren } from 'react';
+import { ReflexProvider } from '../react/context';
 import {
   registerHotReloadCallback,
   triggerHotReload,
@@ -10,23 +12,28 @@ import {
   useHotReloadKey,
   setupSubsHotReload,
 } from '../react/hot-reload';
-import { clearSubsForHotReload } from '../runtime/subscriptions/cache';
-import { createReflexRuntime } from '../runtime/runtime';
+import { createReflexRuntime, type ReflexRuntime } from '../runtime/runtime';
 
-// setupSubsHotReload invokes the cache reset internally.
-jest.mock('../runtime/subscriptions/cache', () => ({
-  ...jest.requireActual('../runtime/subscriptions/cache'),
-  clearSubsForHotReload: jest.fn(),
-}));
+function runtimeWrapper(runtime: ReflexRuntime): ComponentType<PropsWithChildren> {
+  return ({ children }) => createElement(ReflexProvider, { runtime }, children);
+}
 
 describe('Hot Reload System', () => {
+  let runtime: ReflexRuntime;
+  let runtimeSequence = 0;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    runtime = createReflexRuntime({
+      initialDb: {},
+      runtimeId: `hot-reload-test-${++runtimeSequence}`,
+    });
   });
 
   afterEach(() => {
     cleanup();
-    clearHotReloadCallbacks();
+    clearHotReloadCallbacks(runtime);
+    runtime.dispose();
   });
 
   describe('Callback Management', () => {
@@ -34,24 +41,24 @@ describe('Hot Reload System', () => {
       const mockCallback1 = jest.fn();
       const mockCallback2 = jest.fn();
 
-      const unregister1 = registerHotReloadCallback(mockCallback1);
-      const unregister2 = registerHotReloadCallback(mockCallback2);
+      const unregister1 = registerHotReloadCallback(runtime, mockCallback1);
+      const unregister2 = registerHotReloadCallback(runtime, mockCallback2);
 
-      triggerHotReload();
+      triggerHotReload(runtime);
 
       expect(mockCallback1).toHaveBeenCalledTimes(1);
       expect(mockCallback2).toHaveBeenCalledTimes(1);
 
       unregister1();
 
-      triggerHotReload();
+      triggerHotReload(runtime);
 
       expect(mockCallback1).toHaveBeenCalledTimes(1);
       expect(mockCallback2).toHaveBeenCalledTimes(2);
 
       unregister2();
 
-      triggerHotReload();
+      triggerHotReload(runtime);
 
       expect(mockCallback1).toHaveBeenCalledTimes(1);
       expect(mockCallback2).toHaveBeenCalledTimes(2);
@@ -64,11 +71,11 @@ describe('Hot Reload System', () => {
       });
       const mockCallback3 = jest.fn();
 
-      registerHotReloadCallback(mockCallback1);
-      registerHotReloadCallback(mockCallback2);
-      registerHotReloadCallback(mockCallback3);
+      registerHotReloadCallback(runtime, mockCallback1);
+      registerHotReloadCallback(runtime, mockCallback2);
+      registerHotReloadCallback(runtime, mockCallback3);
 
-      triggerHotReload();
+      triggerHotReload(runtime);
 
       expect(mockCallback1).toHaveBeenCalledTimes(1);
       expect(mockCallback2).toHaveBeenCalledTimes(1);
@@ -79,12 +86,12 @@ describe('Hot Reload System', () => {
       const mockCallback1 = jest.fn();
       const mockCallback2 = jest.fn();
 
-      registerHotReloadCallback(mockCallback1);
-      registerHotReloadCallback(mockCallback2);
+      registerHotReloadCallback(runtime, mockCallback1);
+      registerHotReloadCallback(runtime, mockCallback2);
 
-      clearHotReloadCallbacks();
+      clearHotReloadCallbacks(runtime);
 
-      triggerHotReload();
+      triggerHotReload(runtime);
 
       expect(mockCallback1).not.toHaveBeenCalled();
       expect(mockCallback2).not.toHaveBeenCalled();
@@ -98,25 +105,25 @@ describe('Hot Reload System', () => {
         return null;
       });
 
-      renderHook(() => TestComponent());
+      renderHook(() => TestComponent(), { wrapper: runtimeWrapper(runtime) });
 
       expect(TestComponent).toHaveBeenCalledTimes(1);
 
       act(() => {
-        triggerHotReload();
+        triggerHotReload(runtime);
       });
 
       expect(TestComponent).toHaveBeenCalledTimes(2);
     });
 
     it('should provide changing keys with useHotReloadKey', () => {
-      const { result } = renderHook(() => useHotReloadKey());
+      const { result } = renderHook(() => useHotReloadKey(), { wrapper: runtimeWrapper(runtime) });
 
       const initialKey = result.current;
       expect(typeof initialKey).toBe('string');
 
       act(() => {
-        triggerHotReload();
+        triggerHotReload(runtime);
       });
 
       const newKey = result.current;
@@ -127,23 +134,26 @@ describe('Hot Reload System', () => {
     it('should cleanup callbacks when component unmounts', () => {
       const mockCallback = jest.fn();
 
-      const { unmount } = renderHook(() => {
-        useHotReload();
-        registerHotReloadCallback(mockCallback);
-      });
+      const { unmount } = renderHook(
+        () => {
+          useHotReload();
+          registerHotReloadCallback(runtime, mockCallback);
+        },
+        { wrapper: runtimeWrapper(runtime) },
+      );
 
       act(() => {
-        triggerHotReload();
+        triggerHotReload(runtime);
       });
 
       expect(mockCallback).toHaveBeenCalledTimes(1);
 
       unmount();
 
-      clearHotReloadCallbacks();
+      clearHotReloadCallbacks(runtime);
 
       act(() => {
-        triggerHotReload();
+        triggerHotReload(runtime);
       });
 
       expect(mockCallback).toHaveBeenCalledTimes(1);
@@ -152,16 +162,17 @@ describe('Hot Reload System', () => {
 
   describe('setupSubsHotReload', () => {
     it('should provide dispose and accept functions', () => {
-      const { dispose, accept } = setupSubsHotReload();
+      runtime.regSub('value');
+      const { dispose, accept } = setupSubsHotReload(runtime);
 
       expect(typeof dispose).toBe('function');
       expect(typeof accept).toBe('function');
 
       dispose();
-      expect(clearSubsForHotReload).toHaveBeenCalledTimes(1);
+      expect(runtime.getHandlers().sub.value).toBeUndefined();
 
       const mockCallback = jest.fn();
-      registerHotReloadCallback(mockCallback);
+      registerHotReloadCallback(runtime, mockCallback);
 
       accept({ newModule: true });
       expect(mockCallback).toHaveBeenCalledTimes(1);
@@ -172,9 +183,9 @@ describe('Hot Reload System', () => {
 
     it('should not trigger callbacks when accept is called without new module', () => {
       const mockCallback = jest.fn();
-      const { accept } = setupSubsHotReload();
+      const { accept } = setupSubsHotReload(runtime);
 
-      registerHotReloadCallback(mockCallback);
+      registerHotReloadCallback(runtime, mockCallback);
 
       accept();
       expect(mockCallback).not.toHaveBeenCalled();
@@ -225,16 +236,17 @@ describe('Hot Reload System', () => {
     it('should work with a complete hot reload workflow', () => {
       const mockCallback = jest.fn();
 
-      const { dispose, accept } = setupSubsHotReload();
-      registerHotReloadCallback(mockCallback);
+      runtime.regSub('value');
+      const { dispose, accept } = setupSubsHotReload(runtime);
+      registerHotReloadCallback(runtime, mockCallback);
 
       dispose();
-      expect(clearSubsForHotReload).toHaveBeenCalledTimes(1);
+      expect(runtime.getHandlers().sub.value).toBeUndefined();
 
       accept({ newModule: true });
       expect(mockCallback).toHaveBeenCalledTimes(1);
 
-      triggerHotReload();
+      triggerHotReload(runtime);
       expect(mockCallback).toHaveBeenCalledTimes(2);
     });
   });

@@ -1,8 +1,5 @@
-import { regEffect } from '../events/effects';
-import { regEvent } from '../events/registration';
-import { dispatch } from '../events/router';
-import { initAppDb, getAppDb } from '../runtime/app-db';
 import { consoleLog } from '../core/logging';
+import { dispatch, getAppDb, initAppDb, regEffect, regEvent } from './runtime-test-api';
 import { waitForScheduled } from './test-utils';
 
 describe('regFx - Custom Effects', () => {

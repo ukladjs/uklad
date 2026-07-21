@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { useSubscription, dispatch } from '@flexsurfer/reflex';
+import { useSubscription } from '@flexsurfer/reflex';
+import { dispatch } from '../../runtime';
 
 export default function EventFilter() {
     const filter = useSubscription<string>(['filter']);
@@ -36,4 +37,4 @@ export default function EventFilter() {
             )}
         </label>
     );
-} 
+}

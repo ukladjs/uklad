@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useSubscription, dispatch } from '@flexsurfer/reflex';
+import { useSubscription } from '@flexsurfer/reflex';
+import { dispatch } from '../../runtime';
 
 interface TraceViewPanelProps {
   isOpen: boolean;

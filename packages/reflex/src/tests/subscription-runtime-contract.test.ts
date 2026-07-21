@@ -1,11 +1,11 @@
+import type { SubscriptionNode } from '../runtime/subscriptions/engine';
 import {
   createSubscription,
   getSubscriptionSnapshot,
   publishSubscriptions,
   readSubscription,
   subscribeToSubscription,
-  type SubscriptionNode,
-} from '../runtime/subscriptions/engine';
+} from './runtime-test-api';
 
 let nextKey = 0;
 

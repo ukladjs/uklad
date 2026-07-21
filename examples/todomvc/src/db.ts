@@ -1,5 +1,3 @@
-import { initAppDb } from '@flexsurfer/reflex';
-
 export type TodoId = number;
 
 export interface Todo {
@@ -17,9 +15,9 @@ export interface TodoDb {
   showing: Showing;
 }
 
-const defaultDb: TodoDb = {
-  todos: new Map<TodoId, Todo>(),
-  showing: 'all',
-};
-
-initAppDb(defaultDb);
+export function createTodoDb(): TodoDb {
+  return {
+    todos: new Map<TodoId, Todo>(),
+    showing: 'all',
+  };
+}

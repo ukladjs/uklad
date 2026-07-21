@@ -1,6 +1,7 @@
-import { EventQueue, dispatch } from '../events/router';
+import { EventQueue } from '../events/router';
 import type { EventVector } from '../types';
 import { waitForScheduled, waitForAnimationFrame, createEventWithMeta } from './test-utils';
+import { dispatch } from './runtime-test-api';
 
 describe('EventQueue', () => {
   let calls: EventVector[];

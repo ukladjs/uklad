@@ -1,12 +1,4 @@
-import {
-  createReflexRuntime,
-  defaultRuntime,
-  dispatch,
-  enableMapSet,
-  getAppDb,
-  initAppDb,
-  regEvent,
-} from '@flexsurfer/reflex/vanilla';
+import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex/vanilla';
 import type { Trace } from '@flexsurfer/reflex/vanilla';
 import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
 
@@ -909,22 +901,26 @@ describe('persist', () => {
     runtime.dispose();
   });
 
-  it('supports explicit default-runtime attachment for facade apps', async () => {
-    initAppDb({ count: 0 });
-    regEvent('facade/increment', ({ draftDb }) => {
+  it('attaches persistence to an explicitly owned runtime', async () => {
+    const runtime = createReflexRuntime({
+      initialDb: { count: 0 },
+      runtimeId: 'persist-explicit-attachment',
+    });
+    runtime.regEvent('increment', ({ draftDb }) => {
       (draftDb as { count: number }).count += 1;
     });
     const memory = createMemoryStorage({ 'reflex/count': entry(1, 40) });
-    const handle = persist(defaultRuntime, { storage: memory.storage, keys: ['count'] });
+    const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
 
     handle.hydrate();
-    dispatch(['facade/increment']);
-    dispatch(['facade/increment']);
-    await defaultRuntime.flush();
+    runtime.dispatch(['increment']);
+    runtime.dispatch(['increment']);
+    await runtime.flush();
 
-    expect((getAppDb() as { count: number }).count).toBe(42);
+    expect((runtime.getAppDb() as { count: number }).count).toBe(42);
     expect(memory.data.get('reflex/count')).toBe(entry(1, 42));
     handle.dispose();
+    runtime.dispose();
   });
 
   it('keeps the experimental async read gated and settles through its event chain', async () => {

@@ -1,9 +1,10 @@
 import {
-  regGlobalInterceptor,
-  getGlobalInterceptors,
   clearGlobalInterceptors,
-} from '../events/global-interceptors';
-import { setGlobalEqualityCheck, getGlobalEqualityCheck } from '../core/equality';
+  getGlobalEqualityCheck,
+  getGlobalInterceptors,
+  regGlobalInterceptor,
+  setGlobalEqualityCheck,
+} from './runtime-test-api';
 import type { Interceptor, Context, EqualityCheckFn } from '../types';
 
 beforeEach(() => {

@@ -1,28 +1,24 @@
 import {
-  acquireTracingForRuntime,
-  registerTraceCallbackForRuntime,
-  removeTraceCallbackForRuntime,
+  acquireTracingForKernel,
+  registerTraceCallbackForKernel,
+  removeTraceCallbackForKernel,
 } from './core/tracing';
 import { NOW, RANDOM } from './events/coeffects';
 import { DISPATCH, DISPATCH_LATER } from './events/effects';
-import { dispatchForRuntime } from './events/router';
-import { dispatchAndWaitForRuntime, startOperationForRuntime } from './events/router';
-import { getAppDbForRuntime } from './runtime/app-db';
-import { getHandlersForRuntime } from './runtime/handlers';
-import { getOperationForRuntime } from './runtime/operations';
-import { defaultRuntimeScope, isRuntimeDisposed, type RuntimeScope } from './runtime/scope';
-import { getSubscriptionDiagnosticsForRuntime } from './runtime/subscriptions/cache';
-import { getSubscriptionValueForRuntime } from './subscriptions/queries';
+import { dispatchForKernel } from './events/router';
+import { getAppDbForKernel } from './runtime/app-db';
+import { getHandlersForKernel } from './runtime/handlers';
+import {
+  createRuntimeStateKey,
+  getOrCreateRuntimeState,
+  isRuntimeDisposed,
+  type RuntimeKernel,
+} from './runtime/kernel';
+import { getSubscriptionDiagnosticsForKernel } from './runtime/subscriptions/cache';
+import { getSubscriptionValueForKernel } from './subscriptions/queries';
 
 import type { TraceCallback } from './core/tracing';
 import type { SubscriptionDiagnostic } from './runtime/subscriptions/engine';
-import type {
-  DispatchAndWaitOptions,
-  OperationHandle,
-  OperationLookup,
-  OperationReceipt,
-  OperationWaitResult,
-} from './runtime/operations';
 import type { EventVector, SubVector } from './types';
 
 export interface ReflexHandlerKeys {
@@ -50,71 +46,50 @@ export interface ReflexInspectorSnapshot {
  */
 export interface ReflexInspector {
   readonly apiVersion: 2;
-  /** Additive authoritative-operation capability; absent on older v2 inspectors. */
-  readonly operationApiVersion?: 1;
   readonly runtimeId: string;
-  readonly runtimeInstanceId?: string;
   readonly runtimeName: string;
   getSnapshot(): ReflexInspectorSnapshot;
   /** Subscribe to trace batches and keep trace collection active until cleanup. */
   subscribeTraces(callback: TraceCallback): () => void;
   dispatch(event: EventVector): void;
-  startEvent?(event: EventVector, options?: DispatchAndWaitOptions): OperationHandle;
-  executeEvent?(event: EventVector, options?: DispatchAndWaitOptions): Promise<OperationWaitResult>;
-  getOperation?(query: OperationLookup): OperationReceipt | undefined;
   evaluateSubscription(query: SubVector): unknown;
 }
 
-export interface ReflexOperationInspector extends ReflexInspector {
-  readonly operationApiVersion: 1;
-  readonly runtimeInstanceId: string;
-  startEvent(event: EventVector, options?: DispatchAndWaitOptions): OperationHandle;
-  executeEvent(event: EventVector, options?: DispatchAndWaitOptions): Promise<OperationWaitResult>;
-  getOperation(query: OperationLookup): OperationReceipt | undefined;
-}
+const NEXT_TRACE_SUBSCRIPTION_ID = createRuntimeStateKey<{ value: number }>(
+  'reflex.inspector-trace-subscription-id',
+);
 
-const nextTraceSubscriptionIds = new WeakMap<RuntimeScope, number>();
-
-function nextTraceSubscriptionId(runtime: RuntimeScope): number {
-  const next = (nextTraceSubscriptionIds.get(runtime) ?? 0) + 1;
-  nextTraceSubscriptionIds.set(runtime, next);
-  return next;
+function nextTraceSubscriptionId(runtime: RuntimeKernel): number {
+  return ++getOrCreateRuntimeState(runtime, NEXT_TRACE_SUBSCRIPTION_ID, () => ({ value: 0 })).value;
 }
 
 // Devtools is an intentionally dynamic boundary. App-level payload-map
 // augmentation must not narrow vectors arriving from an external inspector.
-/** Create an inspection adapter bound to this exact Reflex module instance. */
-export function createReflexInspector(): ReflexOperationInspector {
-  return createReflexInspectorForRuntime(defaultRuntimeScope);
-}
-
 /** @internal Create an inspection adapter bound to one explicit runtime. */
-export function createReflexInspectorForRuntime(runtime: RuntimeScope): ReflexOperationInspector {
+export function createReflexInspectorForKernel(runtime: RuntimeKernel): ReflexInspector {
   const assertRuntimeActive = () => {
     if (isRuntimeDisposed(runtime)) {
       throw new Error(`[reflex] Runtime '${runtime.runtimeId}' has been disposed.`);
     }
   };
-  const inspector: ReflexOperationInspector = {
+  const inspector: ReflexInspector = {
     apiVersion: 2,
-    operationApiVersion: 1,
     runtimeId: runtime.runtimeId,
-    runtimeInstanceId: runtime.runtimeInstanceId,
     runtimeName: runtime.runtimeName,
     getSnapshot(): ReflexInspectorSnapshot {
       assertRuntimeActive();
       return {
-        appDb: getAppDbForRuntime(runtime),
+        appDb: getAppDbForKernel(runtime),
         handlerKeys: getHandlerKeys(runtime),
-        subscriptions: getSubscriptionDiagnosticsForRuntime(runtime),
+        subscriptions: getSubscriptionDiagnosticsForKernel(runtime),
       };
     },
     subscribeTraces(callback: TraceCallback): () => void {
       assertRuntimeActive();
       const key = `reflex-inspector-${nextTraceSubscriptionId(runtime)}`;
-      const releaseTracing = acquireTracingForRuntime(runtime);
+      const releaseTracing = acquireTracingForKernel(runtime);
       try {
-        registerTraceCallbackForRuntime(runtime, key, callback);
+        registerTraceCallbackForKernel(runtime, key, callback);
       } catch (error) {
         releaseTracing();
         throw error;
@@ -124,39 +99,25 @@ export function createReflexInspectorForRuntime(runtime: RuntimeScope): ReflexOp
       return () => {
         if (!subscribed) return;
         subscribed = false;
-        removeTraceCallbackForRuntime(runtime, key);
+        removeTraceCallbackForKernel(runtime, key);
         releaseTracing();
       };
     },
     dispatch(event: EventVector): void {
       assertRuntimeActive();
-      dispatchForRuntime(runtime, event as never);
-    },
-    executeEvent(
-      event: EventVector,
-      options?: DispatchAndWaitOptions,
-    ): Promise<OperationWaitResult> {
-      assertRuntimeActive();
-      return dispatchAndWaitForRuntime(runtime, event as never, options);
-    },
-    startEvent(event: EventVector, options?: DispatchAndWaitOptions): OperationHandle {
-      assertRuntimeActive();
-      return startOperationForRuntime(runtime, event as never, options);
-    },
-    getOperation(query: OperationLookup): OperationReceipt | undefined {
-      return getOperationForRuntime(runtime, query);
+      dispatchForKernel(runtime, event as never);
     },
     evaluateSubscription(query: SubVector): unknown {
       assertRuntimeActive();
-      return getSubscriptionValueForRuntime(runtime, query);
+      return getSubscriptionValueForKernel(runtime, query);
     },
   };
 
   return Object.freeze(inspector);
 }
 
-function getHandlerKeys(runtime: RuntimeScope): ReflexHandlerKeys {
-  const handlers = getHandlersForRuntime(runtime);
+function getHandlerKeys(runtime: RuntimeKernel): ReflexHandlerKeys {
+  const handlers = getHandlersForKernel(runtime);
   return {
     event: Object.keys(handlers.event),
     fx: Object.keys(handlers.fx).filter((id) => id !== DISPATCH && id !== DISPATCH_LATER),

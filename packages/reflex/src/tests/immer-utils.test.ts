@@ -1,52 +1,40 @@
 import { enableMapSet, original, current } from '../core/immer';
-import { getGlobalEqualityCheck, setGlobalEqualityCheck } from '../core/equality';
-import { createReflexRuntime, defaultRuntime } from '../runtime/runtime';
-import isEqual from 'fast-deep-equal';
+import { createReflexRuntime } from '../runtime/runtime';
 import isEqualEs6 from 'fast-deep-equal/es6/index.js';
 
 describe('immer-utils', () => {
   describe('enableMapSet', () => {
-    beforeEach(() => {
-      setGlobalEqualityCheck(isEqual);
-    });
-
-    it('upgrades untouched explicit runtimes when the default runtime has an override', () => {
+    it('keeps equality overrides isolated between explicit runtimes', () => {
       const runtime = createReflexRuntime({
         initialDb: {},
         runtimeId: 'map-set-explicit-runtime',
       });
-      const customDefaultEquality = () => false;
-      defaultRuntime.setGlobalEqualityCheck(customDefaultEquality);
-
-      const left = new Map([['value', 1]]);
-      const right = new Map([['value', 2]]);
-      expect(runtime.getGlobalEqualityCheck()(left, right)).toBe(true);
+      const customRuntimeEquality = () => true;
+      runtime.setGlobalEqualityCheck(customRuntimeEquality);
 
       enableMapSet();
 
-      expect(defaultRuntime.getGlobalEqualityCheck()).toBe(customDefaultEquality);
-      expect(runtime.getGlobalEqualityCheck()(left, right)).toBe(false);
+      expect(runtime.getGlobalEqualityCheck()).toBe(customRuntimeEquality);
       runtime.dispose();
     });
 
-    it('should update global equality check to isEqualEs6 when current check is default isEqual', () => {
-      expect(getGlobalEqualityCheck()).toBe(isEqual);
-
+    it('uses the ES6 equality fallback for runtimes created after Map and Set support is enabled', () => {
       enableMapSet();
-
-      expect(getGlobalEqualityCheck()).toBe(isEqualEs6);
+      const runtime = createReflexRuntime({ initialDb: {}, runtimeId: 'map-set-default-runtime' });
+      expect(runtime.getGlobalEqualityCheck()).toBe(isEqualEs6);
+      runtime.dispose();
     });
 
-    it('should NOT override custom equality check when user has set one', () => {
+    it('does not override a custom equality check when Map and Set support is enabled', () => {
+      const runtime = createReflexRuntime({ initialDb: {}, runtimeId: 'map-set-custom-runtime' });
       const customEquality = () => true;
-      setGlobalEqualityCheck(customEquality);
-
-      expect(getGlobalEqualityCheck()).toBe(customEquality);
+      runtime.setGlobalEqualityCheck(customEquality);
 
       enableMapSet();
 
-      expect(getGlobalEqualityCheck()).toBe(customEquality);
-      expect(getGlobalEqualityCheck()).not.toBe(isEqualEs6);
+      expect(runtime.getGlobalEqualityCheck()).toBe(customEquality);
+      expect(runtime.getGlobalEqualityCheck()).not.toBe(isEqualEs6);
+      runtime.dispose();
     });
 
     it('should handle Map and Set equality correctly after enableMapSet is called', () => {
@@ -66,23 +54,15 @@ describe('immer-utils', () => {
       ]);
       const set3 = new Set(['a', 'b', 'd']);
 
-      // The default comparator treats all Map and Set instances as equivalent.
-      let equalityCheck = getGlobalEqualityCheck();
-
-      expect(equalityCheck(map1, map2)).toBe(true);
-      expect(equalityCheck(set1, set2)).toBe(true);
-      expect(equalityCheck(map1, map3)).toBe(true);
-      expect(equalityCheck(set1, set3)).toBe(true);
-
       enableMapSet();
-
-      // The ES6 comparator inspects Map and Set contents.
-      equalityCheck = getGlobalEqualityCheck();
+      const runtime = createReflexRuntime({ initialDb: {}, runtimeId: 'map-set-values-runtime' });
+      const equalityCheck = runtime.getGlobalEqualityCheck();
 
       expect(equalityCheck(map1, map2)).toBe(true);
       expect(equalityCheck(set1, set2)).toBe(true);
       expect(equalityCheck(map1, map3)).toBe(false);
       expect(equalityCheck(set1, set3)).toBe(false);
+      runtime.dispose();
     });
   });
 

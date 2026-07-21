@@ -43,8 +43,7 @@ import {
   registerHandlerForKernel,
 } from '../runtime/handlers';
 import { clearHandlersForKernel } from '../runtime/reset';
-import { createReflexRuntime } from '../runtime/runtime';
-import type { RuntimeKernel } from '../runtime/kernel';
+import { createReflexRuntime, getRuntimeKernelForTests } from '../runtime/runtime';
 import {
   clearSubscriptionCacheForKernel,
   clearSubsForHotReloadForKernel,
@@ -107,7 +106,7 @@ export function ReflexTestProvider({ children }: { children?: ReactNode }): Reac
   return createElement(ReflexProvider, { runtime: testRuntime }, children);
 }
 
-const kernel = (testRuntime as unknown as { readonly kernel: RuntimeKernel }).kernel;
+const kernel = getRuntimeKernelForTests(testRuntime);
 
 export function initAppDb<T extends Record<string, any> = DefaultAppDb>(value: Db<T>): void {
   initAppDbForKernel(kernel, value);

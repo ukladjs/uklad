@@ -220,7 +220,7 @@ function assertRuntimeDb(
 
 class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   /** The only owner of this runtime's mutable engine services. */
-  readonly kernel: RuntimeKernel;
+  readonly #kernel: RuntimeKernel;
   private activeInstallation: ModuleInstallation | null = null;
   private readonly installations = new Set<ModuleInstallation>();
   private readonly watches = new Set<ReflexDisposer>();
@@ -228,56 +228,60 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   constructor(kernel: RuntimeKernel, initialDb: ContractDb<TContracts>) {
     assertRuntimeDb(initialDb, 'initialDb');
-    this.kernel = kernel;
+    this.#kernel = kernel;
     registerBuiltInErrorHandler(kernel);
     registerBuiltInCoeffects(kernel);
     initializeEventRouterForKernel(kernel);
     initAppDbForKernel<ContractDb<TContracts>>(kernel, initialDb);
   }
 
+  static getKernelForTests(runtime: ReflexRuntimeImplementation<any>): RuntimeKernel {
+    return runtime.#kernel;
+  }
+
   get runtimeId(): string {
-    return this.kernel.runtimeId;
+    return this.#kernel.runtimeId;
   }
 
   get runtimeName(): string {
-    return this.kernel.runtimeName;
+    return this.#kernel.runtimeName;
   }
 
   getAppDb(): ContractDb<TContracts> {
     this.assertUsable();
-    return getAppDbForKernel<ContractDb<TContracts>>(this.kernel);
+    return getAppDbForKernel<ContractDb<TContracts>>(this.#kernel);
   }
 
   restoreAppDb(nextDb: ContractDb<TContracts>): void {
     this.assertUsable();
     assertRuntimeDb(nextDb, 'restoreAppDb nextDb');
     if (
-      !isEventQueueIdleForKernel(this.kernel) ||
-      getHandlingEventIdForKernel(this.kernel) !== null
+      !isEventQueueIdleForKernel(this.#kernel) ||
+      getHandlingEventIdForKernel(this.#kernel) !== null
     ) {
       throw new Error(
         `[reflex] Cannot restore runtime '${this.runtimeId}' while an event is pending or being handled. Await runtime.flush() first.`,
       );
     }
-    assertPublicationAllowedForKernel(this.kernel);
-    initAppDbForKernel<ContractDb<TContracts>>(this.kernel, nextDb);
+    assertPublicationAllowedForKernel(this.#kernel);
+    initAppDbForKernel<ContractDb<TContracts>>(this.#kernel, nextDb);
   }
 
   dispatch(event: ContractDispatchVector<TContracts>): void {
     this.assertUsable();
     this.assertDispatchableEvent(event, 'dispatch');
-    dispatchForKernel(this.kernel, event as any);
+    dispatchForKernel(this.#kernel, event as any);
   }
 
   dispatchSync(event: ContractDispatchVector<TContracts>): void {
     this.assertUsable();
     this.assertDispatchableEvent(event, 'dispatchSync');
-    dispatchSyncForKernel(this.kernel, event as any);
+    dispatchSyncForKernel(this.#kernel, event as any);
   }
 
   flush(): Promise<void> {
     this.assertUsable();
-    return flushRuntime(this.kernel);
+    return flushRuntime(this.#kernel);
   }
 
   regEvent(
@@ -287,25 +291,25 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
       EventRegistrationOptions<ContractDb<TContracts>> | Interceptor<ContractDb<TContracts>>[],
   ): void {
     this.assertUsable();
-    regEventForKernel(this.kernel, id, handler as any, options);
+    regEventForKernel(this.#kernel, id, handler as any, options);
     this.recordHandler('event', id, true);
   }
 
   regEffect(id: Id, handler: (value: any) => void): void {
     this.assertUsable();
-    regEffectForKernel(this.kernel, id, handler);
+    regEffectForKernel(this.#kernel, id, handler);
     this.recordHandler('fx', id, false);
   }
 
   regCoeffect(id: string, handler: CoEffectHandler<ContractDb<TContracts>>): void {
     this.assertUsable();
-    regCoeffectForKernel(this.kernel, id, handler as unknown as CoEffectHandler);
+    regCoeffectForKernel(this.#kernel, id, handler as unknown as CoEffectHandler);
     this.recordHandler('cofx', id, false);
   }
 
   regEventErrorHandler(handler: ErrorHandler): void {
     this.assertUsable();
-    regEventErrorHandlerForKernel(this.kernel, handler);
+    regEventErrorHandlerForKernel(this.#kernel, handler);
     this.recordHandler('error', 'event-handler', false);
   }
 
@@ -316,9 +320,9 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     config?: SubConfig,
   ): void {
     this.assertUsable();
-    const previousVersion = getHandlerRegistrationVersionForKernel(this.kernel, 'sub', id);
-    regSubForKernel(this.kernel, id, compute as any, dependencies as any, config);
-    const version = getHandlerRegistrationVersionForKernel(this.kernel, 'sub', id);
+    const previousVersion = getHandlerRegistrationVersionForKernel(this.#kernel, 'sub', id);
+    regSubForKernel(this.#kernel, id, compute as any, dependencies as any, config);
+    const version = getHandlerRegistrationVersionForKernel(this.#kernel, 'sub', id);
     if (this.activeInstallation && version !== undefined && version !== previousVersion) {
       this.activeInstallation.registrations.push({ type: 'subscription', id, version });
     }
@@ -327,7 +331,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   getSubscriptionValue(query: ContractSubscribeVector<TContracts>): unknown {
     this.assertUsable();
     this.assertRegisteredSubscription(query);
-    return getSubscriptionValueForKernel(this.kernel, query as SubVector);
+    return getSubscriptionValueForKernel(this.#kernel, query as SubVector);
   }
 
   watchSubscription(
@@ -337,19 +341,19 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   ): ReflexDisposer {
     this.assertUsable();
     this.assertRegisteredSubscription(query);
-    const subscription = getOrCreateSubscriptionForKernel(this.kernel, query as SubVector);
+    const subscription = getOrCreateSubscriptionForKernel(this.#kernel, query as SubVector);
     if (!subscription) {
       throw new Error(
         `[reflex] Failed to build the subscription graph for '${String((query as SubVector)[0])}' in runtime '${this.runtimeId}'.`,
       );
     }
 
-    let previousValue = getSubscriptionSnapshotForKernel(this.kernel, subscription);
+    let previousValue = getSubscriptionSnapshotForKernel(this.#kernel, subscription);
     const unsubscribe = subscribeToSubscriptionForKernel(
-      this.kernel,
+      this.#kernel,
       subscription,
       () => {
-        const nextValue = getSubscriptionSnapshotForKernel(this.kernel, subscription);
+        const nextValue = getSubscriptionSnapshotForKernel(this.#kernel, subscription);
         const oldValue = previousValue;
         previousValue = nextValue;
         listener(nextValue, oldValue);
@@ -385,7 +389,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   ): ReflexDisposer {
     this.assertUsable();
     this.assertRegisteredSubscription(query);
-    const subscription = getOrCreateSubscriptionForKernel(this.kernel, query as SubVector);
+    const subscription = getOrCreateSubscriptionForKernel(this.#kernel, query as SubVector);
     if (!subscription) {
       throw new Error(
         `[reflex] Failed to build the subscription graph for '${String((query as SubVector)[0])}' in runtime '${this.runtimeId}'.`,
@@ -393,7 +397,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     }
 
     const unsubscribe = subscribeToSubscriptionForKernel(
-      this.kernel,
+      this.#kernel,
       subscription,
       listener,
       componentName,
@@ -413,8 +417,8 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   regGlobalInterceptor(interceptor: Interceptor<ContractDb<TContracts>>): void {
     this.assertUsable();
-    regGlobalInterceptorForKernel(this.kernel, interceptor as unknown as Interceptor);
-    const version = getGlobalInterceptorRegistrationVersionForKernel(this.kernel, interceptor.id);
+    regGlobalInterceptorForKernel(this.#kernel, interceptor as unknown as Interceptor);
+    const version = getGlobalInterceptorRegistrationVersionForKernel(this.#kernel, interceptor.id);
     if (this.activeInstallation && version !== undefined) {
       this.activeInstallation.registrations.push({
         type: 'global-interceptor',
@@ -426,90 +430,90 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   getGlobalInterceptors(): Interceptor<ContractDb<TContracts>>[] {
     this.assertUsable();
-    return getGlobalInterceptorsForKernel(this.kernel) as unknown as Interceptor<
+    return getGlobalInterceptorsForKernel(this.#kernel) as unknown as Interceptor<
       ContractDb<TContracts>
     >[];
   }
 
   clearGlobalInterceptors(id?: string): void {
     this.assertUsable();
-    clearGlobalInterceptorsForKernel(this.kernel, id);
+    clearGlobalInterceptorsForKernel(this.#kernel, id);
   }
 
   setGlobalEqualityCheck(equalityCheck: EqualityCheckFn): void {
     this.assertUsable();
-    setGlobalEqualityCheckForKernel(this.kernel, equalityCheck);
+    setGlobalEqualityCheckForKernel(this.#kernel, equalityCheck);
   }
 
   getGlobalEqualityCheck(): EqualityCheckFn {
     this.assertUsable();
-    return getGlobalEqualityCheckForKernel(this.kernel);
+    return getGlobalEqualityCheckForKernel(this.#kernel);
   }
 
   enableTracing(): void {
     this.assertUsable();
-    enableTracingForKernel(this.kernel);
+    enableTracingForKernel(this.#kernel);
   }
 
   disableTracing(): void {
     this.assertUsable();
-    disableTracingForKernel(this.kernel);
+    disableTracingForKernel(this.#kernel);
   }
 
   enableTracePrint(): void {
     this.assertUsable();
-    enableTracePrintForKernel(this.kernel);
+    enableTracePrintForKernel(this.#kernel);
   }
 
   registerTraceCallback(key: string, callback: TraceCallback): void {
     this.assertUsable();
-    registerTraceCallbackForKernel(this.kernel, key, callback);
+    registerTraceCallbackForKernel(this.#kernel, key, callback);
   }
 
   removeTraceCallback(key: string): void {
     this.assertUsable();
-    removeTraceCallbackForKernel(this.kernel, key);
+    removeTraceCallbackForKernel(this.#kernel, key);
   }
 
   debounceAndDispatch(event: ContractDispatchVector<TContracts>, durationMs: number): void {
     this.assertUsable();
-    debounceAndDispatchForKernel(this.kernel, event as any, durationMs);
+    debounceAndDispatchForKernel(this.#kernel, event as any, durationMs);
   }
 
   throttleAndDispatch(event: ContractDispatchVector<TContracts>, durationMs: number): void {
     this.assertUsable();
-    throttleAndDispatchForKernel(this.kernel, event as any, durationMs);
+    throttleAndDispatchForKernel(this.#kernel, event as any, durationMs);
   }
 
   getHandlers(): HandlerRegistry {
     this.assertUsable();
-    return getHandlersForKernel(this.kernel);
+    return getHandlersForKernel(this.#kernel);
   }
 
   clearHandlers(kind?: HandlerKind, id?: Id): void {
     this.assertUsable();
-    clearHandlersForKernel(this.kernel, kind, id);
+    clearHandlersForKernel(this.#kernel, kind, id);
   }
 
   clearSubs(): void {
     this.assertUsable();
-    clearSubsForKernel(this.kernel);
+    clearSubsForKernel(this.#kernel);
   }
 
   /** @internal Clear definitions immediately before the owning React tree remounts. */
   clearSubsForHotReload(subscriptionIds?: readonly Id[]): void {
     this.assertUsable();
-    clearSubsForHotReloadForKernel(this.kernel, subscriptionIds);
+    clearSubsForHotReloadForKernel(this.#kernel, subscriptionIds);
   }
 
   clearSubscriptionCache(key?: string): void {
     this.assertUsable();
-    clearSubscriptionCacheForKernel(this.kernel, key);
+    clearSubscriptionCacheForKernel(this.#kernel, key);
   }
 
   getSubscriptionDiagnostics(): readonly SubscriptionDiagnostic[] {
     this.assertUsable();
-    return getSubscriptionDiagnosticsForKernel(this.kernel);
+    return getSubscriptionDiagnosticsForKernel(this.#kernel);
   }
 
   registerModule(module: ReflexModule<ReflexRuntime<TContracts>>): ReflexDisposer {
@@ -541,32 +545,32 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   createInspector(): ReflexInspector {
     this.assertUsable();
-    return createReflexInspectorForKernel(this.kernel);
+    return createReflexInspectorForKernel(this.#kernel);
   }
 
   dispose(): void {
-    if (isRuntimeDisposed(this.kernel)) return;
+    if (isRuntimeDisposed(this.#kernel)) return;
 
     for (const disposeRenderSubscription of Array.from(this.renderSubscriptions)) {
       disposeRenderSubscription();
     }
     for (const disposeWatch of Array.from(this.watches)) disposeWatch();
-    assertSubscriptionsCanBeClearedForKernel(this.kernel);
+    assertSubscriptionsCanBeClearedForKernel(this.#kernel);
     for (const installation of Array.from(this.installations).reverse()) {
       this.disposeInstallation(installation);
     }
 
-    clearRateLimitsForKernel(this.kernel);
-    clearDelayedEffectsForKernel(this.kernel);
-    disposeEventQueueForKernel(this.kernel);
-    disposeTracingForKernel(this.kernel);
-    clearGlobalInterceptorsForKernel(this.kernel);
-    clearHandlersForKernel(this.kernel);
-    markRuntimeDisposed(this.kernel);
+    clearRateLimitsForKernel(this.#kernel);
+    clearDelayedEffectsForKernel(this.#kernel);
+    disposeEventQueueForKernel(this.#kernel);
+    disposeTracingForKernel(this.#kernel);
+    clearGlobalInterceptorsForKernel(this.#kernel);
+    clearHandlersForKernel(this.#kernel);
+    markRuntimeDisposed(this.#kernel);
   }
 
   private assertUsable(): void {
-    if (isRuntimeDisposed(this.kernel)) {
+    if (isRuntimeDisposed(this.#kernel)) {
       throw new Error(`[reflex] Runtime '${this.runtimeId}' has been disposed.`);
     }
   }
@@ -579,7 +583,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
         `[reflex] ${api} expects a non-empty event vector starting with an event id string.`,
       );
     }
-    if (!hasHandlerForKernel(this.kernel, 'event', event[0])) {
+    if (!hasHandlerForKernel(this.#kernel, 'event', event[0])) {
       throw new Error(
         `[reflex] No event handler registered for '${event[0]}' in runtime '${this.runtimeId}'. Register it with regEvent() before dispatching.`,
       );
@@ -592,7 +596,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
         '[reflex] Subscription queries must be non-empty vectors starting with a subscription id string.',
       );
     }
-    if (!hasHandlerForKernel(this.kernel, 'sub', query[0])) {
+    if (!hasHandlerForKernel(this.#kernel, 'sub', query[0])) {
       throw new Error(
         `[reflex] No subscription registered for '${query[0]}' in runtime '${this.runtimeId}'. Register it with regSub() before use.`,
       );
@@ -601,7 +605,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   private recordHandler(kind: HandlerKind, id: Id, clearEventMetadata: boolean): void {
     if (!this.activeInstallation) return;
-    const version = getHandlerRegistrationVersionForKernel(this.kernel, kind, id);
+    const version = getHandlerRegistrationVersionForKernel(this.#kernel, kind, id);
     if (version === undefined) return;
     this.activeInstallation.registrations.push({
       type: 'handler',
@@ -618,10 +622,10 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     for (const registration of installation.registrations) {
       if (
         registration.type === 'subscription' &&
-        getHandlerRegistrationVersionForKernel(this.kernel, 'sub', registration.id) ===
+        getHandlerRegistrationVersionForKernel(this.#kernel, 'sub', registration.id) ===
           registration.version
       ) {
-        assertSubscriptionDefinitionCanBeClearedForKernel(this.kernel, registration.id);
+        assertSubscriptionDefinitionCanBeClearedForKernel(this.#kernel, registration.id);
       }
     }
 
@@ -633,29 +637,29 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
       const registration = installation.registrations[index]!;
       if (registration.type === 'subscription') {
         if (
-          getHandlerRegistrationVersionForKernel(this.kernel, 'sub', registration.id) ===
+          getHandlerRegistrationVersionForKernel(this.#kernel, 'sub', registration.id) ===
           registration.version
         ) {
-          clearSubscriptionDefinitionsForKernel(this.kernel, registration.id);
+          clearSubscriptionDefinitionsForKernel(this.#kernel, registration.id);
         }
         continue;
       }
       if (registration.type === 'global-interceptor') {
         clearGlobalInterceptorRegistrationForKernel(
-          this.kernel,
+          this.#kernel,
           registration.id,
           registration.version,
         );
         continue;
       }
       const cleared = clearHandlerRegistrationForKernel(
-        this.kernel,
+        this.#kernel,
         registration.kind,
         registration.id,
         registration.version,
       );
       if (cleared && registration.clearEventMetadata) {
-        clearInterceptorsForKernel(this.kernel, registration.id);
+        clearInterceptorsForKernel(this.#kernel, registration.id);
       }
     }
 
@@ -684,6 +688,14 @@ export function createReflexRuntime(options: CreateReflexRuntimeOptions<any>): R
     kernel,
     options.initialDb,
   ) as unknown as ReflexRuntime<any>;
+}
+
+/** @internal Test-only access for focused engine subsystem tests. */
+export function getRuntimeKernelForTests(runtime: ReflexRuntime<any>): RuntimeKernel {
+  if (!(runtime instanceof ReflexRuntimeImplementation)) {
+    throw new Error('[reflex] Expected a runtime created by createReflexRuntime().');
+  }
+  return ReflexRuntimeImplementation.getKernelForTests(runtime);
 }
 
 /** @internal Register the React binding as a render listener. */

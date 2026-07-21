@@ -28,6 +28,15 @@ function createCounterRuntime(runtimeId: string, count: number) {
 }
 
 describe('instance-scoped runtime', () => {
+  it('does not expose its mutable kernel on the runtime object', () => {
+    const runtime = createCounterRuntime('private-kernel', 0);
+
+    expect(Object.hasOwn(runtime, 'kernel')).toBe(false);
+    expect((runtime as any).kernel).toBeUndefined();
+
+    runtime.dispose();
+  });
+
   it('isolates db heads, handlers, queues, subscriptions, and inspectors', async () => {
     const first = createCounterRuntime('first', 1);
     const second = createCounterRuntime('second', 10);

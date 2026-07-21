@@ -6,23 +6,12 @@ import {
   isHandlerKind,
   isSubscriptionHandlerKind,
 } from './handlers';
-import { defaultRuntimeScope, type RuntimeScope } from './scope';
+import type { RuntimeScope } from './scope';
 import { clearSubscriptionDefinitionsForRuntime } from './subscriptions/cache';
 import { assertSubscriptionsCanBeClearedForRuntime } from './subscriptions/engine';
 
 import type { Id } from '../types';
 import type { HandlerKind } from './handlers';
-
-/**
- * Clear handler registrations and their associated event/subscription metadata.
- * Framework-owned system handlers are restored rather than removed.
- */
-export function clearHandlers(): void;
-export function clearHandlers(kind: HandlerKind): void;
-export function clearHandlers(kind: HandlerKind, id: Id): void;
-export function clearHandlers(kind?: HandlerKind, id?: Id): void {
-  clearHandlersForRuntime(defaultRuntimeScope, kind, id);
-}
 
 /** @internal Clear registrations owned by one runtime. */
 export function clearHandlersForRuntime(runtime: RuntimeScope, kind?: HandlerKind, id?: Id): void {

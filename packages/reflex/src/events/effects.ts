@@ -7,7 +7,11 @@ import {
   registerHandlerForRuntime,
   registerSystemHandlerForRuntime,
 } from '../runtime/handlers';
-import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
+import {
+  createRuntimeStateKey,
+  getOrCreateRuntimeState,
+  type RuntimeScope,
+} from '../runtime/scope';
 
 import type {
   Context,
@@ -22,24 +26,15 @@ import type {
 } from '../types';
 
 const HANDLER_KIND = 'fx';
-const delayedEffectTimers = new WeakMap<RuntimeScope, Set<ReturnType<typeof setTimeout>>>();
+const DELAYED_EFFECT_TIMERS =
+  createRuntimeStateKey<Set<ReturnType<typeof setTimeout>>>('reflex.delayed-effects');
 
 function getDelayedEffectTimers(runtime: RuntimeScope): Set<ReturnType<typeof setTimeout>> {
-  let timers = delayedEffectTimers.get(runtime);
-  if (!timers) {
-    timers = new Set();
-    delayedEffectTimers.set(runtime, timers);
-  }
-  return timers;
+  return getOrCreateRuntimeState(runtime, DELAYED_EFFECT_TIMERS, () => new Set());
 }
 
 export const DISPATCH_LATER = 'dispatch-later';
 export const DISPATCH = 'dispatch';
-
-/** Register an effect handler. */
-export function regEffect<K extends Id = Id>(id: K, handler: EffectHandler<EffectParams<K>>): void {
-  regEffectForRuntime(defaultRuntimeScope, id, handler);
-}
 
 /** @internal Register an effect handler in one runtime. */
 export function regEffectForRuntime<K extends Id = Id>(
@@ -50,16 +45,11 @@ export function regEffectForRuntime<K extends Id = Id>(
   registerHandlerForRuntime(runtime, HANDLER_KIND, id, handler);
 }
 
-const doFxInterceptors = new WeakMap<RuntimeScope, Interceptor>();
+const DO_FX_INTERCEPTOR = createRuntimeStateKey<Interceptor>('reflex.do-fx-interceptor');
 
 /** @internal Commit event state and execute its effects. */
 export function getDoFxInterceptorForRuntime(runtime: RuntimeScope): Interceptor {
-  let interceptor = doFxInterceptors.get(runtime);
-  if (!interceptor) {
-    interceptor = createDoFxInterceptor(runtime);
-    doFxInterceptors.set(runtime, interceptor);
-  }
-  return interceptor;
+  return getOrCreateRuntimeState(runtime, DO_FX_INTERCEPTOR, () => createDoFxInterceptor(runtime));
 }
 
 function createDoFxInterceptor(runtime: RuntimeScope): Interceptor {
@@ -122,13 +112,6 @@ function createDoFxInterceptor(runtime: RuntimeScope): Interceptor {
       return context;
     },
   };
-}
-
-export const doFxInterceptor: Interceptor = getDoFxInterceptorForRuntime(defaultRuntimeScope);
-
-/** @internal Register dispatch effects once the router's dispatch function exists. */
-export function registerBuiltInEffects(dispatchEvent: (event: DispatchVector) => void): void {
-  registerBuiltInEffectsForRuntime(defaultRuntimeScope, dispatchEvent);
 }
 
 /** @internal Install dispatch effects in one runtime. */

@@ -1,7 +1,8 @@
-import { dispatch, regEffect, enableMapSet } from '@flexsurfer/reflex';
+import { enableMapSet } from '@flexsurfer/reflex';
 import { saveSettings } from './utils/settingsStorage';
 import { reflexReviver } from './utils/serialization';
 import type { DevtoolsRuntimeSummary } from './types/Runtime';
+import { dispatch, regEffect } from './runtime';
 
 enableMapSet();
 

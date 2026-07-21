@@ -1,6 +1,6 @@
 import { scheduleAfterRender } from '../../core/scheduling';
 import { clearHandlerEntriesForRuntime, SUBSCRIPTION_HANDLER_KINDS } from '../handlers';
-import { defaultRuntimeScope, isRuntimeDisposed, type RuntimeScope } from '../scope';
+import { isRuntimeDisposed, type RuntimeScope } from '../scope';
 import {
   assertSubscriptionsCanBeClearedForRuntime,
   inspectSubscriptionForRuntime,
@@ -17,7 +17,7 @@ interface SubscriptionEntry {
   dependencyKeys: readonly string[];
 }
 
-interface SubscriptionCacheState {
+export interface SubscriptionCacheState {
   readonly rootSubIdBySource: Map<string, Id>;
   readonly rootSubSourceById: Map<Id, string>;
   readonly rootSubscriptionKeys: Set<string>;
@@ -29,29 +29,18 @@ interface SubscriptionCacheState {
   provisionalSweepScheduled: boolean;
 }
 
-const cacheStates = new WeakMap<RuntimeScope, SubscriptionCacheState>();
-
 function getCacheState(runtime: RuntimeScope): SubscriptionCacheState {
-  let state = cacheStates.get(runtime);
-  if (!state) {
-    state = {
-      rootSubIdBySource: new Map(),
-      rootSubSourceById: new Map(),
-      rootSubscriptionKeys: new Set(),
-      subscriptionCache: new Map(),
-      dependentSubscriptionKeys: new Map(),
-      subConfigById: new Map(),
-      provisionalCurrent: new Map(),
-      provisionalPrevious: new Map(),
-      provisionalSweepScheduled: false,
-    };
-    cacheStates.set(runtime, state);
-  }
-  return state;
-}
-
-export function setRootSubSource(subId: Id, sourceKey: string): void {
-  setRootSubSourceForRuntime(defaultRuntimeScope, subId, sourceKey);
+  return (runtime.subscriptionCache ??= {
+    rootSubIdBySource: new Map(),
+    rootSubSourceById: new Map(),
+    rootSubscriptionKeys: new Set(),
+    subscriptionCache: new Map(),
+    dependentSubscriptionKeys: new Map(),
+    subConfigById: new Map(),
+    provisionalCurrent: new Map(),
+    provisionalPrevious: new Map(),
+    provisionalSweepScheduled: false,
+  });
 }
 
 /** @internal Set root subscription metadata for one runtime. */
@@ -81,10 +70,6 @@ export function setRootSubSourceForRuntime(
   state.rootSubscriptionKeys.add(getRootSubKey(subId));
 }
 
-export function getRootSubIdBySource(sourceKey: string): Id | undefined {
-  return getRootSubIdBySourceForRuntime(defaultRuntimeScope, sourceKey);
-}
-
 /** @internal Get a root subscription id in one runtime. */
 export function getRootSubIdBySourceForRuntime(
   runtime: RuntimeScope,
@@ -93,20 +78,12 @@ export function getRootSubIdBySourceForRuntime(
   return getCacheState(runtime).rootSubIdBySource.get(sourceKey);
 }
 
-export function getRootSubSourceById(subId: Id): string | undefined {
-  return getRootSubSourceByIdForRuntime(defaultRuntimeScope, subId);
-}
-
 /** @internal Get a root source key in one runtime. */
 export function getRootSubSourceByIdForRuntime(
   runtime: RuntimeScope,
   subId: Id,
 ): string | undefined {
   return getCacheState(runtime).rootSubSourceById.get(subId);
-}
-
-export function clearRootSubSource(subId: Id): void {
-  clearRootSubSourceForRuntime(defaultRuntimeScope, subId);
 }
 
 /** @internal Clear one runtime's root-source metadata for an id. */
@@ -127,25 +104,12 @@ function clearRootSubSourcesForRuntime(runtime: RuntimeScope): void {
   state.rootSubscriptionKeys.clear();
 }
 
-export function getCachedSubscription(key: string): SubscriptionNode<any> | undefined {
-  return getCachedSubscriptionForRuntime(defaultRuntimeScope, key);
-}
-
 /** @internal Get a cached subscription from one runtime. */
 export function getCachedSubscriptionForRuntime(
   runtime: RuntimeScope,
   key: string,
 ): SubscriptionNode<any> | undefined {
   return getCacheState(runtime).subscriptionCache.get(key)?.node;
-}
-
-export function cacheSubscription(
-  key: string,
-  subscription: SubscriptionNode<any>,
-  subId: Id,
-  dependencyKeys: readonly string[],
-): void {
-  cacheSubscriptionForRuntime(defaultRuntimeScope, key, subscription, subId, dependencyKeys);
 }
 
 /** @internal Cache a subscription in one runtime. */
@@ -176,17 +140,9 @@ export function cacheSubscriptionForRuntime(
   }
 }
 
-export function hasCachedSubscription(key: string): boolean {
-  return hasCachedSubscriptionForRuntime(defaultRuntimeScope, key);
-}
-
 /** @internal Test cache membership in one runtime. */
 export function hasCachedSubscriptionForRuntime(runtime: RuntimeScope, key: string): boolean {
   return getCacheState(runtime).subscriptionCache.has(key);
-}
-
-export function hasCachedSubscriptionForId(subId: Id): boolean {
-  return hasCachedSubscriptionForIdForRuntime(defaultRuntimeScope, subId);
 }
 
 /** @internal Test whether one runtime has a cached query for an id. */
@@ -197,10 +153,6 @@ export function hasCachedSubscriptionForIdForRuntime(runtime: RuntimeScope, subI
   return false;
 }
 
-export function getSubscriptionDiagnostics(): readonly SubscriptionDiagnostic[] {
-  return getSubscriptionDiagnosticsForRuntime(defaultRuntimeScope);
-}
-
 /** @internal Return cache-only diagnostics for one runtime. */
 export function getSubscriptionDiagnosticsForRuntime(
   runtime: RuntimeScope,
@@ -208,12 +160,6 @@ export function getSubscriptionDiagnosticsForRuntime(
   return Array.from(getCacheState(runtime).subscriptionCache.values(), ({ node }) =>
     inspectSubscriptionForRuntime(runtime, node),
   );
-}
-
-export function clearSubscriptionCache(): void;
-export function clearSubscriptionCache(key: string): void;
-export function clearSubscriptionCache(key?: string): void {
-  clearSubscriptionCacheForRuntime(defaultRuntimeScope, key);
 }
 
 /** @internal Clear all or one cache key in a runtime. */
@@ -305,10 +251,6 @@ export function assertSubscriptionDefinitionCanBeClearedForRuntime(
   }
 }
 
-export function evictCachedSubscription(key: string, subscription: SubscriptionNode<any>): void {
-  evictCachedSubscriptionForRuntime(defaultRuntimeScope, key, subscription);
-}
-
 /** @internal Evict an unused computed subscription from one runtime. */
 export function evictCachedSubscriptionForRuntime(
   runtime: RuntimeScope,
@@ -336,13 +278,6 @@ function scheduleProvisionalSweepForRuntime(runtime: RuntimeScope): void {
   });
 }
 
-export function markProvisionalSubscription(
-  key: string,
-  subscription: SubscriptionNode<any>,
-): void {
-  markProvisionalSubscriptionForRuntime(defaultRuntimeScope, key, subscription);
-}
-
 /** @internal Mark a newly read computed subscription provisional in one runtime. */
 export function markProvisionalSubscriptionForRuntime(
   runtime: RuntimeScope,
@@ -355,13 +290,6 @@ export function markProvisionalSubscriptionForRuntime(
   scheduleProvisionalSweepForRuntime(runtime);
 }
 
-export function unmarkProvisionalSubscription(
-  key: string,
-  subscription: SubscriptionNode<any>,
-): void {
-  unmarkProvisionalSubscriptionForRuntime(defaultRuntimeScope, key, subscription);
-}
-
 /** @internal Remove a provisional mark in one runtime. */
 export function unmarkProvisionalSubscriptionForRuntime(
   runtime: RuntimeScope,
@@ -371,10 +299,6 @@ export function unmarkProvisionalSubscriptionForRuntime(
   const state = getCacheState(runtime);
   if (state.provisionalCurrent.get(key) === subscription) state.provisionalCurrent.delete(key);
   if (state.provisionalPrevious.get(key) === subscription) state.provisionalPrevious.delete(key);
-}
-
-export function renewProvisionalSubscriptionTree(rootKey: string): void {
-  renewProvisionalSubscriptionTreeForRuntime(defaultRuntimeScope, rootKey);
 }
 
 /** @internal Renew a dormant dependency component in one runtime. */
@@ -408,10 +332,6 @@ export function renewProvisionalSubscriptionTreeForRuntime(
   if (renewed) scheduleProvisionalSweepForRuntime(runtime);
 }
 
-export function sweepProvisionalSubscriptions(): void {
-  sweepProvisionalSubscriptionsForRuntime(defaultRuntimeScope);
-}
-
 /** @internal Advance one runtime's provisional lease generation. */
 export function sweepProvisionalSubscriptionsForRuntime(runtime: RuntimeScope): void {
   const state = getCacheState(runtime);
@@ -425,17 +345,9 @@ export function sweepProvisionalSubscriptionsForRuntime(runtime: RuntimeScope): 
   if (state.provisionalPrevious.size > 0) scheduleProvisionalSweepForRuntime(runtime);
 }
 
-export function getSubConfig(subId: Id): SubConfig | undefined {
-  return getSubConfigForRuntime(defaultRuntimeScope, subId);
-}
-
 /** @internal Get subscription configuration from one runtime. */
 export function getSubConfigForRuntime(runtime: RuntimeScope, subId: Id): SubConfig | undefined {
   return getCacheState(runtime).subConfigById.get(subId);
-}
-
-export function setSubConfig(subId: Id, config: SubConfig): void {
-  setSubConfigForRuntime(defaultRuntimeScope, subId, config);
 }
 
 /** @internal Set subscription configuration in one runtime. */
@@ -443,21 +355,11 @@ export function setSubConfigForRuntime(runtime: RuntimeScope, subId: Id, config:
   getCacheState(runtime).subConfigById.set(subId, config);
 }
 
-export function clearSubConfigs(): void;
-export function clearSubConfigs(subId: Id): void;
-export function clearSubConfigs(subId?: Id): void {
-  clearSubConfigsForRuntime(defaultRuntimeScope, subId);
-}
-
 /** @internal Clear subscription configuration in one runtime. */
 export function clearSubConfigsForRuntime(runtime: RuntimeScope, subId?: Id): void {
   const state = getCacheState(runtime);
   if (subId === undefined) state.subConfigById.clear();
   else state.subConfigById.delete(subId);
-}
-
-export function clearSubscriptionDefinitions(subId?: Id): void {
-  clearSubscriptionDefinitionsForRuntime(defaultRuntimeScope, subId);
 }
 
 /** @internal Remove subscription definitions and metadata from one runtime. */
@@ -480,18 +382,10 @@ export function clearSubscriptionDefinitionsForRuntime(runtime: RuntimeScope, su
   clearSubConfigsForRuntime(runtime, subId);
 }
 
-export function clearSubs(): void {
-  clearSubsForRuntime(defaultRuntimeScope);
-}
-
 /** @internal Clear every subscription definition and cached query in one runtime. */
 export function clearSubsForRuntime(runtime: RuntimeScope): void {
   assertSubscriptionsCanBeClearedForRuntime(runtime);
   clearSubscriptionDefinitionsForRuntime(runtime);
-}
-
-export function clearSubsForHotReload(subscriptionIds?: readonly Id[]): void {
-  clearSubsForHotReloadForRuntime(defaultRuntimeScope, subscriptionIds);
 }
 
 /** @internal HMR-clear one runtime whose React tree is about to remount. */

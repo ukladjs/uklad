@@ -1,5 +1,9 @@
 import type { Interceptor } from '../types';
-import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
+import {
+  createRuntimeStateKey,
+  getOrCreateRuntimeState,
+  type RuntimeScope,
+} from '../runtime/scope';
 
 interface GlobalInterceptorState {
   interceptors: Interceptor[];
@@ -7,26 +11,22 @@ interface GlobalInterceptorState {
   nextVersion: number;
 }
 
-const interceptorStates = new WeakMap<RuntimeScope, GlobalInterceptorState>();
+const GLOBAL_INTERCEPTOR_STATE = createRuntimeStateKey<GlobalInterceptorState>(
+  'reflex.global-interceptors',
+);
 
 function getInterceptorState(runtime: RuntimeScope): GlobalInterceptorState {
-  let state = interceptorStates.get(runtime);
-  if (!state) {
-    state = { interceptors: [], versions: new Map(), nextVersion: 0 };
-    interceptorStates.set(runtime, state);
-  }
-  return state;
+  return getOrCreateRuntimeState(runtime, GLOBAL_INTERCEPTOR_STATE, () => ({
+    interceptors: [],
+    versions: new Map(),
+    nextVersion: 0,
+  }));
 }
 
 function bumpVersion(state: GlobalInterceptorState, id: string): number {
   const version = ++state.nextVersion;
   state.versions.set(id, version);
   return version;
-}
-
-/** Register or replace a global interceptor while preserving its position. */
-export function regGlobalInterceptor(interceptor: Interceptor): void {
-  regGlobalInterceptorForRuntime(defaultRuntimeScope, interceptor);
 }
 
 /** @internal Register an interceptor in one runtime. */
@@ -49,21 +49,9 @@ export function regGlobalInterceptorForRuntime(
   bumpVersion(state, interceptor.id);
 }
 
-/** Return a snapshot of the registered global interceptors. */
-export function getGlobalInterceptors(): Interceptor[] {
-  return getGlobalInterceptorsForRuntime(defaultRuntimeScope);
-}
-
 /** @internal Return global interceptors for one runtime. */
 export function getGlobalInterceptorsForRuntime(runtime: RuntimeScope): Interceptor[] {
   return [...getInterceptorState(runtime).interceptors];
-}
-
-/** Clear every global interceptor, or only the interceptor with `id`. */
-export function clearGlobalInterceptors(): void;
-export function clearGlobalInterceptors(id: string): void;
-export function clearGlobalInterceptors(id?: string): void {
-  clearGlobalInterceptorsForRuntime(defaultRuntimeScope, id);
 }
 
 /** @internal Clear global interceptors in one runtime. */

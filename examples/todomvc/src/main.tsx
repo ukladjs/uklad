@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { createReflexInspector, enableMapSet, HotReloadWrapper } from '@flexsurfer/reflex';
+import { enableMapSet, HotReloadWrapper, ReflexProvider } from '@flexsurfer/reflex';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
 import TodoApp from './views';
@@ -9,14 +9,14 @@ import TodoApp from './views';
 import './index.css';
 
 // These side-effect imports must finish before hydration is dispatched.
-import './db';
 import './events';
 import './subs';
 import { persistence } from './storage';
+import { todoRuntime } from './runtime';
 
 // Immer requires an explicit plugin before it can draft the Map-backed todo collection.
 enableMapSet();
-enableDevtools(createReflexInspector());
+enableDevtools(todoRuntime.createInspector());
 
 // Synchronous for localStorage: todos are in app-db before the first render.
 persistence.hydrate();
@@ -45,9 +45,11 @@ void persistence.whenHydrated().catch(() => {
 const USE_STRICT_MODE = true;
 const app = (
   // HotReloadWrapper forces a remount when subscriptions are hot reloaded.
-  <HotReloadWrapper>
-    <TodoApp />
-  </HotReloadWrapper>
+  <ReflexProvider runtime={todoRuntime}>
+    <HotReloadWrapper>
+      <TodoApp />
+    </HotReloadWrapper>
+  </ReflexProvider>
 );
 
 createRoot(document.getElementById('root')!).render(

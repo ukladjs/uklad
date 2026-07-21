@@ -3,18 +3,20 @@
  * for the trace pipeline (devtools). With tracing off, events go through
  * plain produce and no patch tags exist anywhere.
  */
+import { waitForScheduled } from './test-utils';
 import {
-  enableTracing,
+  clearGlobalInterceptors,
   disableTracing,
+  dispatch,
+  enableTracing,
+  getAppDb,
+  initAppDb,
+  regEffect,
+  regEvent,
+  regGlobalInterceptor,
   registerTraceCallback,
   removeTraceCallback,
-} from '../core/tracing';
-import { regEvent } from '../events/registration';
-import { regEffect } from '../events/effects';
-import { clearGlobalInterceptors, regGlobalInterceptor } from '../events/global-interceptors';
-import { dispatch } from '../events/router';
-import { initAppDb, getAppDb } from '../runtime/app-db';
-import { waitForScheduled } from './test-utils';
+} from './runtime-test-api';
 
 // Trace callbacks run after the 50 ms batching window.
 const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80));

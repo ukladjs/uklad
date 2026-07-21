@@ -1,7 +1,8 @@
-import { current, regEvent } from "@flexsurfer/reflex";
+import { current } from "@flexsurfer/reflex";
 import { applyPatches, enablePatches } from "immer";
 import type { Badge, Trace, TraceItem } from './types/Trace';
 import type { DevtoolsRuntimeSummary } from './types/Runtime';
+import { regEvent } from './runtime';
 
 // Enable Immer patches plugin for applyPatches functionality
 enablePatches();

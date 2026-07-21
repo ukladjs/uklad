@@ -7,7 +7,7 @@ import {
   SUB_DEPS_HANDLER_KIND,
   SUB_HANDLER_KIND,
 } from '../runtime/handlers';
-import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
+import type { RuntimeScope } from '../runtime/scope';
 import {
   cacheSubscriptionForRuntime,
   evictCachedSubscriptionForRuntime,
@@ -25,17 +25,7 @@ import {
 import { getSubVectorKey } from '../runtime/subscriptions/keys';
 
 import type { SubscriptionKind, SubscriptionNode } from '../runtime/subscriptions/engine';
-import type {
-  EqualityCheckFn,
-  Id,
-  SubDepsHandler,
-  SubHandler,
-  SubParams,
-  SubPayloads,
-  SubResult,
-  SubVector,
-  SubscribeVector,
-} from '../types';
+import type { EqualityCheckFn, Id, SubDepsHandler, SubHandler, SubVector } from '../types';
 
 interface SubscriptionBuildFrame {
   subVector: SubVector;
@@ -57,10 +47,6 @@ interface SubscriptionBuildFrame {
  * after their last live consumer releases them, a later lookup builds a fresh
  * graph from the registry.
  */
-export function getOrCreateSubscription(subVector: SubVector): SubscriptionNode<any> | null {
-  return getOrCreateSubscriptionForRuntime(defaultRuntimeScope, subVector);
-}
-
 /** @internal Return the canonical subscription owned by one runtime. */
 export function getOrCreateSubscriptionForRuntime(
   runtime: RuntimeScope,
@@ -201,14 +187,6 @@ export function getOrCreateSubscriptionForRuntime(
  * augmentation, declared ids infer both their parameter tuple and result type,
  * matching the `useSubscription` contract.
  */
-export function getSubscriptionValue<K extends keyof SubPayloads & Id>(
-  subVector: [K, ...SubParams<K>],
-): SubResult<K>;
-export function getSubscriptionValue<T>(subVector: SubscribeVector): T;
-export function getSubscriptionValue<T>(subVector: SubVector): T {
-  return getSubscriptionValueForRuntime<T>(defaultRuntimeScope, subVector);
-}
-
 /** @internal Read a subscription value from one runtime. */
 export function getSubscriptionValueForRuntime<T>(runtime: RuntimeScope, subVector: SubVector): T {
   const subscription = getOrCreateSubscriptionForRuntime(runtime, subVector);

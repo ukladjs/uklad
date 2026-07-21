@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { JsonViewer } from '../ui/JsonViewer';
 import { DiffViewer } from '../ui/DiffViewer';
 import DispatchButton from '../ui/DispatchButton';
-import { dispatch } from '@flexsurfer/reflex';
+import { dispatch } from '../../runtime';
 
 export default function TraceEventDetails({ tags }: { tags: { [key: string]: any } }) {
     const [viewMode, setViewMode] = useState<'data' | 'diff'>('diff');

@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { getHandler, type CoEffects, type EventHandler } from '@flexsurfer/reflex';
+import type { CoEffects, EventHandler, HandlerKind } from '@flexsurfer/reflex';
 
 import type { TodoDb } from './db';
 import { EVENT_IDS } from './event-ids';
+import { todoRuntime } from './runtime';
 
 import './events';
+
+const getHandler = (kind: HandlerKind, id: string) => todoRuntime.getHandlers()[kind][id];
 
 // Persistence is handled by @flexsurfer/reflex-persist (see storage.ts), so
 // handlers return no storage effects — they only mutate the draft db.

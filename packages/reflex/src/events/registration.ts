@@ -1,18 +1,11 @@
 import { consoleLog } from '../core/logging';
 import { setInterceptorsForRuntime } from '../runtime/event-metadata';
 import { registerHandlerForRuntime } from '../runtime/handlers';
-import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
+import type { RuntimeScope } from '../runtime/scope';
 import { getInjectCofxInterceptorForRuntime } from './coeffects';
 import { isInterceptor } from './interceptors';
 
-import type {
-  DefaultAppDb,
-  EventHandler,
-  EventParams,
-  EventRegistrationOptions,
-  Id,
-  Interceptor,
-} from '../types';
+import type { EventHandler, Id, Interceptor } from '../types';
 
 const HANDLER_KIND = 'event';
 
@@ -24,45 +17,6 @@ interface UnknownEventRegistrationOptions {
 interface NormalizedEventRegistration {
   coeffects: readonly unknown[];
   interceptors: readonly unknown[];
-}
-
-/** Register an event handler. */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(
-  id: K,
-  handler: EventHandler<T, EventParams<K>>,
-): void;
-/** Register an event handler with explicit coeffects and interceptors. */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(
-  id: K,
-  handler: EventHandler<T, EventParams<K>>,
-  options: EventRegistrationOptions<T>,
-): void;
-/** Register an event handler with interceptors using the legacy positional form. */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(
-  id: K,
-  handler: EventHandler<T, EventParams<K>>,
-  interceptors: Interceptor<T>[],
-): void;
-/** Register an event handler with coeffects using the legacy positional form. */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(
-  id: K,
-  handler: EventHandler<T, EventParams<K>>,
-  coeffects: [Id, ...any[]][],
-): void;
-/** Register an event handler with coeffects and interceptors using the legacy positional form. */
-export function regEvent<T = DefaultAppDb, K extends Id = Id>(
-  id: K,
-  handler: EventHandler<T, EventParams<K>>,
-  coeffects: [Id, ...any[]][],
-  interceptors: Interceptor<T>[],
-): void;
-export function regEvent<T = Record<string, any>>(
-  id: Id,
-  handler: EventHandler<T>,
-  registration?: unknown,
-  legacyInterceptors?: Interceptor<T>[],
-): void {
-  regEventForRuntime(defaultRuntimeScope, id, handler, registration, legacyInterceptors);
 }
 
 /** @internal Register an event and its metadata in one runtime. */

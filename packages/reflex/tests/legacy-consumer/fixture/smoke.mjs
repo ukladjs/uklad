@@ -1,37 +1,26 @@
 // Runtime smoke test for ESM consumers: drives a real event -> app-db ->
 // subscription cycle against the packed tarball, not the repo sources.
 import assert from 'node:assert';
-import {
-  ReflexProvider,
-  defaultRuntime,
-  dispatchSync,
-  getAppDb,
-  getSubscriptionValue,
-  initAppDb,
-  regEvent,
-  regSub,
-} from '@flexsurfer/reflex';
+import { ReflexProvider, createReflexRuntime } from '@flexsurfer/reflex';
 import { ReflexProvider as subpathReflexProvider } from '@flexsurfer/reflex/react';
-import { defaultRuntime as subpathDefaultRuntime } from '@flexsurfer/reflex/vanilla';
 
-assert.strictEqual(defaultRuntime, subpathDefaultRuntime);
 assert.strictEqual(ReflexProvider, subpathReflexProvider);
 
-initAppDb({ count: 0 });
-regEvent('inc', ({ draftDb }) => {
+const runtime = createReflexRuntime({ initialDb: { count: 0 } });
+runtime.regEvent('inc', ({ draftDb }) => {
   draftDb.count += 1;
 });
-regSub('count');
-regSub(
+runtime.regSub('count');
+runtime.regSub(
   'doubled',
   (count) => count * 2,
   () => [['count']],
 );
 
-dispatchSync(['inc']);
+runtime.dispatchSync(['inc']);
 
-assert.strictEqual(getAppDb().count, 1);
-assert.strictEqual(getSubscriptionValue(['count']), 1);
-assert.strictEqual(getSubscriptionValue(['doubled']), 2);
+assert.strictEqual(runtime.getAppDb().count, 1);
+assert.strictEqual(runtime.getSubscriptionValue(['count']), 1);
+assert.strictEqual(runtime.getSubscriptionValue(['doubled']), 2);
 
-console.log('[legacy] ESM runtime smoke passed');
+console.log('[explicit] ESM runtime smoke passed');

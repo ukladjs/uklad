@@ -14,7 +14,11 @@ import {
   registerHandlerForRuntime,
   registerSystemHandlerForRuntime,
 } from '../runtime/handlers';
-import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
+import {
+  createRuntimeStateKey,
+  getOrCreateRuntimeState,
+  type RuntimeScope,
+} from '../runtime/scope';
 import { getDoFxInterceptorForRuntime } from './effects';
 import { getGlobalInterceptorsForRuntime } from './global-interceptors';
 import { executeForRuntime } from './interceptors';
@@ -41,20 +45,13 @@ interface PipelineState {
   runningHandlerEventId: Id | null;
 }
 
-const pipelineStates = new WeakMap<RuntimeScope, PipelineState>();
+const PIPELINE_STATE = createRuntimeStateKey<PipelineState>('reflex.pipeline');
 
 function getPipelineState(runtime: RuntimeScope): PipelineState {
-  let state = pipelineStates.get(runtime);
-  if (!state) {
-    state = { handlingEventId: null, runningHandlerEventId: null };
-    pipelineStates.set(runtime, state);
-  }
-  return state;
-}
-
-/** @internal Return the event whose interceptor chain is executing. */
-export function getHandlingEventId(): Id | null {
-  return getHandlingEventIdForRuntime(defaultRuntimeScope);
+  return getOrCreateRuntimeState(runtime, PIPELINE_STATE, () => ({
+    handlingEventId: null,
+    runningHandlerEventId: null,
+  }));
 }
 
 /** @internal Return the event being handled by one runtime. */
@@ -62,19 +59,9 @@ export function getHandlingEventIdForRuntime(runtime: RuntimeScope): Id | null {
   return getPipelineState(runtime).handlingEventId;
 }
 
-/** @internal Return the event whose pure handler is executing. */
-export function getRunningHandlerEventId(): Id | null {
-  return getRunningHandlerEventIdForRuntime(defaultRuntimeScope);
-}
-
 /** @internal Return the pure handler currently running in one runtime. */
 export function getRunningHandlerEventIdForRuntime(runtime: RuntimeScope): Id | null {
   return getPipelineState(runtime).runningHandlerEventId;
-}
-
-/** Register the handler for unhandled event-pipeline exceptions. */
-export function regEventErrorHandler(handler: ErrorHandler): void {
-  regEventErrorHandlerForRuntime(defaultRuntimeScope, handler);
 }
 
 /** @internal Register one runtime's event-pipeline error handler. */
@@ -90,11 +77,6 @@ export function defaultErrorHandler(originalError: Error, reflexError: ReflexErr
     data: reflexError.data,
   });
   throw originalError;
-}
-
-/** @internal Run a registered event through its interceptor pipeline. */
-export function handle(event: EventVector): void {
-  handleForRuntime(defaultRuntimeScope, event);
 }
 
 /** @internal Run a registered event through one runtime's pipeline. */
@@ -139,26 +121,18 @@ export function handleForRuntime(runtime: RuntimeScope, event: EventVector): voi
   }
 }
 
-const injectGlobalInterceptorsByRuntime = new WeakMap<RuntimeScope, Interceptor>();
+const GLOBAL_INTERCEPTOR = createRuntimeStateKey<Interceptor>('reflex.inject-global-interceptors');
 
 /** @internal Inject the current global interceptors into an event pipeline. */
 export function getInjectGlobalInterceptorsForRuntime(runtime: RuntimeScope): Interceptor {
-  let interceptor = injectGlobalInterceptorsByRuntime.get(runtime);
-  if (!interceptor) {
-    interceptor = {
-      id: 'inject-global-interceptors',
-      before(context) {
-        context.queue = [...getGlobalInterceptorsForRuntime(runtime), ...context.queue];
-        return context;
-      },
-    };
-    injectGlobalInterceptorsByRuntime.set(runtime, interceptor);
-  }
-  return interceptor;
+  return getOrCreateRuntimeState(runtime, GLOBAL_INTERCEPTOR, () => ({
+    id: 'inject-global-interceptors',
+    before(context) {
+      context.queue = [...getGlobalInterceptorsForRuntime(runtime), ...context.queue];
+      return context;
+    },
+  }));
 }
-
-export const injectGlobalInterceptors: Interceptor =
-  getInjectGlobalInterceptorsForRuntime(defaultRuntimeScope);
 
 function createEventHandlerInterceptor(
   runtime: RuntimeScope,
@@ -232,8 +206,3 @@ export function registerBuiltInErrorHandler(runtime: RuntimeScope): void {
     defaultErrorHandler,
   );
 }
-
-// Compatibility APIs can import this module without constructing defaultRuntime.
-// Install the default-scope baseline at module evaluation; explicit runtimes are
-// initialized by ReflexRuntimeImplementation.
-registerBuiltInErrorHandler(defaultRuntimeScope);

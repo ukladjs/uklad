@@ -10,7 +10,7 @@ export default defineConfig({
     alias: {
       // Subpath aliases must precede the bare specifier so they match first.
       // Everything (app + reflex-persist) must resolve reflex to the same
-      // source modules — two reflex copies would mean two default runtimes.
+      // source modules — two Reflex copies would create incompatible runtime identities.
       '@flexsurfer/reflex/vanilla': fileURLToPath(
         new URL('../../packages/reflex/src/vanilla.ts', import.meta.url),
       ),

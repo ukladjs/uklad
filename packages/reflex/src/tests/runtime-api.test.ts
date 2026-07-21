@@ -1,9 +1,5 @@
 import type { ReflexContracts } from '../contracts';
-import { regEvent } from '../events/registration';
-import { dispatchSync } from '../events/router';
-import { getAppDb, initAppDb } from '../runtime/app-db';
-import { clearHandlers } from '../runtime/reset';
-import { createReflexRuntime, defaultRuntime, type RuntimeEventHandler } from '../runtime/runtime';
+import { createReflexRuntime, type RuntimeEventHandler } from '../runtime/runtime';
 import { waitForScheduled } from './test-utils';
 
 interface CounterContracts extends ReflexContracts {
@@ -200,7 +196,7 @@ describe('instance-scoped runtime', () => {
     runtime.dispose();
   });
 
-  it('fails loudly on unknown ids through the instance API while the facade stays lenient', () => {
+  it('fails loudly on unknown ids through the instance API', () => {
     const runtime = createCounterRuntime('fail-loud', 0);
 
     expect(() => runtime.dispatch(['missing-event'] as never)).toThrow(
@@ -220,11 +216,6 @@ describe('instance-scoped runtime', () => {
     );
     expect(runtime.getAppDb().count).toBe(0);
     runtime.dispose();
-
-    // The legacy root functions keep the 0.x console-error behavior.
-    clearTestLogCalls();
-    dispatchSync(['legacy-missing-event'] as never);
-    expectLogCall('error', '[reflex] no event handler registered for:', 'legacy-missing-event');
   });
 
   it('rejects non-string runtime identities at the JavaScript boundary', () => {
@@ -338,23 +329,6 @@ describe('instance-scoped runtime', () => {
     removeSecond();
     first.dispose();
     second.dispose();
-  });
-
-  it('keeps the legacy functions and defaultRuntime on the same owner', () => {
-    clearHandlers();
-    initAppDb({ count: 0 });
-    regEvent('legacy/increment', ({ draftDb }) => {
-      draftDb.count += 1;
-    });
-
-    defaultRuntime.dispatchSync(['legacy/increment']);
-    expect(getAppDb()).toEqual({ count: 1 });
-
-    defaultRuntime.regEvent('legacy/increment-again', ({ draftDb }) => {
-      draftDb.count += 1;
-    });
-    dispatchSync(['legacy/increment-again']);
-    expect(defaultRuntime.getAppDb()).toEqual({ count: 2 });
   });
 
   it('terminally disposes an explicit runtime', () => {

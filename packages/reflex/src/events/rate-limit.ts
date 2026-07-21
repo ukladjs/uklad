@@ -1,32 +1,20 @@
-import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
-import { dispatch, dispatchForRuntime } from './router';
+import { type RuntimeScope } from '../runtime/scope';
+import { dispatchForRuntime } from './router';
 
 import type { DispatchVector, Id } from '../types';
 
-interface RateLimitState {
+export interface RateLimitState {
   readonly debounceTimers: Map<Id, ReturnType<typeof setTimeout>>;
   readonly throttledEventIds: Set<Id>;
   readonly throttleTimers: Set<ReturnType<typeof setTimeout>>;
 }
 
-const rateLimitStates = new WeakMap<RuntimeScope, RateLimitState>();
-
 function getRateLimitState(runtime: RuntimeScope): RateLimitState {
-  let state = rateLimitStates.get(runtime);
-  if (!state) {
-    state = {
-      debounceTimers: new Map(),
-      throttledEventIds: new Set(),
-      throttleTimers: new Set(),
-    };
-    rateLimitStates.set(runtime, state);
-  }
-  return state;
-}
-
-/** @internal Clear the pending compatibility debounce for an event id. */
-export function clear(eventId: Id): void {
-  clearForRuntime(defaultRuntimeScope, eventId);
+  return (runtime.rateLimit ??= {
+    debounceTimers: new Map(),
+    throttledEventIds: new Set(),
+    throttleTimers: new Set(),
+  });
 }
 
 /** @internal Clear a pending debounce in one runtime. */
@@ -38,11 +26,6 @@ export function clearForRuntime(runtime: RuntimeScope, eventId: Id): void {
   state.debounceTimers.delete(eventId);
 }
 
-/** @internal Clear every pending compatibility debounce. */
-export function clearAll(): void {
-  clearAllForRuntime(defaultRuntimeScope);
-}
-
 /** @internal Clear every rate-limit timer in one runtime. */
 export function clearAllForRuntime(runtime: RuntimeScope): void {
   const state = getRateLimitState(runtime);
@@ -51,11 +34,6 @@ export function clearAllForRuntime(runtime: RuntimeScope): void {
   state.debounceTimers.clear();
   state.throttleTimers.clear();
   state.throttledEventIds.clear();
-}
-
-/** Dispatch an event after calls for its id have stopped for `durationMs`. */
-export function debounceAndDispatch(event: DispatchVector, durationMs: number): void {
-  debounceWithDispatcher(defaultRuntimeScope, event, durationMs, dispatch);
 }
 
 /** @internal Debounce an event in one runtime. */
@@ -85,11 +63,6 @@ function debounceWithDispatcher(
   }, durationMs);
 
   state.debounceTimers.set(eventId, timeout);
-}
-
-/** Dispatch immediately, then ignore the same event id for `durationMs`. */
-export function throttleAndDispatch(event: DispatchVector, durationMs: number): void {
-  throttleWithDispatcher(defaultRuntimeScope, event, durationMs, dispatch);
 }
 
 /** @internal Throttle an event in one runtime. */

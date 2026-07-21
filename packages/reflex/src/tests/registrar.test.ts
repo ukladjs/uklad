@@ -1,14 +1,18 @@
 import type { Context, EventHandler, Interceptor, SubDepsHandler, SubHandler } from '../types';
-import { getHandler, getHandlers, hasHandler, registerHandler } from '../runtime/handlers';
-import { clearHandlers } from '../runtime/reset';
-import { getInterceptors, setInterceptors } from '../runtime/event-metadata';
 import {
+  clearHandlers,
   clearSubs,
+  getHandler,
+  getHandlers,
+  getInterceptors,
   getRootSubSourceById,
   getSubConfig,
+  hasHandler,
+  registerHandler,
+  setInterceptors,
   setRootSubSource,
   setSubConfig,
-} from '../runtime/subscriptions/cache';
+} from './runtime-test-api';
 
 describe('handler registry', () => {
   beforeEach(() => {

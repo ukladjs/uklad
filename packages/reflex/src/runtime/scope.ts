@@ -1,26 +1,82 @@
+import type { EqualityCheckFn } from '../types';
+import type { EventQueue } from '../events/router';
+import type { RateLimitState } from '../events/rate-limit';
+import type { TraceState } from '../core/tracing';
+import type { AppDbState } from './app-db';
+import type { HandlerState } from './handlers';
+import type { SubscriptionCacheState } from './subscriptions/cache';
+import type { SubscriptionEngine } from './subscriptions/engine';
+
 const RUNTIME_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 
 let nextRuntimeId = 0;
-const disposedRuntimeScopes = new WeakSet<RuntimeScope>();
 
-/** @internal Immutable identity used as the key for instance-owned state. */
-export interface RuntimeScope {
+/**
+ * A private key for one independently owned runtime service.
+ *
+ * Keeping service state behind symbols lets the kernel own all mutable state
+ * without making internal implementation details part of its public shape.
+ */
+export interface RuntimeStateKey<T> {
+  readonly description: string;
+  readonly symbol: symbol;
+  readonly __state?: T;
+}
+
+/**
+ * The instance-owned core state of one Reflex application.
+ *
+ * It deliberately has no process-global registry and no default instance:
+ * every handler, queue, subscription cache, and diagnostic service belongs to
+ * the runtime that created it.
+ */
+export interface RuntimeKernel {
   readonly runtimeId: string;
   readonly runtimeName: string;
+  /** Hot-path state is typed and directly addressable. It remains lazy. */
+  appDb?: AppDbState;
+  handlers?: HandlerState;
+  eventQueue?: EventQueue;
+  subscriptionCache?: SubscriptionCacheState;
+  subscriptionEngine?: SubscriptionEngine;
+  tracing?: TraceState;
+  rateLimit?: RateLimitState;
+  equalityCheck?: EqualityCheckFn;
+  /** Rare/optional services use this extension storage. */
+  readonly extensions: Map<symbol, unknown>;
+  readonly lifecycle: {
+    disposed: boolean;
+  };
 }
+
+/** @internal Transitional alias while runtime-scoped helpers are renamed. */
+export type RuntimeScope = RuntimeKernel;
 
 export interface RuntimeIdentityOptions {
   readonly runtimeId?: string;
   readonly name?: string;
 }
 
-export const defaultRuntimeScope: RuntimeScope = Object.freeze({
-  runtimeId: 'default',
-  runtimeName: 'Default runtime',
-});
+/** @internal Define one private slot on every runtime kernel that uses it. */
+export function createRuntimeStateKey<T>(description: string): RuntimeStateKey<T> {
+  return Object.freeze({ description, symbol: Symbol(description) });
+}
 
-/** @internal Create a process-local runtime identity. */
-export function createRuntimeScope(options: RuntimeIdentityOptions = {}): RuntimeScope {
+/** @internal Read or lazily initialise state owned by one runtime kernel. */
+export function getOrCreateRuntimeState<T>(
+  runtime: RuntimeKernel,
+  key: RuntimeStateKey<T>,
+  create: () => T,
+): T {
+  const existing = runtime.extensions.get(key.symbol);
+  if (existing !== undefined) return existing as T;
+  const state = create();
+  runtime.extensions.set(key.symbol, state);
+  return state;
+}
+
+/** @internal Create a process-local, instance-owned runtime kernel. */
+export function createRuntimeKernel(options: RuntimeIdentityOptions = {}): RuntimeKernel {
   const runtimeId = options.runtimeId ?? createGeneratedRuntimeId();
   if (typeof runtimeId !== 'string' || !RUNTIME_ID_PATTERN.test(runtimeId)) {
     throw new Error(
@@ -33,8 +89,16 @@ export function createRuntimeScope(options: RuntimeIdentityOptions = {}): Runtim
     throw new Error('[reflex] runtime name must be between 1 and 128 characters.');
   }
 
-  return Object.freeze({ runtimeId, runtimeName });
+  return {
+    runtimeId,
+    runtimeName,
+    extensions: new Map<symbol, unknown>(),
+    lifecycle: { disposed: false },
+  };
 }
+
+/** @internal Backwards-compatible constructor name during the internal migration. */
+export const createRuntimeScope: typeof createRuntimeKernel = createRuntimeKernel;
 
 function createGeneratedRuntimeId(): string {
   const randomUUID = globalThis.crypto?.randomUUID;
@@ -46,14 +110,11 @@ function createGeneratedRuntimeId(): string {
 }
 
 /** @internal Mark a runtime terminally disposed. */
-export function markRuntimeDisposed(runtime: RuntimeScope): void {
-  if (runtime === defaultRuntimeScope) {
-    throw new Error('[reflex] The compatibility default runtime cannot be disposed.');
-  }
-  disposedRuntimeScopes.add(runtime);
+export function markRuntimeDisposed(runtime: RuntimeKernel): void {
+  runtime.lifecycle.disposed = true;
 }
 
 /** @internal Return whether a runtime has entered its terminal state. */
-export function isRuntimeDisposed(runtime: RuntimeScope): boolean {
-  return disposedRuntimeScopes.has(runtime);
+export function isRuntimeDisposed(runtime: RuntimeKernel): boolean {
+  return runtime.lifecycle.disposed;
 }

@@ -33,8 +33,8 @@ export function enableMapSet(): void {
   immerEnableMapSet();
   // The fallback is process-wide because Immer's Map/Set plugin is process-wide,
   // but runtime-local equality overrides must remain untouched. Do not consult
-  // the compatibility runtime here: its override must not decide whether other
-  // runtimes receive the ES6-aware framework fallback.
+  // another runtime here: its override must not decide whether other runtimes
+  // receive the ES6-aware framework fallback.
   replaceDefaultEqualityCheck(isEqual, isEqualEs6);
 }
 

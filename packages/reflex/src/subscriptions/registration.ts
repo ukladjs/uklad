@@ -6,7 +6,7 @@ import {
   SUB_DEPS_HANDLER_KIND,
   SUB_HANDLER_KIND,
 } from '../runtime/handlers';
-import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
+import type { RuntimeScope } from '../runtime/scope';
 import {
   clearRootSubSourceForRuntime,
   clearSubConfigsForRuntime,
@@ -29,15 +29,6 @@ import type { Id, SubConfig, SubResult, SubVector } from '../types';
  * When `SubPayloads` is augmented, the compute result is checked against the
  * declared result for `K`. Explicit result generics retain the legacy contract.
  */
-export function regSub<R = any, K extends Id = Id>(
-  id: K,
-  computeFn?: ((...values: any[]) => SubResult<K, R>) | string,
-  depsFn?: (...params: any[]) => SubVector[],
-  config?: SubConfig,
-): void {
-  regSubForRuntime(defaultRuntimeScope, id, computeFn, depsFn, config);
-}
-
 /** @internal Register a root or computed subscription in one runtime. */
 export function regSubForRuntime<R = any, K extends Id = Id>(
   runtime: RuntimeScope,

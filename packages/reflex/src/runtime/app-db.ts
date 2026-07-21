@@ -1,5 +1,5 @@
 import { scheduleAfterRender } from '../core/scheduling';
-import { defaultRuntimeScope, isRuntimeDisposed, type RuntimeScope } from './scope';
+import { isRuntimeDisposed, type RuntimeScope } from './scope';
 import {
   getCachedSubscriptionForRuntime,
   getRootSubIdBySourceForRuntime,
@@ -13,29 +13,21 @@ import { getRootSubKey } from './subscriptions/keys';
 
 import type { Db, DefaultAppDb } from '../types';
 
-interface AppDbState {
+export interface AppDbState {
   appDb: any;
   renderDb: any;
   flushScheduled: boolean;
 }
 
-const appDbStates = new WeakMap<RuntimeScope, AppDbState>();
-
 function getAppDbState(runtime: RuntimeScope): AppDbState {
-  let state = appDbStates.get(runtime);
-  if (!state) {
-    state = { appDb: {}, renderDb: {}, flushScheduled: false };
-    appDbStates.set(runtime, state);
-  }
-  return state;
+  return (runtime.appDb ??= {
+    appDb: {},
+    renderDb: {},
+    flushScheduled: false,
+  });
 }
 
 type NoInfer<T> = [T][T extends any ? 0 : never];
-
-/** Replace the compatibility runtime's app-db and publish surviving roots. */
-export function initAppDb<T = DefaultAppDb>(value: Db<NoInfer<T>>): void {
-  initAppDbForRuntime(defaultRuntimeScope, value);
-}
 
 /** @internal Replace one runtime's db heads and publish surviving roots. */
 export function initAppDbForRuntime<T = DefaultAppDb>(
@@ -50,29 +42,14 @@ export function initAppDbForRuntime<T = DefaultAppDb>(
   publishSubscriptionsForRuntime(runtime, collectChangedRoots(runtime, oldDb, value));
 }
 
-/** Return the latest committed compatibility app-db. */
-export function getAppDb<T = DefaultAppDb>(): Db<T> {
-  return getAppDbForRuntime<T>(defaultRuntimeScope);
-}
-
 /** @internal Return the latest committed db for one runtime. */
 export function getAppDbForRuntime<T = DefaultAppDb>(runtime: RuntimeScope): Db<T> {
   return getAppDbState(runtime).appDb as Db<T>;
 }
 
-/** Return the compatibility runtime's render-visible db generation. */
-export function getRenderDb<T = DefaultAppDb>(): Db<T> {
-  return getRenderDbForRuntime<T>(defaultRuntimeScope);
-}
-
 /** @internal Return one runtime's render-visible db generation. */
 export function getRenderDbForRuntime<T = DefaultAppDb>(runtime: RuntimeScope): Db<T> {
   return getAppDbState(runtime).renderDb as Db<T>;
-}
-
-/** Commit a compatibility db generation and schedule subscription publication. */
-export function updateAppDb<T = Record<string, any>>(newDb: Db<T>): void {
-  updateAppDbForRuntime(defaultRuntimeScope, newDb);
 }
 
 /** @internal Commit one runtime's db generation and schedule publication. */
@@ -90,11 +67,6 @@ export function updateAppDbForRuntime<T = Record<string, any>>(
     if (isRuntimeDisposed(runtime)) return;
     flushSubscriptionsForRuntime(runtime);
   });
-}
-
-/** Publish the compatibility runtime's latest db generation. */
-export function flushSubscriptions(): void {
-  flushSubscriptionsForRuntime(defaultRuntimeScope);
 }
 
 /** @internal Publish one runtime's latest db generation synchronously. */

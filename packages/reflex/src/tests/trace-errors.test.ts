@@ -1,17 +1,18 @@
+import { defaultErrorHandler } from '../events/pipeline';
+import { waitForScheduled } from './test-utils';
 import {
-  enableTracing,
+  clearHandlers,
   disableTracing,
+  dispatch,
+  enableTracing,
+  getHandlers,
+  initAppDb,
+  regEffect,
+  regEvent,
+  regEventErrorHandler,
   registerTraceCallback,
   removeTraceCallback,
-} from '../core/tracing';
-import { defaultErrorHandler, regEventErrorHandler } from '../events/pipeline';
-import { regEvent } from '../events/registration';
-import { regEffect } from '../events/effects';
-import { dispatch } from '../events/router';
-import { initAppDb } from '../runtime/app-db';
-import { getHandlers } from '../runtime/handlers';
-import { clearHandlers } from '../runtime/reset';
-import { waitForScheduled } from './test-utils';
+} from './runtime-test-api';
 
 // Trace callbacks run after the 50 ms batching window.
 const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80));

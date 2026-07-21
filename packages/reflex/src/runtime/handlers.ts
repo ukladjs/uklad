@@ -1,5 +1,5 @@
 import { consoleLog } from '../core/logging';
-import { defaultRuntimeScope, type RuntimeScope } from './scope';
+import { type RuntimeScope } from './scope';
 
 import type {
   CoEffectHandler,
@@ -57,27 +57,20 @@ function createHandlerRegistry(): HandlerRegistry {
   };
 }
 
-interface HandlerState {
+export interface HandlerState {
   handlers: HandlerRegistry;
   systemHandlers: HandlerRegistry;
   versions: Record<HandlerKind, Partial<Record<string, number>>>;
   nextVersion: number;
 }
 
-const handlerStates = new WeakMap<RuntimeScope, HandlerState>();
-
 function getHandlerState(runtime: RuntimeScope): HandlerState {
-  let state = handlerStates.get(runtime);
-  if (!state) {
-    state = {
-      handlers: createHandlerRegistry(),
-      systemHandlers: createHandlerRegistry(),
-      versions: createVersionRegistry(),
-      nextVersion: 0,
-    };
-    handlerStates.set(runtime, state);
-  }
-  return state;
+  return (runtime.handlers ??= {
+    handlers: createHandlerRegistry(),
+    systemHandlers: createHandlerRegistry(),
+    versions: createVersionRegistry(),
+    nextVersion: 0,
+  });
 }
 
 function createVersionRegistry(): Record<HandlerKind, Partial<Record<string, number>>> {
@@ -124,11 +117,6 @@ export function isSubscriptionHandlerKind(value: string): value is SubscriptionH
   return SUBSCRIPTION_HANDLER_KINDS.includes(value as SubscriptionHandlerKind);
 }
 
-/** Return the handler registered for `kind` and `id`, if one exists. */
-export function getHandler<K extends HandlerKind>(kind: K, id: Id): HandlerByKind[K] | undefined {
-  return getHandlerForRuntime(defaultRuntimeScope, kind, id);
-}
-
 /** @internal Runtime-scoped handler lookup. */
 export function getHandlerForRuntime<K extends HandlerKind>(
   runtime: RuntimeScope,
@@ -138,24 +126,9 @@ export function getHandlerForRuntime<K extends HandlerKind>(
   return getHandlerState(runtime).handlers[kind][id];
 }
 
-/**
- * Return the live handler registry used by diagnostics integrations.
- * Consumers must treat the returned records as read-only.
- */
-export function getHandlers(): HandlerRegistry {
-  return getHandlersForRuntime(defaultRuntimeScope);
-}
-
 /** @internal Runtime-scoped live registry for diagnostics. */
 export function getHandlersForRuntime(runtime: RuntimeScope): HandlerRegistry {
   return getHandlerState(runtime).handlers;
-}
-
-export function registerHandler<
-  K extends HandlerKind,
-  T extends HandlerByKind[K] = HandlerByKind[K],
->(kind: K, id: Id, handler: T): T {
-  return registerHandlerForRuntime(defaultRuntimeScope, kind, id, handler);
 }
 
 /** @internal Register a handler in one runtime. */
@@ -172,14 +145,6 @@ export function registerHandlerForRuntime<
   return handler;
 }
 
-/** Register a framework handler that public reset operations must restore. */
-export function registerSystemHandler<
-  K extends HandlerKind,
-  T extends HandlerByKind[K] = HandlerByKind[K],
->(kind: K, id: Id, handler: T): T {
-  return registerSystemHandlerForRuntime(defaultRuntimeScope, kind, id, handler);
-}
-
 /** @internal Register a framework-owned handler in one runtime. */
 export function registerSystemHandlerForRuntime<
   K extends HandlerKind,
@@ -192,18 +157,9 @@ export function registerSystemHandlerForRuntime<
   return handler;
 }
 
-export function hasHandler(kind: HandlerKind, id: Id): boolean {
-  return hasHandlerForRuntime(defaultRuntimeScope, kind, id);
-}
-
 /** @internal Runtime-scoped handler existence check. */
 export function hasHandlerForRuntime(runtime: RuntimeScope, kind: HandlerKind, id: Id): boolean {
   return getHandlerState(runtime).handlers[kind][id] !== undefined;
-}
-
-/** @internal Reset stored handlers without clearing related feature metadata. */
-export function clearHandlerEntries(kind?: HandlerKind, id?: Id): void {
-  clearHandlerEntriesForRuntime(defaultRuntimeScope, kind, id);
 }
 
 /** @internal Reset stored handlers in one runtime without clearing feature metadata. */

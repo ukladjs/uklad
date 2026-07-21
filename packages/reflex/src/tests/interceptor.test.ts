@@ -1,7 +1,5 @@
-import { isInterceptor, execute } from '../events/interceptors';
-import { getAppDb } from '../runtime/app-db';
-import { registerHandler } from '../runtime/handlers';
-import { clearHandlers } from '../runtime/reset';
+import { isInterceptor } from '../events/interceptors';
+import { clearHandlers, execute, getAppDb, registerHandler } from './runtime-test-api';
 import type { Interceptor, Context, EventVector } from '../types';
 
 function createTestInterceptor(

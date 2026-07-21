@@ -1,6 +1,6 @@
 import { consoleLog } from '../../core/logging';
 import { mergeTraceForRuntime, withTraceForRuntime } from '../../core/tracing';
-import { defaultRuntimeScope, type RuntimeScope } from '../scope';
+import { type RuntimeScope } from '../scope';
 
 import type { EqualityCheckFn, SubVector } from '../../types';
 
@@ -58,7 +58,7 @@ class SubscriptionCell<T> {
   readonly spec: SubscriptionSpec<T>;
   readonly dependencies: SubscriptionCell<any>[];
   readonly uniqueDependencies: SubscriptionCell<any>[];
-  readonly dependents = new Set<SubscriptionCell<any>>();
+  readonly dependents: Set<SubscriptionCell<any>> = new Set<SubscriptionCell<any>>();
   readonly listeners: ListenerRegistration[] = [];
   /** Fixed topological rank: roots are zero, dependents exceed every dependency. */
   readonly rank: number;
@@ -66,25 +66,25 @@ class SubscriptionCell<T> {
   // Cached result and error state. `initialized` distinguishes an unread cell
   // from a legitimate `undefined` result.
   value: T | undefined;
-  initialized = false;
-  hasValue = false;
-  hasError = false;
+  initialized: boolean = false;
+  hasValue: boolean = false;
+  hasError: boolean = false;
   error: unknown;
 
   // Version stamps let computed cells skip equality work when no dependency
   // produced a new observable value.
-  outputStamp = 0;
+  outputStamp: number = 0;
   dependencyStamps: number[] = [];
 
   // Active cells participate in push publication. A released computed cell is
   // terminal and must be reacquired through the canonical cache.
-  active = false;
-  disposed = false;
+  active: boolean = false;
+  disposed: boolean = false;
 
   // Per-operation marks avoid allocation-heavy visited sets during pull/push.
-  lastPullEpoch = 0;
-  queuedWave = 0;
-  validatedEpoch = 0;
+  lastPullEpoch: number = 0;
+  queuedWave: number = 0;
+  validatedEpoch: number = 0;
 
   constructor(engine: SubscriptionEngine, spec: SubscriptionSpec<T>) {
     this.engine = engine;
@@ -220,7 +220,7 @@ class SubscriptionCell<T> {
  * graphs are validated lazily by a memoized pull. DB publication is already the
  * scheduler, so this engine deliberately owns no node tasks or notification debt.
  */
-class SubscriptionEngine {
+export class SubscriptionEngine {
   readonly runtime: RuntimeScope;
 
   constructor(runtime: RuntimeScope) {
@@ -567,19 +567,8 @@ class SubscriptionEngine {
   }
 }
 
-const engines = new WeakMap<RuntimeScope, SubscriptionEngine>();
-
 function getEngine(runtime: RuntimeScope): SubscriptionEngine {
-  let engine = engines.get(runtime);
-  if (!engine) {
-    engine = new SubscriptionEngine(runtime);
-    engines.set(runtime, engine);
-  }
-  return engine;
-}
-
-export function createSubscription<T>(spec: SubscriptionSpec<T>): SubscriptionNode<T> {
-  return createSubscriptionForRuntime(defaultRuntimeScope, spec);
+  return (runtime.subscriptionEngine ??= new SubscriptionEngine(runtime));
 }
 
 /** @internal Create a subscription owned by one runtime. */
@@ -590,17 +579,9 @@ export function createSubscriptionForRuntime<T>(
   return getEngine(runtime).create(spec);
 }
 
-export function readSubscription<T>(node: SubscriptionNode<T>): T {
-  return readSubscriptionForRuntime(defaultRuntimeScope, node);
-}
-
 /** @internal Read a subscription through its owning runtime. */
 export function readSubscriptionForRuntime<T>(runtime: RuntimeScope, node: SubscriptionNode<T>): T {
   return getEngine(runtime).read(node);
-}
-
-export function getSubscriptionSnapshot<T>(node: SubscriptionNode<T>): T {
-  return getSubscriptionSnapshotForRuntime(defaultRuntimeScope, node);
 }
 
 /** @internal Read a snapshot from one runtime's subscription. */
@@ -609,14 +590,6 @@ export function getSubscriptionSnapshotForRuntime<T>(
   node: SubscriptionNode<T>,
 ): T {
   return getEngine(runtime).getSnapshot(node);
-}
-
-export function subscribeToSubscription<T>(
-  node: SubscriptionNode<T>,
-  listener: () => void,
-  componentName?: string,
-): () => void {
-  return subscribeToSubscriptionForRuntime(defaultRuntimeScope, node, listener, componentName);
 }
 
 /** @internal Subscribe to a node owned by one runtime. */
@@ -630,20 +603,12 @@ export function subscribeToSubscriptionForRuntime<T>(
   return getEngine(runtime).subscribe(node, listener, componentName, listenerKind);
 }
 
-export function publishSubscriptions(roots: SubscriptionNode<any>[]): void {
-  publishSubscriptionsForRuntime(defaultRuntimeScope, roots);
-}
-
 /** @internal Publish roots through one runtime's engine. */
 export function publishSubscriptionsForRuntime(
   runtime: RuntimeScope,
   roots: SubscriptionNode<any>[],
 ): void {
   getEngine(runtime).publish(roots);
-}
-
-export function inspectSubscription(node: SubscriptionNode<any>): SubscriptionDiagnostic {
-  return inspectSubscriptionForRuntime(defaultRuntimeScope, node);
 }
 
 /** @internal Inspect a node owned by one runtime. */
@@ -654,17 +619,9 @@ export function inspectSubscriptionForRuntime(
   return getEngine(runtime).inspect(node);
 }
 
-export function assertPublicationAllowed(): void {
-  assertPublicationAllowedForRuntime(defaultRuntimeScope);
-}
-
 /** @internal Assert publication is safe in one runtime. */
 export function assertPublicationAllowedForRuntime(runtime: RuntimeScope): void {
   getEngine(runtime).assertPublicationAllowed();
-}
-
-export function assertSubscriptionsCanBeCleared(): void {
-  assertSubscriptionsCanBeClearedForRuntime(defaultRuntimeScope);
 }
 
 /** @internal Assert destructive subscription clears are safe in one runtime. */

@@ -8,7 +8,12 @@ import { DISPATCH, DISPATCH_LATER } from './events/effects';
 import { dispatchForRuntime } from './events/router';
 import { getAppDbForRuntime } from './runtime/app-db';
 import { getHandlersForRuntime } from './runtime/handlers';
-import { defaultRuntimeScope, isRuntimeDisposed, type RuntimeScope } from './runtime/scope';
+import {
+  createRuntimeStateKey,
+  getOrCreateRuntimeState,
+  isRuntimeDisposed,
+  type RuntimeScope,
+} from './runtime/scope';
 import { getSubscriptionDiagnosticsForRuntime } from './runtime/subscriptions/cache';
 import { getSubscriptionValueForRuntime } from './subscriptions/queries';
 
@@ -50,21 +55,16 @@ export interface ReflexInspector {
   evaluateSubscription(query: SubVector): unknown;
 }
 
-const nextTraceSubscriptionIds = new WeakMap<RuntimeScope, number>();
+const NEXT_TRACE_SUBSCRIPTION_ID = createRuntimeStateKey<{ value: number }>(
+  'reflex.inspector-trace-subscription-id',
+);
 
 function nextTraceSubscriptionId(runtime: RuntimeScope): number {
-  const next = (nextTraceSubscriptionIds.get(runtime) ?? 0) + 1;
-  nextTraceSubscriptionIds.set(runtime, next);
-  return next;
+  return ++getOrCreateRuntimeState(runtime, NEXT_TRACE_SUBSCRIPTION_ID, () => ({ value: 0 })).value;
 }
 
 // Devtools is an intentionally dynamic boundary. App-level payload-map
 // augmentation must not narrow vectors arriving from an external inspector.
-/** Create an inspection adapter bound to this exact Reflex module instance. */
-export function createReflexInspector(): ReflexInspector {
-  return createReflexInspectorForRuntime(defaultRuntimeScope);
-}
-
 /** @internal Create an inspection adapter bound to one explicit runtime. */
 export function createReflexInspectorForRuntime(runtime: RuntimeScope): ReflexInspector {
   const assertRuntimeActive = () => {

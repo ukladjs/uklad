@@ -1,10 +1,8 @@
 import type {
   ContractDb,
   ContractDispatchVector,
-  ContractEffectId,
   ContractEffectParams,
   ContractEffects,
-  ContractEventId,
   ContractEventParams,
   ContractSubscribeVector,
   ContractSubscriptionId,
@@ -12,7 +10,6 @@ import type {
   ContractSubscriptionResult,
   ContractSubscriptionVector,
   CreateReflexRuntimeOptions,
-  DefaultReflexContracts,
   PermissiveReflexContracts,
   ReflexContracts,
   ReflexDisposer,
@@ -32,7 +29,7 @@ import {
   getGlobalEqualityCheckForRuntime,
   setGlobalEqualityCheckForRuntime,
 } from '../core/equality';
-import { regCoeffectForRuntime } from '../events/coeffects';
+import { regCoeffectForRuntime, registerBuiltInCoeffects } from '../events/coeffects';
 import { clearDelayedEffectsForRuntime, regEffectForRuntime } from '../events/effects';
 import {
   clearGlobalInterceptorRegistrationForRuntime,
@@ -72,10 +69,10 @@ import {
 } from './handlers';
 import { clearHandlersForRuntime } from './reset';
 import {
-  createRuntimeScope,
-  defaultRuntimeScope,
+  createRuntimeKernel,
   isRuntimeDisposed,
   markRuntimeDisposed,
+  type RuntimeKernel,
   type RuntimeScope,
 } from './scope';
 import {
@@ -114,18 +111,14 @@ import type {
   SubVector,
 } from '../types';
 
-export type RuntimeEventHandler<
-  TContracts extends ReflexContracts,
-  TId extends ContractEventId<TContracts>,
-> = (
+export type RuntimeEventHandler<TContracts extends ReflexContracts, TId extends string> = (
   coeffects: CoEffects<ContractDb<TContracts>>,
   ...params: ContractEventParams<TContracts, TId>
 ) => ContractEffects<TContracts> | void;
 
-export type RuntimeSubscriptionHandler<
-  TContracts extends ReflexContracts,
-  TId extends ContractSubscriptionId<TContracts>,
-> = (...values: any[]) => ContractSubscriptionResult<TContracts, TId>;
+export type RuntimeSubscriptionHandler<TContracts extends ReflexContracts, TId extends string> = (
+  ...values: any[]
+) => ContractSubscriptionResult<TContracts, TId>;
 
 export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveReflexContracts> {
   readonly runtimeId: string;
@@ -137,21 +130,21 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
   dispatchSync(event: ContractDispatchVector<TContracts>): void;
   flush(): Promise<void>;
 
-  regEvent<TId extends ContractEventId<TContracts>>(
+  regEvent<TId extends string>(
     id: TId,
     handler: RuntimeEventHandler<TContracts, TId>,
     options?:
       EventRegistrationOptions<ContractDb<TContracts>> | Interceptor<ContractDb<TContracts>>[],
   ): void;
-  regEffect<TId extends ContractEffectId<TContracts>>(
+  regEffect<TId extends string>(
     id: TId,
     handler: (value: ContractEffectParams<TContracts, TId>) => void,
   ): void;
   regCoeffect(id: string, handler: CoEffectHandler<ContractDb<TContracts>>): void;
   regEventErrorHandler(handler: ErrorHandler): void;
-  regSub<TId extends ContractSubscriptionId<TContracts>>(id: TId): void;
-  regSub<TId extends ContractSubscriptionId<TContracts>>(id: TId, sourceKey: string): void;
-  regSub<TId extends ContractSubscriptionId<TContracts>>(
+  regSub<TId extends string>(id: TId): void;
+  regSub<TId extends string>(id: TId, sourceKey: string): void;
+  regSub<TId extends string>(
     id: TId,
     compute: RuntimeSubscriptionHandler<TContracts, TId>,
     dependencies: (
@@ -230,31 +223,38 @@ function assertRuntimeDb(
 }
 
 class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
-  readonly scope: RuntimeScope;
+  /** The only owner of this runtime's mutable engine services. */
+  readonly kernel: RuntimeKernel;
   private activeInstallation: ModuleInstallation | null = null;
   private readonly installations = new Set<ModuleInstallation>();
   private readonly watches = new Set<ReflexDisposer>();
   private readonly renderSubscriptions = new Set<ReflexDisposer>();
 
-  constructor(scope: RuntimeScope, initialDb: ContractDb<TContracts>) {
+  constructor(kernel: RuntimeKernel, initialDb: ContractDb<TContracts>) {
     assertRuntimeDb(initialDb, 'initialDb');
-    this.scope = scope;
-    registerBuiltInErrorHandler(scope);
-    initializeEventRouterForRuntime(scope);
-    initAppDbForRuntime<ContractDb<TContracts>>(scope, initialDb);
+    this.kernel = kernel;
+    registerBuiltInErrorHandler(kernel);
+    registerBuiltInCoeffects(kernel);
+    initializeEventRouterForRuntime(kernel);
+    initAppDbForRuntime<ContractDb<TContracts>>(kernel, initialDb);
   }
 
   get runtimeId(): string {
-    return this.scope.runtimeId;
+    return this.kernel.runtimeId;
   }
 
   get runtimeName(): string {
-    return this.scope.runtimeName;
+    return this.kernel.runtimeName;
+  }
+
+  /** @internal Transitional view for runtime-scoped engine helpers. */
+  private get scope(): RuntimeScope {
+    return this.kernel;
   }
 
   getAppDb(): ContractDb<TContracts> {
     this.assertUsable();
-    return getAppDbForRuntime<ContractDb<TContracts>>(this.scope);
+    return getAppDbForRuntime<ContractDb<TContracts>>(this.kernel);
   }
 
   restoreAppDb(nextDb: ContractDb<TContracts>): void {
@@ -555,9 +555,6 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   dispose(): void {
     if (isRuntimeDisposed(this.scope)) return;
-    if (this.scope === defaultRuntimeScope) {
-      throw new Error('[reflex] The compatibility default runtime cannot be disposed.');
-    }
 
     for (const disposeRenderSubscription of Array.from(this.renderSubscriptions)) {
       disposeRenderSubscription();
@@ -691,8 +688,11 @@ export function createReflexRuntime<TDb extends Record<string, any>>(
   options: NonArrayRuntimeOptions<TDb>,
 ): ReflexRuntime<DbInferredContracts<TDb>>;
 export function createReflexRuntime(options: CreateReflexRuntimeOptions<any>): ReflexRuntime<any> {
-  const scope = createRuntimeScope(options);
-  return new ReflexRuntimeImplementation(scope, options.initialDb) as unknown as ReflexRuntime<any>;
+  const kernel = createRuntimeKernel(options);
+  return new ReflexRuntimeImplementation(
+    kernel,
+    options.initialDb,
+  ) as unknown as ReflexRuntime<any>;
 }
 
 /** @internal Register the React binding as a render listener. */
@@ -721,36 +721,4 @@ export function clearRuntimeSubsForHotReload(
     );
   }
   runtime.clearSubsForHotReload(subscriptionIds);
-}
-
-export const defaultRuntime: ReflexRuntime<DefaultReflexContracts> =
-  new ReflexRuntimeImplementation<DefaultReflexContracts>(
-    defaultRuntimeScope,
-    {} as unknown as ContractDb<DefaultReflexContracts>,
-  ) as unknown as ReflexRuntime<DefaultReflexContracts>;
-
-/** Replace the compatibility default runtime's app-db. */
-export function restoreAppDb(nextDb: ContractDb<DefaultReflexContracts>): void {
-  defaultRuntime.restoreAppDb(nextDb);
-}
-
-/** Wait for the compatibility default runtime to reach an idle publication boundary. */
-export function flush(): Promise<void> {
-  return defaultRuntime.flush();
-}
-
-/** Watch a subscription in the compatibility default runtime. */
-export function watchSubscription<TId extends ContractSubscriptionId<DefaultReflexContracts>>(
-  query: ContractSubscriptionVector<DefaultReflexContracts, TId>,
-  listener: WatchSubscriptionListener<ContractSubscriptionResult<DefaultReflexContracts, TId>>,
-  options?: WatchSubscriptionOptions,
-): ReflexDisposer {
-  return defaultRuntime.watchSubscription(query, listener, options);
-}
-
-/** Install a scoped feature in the compatibility default runtime. */
-export function registerModule(
-  module: ReflexModule<ReflexRuntime<DefaultReflexContracts>>,
-): ReflexDisposer {
-  return defaultRuntime.registerModule(module);
 }

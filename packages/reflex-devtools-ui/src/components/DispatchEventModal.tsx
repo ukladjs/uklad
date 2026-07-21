@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSubscription, dispatch } from '@flexsurfer/reflex';
+import { useSubscription } from '@flexsurfer/reflex';
 import type { DevtoolsRuntimeSummary } from '../types/Runtime';
+import { dispatch } from '../runtime';
 
 export function DispatchEventModal() {
     const dispatchModalState = useSubscription(['dispatchModalOpenState']) as {

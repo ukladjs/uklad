@@ -241,87 +241,53 @@ export const SUB_IDS = {
 
 - When adding or changing a handler's params, update its signature comment — the ids files are the API docs that later sessions (and other agents) rely on.
 
-## 11) Legacy compatibility starter (single default runtime)
+## 11) Explicit runtime starter
 
-The following copy pattern is retained for existing 0.x applications using
-the package-root compatibility facade. New applications should use the
-explicit runtime/module/provider structure in section 1.
+Reflex never creates a package-global runtime. Construct the application
+runtime once, register every feature on it, and provide that same instance to
+React.
 
 ```ts
 import {
-  initAppDb,
-  regSub,
-  regEvent,
-  regEffect,
-  regCoeffect,
+  createReflexRuntime,
   current,
-  dispatch,
+  ReflexProvider,
   useSubscription,
 } from '@flexsurfer/reflex';
 
-// event-ids.ts
-export const EVENT_IDS = {
-  APP_INIT: 'app/init',
-  TODOS_ADD: 'todos/add',
-} as const;
-
-// effect-ids.ts
-export const EFFECT_IDS = {
-  GET_TODOS: 'storage/get_todos',
-  SET_TODOS: 'storage/set_todos',
-} as const;
-
-// sub-ids.ts
-export const SUB_IDS = {
-  TODOS_LIST: 'todos/list',       // root sub
-  TODOS_OPEN_COUNT: 'todos/open_count', // computed sub
-} as const;
-
-// db.ts
 type Todo = { id: string; text: string; done: boolean };
-initAppDb({ todos: [] as Todo[] });
 
-// effects.ts
-regEffect(EFFECT_IDS.SET_TODOS, (todos: Todo[]) => {
+export const runtime = createReflexRuntime({
+  initialDb: { todos: [] as Todo[] },
+  runtimeId: 'todos',
+});
+
+runtime.regEffect('storage/set_todos', (todos: Todo[]) => {
   localStorage.setItem('todos', JSON.stringify(todos));
 });
 
-regCoeffect(EFFECT_IDS.GET_TODOS, (coeffects) => {
-  const raw = localStorage.getItem('todos');
-  coeffects.localStoreTodos = raw ? (JSON.parse(raw) as Todo[]) : [];
-  return coeffects;
-});
-
-// events.ts
-regEvent(
-  EVENT_IDS.APP_INIT,
-  ({ draftDb, localStoreTodos }) => {
-    draftDb.todos = Array.isArray(localStoreTodos) ? localStoreTodos : [];
-  },
-  [[EFFECT_IDS.GET_TODOS]]
-);
-
-regEvent(EVENT_IDS.TODOS_ADD, ({ draftDb }, text: string) => {
+runtime.regEvent('todos/add', ({ draftDb }, text: string) => {
   const clean = text.trim();
   if (!clean) return;
   draftDb.todos.push({ id: `todo_${Date.now()}`, text: clean, done: false });
-  return [[EFFECT_IDS.SET_TODOS, current(draftDb.todos)]];
+  return [['storage/set_todos', current(draftDb.todos)]];
 });
 
-// subs.ts
-regSub(SUB_IDS.TODOS_LIST, 'todos'); // root sub
-
-regSub(
-  SUB_IDS.TODOS_OPEN_COUNT,          // computed sub from root sub
-  (todos: Todo[]) => todos.filter((t) => !t.done).length,
-  () => [[SUB_IDS.TODOS_LIST]]
+runtime.regSub('todos/list', 'todos');
+runtime.regSub(
+  'todos/open_count',
+  (todos: Todo[]) => todos.filter((todo) => !todo.done).length,
+  () => [['todos/list']],
 );
 
-// Usage example (React):
-// const todos = useSubscription([SUB_IDS.TODOS_LIST], 'TodoList');
-// const openCount = useSubscription([SUB_IDS.TODOS_OPEN_COUNT], 'TodoFooter');
-// dispatch([EVENT_IDS.APP_INIT]);
-// dispatch([EVENT_IDS.TODOS_ADD, 'Buy milk']);
+// app.tsx
+export function AppRoot() {
+  return <ReflexProvider runtime={runtime}><App /></ReflexProvider>;
+}
+
+// TodoList.tsx
+const todos = useSubscription<Todo[]>(['todos/list']);
+runtime.dispatch(['todos/add', 'Buy milk']);
 ```
 ## 12) Typed Payload Maps (opt-in compile-time checking)
 

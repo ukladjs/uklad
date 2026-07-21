@@ -1,7 +1,6 @@
-import { DISPATCH, DISPATCH_LATER, NOW, RANDOM, regEffect } from '../index';
-import { defaultErrorHandler, regEventErrorHandler } from '../events/pipeline';
-import { getHandler } from '../runtime/handlers';
-import { clearHandlers } from '../runtime/reset';
+import { DISPATCH, DISPATCH_LATER, NOW, RANDOM } from '../index';
+import { defaultErrorHandler } from '../events/pipeline';
+import { clearHandlers, getHandler, regEffect, regEventErrorHandler } from './runtime-test-api';
 
 describe('framework handler lifecycle', () => {
   it('restores built-in effects and coeffects after a complete handler clear', () => {

@@ -1,8 +1,12 @@
-import { regCoeffect, getInjectCofxInterceptor } from '../events/coeffects';
-import { regEvent } from '../events/registration';
-import { dispatch } from '../events/router';
-import { initAppDb, getAppDb } from '../runtime/app-db';
-import { clearGlobalInterceptors } from '../events/global-interceptors';
+import {
+  clearGlobalInterceptors,
+  dispatch,
+  getAppDb,
+  getInjectCofxInterceptor,
+  initAppDb,
+  regCoeffect,
+  regEvent,
+} from './runtime-test-api';
 import type { CoEffects } from '../types';
 import { consoleLog } from '../core/logging';
 import { waitForScheduled } from './test-utils';

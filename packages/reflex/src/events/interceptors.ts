@@ -1,7 +1,7 @@
 import { mergeTraceForRuntime } from '../core/tracing';
 import { getAppDbForRuntime } from '../runtime/app-db';
 import { getHandlerForRuntime } from '../runtime/handlers';
-import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
+import type { RuntimeScope } from '../runtime/scope';
 
 import type {
   CoEffects,
@@ -33,11 +33,6 @@ export function isInterceptor(value: unknown): value is Interceptor {
     (candidate.before === undefined || hasBefore) &&
     (candidate.after === undefined || hasAfter)
   );
-}
-
-/** @internal Execute an event's interceptor chain. */
-export function execute(event: EventVector, interceptors: Interceptor[]): Context {
-  return executeForRuntime(defaultRuntimeScope, event, interceptors);
 }
 
 /** @internal Execute an event interceptor chain in one runtime. */

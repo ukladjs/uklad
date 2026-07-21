@@ -1,13 +1,11 @@
 import isEqual from 'fast-deep-equal';
 
 import type { EqualityCheckFn } from '../types';
-import { defaultRuntimeScope, type RuntimeScope } from '../runtime/scope';
+import { type RuntimeScope } from '../runtime/scope';
 
-const equalityChecks = new WeakMap<RuntimeScope, EqualityCheckFn>();
 let defaultEqualityCheck: EqualityCheckFn = isEqual;
-
 function getRuntimeEqualityCheck(runtime: RuntimeScope): EqualityCheckFn {
-  return equalityChecks.get(runtime) ?? defaultEqualityCheck;
+  return runtime.equalityCheck ?? defaultEqualityCheck;
 }
 
 /**
@@ -44,22 +42,12 @@ export const shallowEqual: EqualityCheckFn = (left: any, right: any): boolean =>
   return true;
 };
 
-/** Replace the equality function used by subscriptions without a local override. */
-export function setGlobalEqualityCheck(equalityCheck: EqualityCheckFn): void {
-  setGlobalEqualityCheckForRuntime(defaultRuntimeScope, equalityCheck);
-}
-
 /** @internal Replace the default equality function for one runtime. */
 export function setGlobalEqualityCheckForRuntime(
   runtime: RuntimeScope,
   equalityCheck: EqualityCheckFn,
 ): void {
-  equalityChecks.set(runtime, equalityCheck);
-}
-
-/** Return the equality function used by subscriptions without a local override. */
-export function getGlobalEqualityCheck(): EqualityCheckFn {
-  return getGlobalEqualityCheckForRuntime(defaultRuntimeScope);
+  runtime.equalityCheck = equalityCheck;
 }
 
 /** @internal Return the default equality function for one runtime. */
@@ -73,7 +61,4 @@ export function replaceDefaultEqualityCheck(
   next: EqualityCheckFn,
 ): void {
   if (defaultEqualityCheck === previous) defaultEqualityCheck = next;
-  if (equalityChecks.get(defaultRuntimeScope) === previous) {
-    equalityChecks.set(defaultRuntimeScope, next);
-  }
 }

@@ -3,7 +3,7 @@ import { consoleLog } from '../core/logging';
 import { scheduleAfterRender, scheduleNextTick } from '../core/scheduling';
 import { isEventVector } from '../core/validation';
 import { flushSubscriptionsForRuntime } from '../runtime/app-db';
-import { defaultRuntimeScope, isRuntimeDisposed, type RuntimeScope } from '../runtime/scope';
+import { isRuntimeDisposed, type RuntimeScope } from '../runtime/scope';
 import { assertPublicationAllowedForRuntime } from '../runtime/subscriptions/engine';
 import { registerBuiltInEffectsForRuntime } from './effects';
 import {
@@ -225,20 +225,8 @@ export class EventQueue {
   }
 }
 
-const eventQueues = new WeakMap<RuntimeScope, EventQueue>();
-
 function getEventQueue(runtime: RuntimeScope): EventQueue {
-  let eventQueue = eventQueues.get(runtime);
-  if (!eventQueue) {
-    eventQueue = new EventQueue((event) => handleForRuntime(runtime, event));
-    eventQueues.set(runtime, eventQueue);
-  }
-  return eventQueue;
-}
-
-/** Dispatch an event asynchronously. */
-export function dispatch(event: DispatchVector): void {
-  dispatchForRuntime(defaultRuntimeScope, event);
+  return (runtime.eventQueue ??= new EventQueue((event) => handleForRuntime(runtime, event)));
 }
 
 /** @internal Dispatch an event asynchronously in one runtime. */
@@ -260,16 +248,6 @@ export function dispatchForRuntime(runtime: RuntimeScope, event: DispatchVector)
   }
 
   getEventQueue(runtime).push(event);
-}
-
-/**
- * Dispatch an event and publish subscription updates before returning.
- *
- * This must not be called from an event handler. Return a `dispatch` effect
- * from the handler instead.
- */
-export function dispatchSync(event: DispatchVector): void {
-  dispatchSyncForRuntime(defaultRuntimeScope, event);
 }
 
 /** @internal Dispatch and publish synchronously in one runtime. */
@@ -328,7 +306,3 @@ function getEventScheduler(event: EventVector): ScheduleFunction | undefined {
   }
   return undefined;
 }
-
-// Compatibility APIs can import this module without constructing defaultRuntime.
-// Install dispatch-dependent effects for the default scope after dispatch exists.
-initializeEventRouterForRuntime(defaultRuntimeScope);

@@ -22,7 +22,7 @@ import { DevToolsAPIClient } from './httpClient.js';
 import { appStatusTool } from './tools/appStatus.js';
 import { getTracesTool } from './tools/getTraces.js';
 import { getTraceTool } from './tools/getTrace.js';
-import { getAppStateTool } from './tools/getAppState.js';
+import { getStateTool } from './tools/getState.js';
 import { dispatchEventTool } from './tools/dispatchEvent.js';
 import { dispatchAndWaitTool } from './tools/dispatchAndWait.js';
 import { getHandlersTool } from './tools/getHandlers.js';
@@ -44,7 +44,7 @@ const SERVER_INSTRUCTIONS = `Reflex DevTools: inspect and drive a live Reflex ap
 Retrieval order (cheapest first):
 1. app_status — discover runtimes and select one. It lists stable runtimeId values and reports whether the selected app is connected, browser/React Native/headless, tracing state, handler counts, and sessionEpoch. Call it first after a cold start and after any reload; a changed sessionEpoch means the DevTools connection session changed and server-stored trace ids were invalidated. A transient reconnect can leave the runtime state intact.
 2. get_handlers — registered event/sub/effect ids; learn what exists before reading state.
-3. get_app_state with "path" — read only the state slice you need; avoid full dumps on real apps.
+3. get_state with "path" — read only the state slice you need; avoid full dumps on real apps.
 4. eval_sub — evaluate any registered subscription against live state, whether or not a component has mounted it. Use get_active_subs only when you need the current mounted-subscription set.
 5. dispatch_and_wait — preferred act-and-verify path for operation-enabled runtimes. It returns the full post-dispatch receipt after the joined event cascade and active subscription graph settle, including recalculated subscriptions. Use dispatch_event only with older runtimes that lack the operation capability.
 6. get_traces — compact rows of recent activity, including what you did not initiate (user clicks, timers, subscriptions). Drill into one trace with get_trace, passing the get_traces response's runtimeId and sessionEpoch so a restart fails explicitly; never page through full trace details.
@@ -103,7 +103,7 @@ export class ReflexDevToolsMCPServer {
       appStatusTool(this.apiClient),
       getTracesTool(this.apiClient),
       getTraceTool(this.apiClient),
-      getAppStateTool(this.apiClient),
+      getStateTool(this.apiClient),
       getHandlersTool(this.apiClient),
       getActiveSubsTool(this.apiClient),
       evalSubTool(this.apiClient),

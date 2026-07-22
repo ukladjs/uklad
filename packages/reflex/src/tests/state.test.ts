@@ -1,6 +1,6 @@
 import { produce } from 'immer';
-import { initState, getState, updateState as commitAppState } from './runtime-test-api';
-interface TestAppState {
+import { initState, getState, updateState as commitState } from './runtime-test-api';
+interface TestState {
   counter: number;
   todos: Array<{
     id: number;
@@ -29,7 +29,7 @@ interface SimpleState {
 function updateState<T = Record<string, any>>(updater: (draft: T) => void) {
   const initialState = getState();
   const newState = produce(initialState, updater);
-  commitAppState(newState);
+  commitState(newState);
 }
 
 describe('Immer integration', () => {
@@ -105,10 +105,10 @@ describe('Immer integration', () => {
   });
 });
 
-describe('Type-safe AppSTATE', () => {
+describe('Type-safe AppState', () => {
   describe('Type-safe initialization and retrieval', () => {
     test('should initialize and retrieve type-safe state', () => {
-      const initialState: TestAppState = {
+      const initialState: TestState = {
         counter: 42,
         todos: [
           { id: 1, text: 'Learn TypeScript', completed: false },
@@ -120,8 +120,8 @@ describe('Type-safe AppSTATE', () => {
         },
       };
 
-      initState<TestAppState>(initialState);
-      const state = getState<TestAppState>();
+      initState<TestState>(initialState);
+      const state = getState<TestState>();
 
       expect(state.counter).toBe(42);
       expect(state.todos).toHaveLength(2);
@@ -146,7 +146,7 @@ describe('Type-safe AppSTATE', () => {
 
   describe('Type-safe updates', () => {
     beforeEach(() => {
-      const initialState: TestAppState = {
+      const initialState: TestState = {
         counter: 0,
         todos: [],
         user: {
@@ -154,20 +154,20 @@ describe('Type-safe AppSTATE', () => {
           email: 'bob@example.com',
         },
       };
-      initState<TestAppState>(initialState);
+      initState<TestState>(initialState);
     });
 
     test('should handle type-safe counter updates', () => {
-      updateState<TestAppState>((draft) => {
+      updateState<TestState>((draft) => {
         draft.counter += 10;
       });
 
-      const state = getState<TestAppState>();
+      const state = getState<TestState>();
       expect(state.counter).toBe(10);
     });
 
     test('should handle type-safe array operations', () => {
-      updateState<TestAppState>((draft) => {
+      updateState<TestState>((draft) => {
         draft.todos.push({
           id: 1,
           text: 'First todo',
@@ -175,7 +175,7 @@ describe('Type-safe AppSTATE', () => {
         });
       });
 
-      updateState<TestAppState>((draft) => {
+      updateState<TestState>((draft) => {
         draft.todos[0]!.completed = true;
         draft.todos.push({
           id: 2,
@@ -184,14 +184,14 @@ describe('Type-safe AppSTATE', () => {
         });
       });
 
-      const state = getState<TestAppState>();
+      const state = getState<TestState>();
       expect(state.todos).toHaveLength(2);
       expect(state.todos[0]!.completed).toBe(true);
       expect(state.todos[1]!.text).toBe('Second todo');
     });
 
     test('should handle type-safe nested object updates', () => {
-      updateState<TestAppState>((draft) => {
+      updateState<TestState>((draft) => {
         draft.user.name = 'Charlie';
         draft.user.profile = {
           age: 25,
@@ -203,7 +203,7 @@ describe('Type-safe AppSTATE', () => {
         };
       });
 
-      const state = getState<TestAppState>();
+      const state = getState<TestState>();
       expect(state.user.name).toBe('Charlie');
       expect(state.user.profile?.age).toBe(25);
       expect(state.user.profile?.location).toBe('New York');
@@ -212,14 +212,14 @@ describe('Type-safe AppSTATE', () => {
     });
 
     test('should maintain immutability with type-safe updates', () => {
-      const initialState = getState<TestAppState>();
+      const initialState = getState<TestState>();
 
-      updateState<TestAppState>((draft) => {
+      updateState<TestState>((draft) => {
         draft.counter = 99;
         draft.user.name = 'David';
       });
 
-      const updatedState = getState<TestAppState>();
+      const updatedState = getState<TestState>();
 
       expect(initialState.counter).toBe(0);
       expect(initialState.user.name).toBe('Bob');
@@ -234,33 +234,33 @@ describe('Type-safe AppSTATE', () => {
 
   describe('Mixed usage patterns', () => {
     test('should handle switching between different typed states', () => {
-      const testState: TestAppState = {
+      const testState: TestState = {
         counter: 1,
         todos: [],
         user: { name: 'Test', email: 'test@example.com' },
       };
-      initState<TestAppState>(testState);
-      const db1 = getState<TestAppState>();
-      expect(db1.counter).toBe(1);
+      initState<TestState>(testState);
+      const state1 = getState<TestState>();
+      expect(state1.counter).toBe(1);
 
       const simpleState: SimpleState = {
         count: 200,
         message: 'New state',
       };
       initState<SimpleState>(simpleState);
-      const db2 = getState<SimpleState>();
-      expect(db2.count).toBe(200);
-      expect(db2.message).toBe('New state');
+      const state2 = getState<SimpleState>();
+      expect(state2.count).toBe(200);
+      expect(state2.message).toBe('New state');
     });
 
     test('should work with partial state initialization', () => {
-      initState<TestAppState>({
+      initState<TestState>({
         counter: 5,
         todos: [],
         user: { name: 'Minimal', email: 'min@example.com' },
       });
 
-      const state = getState<TestAppState>();
+      const state = getState<TestState>();
       expect(state.counter).toBe(5);
       expect(state.user.name).toBe('Minimal');
       expect(state.user.profile).toBeUndefined();

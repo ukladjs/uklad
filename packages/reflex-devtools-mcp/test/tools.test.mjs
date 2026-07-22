@@ -12,7 +12,7 @@ import { dispatchEventTool } from '../dist/tools/dispatchEvent.js';
 import { dispatchAndWaitTool } from '../dist/tools/dispatchAndWait.js';
 import { evalSubTool } from '../dist/tools/evalSub.js';
 import { getActiveSubsTool } from '../dist/tools/getActiveSubs.js';
-import { getAppStateTool } from '../dist/tools/getAppState.js';
+import { getStateTool } from '../dist/tools/getState.js';
 import { getHandlersTool } from '../dist/tools/getHandlers.js';
 import { getTraceTool } from '../dist/tools/getTrace.js';
 import { getTracesTool } from '../dist/tools/getTraces.js';
@@ -127,7 +127,7 @@ test('every MCP tool accepts runtimeId, routes it, and surfaces runtime identity
       assert.equal(sessionEpoch, identity.sessionEpoch);
       return { ...identity, trace: { id } };
     },
-    async getAppState(path, selected) {
+    async getState(path, selected) {
       assert.equal(path, 'cart');
       assert.equal(selected, runtimeId);
       return { ...identity, state: { total: 12 } };
@@ -163,7 +163,7 @@ test('every MCP tool accepts runtimeId, routes it, and surfaces runtime identity
     appStatusTool(apiClient),
     getTracesTool(apiClient),
     getTraceTool(apiClient),
-    getAppStateTool(apiClient),
+    getStateTool(apiClient),
     getHandlersTool(apiClient),
     getActiveSubsTool(apiClient),
     evalSubTool(apiClient),
@@ -337,9 +337,9 @@ test('get_handlers tells the agent how to start the DevTools server when unreach
   assert.equal(body.retry, 'get_handlers');
 });
 
-test('get_app_state returns only the requested state slice', async () => {
+test('get_state returns only the requested state slice', async () => {
   const apiClient = {
-    async getAppState(path) {
+    async getState(path) {
       assert.equal(path, 'user.profile');
       return {
         state: { id: 'u1', name: 'Ada' },
@@ -347,7 +347,7 @@ test('get_app_state returns only the requested state slice', async () => {
     },
   };
 
-  const result = await getAppStateTool(apiClient).handler({ path: 'user.profile' });
+  const result = await getStateTool(apiClient).handler({ path: 'user.profile' });
   const body = parseToolResult(result);
 
   assert.equal(body.path, 'user.profile');
@@ -614,7 +614,7 @@ test('DevToolsAPIClient sends runtimeId in read queries and mutation bodies', as
     await apiClient.getStatus('runtime-b');
     await apiClient.getTraces({ limit: 5, runtimeId: 'runtime-b' });
     await apiClient.getTrace(8, 'runtime-b', 7);
-    await apiClient.getAppState('user.profile', 'runtime-b');
+    await apiClient.getState('user.profile', 'runtime-b');
     await apiClient.getSubscriptions('user', 'runtime-b');
     await apiClient.getHandlers('event', 'runtime-b');
     await apiClient.getStats('runtime-b');

@@ -37,7 +37,7 @@ export interface RuntimeKernel {
   readonly runtimeInstanceId: string;
   readonly runtimeName: string;
   /** Hot-path state is typed and directly addressable. It remains lazy. */
-  appState?: StateStore;
+  state?: StateStore;
   handlers?: HandlerState;
   eventQueue?: EventQueue;
   subscriptionCache?: SubscriptionCacheState;

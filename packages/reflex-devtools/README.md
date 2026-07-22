@@ -65,7 +65,7 @@ The plugin starts a version-pinned MCP bridge ([@flexsurfer/reflex-devtools-mcp]
 |---|---|
 | `app_status` | Is an app connected? Browser or headless? Did its DevTools session change? |
 | `get_handlers` | Which event/effect/subscription ids exist? |
-| `get_app_state` | What is the state *at this path* (scoped reads, not full dumps)? |
+| `get_state` | What is the state *at this path* (scoped reads, not full dumps)? |
 | `eval_sub` | What does any registered subscription return, mounted or not? |
 | `get_active_subs` | What are the current values of mounted subscriptions and their active dependencies? |
 | `dispatch_event` | Act — and get back the outcome: state patches, emitted effects, or the error (requires `--allow-dispatch`; otherwise returns `CAPABILITY_DENIED`) |

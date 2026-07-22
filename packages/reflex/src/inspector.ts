@@ -34,7 +34,7 @@ export interface ReflexHandlerKeys {
 
 export interface ReflexInspectorSnapshot {
   /** The live state write head. The value is not cloned or deep-frozen. */
-  readonly appState: unknown;
+  readonly state: unknown;
   /** User-facing handler ids; framework-owned effect and coeffect ids are omitted. */
   readonly handlerKeys: ReflexHandlerKeys;
   /** Cache-only diagnostics. Reading a snapshot never evaluates subscriptions. */
@@ -120,7 +120,7 @@ export function createReflexInspectorForKernel(runtime: RuntimeKernel): ReflexIn
     getSnapshot(): ReflexInspectorSnapshot {
       assertRuntimeActive();
       return {
-        appState: getStateForKernel(runtime),
+        state: getStateForKernel(runtime),
         handlerKeys: getHandlerKeys(runtime),
         subscriptions: getSubscriptionDiagnosticsForKernel(runtime),
       };

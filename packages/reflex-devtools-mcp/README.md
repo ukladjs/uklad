@@ -243,7 +243,7 @@ Get the full detail of a single trace by id: for events, the state patches commi
 
 
 
-### 4. `get_app_state`
+### 4. `get_state`
 
 Retrieve the current application state state — scoped by path whenever possible.
 
@@ -677,7 +677,7 @@ packages/reflex-devtools-mcp/
 │       ├── appStatus.ts
 │       ├── getTraces.ts
 │       ├── getTrace.ts
-│       ├── getAppState.ts
+│       ├── getState.ts
 │       ├── evalSub.ts
 │       ├── dispatchEvent.ts
 │       ├── getHandlers.ts

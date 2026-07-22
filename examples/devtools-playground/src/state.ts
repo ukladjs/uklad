@@ -21,7 +21,7 @@ export interface PlaygroundContracts extends ReflexContracts {
 }
 
 /** Create fresh state for one independently owned playground runtime. */
-export function createInitialAppState(): PlaygroundState {
+export function createInitialState(): PlaygroundState {
   return {
     users: [
       { id: 1, name: 'John Doe', active: true },

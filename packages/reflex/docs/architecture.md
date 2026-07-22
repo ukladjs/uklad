@@ -19,8 +19,8 @@ dispatch(['todos/add', 'milk'])
   │                   → context.newState   (pure, no side effects)
   │                   → context.effects  [['http', {...}]]  (data, not calls)
   ├─ events/effects.ts        doFx (after phase): updateState(newState), then run effects
-  ├─ runtime/state.ts        appState advances; flush scheduled (coalesced, rAF)
-  │        ~~~~~~~~~~ window: appState ahead, renderState behind; ALL subs still read renderState
+  ├─ runtime/state.ts        state advances; flush scheduled (coalesced, rAF)
+  │        ~~~~~~~~~~ window: state ahead, renderState behind; ALL subs still read renderState
   ├─ runtime/state.ts        flushSubscriptions(): renderState advances, diff top-level keys
   ├─ runtime/subscriptions/engine.ts
   │                           roots refresh → rank-ordered settle → freeze → notify
@@ -43,7 +43,7 @@ Paths in this document are relative to `src/`.
 | `runtime/runtime.ts`              | `createReflexRuntime`, modules, watches, restore/flush                      |
 | `runtime/kernel.ts`               | Instance-owned runtime kernel, identity, and terminal lifecycle             |
 | `core/*`                          | Environment, equality, Immer, logging, scheduling, tracing, and validation  |
-| `runtime/state.ts`                | `appState`/`renderState`, coalesced flush, and changed-root publication     |
+| `runtime/state.ts`                | `state`/`renderState`, coalesced flush, and changed-root publication        |
 | `runtime/handlers.ts`             | Typed handler definitions and framework-owned handler baselines             |
 | `runtime/event-metadata.ts`       | Per-event interceptor metadata                                              |
 | `runtime/reset.ts`                | Cross-store clear coordination                                              |
@@ -103,8 +103,8 @@ that owns its state.
 
 | Item                                                   | What / why                                                                         |
 | ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `appState`                                             | Live write head. Events commit new generations here                                |
-| `renderState`                                          | Published read head. Every subscription reads this, never `appState`               |
+| `state`                                                | Live write head. Events commit new generations here                                |
+| `renderState`                                          | Published read head. Every subscription reads this, never `state`                  |
 | `updateState(newState)`                                | Commit + schedule a flush. Consecutive events coalesce into one                    |
 | `flushSubscriptions()`                                 | Promote `renderState`, diff top-level keys with `Object.is`, publish changed roots |
 | `initState(value)` / `getState()` / `getRenderState()` | Bootstrap and accessors                                                            |

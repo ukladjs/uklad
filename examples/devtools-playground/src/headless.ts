@@ -5,7 +5,7 @@
  * side-effect adapters differ (effects.headless / coeffects.headless are
  * Node-safe: memory-backed or no-op). The devtools SDK connects over
  * WebSocket exactly as in the browser, so every MCP tool — app_status,
- * get_app_state, eval_sub, dispatch_event, dispatch_and_wait, get_traces — works against this process.
+ * get_state, eval_sub, dispatch_event, dispatch_and_wait, get_traces — works against this process.
  *
  * Run it (devtools server first, then this; needs Node >= 22 for the
  * global WebSocket the SDK connects through):
@@ -19,7 +19,7 @@
 import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex/vanilla';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 import { coeffectModes, installHeadlessCoeffects } from './coeffects.headless';
-import { createInitialAppState, type PlaygroundContracts } from './state';
+import { createInitialState, type PlaygroundContracts } from './state';
 import { effectModes, installHeadlessEffects } from './effects.headless';
 import { installPlaygroundEvents } from './events';
 import { installPlaygroundSubscriptions } from './subs';
@@ -29,7 +29,7 @@ const serverUrl = process.env.REFLEX_DEVTOOLS_SERVER_URL ?? '127.0.0.1:4000';
 enableMapSet();
 
 const headlessRuntime = createReflexRuntime<PlaygroundContracts>({
-  initialState: createInitialAppState(),
+  initialState: createInitialState(),
   runtimeId: 'devtools-playground.headless',
   name: 'DevTools Playground (Headless)',
 });

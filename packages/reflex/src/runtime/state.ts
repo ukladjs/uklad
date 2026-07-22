@@ -15,7 +15,7 @@ import { getRootSubKey } from './subscriptions/keys';
 import type { State, DefaultAppState } from '../types';
 
 export interface StateStore {
-  appState: any;
+  state: any;
   renderState: any;
   flushScheduled: boolean;
   initialized: boolean;
@@ -30,8 +30,8 @@ export interface StateRevisions {
 }
 
 function getStateStore(runtime: RuntimeKernel): StateStore {
-  return (runtime.appState ??= {
-    appState: {},
+  return (runtime.state ??= {
+    state: {},
     renderState: {},
     flushScheduled: false,
     initialized: false,
@@ -50,11 +50,11 @@ export function initStateForKernel<T = DefaultAppState>(
   assertPublicationAllowedForKernel(runtime);
   const state = getStateStore(runtime);
   const oldState = state.renderState;
-  const changed = value !== state.appState;
+  const changed = value !== state.state;
   const acceptedValue = value;
   if (state.initialized && changed) state.committedRevision++;
   state.initialized = true;
-  state.appState = acceptedValue;
+  state.state = acceptedValue;
   state.renderState = acceptedValue;
   const recalculated = publishSubscriptionsForKernel(
     runtime,
@@ -72,7 +72,7 @@ export function initStateForKernel<T = DefaultAppState>(
 
 /** @internal Return the latest committed state for one runtime. */
 export function getStateForKernel<T = DefaultAppState>(runtime: RuntimeKernel): State<T> {
-  return getStateStore(runtime).appState as State<T>;
+  return getStateStore(runtime).state as State<T>;
 }
 
 /** @internal Return one runtime's render-visible state generation. */
@@ -95,10 +95,10 @@ export function updateStateForKernel<T = Record<string, any>>(
   newState: State<T>,
 ): number {
   const state = getStateStore(runtime);
-  if (newState === state.appState) return state.committedRevision;
-  const previousState = state.appState;
+  if (newState === state.state) return state.committedRevision;
+  const previousState = state.state;
   state.initialized = true;
-  state.appState = newState;
+  state.state = newState;
   state.committedRevision++;
   notifyRuntimeLifecycleForKernel(
     runtime,
@@ -120,11 +120,11 @@ export function updateStateForKernel<T = Record<string, any>>(
 /** @internal Publish one runtime's latest state generation synchronously. */
 export function flushSubscriptionsForKernel(runtime: RuntimeKernel): void {
   const state = getStateStore(runtime);
-  if (state.renderState === state.appState && state.publishedRevision === state.committedRevision)
+  if (state.renderState === state.state && state.publishedRevision === state.committedRevision)
     return;
   assertPublicationAllowedForKernel(runtime);
   const oldState = state.renderState;
-  const newState = state.appState;
+  const newState = state.state;
   const targetRevision = state.committedRevision;
   state.renderState = newState;
   const recalculated = publishSubscriptionsForKernel(

@@ -40,13 +40,13 @@ test('active subscription count and byte limits reject updates atomically', () =
 
 test('app state growth is bounded without corrupting the retained snapshot', () => {
   const storage = new TraceStorage(10, 10, 1024, 128);
-  storage.updateAppState({ message: 'safe' });
+  storage.updateState({ message: 'safe' });
 
   assert.throws(
-    () => storage.updateAppState({ message: 'x'.repeat(256) }),
+    () => storage.updateState({ message: 'x'.repeat(256) }),
     /App state retention limit exceeded/,
   );
-  assert.deepEqual(storage.getAppState(), { message: 'safe' });
+  assert.deepEqual(storage.getState(), { message: 'safe' });
 
   const stateRetentionRejected = storage.addTraces([
     {
@@ -66,5 +66,5 @@ test('app state growth is bounded without corrupting the retained snapshot', () 
     },
   ]);
   assert.equal(stateRetentionRejected, true);
-  assert.deepEqual(storage.getAppState(), { message: 'safe' });
+  assert.deepEqual(storage.getState(), { message: 'safe' });
 });

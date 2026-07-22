@@ -443,7 +443,7 @@ Every snapshot should store enough metadata to detect risk:
 
 Recommended fields:
 
-- `stateVersion`: app-provided version, usually from `appState.meta.stateVersion` or a configured getter.
+- `stateVersion`: app-provided version, usually from `state.meta.stateVersion` or a configured getter.
 - `appMapHash`: hash of `.reflex/map.json` when available.
 - `schemaHash`: hash of top-level keys and coarse value types.
 - `stateShape`: bounded summary for agent visibility.
@@ -465,7 +465,7 @@ MCP restore_state
        { type: "restore-state-to-client", payload: { restoreId, state } }
   -> SDK calls the injected Reflex inspector:
        inspector.restoreState(state)
-  -> app replaces appState and flushes subscriptions
+  -> app replaces state and flushes subscriptions
   -> SDK sends restore result:
        { type: "reflex-restore-result", payload: { restoreId, trace } }
   -> server resolves MCP call

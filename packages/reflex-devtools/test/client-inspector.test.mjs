@@ -109,7 +109,7 @@ async function successfulFetch(url) {
 }
 
 function createFakeInspector(
-  appState = { count: 1 },
+  state = { count: 1 },
   {
     runtimeId = 'runtime-test',
     runtimeName = 'Runtime test',
@@ -128,7 +128,7 @@ function createFakeInspector(
     getSnapshot() {
       snapshotCount++;
       return {
-        appState,
+        state,
         handlerKeys: {
           event: ['increment'],
           fx: [],

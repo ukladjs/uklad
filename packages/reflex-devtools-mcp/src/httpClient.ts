@@ -266,7 +266,7 @@ export class DevToolsAPIClient {
     return this.responseBody(await this.fetch(`/api/traces/${id}${suffix}`));
   }
 
-  async getAppState(path?: string, runtimeId?: string): Promise<any> {
+  async getState(path?: string, runtimeId?: string): Promise<any> {
     const queryParams = new URLSearchParams();
     if (path) queryParams.append('path', path);
     if (runtimeId !== undefined) queryParams.append('runtimeId', runtimeId);

@@ -9,7 +9,7 @@ enablePatches();
 enableMapSet();
 
 const DEFAULT_MAX_ACTIVE_SUBSCRIPTION_BYTES = 8 * 1024 * 1024;
-const DEFAULT_MAX_APP_STATE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_MAX_STATE_BYTES = 8 * 1024 * 1024;
 const DEFAULT_MAX_TRACE_STORAGE_BYTES = 16 * 1024 * 1024;
 const MAX_ESTIMATE_DEPTH = 100;
 
@@ -123,7 +123,7 @@ export class TraceStorage {
   private traces: Trace[] = [];
   private traceSizes: number[] = [];
   private traceBytes = 0;
-  private appState: any = null;
+  private state: any = null;
   private activeSubs: Record<string, any> = Object.create(null);
   private activeSubSizes: Record<string, number> = Object.create(null);
   private activeSubBytes = 0;
@@ -132,7 +132,7 @@ export class TraceStorage {
   private readonly maxTraces: number;
   private readonly maxActiveSubscriptions: number;
   private readonly maxActiveSubscriptionBytes: number;
-  private readonly maxAppStateBytes: number;
+  private readonly maxStateBytes: number;
   private readonly maxTraceStorageBytes: number;
 
   constructor(
@@ -140,18 +140,18 @@ export class TraceStorage {
     maxActiveSubscriptions: number = 10_000,
     maxActiveSubscriptionBytes:
       number = DEFAULT_MAX_ACTIVE_SUBSCRIPTION_BYTES,
-    maxAppStateBytes: number = DEFAULT_MAX_APP_STATE_BYTES,
+    maxStateBytes: number = DEFAULT_MAX_STATE_BYTES,
     maxTraceStorageBytes: number = DEFAULT_MAX_TRACE_STORAGE_BYTES,
   ) {
     this.maxTraces = maxTraces;
     this.maxActiveSubscriptions = maxActiveSubscriptions;
     this.maxActiveSubscriptionBytes = maxActiveSubscriptionBytes;
-    this.maxAppStateBytes = maxAppStateBytes;
+    this.maxStateBytes = maxStateBytes;
     this.maxTraceStorageBytes = maxTraceStorageBytes;
   }
 
   addTraces(traces: Trace[]): boolean {
-    let appStateRetentionRejected = false;
+    let stateRetentionRejected = false;
 
     // Avoid spreading attacker-controlled arrays into a function call; large
     // argument lists can throw before the configured retention bound applies.
@@ -165,19 +165,19 @@ export class TraceStorage {
       this.traceBytes += traceSize;
 
       const patches = trace.tags?.patches;
-      if (Array.isArray(patches) && patches.length > 0 && this.appState !== null) {
+      if (Array.isArray(patches) && patches.length > 0 && this.state !== null) {
         try {
-          const nextState = applyPatches(this.appState, patches);
+          const nextState = applyPatches(this.state, patches);
           if (
-            estimateValueBytes(nextState, this.maxAppStateBytes + 1)
-            > this.maxAppStateBytes
+            estimateValueBytes(nextState, this.maxStateBytes + 1)
+            > this.maxStateBytes
           ) {
             throw new StorageRetentionError('state');
           }
-          this.appState = nextState;
+          this.state = nextState;
         } catch (error) {
           if (error instanceof StorageRetentionError) {
-            appStateRetentionRejected = true;
+            stateRetentionRejected = true;
           } else {
             console.warn('[Reflex Devtools] Failed to apply trace patches to app state.');
           }
@@ -203,17 +203,17 @@ export class TraceStorage {
       this.traceBytes -= removedBytes;
     }
 
-    return appStateRetentionRejected;
+    return stateRetentionRejected;
   }
 
-  updateAppState(state: any): void {
+  updateState(state: any): void {
     if (
-      estimateValueBytes(state, this.maxAppStateBytes + 1)
-      > this.maxAppStateBytes
+      estimateValueBytes(state, this.maxStateBytes + 1)
+      > this.maxStateBytes
     ) {
       throw new StorageRetentionError('state');
     }
-    this.appState = state;
+    this.state = state;
   }
 
   updateActiveSubs(subs: Record<string, any>): void {
@@ -312,8 +312,8 @@ export class TraceStorage {
     return this.traces.find(trace => trace.id === id);
   }
 
-  getAppState(): any {
-    return this.appState;
+  getState(): any {
+    return this.state;
   }
 
   getActiveSubs(): Record<string, any> {
@@ -347,7 +347,7 @@ export class TraceStorage {
     this.traces = [];
     this.traceSizes = [];
     this.traceBytes = 0;
-    this.appState = null;
+    this.state = null;
     this.activeSubs = Object.create(null);
     this.activeSubSizes = Object.create(null);
     this.activeSubBytes = 0;

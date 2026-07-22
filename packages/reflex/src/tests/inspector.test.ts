@@ -30,8 +30,8 @@ describe('Reflex inspector', () => {
   });
 
   it('returns a frozen versioned adapter and protocol-ready snapshot', () => {
-    const appState = { count: 1 };
-    initState(appState);
+    const state = { count: 1 };
+    initState(state);
     regEvent('inspector-event', () => undefined);
     regEffect('inspector-effect', () => {});
     regCoeffect('inspector-coeffect', (coeffects) => coeffects);
@@ -44,7 +44,7 @@ describe('Reflex inspector', () => {
     expect(inspector.runtimeId).toBe('reflex-unit-test-runtime');
     expect(inspector.runtimeName).toBe('Reflex unit-test runtime');
     expect(Object.isFrozen(inspector)).toBe(true);
-    expect(snapshot.appState).toBe(appState);
+    expect(snapshot.state).toBe(state);
     expect(snapshot.handlerKeys).toEqual({
       event: ['inspector-event'],
       fx: ['inspector-effect'],

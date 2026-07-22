@@ -692,7 +692,7 @@ export class DevtoolsServer {
               }
             : null,
           stateAvailable:
-            runtime.storage ? runtime.storage.getAppState() !== null : false,
+            runtime.storage ? runtime.storage.getState() !== null : false,
           traceCount: runtime.storage?.getStats().totalTraces ?? 0,
           capabilities: [...auth.capabilities],
           readOnly:
@@ -891,7 +891,7 @@ export class DevtoolsServer {
         if (!runtime || !this.requireStorage(runtime, res)) return;
         const pathValue =
           typeof req.query.path === 'string' ? req.query.path : undefined;
-        let state = runtime.storage!.getAppState();
+        let state = runtime.storage!.getState();
         if (pathValue) {
           if (pathValue.length > 512) {
             res.status(400).json({
@@ -2220,7 +2220,7 @@ export class DevtoolsServer {
         break;
       case 'reflex-state':
         if (event.payload !== undefined) {
-          storage.updateAppState(event.payload);
+          storage.updateState(event.payload);
         }
         break;
       case 'reflex-active-subs':
@@ -2524,7 +2524,7 @@ export class DevtoolsServer {
     }
     this.sendTaggedRuntimeEventToUi(client, runtime, {
       type: 'reflex-state',
-      payload: storage.getAppState(),
+      payload: storage.getState(),
       timestamp: Date.now(),
     });
     this.sendTaggedRuntimeEventToUi(client, runtime, {

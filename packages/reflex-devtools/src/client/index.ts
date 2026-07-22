@@ -809,7 +809,7 @@ class DevtoolsClient {
     this.sendEvent({
       type: 'reflex-state',
       component: 'Reflex',
-      payload: snapshot.appState
+      payload: snapshot.state
     });
     this.sendEvent({
       type: 'reflex-active-subs',

@@ -81,11 +81,11 @@ app_status {}
 ### 3. Read the initial state
 
 ```
-get_app_state { path: "selectedCategory" }   ✅
+get_state { path: "selectedCategory" }   ✅
 → { path: "selectedCategory", state: null }
 ```
 
-Path-scoped reads only. On an unfamiliar or large app the discovery step comes first: 🚧 `get_app_state { shape: true }` → keys, types, collection sizes — the runtime equivalent of reading `state.ts`. The full dump is the anti-pattern.
+Path-scoped reads only. On an unfamiliar or large app the discovery step comes first: 🚧 `get_state { shape: true }` → keys, types, collection sizes — the runtime equivalent of reading `state.ts`. The full dump is the anti-pattern.
 
 ### 4. Seed test state
 
@@ -261,7 +261,7 @@ Anti-patterns the API must keep unnecessary — if any of these becomes the prac
 | Write | is the code legal? | `tsc` + typed payload maps | ✅ (lib) |
 | Launch | run the app without a browser | headless runtime entry (`src/headless.ts`) | ✅ |
 | Health | did it mount? errors? session? | `app_status` · `get_client_logs` | ✅ · 🚧 |
-| Inspect | what is the state? | `get_app_state(path)` · `shape: true` | ✅ · 🚧 |
+| Inspect | what is the state? | `get_state(path)` · `shape: true` | ✅ · 🚧 |
 | Seed | put the app in a known state | `dispatch_event` · `replay_events` · snapshots | ✅ · ✳️ · 🚧 |
 | Act & verify | did it do what I meant? | `dispatch_event` outcome/patches/effects | ✅ |
 | Verify derived | does the sub compute right? | `eval_sub` | ✅ |

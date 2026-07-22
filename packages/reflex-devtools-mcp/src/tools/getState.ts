@@ -1,5 +1,5 @@
 /**
- * MCP Tool: get_app_state
+ * MCP Tool: get_state
  * Retrieve current application state state
  */
 
@@ -14,13 +14,13 @@ import {
   type RuntimeSelectionParams,
 } from './runtimeSelection.js';
 
-export interface GetAppStateParams extends RuntimeSelectionParams {
+export interface GetStateParams extends RuntimeSelectionParams {
   path?: string;
 }
 
-export function getAppStateTool(apiClient: DevToolsAPIClient) {
+export function getStateTool(apiClient: DevToolsAPIClient) {
   return {
-    name: 'get_app_state',
+    name: 'get_state',
     description: 'Retrieve current Reflex state state. Pass a path for a narrow slice; omit it only for intentionally small state because a full dump spends context. This does NOT include computed subscription values — use get_active_subs for mounted values.',
     inputSchema: {
       type: 'object',
@@ -34,9 +34,9 @@ export function getAppStateTool(apiClient: DevToolsAPIClient) {
       },
       additionalProperties: false
     },
-    handler: async (params: GetAppStateParams) => {
+    handler: async (params: GetStateParams) => {
       try {
-        const response = await apiClient.getAppState(
+        const response = await apiClient.getState(
           params.path,
           params.runtimeId,
         );
@@ -69,11 +69,11 @@ export function getAppStateTool(apiClient: DevToolsAPIClient) {
           ]
         };
       } catch (error) {
-        const unavailable = serverUnavailableResult(error, 'get_app_state');
+        const unavailable = serverUnavailableResult(error, 'get_state');
         if (unavailable) return unavailable;
         const routing = runtimeRoutingErrorResult(
           error,
-          'get_app_state',
+          'get_state',
           params.runtimeId,
         );
         if (routing) return routing;

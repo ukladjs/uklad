@@ -695,7 +695,7 @@ test('retention-limit rejection sends a bounded notice and keeps the runtime soc
   // Exercise the real storage limiter with a small test-only threshold. TS
   // private/readonly fields are compile-time constraints and remain ordinary
   // object properties in the emitted JavaScript.
-  server.runtimes.get('runtime-test').storage.maxAppStateBytes = 128;
+  server.runtimes.get('runtime-test').storage.maxStateBytes = 128;
 
   const noticePromise = waitForSocketMessage(
     socket,
@@ -2037,7 +2037,7 @@ test('UI runtime selection replays a minimal snapshot when MCP storage is disabl
     }],
   });
   await waitForCondition(() =>
-    server.runtimes.get('runtime-beta')?.snapshot.getAppState()?.value === 2);
+    server.runtimes.get('runtime-beta')?.snapshot.getState()?.value === 2);
 
   const ui = await connectUi(wsUrl);
   const statePromise = waitForSocketMessage(
@@ -2095,7 +2095,7 @@ test('UI snapshot replay requires inspect capability', async () => {
     payload: { secretProfile: 'must-not-replay' },
   });
   await waitForCondition(() =>
-    server.runtimes.get('runtime-private')?.storage?.getAppState() !== null);
+    server.runtimes.get('runtime-private')?.storage?.getState() !== null);
 
   const ui = await connectUi(wsUrl);
   await waitForCondition(() => ui.receivedMessages.some(

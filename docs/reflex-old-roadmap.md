@@ -16,7 +16,7 @@ Reflex should be presented to AI agents as a small set of indexes and tools, not
 2. **Runtime state/trace index** — what actually happened in the running app: current state shape, active subscription values, recent trace rows, single-trace details, and path-indexed writes (`find_state_changes(path)`). This lives in reflex-devtools storage and is exposed through MCP.
 3. **Compile-time contract index** — what is legal to call: `EventPayloads`, `SubPayloads`, `EffectPayloads`, and `AppState` module augmentation. This turns agent mistakes into `tsc` feedback instead of runtime surprises.
 
-The intended agent retrieval order is: MCP static/runtime tools first (`get_reflex_map`, `get_handlers`, `get_app_state({ shape: true })`, `find_state_changes`, `dispatch_event`), then `APP_MAP.md`, then `*-ids.ts` + exact-match `rg`, and only then implementation files. Agents should not read `events.ts`/`subs.ts` end-to-end.
+The intended agent retrieval order is: MCP static/runtime tools first (`get_reflex_map`, `get_handlers`, `get_state({ shape: true })`, `find_state_changes`, `dispatch_event`), then `APP_MAP.md`, then `*-ids.ts` + exact-match `rg`, and only then implementation files. Agents should not read `events.ts`/`subs.ts` end-to-end.
 
 A full worked scenario — one task walked through the agent's loop (orient → write → launch → health → seed → act → verify → explain → reload → replay), with each tool touchpoint marked shipped/planned/proposed — lives in this monorepo: [docs/agent-workflow.md](docs/agent-workflow.md).
 

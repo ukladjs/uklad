@@ -34,7 +34,7 @@ describe('instance-scoped runtime', () => {
     const publicRuntime = runtime as unknown as Record<string, unknown>;
     expect(Object.hasOwn(publicRuntime, 'kernel')).toBe(false);
     expect(publicRuntime.kernel).toBeUndefined();
-    expect(publicRuntime.appState).toBeUndefined();
+    expect(publicRuntime.state).toBeUndefined();
     expect(publicRuntime.handlers).toBeUndefined();
     expect(publicRuntime.extensions).toBeUndefined();
 
@@ -71,8 +71,8 @@ describe('instance-scoped runtime', () => {
       runtimeId: 'second',
       runtimeName: 'Runtime second',
     });
-    expect(firstInspector.getSnapshot().appState).toBe(first.getState());
-    expect(secondInspector.getSnapshot().appState).toBe(second.getState());
+    expect(firstInspector.getSnapshot().state).toBe(first.getState());
+    expect(secondInspector.getSnapshot().state).toBe(second.getState());
 
     first.clearHandlers('event');
     expect(first.getHandlers().event.increment).toBeUndefined();
@@ -373,7 +373,7 @@ describe('instance-scoped runtime', () => {
     expect(() => disposed.getState()).toThrow("Runtime 'dispose-first' has been disposed");
     surviving.dispatchSync(['increment', 5]);
     expect(surviving.getState()).toEqual({ count: 15, label: 'dispose-second' });
-    expect(survivingInspector.getSnapshot().appState).toEqual({
+    expect(survivingInspector.getSnapshot().state).toEqual({
       count: 15,
       label: 'dispose-second',
     });

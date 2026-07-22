@@ -28,7 +28,7 @@ export interface ReflexHandlerKeys {
 }
 
 export interface ReflexInspectorSnapshot {
-  readonly appState: unknown;
+  readonly state: unknown;
   readonly handlerKeys: ReflexHandlerKeys;
   readonly subscriptions: readonly ReflexSubscriptionDiagnostic[];
 }

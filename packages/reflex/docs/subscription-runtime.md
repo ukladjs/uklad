@@ -52,7 +52,7 @@ active/dormant boundaries, and deep registered graphs.
   edge; release-hook and listener failures cannot interrupt other cleanup or
   delivery.
 - Direct publication and `dispatchSync` are rejected during computation or
-  listener delivery before `appState` or `renderState` can advance. Ordinary async
+  listener delivery before `state` or `renderState` can advance. Ordinary async
   `dispatch` remains safe because its flush runs later while the runtime is
   idle.
 - Computation errors are retained. A dependency publication or subsequent
@@ -65,7 +65,7 @@ active/dormant boundaries, and deep registered graphs.
 
 ## React and STATE timing
 
-`renderState` is the published generation. Async events may advance `appState`, but
+`renderState` is the published generation. Async events may advance `state`, but
 all subscriptions continue to expose `renderState` until the scheduled flush:
 
 1. `renderState` advances.
@@ -119,8 +119,8 @@ Components watch `[visible]` and `[stats]`. Two events dispatch within one
 frame:
 
 ```
-dispatch(['add-todo'])     appState = G1    renderState = G0
-dispatch(['set-filter'])   appState = G2    renderState = G0
+dispatch(['add-todo'])     state = G1    renderState = G0
+dispatch(['set-filter'])   state = G2    renderState = G0
      every subscription read in this window still serves G0,
      including subscriptions created by components mounting now
 

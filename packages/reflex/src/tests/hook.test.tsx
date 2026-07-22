@@ -204,7 +204,7 @@ describe('React Hooks', () => {
       expect(result.current.todosCount).toBe(1);
     });
 
-    it('should re-render when AppSTATE changes via event dispatch', async () => {
+    it('should re-render when AppState changes via event dispatch', async () => {
       regEvent('add-todo', ({ draftState }, text) => {
         const currentTodos = draftState.todos || [];
         const newTodo = {

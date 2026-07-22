@@ -3,7 +3,6 @@ import {
   registerTraceCallbackForKernel,
   removeTraceCallbackForKernel,
 } from './core/tracing';
-import { NOW, RANDOM } from './events/coeffects';
 import { DISPATCH, DISPATCH_LATER } from './events/effects';
 import { dispatchForKernel, flushRuntime } from './events/router';
 import { getStateForKernel, getStateRevisionsForKernel } from './runtime/state';
@@ -35,7 +34,7 @@ export interface ReflexHandlerKeys {
 export interface ReflexInspectorSnapshot {
   /** The live state write head. The value is not cloned or deep-frozen. */
   readonly state: unknown;
-  /** User-facing handler ids; framework-owned effect and coeffect ids are omitted. */
+  /** User-facing handler ids; framework-owned effect ids are omitted. */
   readonly handlerKeys: ReflexHandlerKeys;
   /** Cache-only diagnostics. Reading a snapshot never evaluates subscriptions. */
   readonly subscriptions: readonly SubscriptionDiagnostic[];
@@ -166,7 +165,7 @@ function getHandlerKeys(runtime: RuntimeKernel): ReflexHandlerKeys {
   return {
     event: Object.keys(handlers.event),
     fx: Object.keys(handlers.fx).filter((id) => id !== DISPATCH && id !== DISPATCH_LATER),
-    cofx: Object.keys(handlers.cofx).filter((id) => id !== NOW && id !== RANDOM),
+    cofx: Object.keys(handlers.cofx),
     sub: Object.keys(handlers.sub),
   };
 }

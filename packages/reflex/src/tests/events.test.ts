@@ -356,10 +356,18 @@ describe('Type-safe Event Handlers', () => {
 describe('regEvent with cofx', () => {
   beforeEach(() => {
     initState({ counter: 0, messages: [], timestamp: 0, randomValue: 0 });
+    regCoeffect('now', (coeffects) => ({
+      ...coeffects,
+      now: Date.now(),
+    }));
+    regCoeffect('random', (coeffects) => ({
+      ...coeffects,
+      random: Math.random(),
+    }));
   });
 
   describe('Basic cofx functionality', () => {
-    it('should inject built-in cofx like now', async () => {
+    it('should inject an application-defined clock cofx', async () => {
       regEvent(
         'test-now-cofx',
         ({ draftState, now }) => {
@@ -379,7 +387,7 @@ describe('regEvent with cofx', () => {
       expect(state.timestamp).toBeGreaterThan(0);
     });
 
-    it('should inject built-in cofx like random', async () => {
+    it('should inject an application-defined random cofx', async () => {
       regEvent(
         'test-random-cofx',
         ({ draftState, random }) => {

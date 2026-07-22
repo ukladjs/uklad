@@ -5,7 +5,6 @@ import './runtime/instance';
 export { createReflexRuntime } from './runtime/runtime';
 
 export { DISPATCH, DISPATCH_LATER } from './events/effects';
-export { NOW, RANDOM } from './events/coeffects';
 export { shallowEqual } from './core/equality';
 export { current, enableMapSet, original } from './core/immer';
 

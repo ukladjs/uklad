@@ -1,8 +1,13 @@
-import { NOW, type ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
 import type { PlaygroundContracts } from './state';
 
 /** Install the environment-independent event and effect handlers. */
 export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContracts>): void {
+  runtime.regCoeffect('now', (coeffects) => ({
+    ...coeffects,
+    now: Date.now(),
+  }));
+
   runtime.regEvent('increment-counter', (coeffects) => {
     const { draftState } = coeffects;
     draftState.counter = draftState.counter + 1;
@@ -40,7 +45,7 @@ export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContrac
     ({ now }) => {
       return [['fake-effect', now]];
     },
-    { coeffects: [[NOW]] },
+    { coeffects: [['now']] },
   );
 
   runtime.regEvent('test-event-with-bad-params', ({ draftState }, badPayload: any) => {

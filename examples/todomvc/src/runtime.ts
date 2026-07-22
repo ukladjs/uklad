@@ -9,4 +9,9 @@ export const todoRuntime = createReflexRuntime({
   name: 'TodoMVC',
 });
 
+todoRuntime.regCoeffect('now', (coeffects) => ({
+  ...coeffects,
+  now: Date.now(),
+}));
+
 export const dispatch = todoRuntime.dispatch.bind(todoRuntime);

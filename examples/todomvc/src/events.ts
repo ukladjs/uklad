@@ -1,5 +1,3 @@
-import { NOW } from '@flexsurfer/reflex';
-
 import type { Showing, Todo, TodoId, Todos } from './state';
 import { EVENT_IDS } from './event-ids';
 import { todoRuntime } from './runtime';
@@ -17,7 +15,7 @@ const disposeEvents = todoRuntime.registerModule((scope) => {
 
       draftState.todos.set(newTodo.id, newTodo);
     },
-    { coeffects: [[NOW]] },
+    { coeffects: [['now']] },
   );
 
   scope.regEvent(EVENT_IDS.TOGGLE_DONE, ({ draftState }, id: TodoId) => {

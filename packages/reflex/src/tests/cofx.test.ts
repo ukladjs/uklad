@@ -15,9 +15,17 @@ describe('regCofx - Co-Effects', () => {
   beforeEach(() => {
     initState({ counter: 0, messages: [] });
     clearGlobalInterceptors();
+    regCoeffect('now', (coeffects) => ({
+      ...coeffects,
+      now: Date.now(),
+    }));
+    regCoeffect('random', (coeffects) => ({
+      ...coeffects,
+      random: Math.random(),
+    }));
   });
 
-  describe('Built-in Co-Effects', () => {
+  describe('Application Co-Effects', () => {
     it('should inject state co-effect', async () => {
       let capturedCoeffects: CoEffects | null = null;
 
@@ -33,7 +41,7 @@ describe('regCofx - Co-Effects', () => {
       expect(capturedCoeffects!.event).toEqual(['test-state-cofx']);
     });
 
-    it('should inject now co-effect', async () => {
+    it('should inject an application-defined now co-effect', async () => {
       let capturedCoeffects: CoEffects | null = null;
       const startTime = Date.now();
 
@@ -57,7 +65,7 @@ describe('regCofx - Co-Effects', () => {
       expect(typeof capturedCoeffects!.now).toBe('number');
     });
 
-    it('should inject random co-effect', async () => {
+    it('should inject an application-defined random co-effect', async () => {
       let capturedCoeffects: CoEffects | null = null;
 
       regEvent(
@@ -78,7 +86,7 @@ describe('regCofx - Co-Effects', () => {
       expect(capturedCoeffects!.random).toBeLessThan(1);
     });
 
-    it('should inject multiple built-in co-effects', async () => {
+    it('should inject multiple application-defined co-effects', async () => {
       let capturedCoeffects: CoEffects | null = null;
 
       regEvent(

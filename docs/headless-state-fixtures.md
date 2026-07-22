@@ -181,7 +181,7 @@ Typical examples: local storage, session storage, routing state, feature flags, 
 Use for values that must be repeatable across scenario runs:
 
 ```ts
-regCoeffect(COEFFECT_IDS.NOW, (cofx) => {
+regCoeffect(COEFFECT_IDS.CLOCK_NOW, (cofx) => {
   cofx.now = headlessClock.now();
   return cofx;
 });

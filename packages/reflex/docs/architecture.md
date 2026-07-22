@@ -90,11 +90,14 @@ regEvent('todos/load', handler, {
 });
 ```
 
+Coeffects such as `now` must be registered by the application before the event
+is dispatched.
+
 **`events/interceptors.ts`** — `execute(eventV, interceptors)`; `Context = { coeffects, previousState, effects, queue, stack, newState }`. `previousState` is the immutable state generation captured at event start; `newState` is the final Immer generation after the handler, or unset until it runs. `before` walks queue→stack, `after` unwinds the stack. Every `after` hook may compare the read-only state generations and append to the shared `effects` list. Hooks must not replace or mutate either state generation, or replace `effects`; `doFx` is the outermost unwind step, so it commits `newState` before running the final list. Event traces record that final list, including effects contributed by interceptors.
 
 **`events/effects.ts`** — `regEffect(id, handler)`. `doFxInterceptor` (after phase) commits `newState` via `updateState`, then invokes each effect handler; failures are isolated and tagged onto the event's trace. Built-ins: `DISPATCH`, `DISPATCH_LATER`. The router injects its `dispatch` function when composing these built-ins, so the write path has no `pipeline → effects → router → pipeline` module cycle.
 
-**`events/coeffects.ts`** — `regCoeffect(id, handler)`. `getInjectCofxInterceptor(id, value?)` injects into `context.coeffects` before the handler runs. Built-ins: `NOW`, `RANDOM`.
+**`events/coeffects.ts`** — `regCoeffect(id, handler)`. `getInjectCofxInterceptor(id, value?)` injects into `context.coeffects` before the handler runs. Coeffects are application-owned and must be registered explicitly.
 
 ## State
 

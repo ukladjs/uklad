@@ -1,21 +1,17 @@
-import { DISPATCH, DISPATCH_LATER, NOW, RANDOM } from '../index';
+import { DISPATCH, DISPATCH_LATER } from '../index';
 import { defaultErrorHandler } from '../events/pipeline';
 import { clearHandlers, getHandler, regEffect, regEventErrorHandler } from './runtime-test-api';
 
 describe('framework handler lifecycle', () => {
-  it('restores built-in effects and coeffects after a complete handler clear', () => {
+  it('restores built-in effects after a complete handler clear', () => {
     expect(getHandler('fx', DISPATCH)).toBeDefined();
     expect(getHandler('fx', DISPATCH_LATER)).toBeDefined();
-    expect(getHandler('cofx', NOW)).toBeDefined();
-    expect(getHandler('cofx', RANDOM)).toBeDefined();
     expect(getHandler('error', 'event-handler')).toBe(defaultErrorHandler);
 
     clearHandlers();
 
     expect(getHandler('fx', DISPATCH)).toBeDefined();
     expect(getHandler('fx', DISPATCH_LATER)).toBeDefined();
-    expect(getHandler('cofx', NOW)).toBeDefined();
-    expect(getHandler('cofx', RANDOM)).toBeDefined();
     expect(getHandler('error', 'event-handler')).toBe(defaultErrorHandler);
   });
 

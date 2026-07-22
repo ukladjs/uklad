@@ -26,7 +26,7 @@ import {
   removeTraceCallbackForKernel,
 } from '../core/tracing';
 import { getGlobalEqualityCheckForKernel, setGlobalEqualityCheckForKernel } from '../core/equality';
-import { regCoeffectForKernel, registerBuiltInCoeffects } from '../events/coeffects';
+import { regCoeffectForKernel } from '../events/coeffects';
 import { clearDelayedEffectsForKernel, regEffectForKernel } from '../events/effects';
 import {
   clearGlobalInterceptorRegistrationForKernel,
@@ -247,7 +247,6 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     assertRuntimeState(initialState, 'initialState');
     this.#kernel = kernel;
     registerBuiltInErrorHandler(kernel);
-    registerBuiltInCoeffects(kernel);
     initializeEventRouterForKernel(kernel);
     initStateForKernel<ContractState<TContracts>>(kernel, initialState);
   }

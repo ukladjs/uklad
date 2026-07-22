@@ -9,8 +9,6 @@ const expectedRuntimeExports = [
   'DISPATCH',
   'DISPATCH_LATER',
   'HotReloadWrapper',
-  'NOW',
-  'RANDOM',
   'clearHotReloadCallbacks',
   'createReflexHooks',
   'createReflexRuntime',
@@ -30,8 +28,6 @@ const expectedRuntimeExports = [
 const expectedVanillaRuntimeExports = [
   'DISPATCH',
   'DISPATCH_LATER',
-  'NOW',
-  'RANDOM',
   'createReflexRuntime',
   'current',
   'enableMapSet',

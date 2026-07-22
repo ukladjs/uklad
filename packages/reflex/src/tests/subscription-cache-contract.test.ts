@@ -6,7 +6,7 @@ import {
   getOrCreateSubscription,
   getSubscriptionSnapshot,
   getSubscriptionValue,
-  initAppDb,
+  initState,
   readSubscription,
   regEvent,
   regSub,
@@ -98,17 +98,17 @@ describe('Subscription cache contract', () => {
     (offset: number) => [['cache-param-select', offset]],
   );
 
-  regEvent('cache-add-item', ({ draftDb }, item: number) => {
-    draftDb['cache-items'].push(item);
+  regEvent('cache-add-item', ({ draftState }, item: number) => {
+    draftState['cache-items'].push(item);
   });
-  regEvent('cache-replace-items', ({ draftDb }, items: number[]) => {
-    draftDb['cache-items'] = items;
+  regEvent('cache-replace-items', ({ draftState }, items: number[]) => {
+    draftState['cache-items'] = items;
   });
-  regEvent('cache-set-revive-source', ({ draftDb }, value: number) => {
-    draftDb['cache-revive-source'] = value;
+  regEvent('cache-set-revive-source', ({ draftState }, value: number) => {
+    draftState['cache-revive-source'] = value;
   });
-  regEvent('cache-set-selected', ({ draftDb }, value: string | undefined) => {
-    draftDb['cache-selected'] = value;
+  regEvent('cache-set-selected', ({ draftState }, value: string | undefined) => {
+    draftState['cache-selected'] = value;
   });
 
   beforeEach(() => {
@@ -116,7 +116,7 @@ describe('Subscription cache contract', () => {
     mappedRuns = 0;
     lengthRuns = 0;
     selectedRuns = 0;
-    initAppDb({
+    initState({
       'cache-items': [1],
       'cache-revive-source': 1,
       'cache-selected': undefined,
@@ -124,7 +124,7 @@ describe('Subscription cache contract', () => {
     });
   });
 
-  it('refreshes a dormant cached subscription after the db flush', async () => {
+  it('refreshes a dormant cached subscription after the state flush', async () => {
     const subscription = getOrCreateSubscription(['cache-count'])!;
     expect(readSubscription(subscription)).toBe(1);
 
@@ -228,7 +228,7 @@ describe('Subscription cache contract', () => {
     const unsubscribeParent = subscribeToSubscription(rebuiltParent, listener);
     expect(getSubscriptionSnapshot(rebuiltParent)).toBe(5);
 
-    initAppDb({ 'cache-shared-source': 3 });
+    initState({ 'cache-shared-source': 3 });
     expect(listener).toHaveBeenCalledTimes(1);
     expect(getSubscriptionSnapshot(rebuiltParent)).toBe(7);
     unsubscribeParent();
@@ -245,7 +245,7 @@ describe('Subscription cache contract', () => {
     unsubscribeFirst();
     expect(getOrCreateSubscription(['cache-shared-dependency'])).toBe(shared);
 
-    initAppDb({ 'cache-shared-source': 3 });
+    initState({ 'cache-shared-source': 3 });
     expect(secondListener).toHaveBeenCalledTimes(1);
     expect(getSubscriptionSnapshot(secondParent)).toBe(16);
     unsubscribeSecond();
@@ -256,7 +256,7 @@ describe('Subscription cache contract', () => {
     expect(getSubscriptionSnapshot(original)).toBe(5);
 
     clearSubscriptionCache(JSON.stringify(['cache-shared-source']));
-    initAppDb({ 'cache-shared-source': 3 });
+    initState({ 'cache-shared-source': 3 });
 
     const rebuilt = getOrCreateSubscription(['cache-dormant-parent'])!;
     expect(rebuilt).not.toBe(original);
@@ -284,11 +284,11 @@ describe('Subscription cache contract', () => {
       (value: number) => value * 2,
       () => [[sourceId]],
     );
-    initAppDb({ [sourceId]: 2 });
+    initState({ [sourceId]: 2 });
     expect(getSubscriptionValue([derivedId])).toBe(4);
 
     clearHandlers('sub', sourceId);
-    initAppDb({ [sourceId]: 3 });
+    initState({ [sourceId]: 3 });
 
     expect(() => getSubscriptionValue([derivedId])).toThrow(
       `depends on missing subscription '${sourceId}'`,
@@ -304,7 +304,7 @@ describe('Subscription cache contract', () => {
       (value: number) => value * 2,
       () => [[sourceId]],
     );
-    initAppDb({ [sourceId]: 1 });
+    initState({ [sourceId]: 1 });
 
     const oldSubscription = getOrCreateSubscription([derivedId])!;
     const unsubscribeOld = subscribeToSubscription(oldSubscription, () => {});
@@ -323,7 +323,7 @@ describe('Subscription cache contract', () => {
 
     unsubscribeOld();
     expect(getOrCreateSubscription([derivedId])).toBe(replacement);
-    initAppDb({ [sourceId]: 2 });
+    initState({ [sourceId]: 2 });
     expect(getSubscriptionSnapshot(replacement)).toBe(6);
     unsubscribeReplacement();
   });

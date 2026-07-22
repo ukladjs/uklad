@@ -29,12 +29,12 @@ import { dispatchForKernel, dispatchSyncForKernel } from '../events/router';
 import { createReflexInspectorForKernel } from '../inspector';
 import {
   flushSubscriptionsForKernel,
-  getAppDbForKernel,
-  getRenderDbForKernel,
-  hasPendingDbFlushForKernel,
-  initAppDbForKernel,
-  updateAppDbForKernel,
-} from '../runtime/app-db';
+  getStateForKernel,
+  getRenderStateForKernel,
+  hasPendingStateFlushForKernel,
+  initStateForKernel,
+  updateStateForKernel,
+} from '../runtime/state';
 import { getInterceptorsForKernel, setInterceptorsForKernel } from '../runtime/event-metadata';
 import {
   getHandlerForKernel,
@@ -75,8 +75,8 @@ import type { ReactElement, ReactNode } from 'react';
 import { ReflexProvider } from '../react/context';
 import type {
   Context,
-  Db,
-  DefaultAppDb,
+  State,
+  DefaultAppState,
   EffectHandler,
   EffectParams,
   ErrorHandler,
@@ -96,7 +96,7 @@ import type {
 } from '../runtime/subscriptions/engine';
 
 export const testRuntime = createReflexRuntime({
-  initialDb: {},
+  initialState: {},
   runtimeId: 'reflex-unit-test-runtime',
   name: 'Reflex unit-test runtime',
 });
@@ -108,31 +108,31 @@ export function ReflexTestProvider({ children }: { children?: ReactNode }): Reac
 
 const kernel = getRuntimeKernelForTests(testRuntime);
 
-export function initAppDb<T extends Record<string, any> = DefaultAppDb>(value: Db<T>): void {
-  initAppDbForKernel(kernel, value);
+export function initState<T extends Record<string, any> = DefaultAppState>(value: State<T>): void {
+  initStateForKernel(kernel, value);
 }
 
-export function getAppDb<T extends Record<string, any> = DefaultAppDb>(): Db<T> {
-  return getAppDbForKernel<T>(kernel);
+export function getState<T extends Record<string, any> = DefaultAppState>(): State<T> {
+  return getStateForKernel<T>(kernel);
 }
 
-export function getRenderDb<T extends Record<string, any> = DefaultAppDb>(): Db<T> {
-  return getRenderDbForKernel<T>(kernel);
+export function getRenderState<T extends Record<string, any> = DefaultAppState>(): State<T> {
+  return getRenderStateForKernel<T>(kernel);
 }
 
-export function updateAppDb<T = Record<string, any>>(value: Db<T>): void {
-  updateAppDbForKernel(kernel, value);
+export function updateState<T = Record<string, any>>(value: State<T>): void {
+  updateStateForKernel(kernel, value);
 }
 
 export function flushSubscriptions(): void {
   flushSubscriptionsForKernel(kernel);
 }
 
-export function hasPendingDbFlush(): boolean {
-  return hasPendingDbFlushForKernel(kernel);
+export function hasPendingStateFlush(): boolean {
+  return hasPendingStateFlushForKernel(kernel);
 }
 
-export function regEvent<T = DefaultAppDb>(
+export function regEvent<T = DefaultAppState>(
   id: Id,
   handler: EventHandler<T>,
   registration?: EventRegistrationOptions<T> | Interceptor<T>[] | readonly unknown[],

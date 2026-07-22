@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { CoEffects, EventHandler, HandlerKind } from '@flexsurfer/reflex';
 
-import type { TodoDb } from './db';
+import type { TodoState } from './state';
 import { EVENT_IDS } from './event-ids';
 import { todoRuntime } from './runtime';
 
@@ -11,7 +11,7 @@ import './events';
 const getHandler = (kind: HandlerKind, id: string) => todoRuntime.getHandlers()[kind][id];
 
 // Persistence is handled by @flexsurfer/reflex-persist (see storage.ts), so
-// handlers return no storage effects — they only mutate the draft db.
+// handlers return no storage effects — they only mutate the draft state.
 
 describe('TodoMVC Event Handlers (Pure Functions)', () => {
   describe('ADD_TODO handler', () => {
@@ -19,47 +19,47 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
       const handler = getHandler('event', EVENT_IDS.ADD_TODO) as EventHandler;
       expect(handler).toBeDefined();
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map(),
         showing: 'all',
       };
 
       const coeffects = {
         event: [EVENT_IDS.ADD_TODO, 'New Todo'],
-        draftDb: mockDb,
+        draftState: mockState,
         now: 12345,
       } as CoEffects;
 
       handler(coeffects, 'New Todo');
 
-      expect(mockDb.todos.size).toBe(1);
-      expect(mockDb.todos.get(12345)).toEqual({
+      expect(mockState.todos.size).toBe(1);
+      expect(mockState.todos.get(12345)).toEqual({
         id: 12345,
         title: 'New Todo',
         done: false,
       });
 
-      expect(Object.keys(mockDb)).toEqual(['todos', 'showing']);
-      expect(Object.keys(mockDb).length).toBe(2);
+      expect(Object.keys(mockState)).toEqual(['todos', 'showing']);
+      expect(Object.keys(mockState).length).toBe(2);
     });
 
     it('should trim whitespace from title', () => {
       const handler = getHandler('event', EVENT_IDS.ADD_TODO) as EventHandler;
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map(),
         showing: 'all',
       };
 
       const coeffects = {
         event: [EVENT_IDS.ADD_TODO, '  Trimmed Todo  '],
-        draftDb: mockDb,
+        draftState: mockState,
         now: 12345,
       } as CoEffects;
 
       handler(coeffects, '  Trimmed Todo  ');
 
-      expect(mockDb.todos.get(12345)?.title).toBe('Trimmed Todo');
+      expect(mockState.todos.get(12345)?.title).toBe('Trimmed Todo');
     });
   });
 
@@ -67,36 +67,36 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
     it('should toggle todo completion status', () => {
       const handler = getHandler('event', EVENT_IDS.TOGGLE_DONE) as EventHandler;
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map([[1, { id: 1, title: 'Test Todo', done: false }]]),
         showing: 'all',
       };
 
       const coeffects = {
         event: [EVENT_IDS.TOGGLE_DONE, 1],
-        draftDb: mockDb,
+        draftState: mockState,
       } as CoEffects;
 
       const result = handler(coeffects, 1);
 
-      expect(mockDb.todos.get(1)?.done).toBe(true);
+      expect(mockState.todos.get(1)?.done).toBe(true);
       expect(result).toBeUndefined();
 
-      expect(Object.keys(mockDb)).toEqual(['todos', 'showing']);
-      expect(Object.keys(mockDb).length).toBe(2);
+      expect(Object.keys(mockState)).toEqual(['todos', 'showing']);
+      expect(Object.keys(mockState).length).toBe(2);
     });
 
     it('should handle non-existent todo gracefully', () => {
       const handler = getHandler('event', EVENT_IDS.TOGGLE_DONE) as EventHandler;
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map(),
         showing: 'all',
       };
 
       const coeffects = {
         event: [EVENT_IDS.TOGGLE_DONE, 999],
-        draftDb: mockDb,
+        draftState: mockState,
       } as CoEffects;
 
       const result = handler(coeffects, 999);
@@ -109,7 +109,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
     it('should remove todo from map', () => {
       const handler = getHandler('event', EVENT_IDS.DELETE_TODO) as EventHandler;
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map([
           [1, { id: 1, title: 'Todo 1', done: false }],
           [2, { id: 2, title: 'Todo 2', done: true }],
@@ -119,17 +119,17 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
 
       const coeffects = {
         event: [EVENT_IDS.DELETE_TODO, 1],
-        draftDb: mockDb,
+        draftState: mockState,
       } as CoEffects;
 
       const result = handler(coeffects, 1);
 
-      expect(mockDb.todos.has(1)).toBe(false);
-      expect(mockDb.todos.has(2)).toBe(true);
+      expect(mockState.todos.has(1)).toBe(false);
+      expect(mockState.todos.has(2)).toBe(true);
       expect(result).toBeUndefined();
 
-      expect(Object.keys(mockDb)).toEqual(['todos', 'showing']);
-      expect(Object.keys(mockDb).length).toBe(2);
+      expect(Object.keys(mockState)).toEqual(['todos', 'showing']);
+      expect(Object.keys(mockState).length).toBe(2);
     });
   });
 
@@ -137,38 +137,38 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
     it('should update todo title with event2 suffix', () => {
       const handler = getHandler('event', EVENT_IDS.SAVE) as EventHandler;
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map([[1, { id: 1, title: 'Original Title', done: false }]]),
         showing: 'all',
       };
 
       const coeffects = {
         event: [EVENT_IDS.SAVE, 1, 'Updated Title'],
-        draftDb: mockDb,
+        draftState: mockState,
       } as CoEffects;
 
       const result = handler(coeffects, 1, 'Updated Title');
 
-      expect(mockDb.todos.get(1)?.title).toBe('Updated Titleevent2');
+      expect(mockState.todos.get(1)?.title).toBe('Updated Titleevent2');
       expect(result).toBeUndefined();
     });
 
     it('should trim whitespace before adding suffix', () => {
       const handler = getHandler('event', EVENT_IDS.SAVE) as EventHandler;
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map([[1, { id: 1, title: 'Original', done: false }]]),
         showing: 'all',
       };
 
       const coeffects = {
         event: [EVENT_IDS.SAVE, 1, '  Spaced Title  '],
-        draftDb: mockDb,
+        draftState: mockState,
       } as CoEffects;
 
       handler(coeffects, 1, '  Spaced Title  ');
 
-      expect(mockDb.todos.get(1)?.title).toBe('Spaced Titleevent2');
+      expect(mockState.todos.get(1)?.title).toBe('Spaced Titleevent2');
     });
   });
 
@@ -176,7 +176,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
     it('should mark all as completed when not all are completed', () => {
       const handler = getHandler('event', EVENT_IDS.COMPLETE_ALL_TOGGLE) as EventHandler;
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map([
           [1, { id: 1, title: 'Todo 1', done: false }],
           [2, { id: 2, title: 'Todo 2', done: true }],
@@ -187,21 +187,21 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
 
       const coeffects = {
         event: [EVENT_IDS.COMPLETE_ALL_TOGGLE],
-        draftDb: mockDb,
+        draftState: mockState,
       } as CoEffects;
 
       const result = handler(coeffects);
 
-      expect(mockDb.todos.get(1)?.done).toBe(true);
-      expect(mockDb.todos.get(2)?.done).toBe(true);
-      expect(mockDb.todos.get(3)?.done).toBe(true);
+      expect(mockState.todos.get(1)?.done).toBe(true);
+      expect(mockState.todos.get(2)?.done).toBe(true);
+      expect(mockState.todos.get(3)?.done).toBe(true);
       expect(result).toBeUndefined();
     });
 
     it('should mark all as incomplete when all are completed', () => {
       const handler = getHandler('event', EVENT_IDS.COMPLETE_ALL_TOGGLE) as EventHandler;
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map([
           [1, { id: 1, title: 'Todo 1', done: true }],
           [2, { id: 2, title: 'Todo 2', done: true }],
@@ -211,13 +211,13 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
 
       const coeffects = {
         event: [EVENT_IDS.COMPLETE_ALL_TOGGLE],
-        draftDb: mockDb,
+        draftState: mockState,
       } as CoEffects;
 
       handler(coeffects);
 
-      expect(mockDb.todos.get(1)?.done).toBe(false);
-      expect(mockDb.todos.get(2)?.done).toBe(false);
+      expect(mockState.todos.get(1)?.done).toBe(false);
+      expect(mockState.todos.get(2)?.done).toBe(false);
     });
   });
 
@@ -225,7 +225,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
     it('should remove only completed todos', () => {
       const handler = getHandler('event', EVENT_IDS.CLEAR_COMPLETED) as EventHandler;
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map([
           [1, { id: 1, title: 'Todo 1', done: true }],
           [2, { id: 2, title: 'Todo 2', done: false }],
@@ -236,15 +236,15 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
 
       const coeffects = {
         event: [EVENT_IDS.CLEAR_COMPLETED],
-        draftDb: mockDb,
+        draftState: mockState,
       } as CoEffects;
 
       const result = handler(coeffects);
 
-      expect(mockDb.todos.size).toBe(1);
-      expect(mockDb.todos.has(1)).toBe(false);
-      expect(mockDb.todos.has(2)).toBe(true);
-      expect(mockDb.todos.has(3)).toBe(false);
+      expect(mockState.todos.size).toBe(1);
+      expect(mockState.todos.has(1)).toBe(false);
+      expect(mockState.todos.has(2)).toBe(true);
+      expect(mockState.todos.has(3)).toBe(false);
       expect(result).toBeUndefined();
     });
   });
@@ -253,38 +253,38 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
     it('should update showing filter', () => {
       const handler = getHandler('event', EVENT_IDS.SET_SHOWING) as EventHandler;
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map(),
         showing: 'all',
       };
 
       const coeffects = {
         event: [EVENT_IDS.SET_SHOWING, 'active'],
-        draftDb: mockDb,
+        draftState: mockState,
       } as CoEffects;
 
       const result = handler(coeffects, 'active');
 
-      expect(mockDb.showing).toBe('active');
+      expect(mockState.showing).toBe('active');
       expect(result).toBeUndefined();
 
-      expect(Object.keys(mockDb)).toEqual(['todos', 'showing']);
-      expect(Object.keys(mockDb).length).toBe(2);
+      expect(Object.keys(mockState)).toEqual(['todos', 'showing']);
+      expect(Object.keys(mockState).length).toBe(2);
     });
 
     it('should work with all filter values', () => {
       const handler = getHandler('event', EVENT_IDS.SET_SHOWING) as EventHandler;
 
-      const mockDb: TodoDb = {
+      const mockState: TodoState = {
         todos: new Map(),
         showing: 'all',
       };
 
-      handler({ event: [EVENT_IDS.SET_SHOWING, 'done'], draftDb: mockDb } as CoEffects, 'done');
-      expect(mockDb.showing).toBe('done');
+      handler({ event: [EVENT_IDS.SET_SHOWING, 'done'], draftState: mockState } as CoEffects, 'done');
+      expect(mockState.showing).toBe('done');
 
-      handler({ event: [EVENT_IDS.SET_SHOWING, 'all'], draftDb: mockDb } as CoEffects, 'all');
-      expect(mockDb.showing).toBe('all');
+      handler({ event: [EVENT_IDS.SET_SHOWING, 'all'], draftState: mockState } as CoEffects, 'all');
+      expect(mockState.showing).toBe('all');
     });
   });
 });

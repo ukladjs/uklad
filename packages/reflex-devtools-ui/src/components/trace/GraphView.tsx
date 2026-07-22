@@ -6,7 +6,7 @@ import { createGraphData } from '../../utils/graphUtils';
 
 function getNodeColor(type: string, isDark: boolean): string {
     switch (type) {
-        case 'appdb':
+        case 'state':
             return isDark ? '#22c55e' : '#16a34a';
         case 'sub/run':
             return isDark ? '#3b82f6' : '#2563eb';

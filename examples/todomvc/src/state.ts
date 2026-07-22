@@ -10,12 +10,12 @@ export type Todos = Map<TodoId, Todo>;
 
 export type Showing = 'all' | 'active' | 'done';
 
-export interface TodoDb {
+export interface TodoState {
   todos: Todos;
   showing: Showing;
 }
 
-export function createTodoDb(): TodoDb {
+export function createTodoState(): TodoState {
   return {
     todos: new Map<TodoId, Todo>(),
     showing: 'all',

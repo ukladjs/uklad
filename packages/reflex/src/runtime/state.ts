@@ -12,11 +12,11 @@ import {
 } from './subscriptions/engine';
 import { getRootSubKey } from './subscriptions/keys';
 
-import type { Db, DefaultAppDb } from '../types';
+import type { State, DefaultAppState } from '../types';
 
-export interface AppDbState {
-  appDb: any;
-  renderDb: any;
+export interface StateStore {
+  appState: any;
+  renderState: any;
   flushScheduled: boolean;
   initialized: boolean;
   committedRevision: number;
@@ -24,15 +24,15 @@ export interface AppDbState {
 }
 
 /** Monotonic state-generation counters owned by one runtime. */
-export interface AppDbRevisions {
+export interface StateRevisions {
   readonly committedRevision: number;
   readonly publishedRevision: number;
 }
 
-function getAppDbState(runtime: RuntimeKernel): AppDbState {
-  return (runtime.appDb ??= {
-    appDb: {},
-    renderDb: {},
+function getStateStore(runtime: RuntimeKernel): StateStore {
+  return (runtime.appState ??= {
+    appState: {},
+    renderState: {},
     flushScheduled: false,
     initialized: false,
     committedRevision: 0,
@@ -42,23 +42,23 @@ function getAppDbState(runtime: RuntimeKernel): AppDbState {
 
 type NoInfer<T> = [T][T extends any ? 0 : never];
 
-/** @internal Replace one runtime's db heads and publish surviving roots. */
-export function initAppDbForKernel<T = DefaultAppDb>(
+/** @internal Replace one runtime's state heads and publish surviving roots. */
+export function initStateForKernel<T = DefaultAppState>(
   runtime: RuntimeKernel,
-  value: Db<NoInfer<T>>,
+  value: State<NoInfer<T>>,
 ): void {
   assertPublicationAllowedForKernel(runtime);
-  const state = getAppDbState(runtime);
-  const oldDb = state.renderDb;
-  const changed = value !== state.appDb;
+  const state = getStateStore(runtime);
+  const oldState = state.renderState;
+  const changed = value !== state.appState;
   const acceptedValue = value;
   if (state.initialized && changed) state.committedRevision++;
   state.initialized = true;
-  state.appDb = acceptedValue;
-  state.renderDb = acceptedValue;
+  state.appState = acceptedValue;
+  state.renderState = acceptedValue;
   const recalculated = publishSubscriptionsForKernel(
     runtime,
-    collectChangedRoots(runtime, oldDb, acceptedValue),
+    collectChangedRoots(runtime, oldState, acceptedValue),
   );
   state.publishedRevision = state.committedRevision;
   notifyRuntimeLifecycleForKernel(
@@ -70,41 +70,41 @@ export function initAppDbForKernel<T = DefaultAppDb>(
   );
 }
 
-/** @internal Return the latest committed db for one runtime. */
-export function getAppDbForKernel<T = DefaultAppDb>(runtime: RuntimeKernel): Db<T> {
-  return getAppDbState(runtime).appDb as Db<T>;
+/** @internal Return the latest committed state for one runtime. */
+export function getStateForKernel<T = DefaultAppState>(runtime: RuntimeKernel): State<T> {
+  return getStateStore(runtime).appState as State<T>;
 }
 
-/** @internal Return one runtime's render-visible db generation. */
-export function getRenderDbForKernel<T = DefaultAppDb>(runtime: RuntimeKernel): Db<T> {
-  return getAppDbState(runtime).renderDb as Db<T>;
+/** @internal Return one runtime's render-visible state generation. */
+export function getRenderStateForKernel<T = DefaultAppState>(runtime: RuntimeKernel): State<T> {
+  return getStateStore(runtime).renderState as State<T>;
 }
 
 /** @internal Return one runtime's committed and render-published generations. */
-export function getAppDbRevisionsForKernel(runtime: RuntimeKernel): AppDbRevisions {
-  const state = getAppDbState(runtime);
+export function getStateRevisionsForKernel(runtime: RuntimeKernel): StateRevisions {
+  const state = getStateStore(runtime);
   return {
     committedRevision: state.committedRevision,
     publishedRevision: state.publishedRevision,
   };
 }
 
-/** @internal Commit one runtime's db generation and schedule publication. */
-export function updateAppDbForKernel<T = Record<string, any>>(
+/** @internal Commit one runtime's state generation and schedule publication. */
+export function updateStateForKernel<T = Record<string, any>>(
   runtime: RuntimeKernel,
-  newDb: Db<T>,
+  newState: State<T>,
 ): number {
-  const state = getAppDbState(runtime);
-  if (newDb === state.appDb) return state.committedRevision;
-  const previousDb = state.appDb;
+  const state = getStateStore(runtime);
+  if (newState === state.appState) return state.committedRevision;
+  const previousState = state.appState;
   state.initialized = true;
-  state.appDb = newDb;
+  state.appState = newState;
   state.committedRevision++;
   notifyRuntimeLifecycleForKernel(
     runtime,
     'onStateCommitted',
-    previousDb,
-    newDb,
+    previousState,
+    newState,
     state.committedRevision,
   );
   if (state.flushScheduled) return state.committedRevision;
@@ -117,38 +117,45 @@ export function updateAppDbForKernel<T = Record<string, any>>(
   return state.committedRevision;
 }
 
-/** @internal Publish one runtime's latest db generation synchronously. */
+/** @internal Publish one runtime's latest state generation synchronously. */
 export function flushSubscriptionsForKernel(runtime: RuntimeKernel): void {
-  const state = getAppDbState(runtime);
-  if (state.renderDb === state.appDb && state.publishedRevision === state.committedRevision) return;
+  const state = getStateStore(runtime);
+  if (state.renderState === state.appState && state.publishedRevision === state.committedRevision)
+    return;
   assertPublicationAllowedForKernel(runtime);
-  const oldDb = state.renderDb;
-  const newDb = state.appDb;
+  const oldState = state.renderState;
+  const newState = state.appState;
   const targetRevision = state.committedRevision;
-  state.renderDb = newDb;
+  state.renderState = newState;
   const recalculated = publishSubscriptionsForKernel(
     runtime,
-    collectChangedRoots(runtime, oldDb, newDb),
+    collectChangedRoots(runtime, oldState, newState),
   );
   state.publishedRevision = targetRevision;
-  notifyRuntimeLifecycleForKernel(runtime, 'onStatePublished', newDb, targetRevision, recalculated);
+  notifyRuntimeLifecycleForKernel(
+    runtime,
+    'onStatePublished',
+    newState,
+    targetRevision,
+    recalculated,
+  );
 }
 
-/** @internal Return whether one runtime still has an unflushed db generation. */
-export function hasPendingDbFlushForKernel(runtime: RuntimeKernel): boolean {
-  const state = getAppDbState(runtime);
+/** @internal Return whether one runtime still has an unflushed state generation. */
+export function hasPendingStateFlushForKernel(runtime: RuntimeKernel): boolean {
+  const state = getStateStore(runtime);
   return state.publishedRevision !== state.committedRevision;
 }
 
 function collectChangedRoots(
   runtime: RuntimeKernel,
-  oldDb: any,
-  newDb: any,
+  oldState: any,
+  newState: any,
 ): SubscriptionNode<any>[] {
   const dirtyRoots: SubscriptionNode<any>[] = [];
-  const keys = new Set([...Object.keys(oldDb), ...Object.keys(newDb)]);
+  const keys = new Set([...Object.keys(oldState), ...Object.keys(newState)]);
   for (const key of keys) {
-    if (Object.is(oldDb[key], newDb[key])) continue;
+    if (Object.is(oldState[key], newState[key])) continue;
 
     const subId = getRootSubIdBySourceForKernel(runtime, key);
     if (subId === undefined) continue;

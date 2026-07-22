@@ -4,12 +4,12 @@ import { PERSIST_IDS, memoryStorageAdapter, persist } from '@flexsurfer/reflex-p
 import type { PersistContracts, PersistStatus } from '@flexsurfer/reflex-persist';
 
 interface AppContracts extends ReflexContracts {
-  readonly db: { readonly count: number };
+  readonly state: { readonly count: number };
   readonly events: { readonly increment: [] };
 }
 
 type Contracts = PersistContracts<AppContracts>;
-const runtime = createReflexRuntime<Contracts>({ initialDb: { count: 0 } });
+const runtime = createReflexRuntime<Contracts>({ initialState: { count: 0 } });
 const handle = persist(runtime, {
   storage: memoryStorageAdapter(),
   keys: [{ key: 'count', serialize: (count) => count, deserialize: Number }],

@@ -1,5 +1,5 @@
 import { mergeTraceForKernel } from '../core/tracing';
-import { getAppDbForKernel } from '../runtime/app-db';
+import { getStateForKernel } from '../runtime/state';
 import { getHandlerForKernel } from '../runtime/handlers';
 import type { RuntimeKernel } from '../runtime/kernel';
 import { reportRuntimeLifecycleErrorForKernel } from '../runtime/lifecycle';
@@ -7,7 +7,7 @@ import { reportRuntimeLifecycleErrorForKernel } from '../runtime/lifecycle';
 import type {
   CoEffects,
   Context,
-  Db,
+  State,
   ErrorHandler,
   EventVector,
   Interceptor,
@@ -42,7 +42,7 @@ export function executeForKernel(
   event: EventVector,
   interceptors: Interceptor[],
 ): Context {
-  const context = createContext(event, interceptors, getAppDbForKernel<Db>(runtime));
+  const context = createContext(event, interceptors, getStateForKernel<State>(runtime));
   const errorHandler: ErrorHandler | undefined = getHandlerForKernel(
     runtime,
     ERROR_HANDLER_KIND,
@@ -179,15 +179,19 @@ function changeDirection(context: Context): Context {
   };
 }
 
-function createContext(event: EventVector, interceptors: Interceptor[], previousDb: Db): Context {
+function createContext(
+  event: EventVector,
+  interceptors: Interceptor[],
+  previousState: State,
+): Context {
   const coeffects: CoEffects<Record<string, any>> = {
     event,
-    draftDb: {},
+    draftState: {},
   };
 
   return {
     coeffects,
-    previousDb,
+    previousState,
     effects: [],
     queue: [...interceptors],
     stack: [],

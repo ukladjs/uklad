@@ -1,5 +1,5 @@
 import type {
-  ContractDb,
+  ContractState,
   DefaultReflexContracts,
   ReflexContracts,
   ReflexRuntime,
@@ -25,7 +25,7 @@ import {
   type TerminalStatus,
 } from './protocol';
 import type {
-  AnyDb,
+  AnyState,
   AsyncPersistStorage,
   PersistDiagnostic,
   PersistErrorCode,
@@ -59,7 +59,7 @@ const EFFECT_AUTHORIZATION = '__reflexPersistAuthorization';
 /** Attach one persistence module to a runtime. */
 export function persist<TContracts extends ReflexContracts>(
   targetRuntime: ReflexRuntime<TContracts>,
-  options: PersistOptions<ContractDb<TContracts>>,
+  options: PersistOptions<ContractState<TContracts>>,
 ): PersistHandle {
   if (typeof targetRuntime !== 'object' || targetRuntime === null) {
     throw new Error('[reflex-persist] persist() requires a Reflex runtime.');
@@ -70,7 +70,7 @@ export function persist<TContracts extends ReflexContracts>(
     throw new Error('[reflex-persist] A persistence module is already attached to this runtime.');
   }
 
-  const normalized = normalizeOptions(options as unknown as PersistOptions<AnyDb>);
+  const normalized = normalizeOptions(options as unknown as PersistOptions<AnyState>);
   const runtime = targetRuntime as unknown as Runtime;
   assertProtocolAvailable(runtime, normalized.storage.sync === true);
 
@@ -262,7 +262,7 @@ export function persist<TContracts extends ReflexContracts>(
     return { rawByKey, diagnostics };
   };
 
-  const applySnapshot = (draftDb: AnyDb, snapshot: HydrationSnapshot): PersistEffect[] => {
+  const applySnapshot = (draftState: AnyState, snapshot: HydrationSnapshot): PersistEffect[] => {
     const diagnostics = [...snapshot.diagnostics];
     const staged: StagedEntry[] = [];
 
@@ -278,10 +278,10 @@ export function persist<TContracts extends ReflexContracts>(
       else staged.push(result);
     }
 
-    for (const entry of staged) draftDb[entry.key] = entry.value;
+    for (const entry of staged) draftState[entry.key] = entry.value;
 
     const status: TerminalStatus = diagnostics.length === 0 ? 'hydrated' : 'failed';
-    draftDb[PERSIST_IDS.STATUS] = status;
+    draftState[PERSIST_IDS.STATUS] = status;
 
     const effects: PersistEffect[] = diagnostics.map((value) => effect(PERSIST_IDS.REPORT, value));
     // Fail closed: partial good data may publish, but no migration is rewritten
@@ -315,7 +315,7 @@ export function persist<TContracts extends ReflexContracts>(
     const config = configByKey.get(key);
     if (!config) return;
 
-    const value = (runtime.getAppDb() as AnyDb)[key];
+    const value = (runtime.getState() as AnyState)[key];
     if (value === undefined) {
       // A missing root means "no stored entry". A serializer returning
       // undefined, in contrast, is an invalid serialization below.
@@ -397,11 +397,11 @@ export function persist<TContracts extends ReflexContracts>(
       scope.regSub(PERSIST_IDS.STATUS, PERSIST_IDS.STATUS);
       scope.regEvent(
         PERSIST_IDS.ATTACH,
-        ({ draftDb }, _payload: unknown, authorization: unknown) => {
+        ({ draftState }, _payload: unknown, authorization: unknown) => {
           if (!consumeEventAuthorization(authorization)) {
             return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
           }
-          (draftDb as AnyDb)[PERSIST_IDS.STATUS] = 'idle';
+          (draftState as AnyState)[PERSIST_IDS.STATUS] = 'idle';
           return undefined;
         },
       );
@@ -419,16 +419,16 @@ export function persist<TContracts extends ReflexContracts>(
           (coeffects) => {
             if (lifecycleState !== 'idle') return [effect(PERSIST_IDS.SETTLE, {})];
             return applySnapshot(
-              coeffects.draftDb as AnyDb,
+              coeffects.draftState as AnyState,
               coeffects[PERSIST_IDS.SNAPSHOT] as HydrationSnapshot,
             );
           },
           { coeffects: [[PERSIST_IDS.SNAPSHOT]] },
         );
       } else {
-        scope.regEvent(PERSIST_IDS.HYDRATE, ({ draftDb }, request: unknown) => {
+        scope.regEvent(PERSIST_IDS.HYDRATE, ({ draftState }, request: unknown) => {
           if (lifecycleState !== 'idle') return [effect(PERSIST_IDS.SETTLE, {})];
-          (draftDb as AnyDb)[PERSIST_IDS.STATUS] = 'hydrating';
+          (draftState as AnyState)[PERSIST_IDS.STATUS] = 'hydrating';
           return [effect(PERSIST_IDS.READ, { request })];
         });
       }
@@ -465,7 +465,7 @@ export function persist<TContracts extends ReflexContracts>(
       });
       scope.regEvent(
         PERSIST_IDS.LOADED,
-        ({ draftDb }, snapshot: unknown, authorization: unknown) => {
+        ({ draftState }, snapshot: unknown, authorization: unknown) => {
           if (!consumeEventAuthorization(authorization)) {
             return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
           }
@@ -473,33 +473,36 @@ export function persist<TContracts extends ReflexContracts>(
             return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
           }
           if (!isHydrationSnapshot(snapshot, keyConfigs)) {
-            (draftDb as AnyDb)[PERSIST_IDS.STATUS] = 'failed';
+            (draftState as AnyState)[PERSIST_IDS.STATUS] = 'failed';
             return [
               effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle')),
               effect(PERSIST_IDS.COMPLETE, { status: 'failed' } satisfies CompletionPayload),
             ];
           }
-          return applySnapshot(draftDb as AnyDb, snapshot);
+          return applySnapshot(draftState as AnyState, snapshot);
         },
       );
-      scope.regEvent(PERSIST_IDS.FAILED, ({ draftDb }, value: unknown, authorization: unknown) => {
-        if (!consumeEventAuthorization(authorization)) {
-          return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
-        }
-        if (lifecycleState !== 'idle' && lifecycleState !== 'hydrating') {
-          return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
-        }
-        const reported = isPersistDiagnosticValue(value)
-          ? value
-          : diagnostic('invalid-completion', 'lifecycle');
-        (draftDb as AnyDb)[PERSIST_IDS.STATUS] = 'failed';
-        return [
-          effect(PERSIST_IDS.REPORT, reported),
-          effect(PERSIST_IDS.COMPLETE, { status: 'failed' } satisfies CompletionPayload),
-        ];
-      });
+      scope.regEvent(
+        PERSIST_IDS.FAILED,
+        ({ draftState }, value: unknown, authorization: unknown) => {
+          if (!consumeEventAuthorization(authorization)) {
+            return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
+          }
+          if (lifecycleState !== 'idle' && lifecycleState !== 'hydrating') {
+            return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
+          }
+          const reported = isPersistDiagnosticValue(value)
+            ? value
+            : diagnostic('invalid-completion', 'lifecycle');
+          (draftState as AnyState)[PERSIST_IDS.STATUS] = 'failed';
+          return [
+            effect(PERSIST_IDS.REPORT, reported),
+            effect(PERSIST_IDS.COMPLETE, { status: 'failed' } satisfies CompletionPayload),
+          ];
+        },
+      );
 
-      scope.regEvent(PERSIST_IDS.PURGE, ({ draftDb }, request: unknown) => {
+      scope.regEvent(PERSIST_IDS.PURGE, ({ draftState }, request: unknown) => {
         if (purgeInFlight) {
           markPurgeAccepted(request);
           return;
@@ -510,7 +513,7 @@ export function persist<TContracts extends ReflexContracts>(
             effect(PERSIST_IDS.REJECT_PURGE, { request }),
           ];
         }
-        (draftDb as AnyDb)[PERSIST_IDS.STATUS] = 'hydrating';
+        (draftState as AnyState)[PERSIST_IDS.STATUS] = 'hydrating';
         return [effect(PERSIST_IDS.REMOVE, { request })];
       });
       scope.regEffect(PERSIST_IDS.REMOVE, (payload: unknown) => {
@@ -528,28 +531,31 @@ export function persist<TContracts extends ReflexContracts>(
           }
         });
       });
-      scope.regEvent(PERSIST_IDS.PURGED, ({ draftDb }, value: unknown, authorization: unknown) => {
-        if (!consumeEventAuthorization(authorization)) {
-          return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
-        }
-        if (!purgeInFlight) {
-          return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
-        }
-        const diagnostics = isPersistDiagnosticArray(value)
-          ? value
-          : [diagnostic('invalid-completion', 'lifecycle')];
-        const status: TerminalStatus = diagnostics.length === 0 ? 'hydrated' : 'failed';
-        (draftDb as AnyDb)[PERSIST_IDS.STATUS] = status;
-        return [
-          ...diagnostics.map((diagnosticValue): PersistEffect =>
-            effect(PERSIST_IDS.REPORT, diagnosticValue),
-          ),
-          effect(PERSIST_IDS.COMPLETE_PURGE, {
-            status,
-            diagnostics,
-          } satisfies PurgeCompletionPayload),
-        ];
-      });
+      scope.regEvent(
+        PERSIST_IDS.PURGED,
+        ({ draftState }, value: unknown, authorization: unknown) => {
+          if (!consumeEventAuthorization(authorization)) {
+            return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
+          }
+          if (!purgeInFlight) {
+            return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
+          }
+          const diagnostics = isPersistDiagnosticArray(value)
+            ? value
+            : [diagnostic('invalid-completion', 'lifecycle')];
+          const status: TerminalStatus = diagnostics.length === 0 ? 'hydrated' : 'failed';
+          (draftState as AnyState)[PERSIST_IDS.STATUS] = status;
+          return [
+            ...diagnostics.map((diagnosticValue): PersistEffect =>
+              effect(PERSIST_IDS.REPORT, diagnosticValue),
+            ),
+            effect(PERSIST_IDS.COMPLETE_PURGE, {
+              status,
+              diagnostics,
+            } satisfies PurgeCompletionPayload),
+          ];
+        },
+      );
 
       scope.regGlobalInterceptor({
         id: PERSIST_IDS.WRITER,
@@ -557,18 +563,18 @@ export function persist<TContracts extends ReflexContracts>(
         after: (context) => {
           const [eventId] = context.coeffects.event;
           if (isPersistProtocolEvent(eventId)) return context;
-          const newDb = context.newDb as AnyDb | undefined;
+          const newState = context.newState as AnyState | undefined;
           if (
-            newDb === undefined ||
+            newState === undefined ||
             lifecycleState !== 'hydrated' ||
-            newDb[PERSIST_IDS.STATUS] !== 'hydrated'
+            newState[PERSIST_IDS.STATUS] !== 'hydrated'
           ) {
             return context;
           }
 
-          const previousDb = context.previousDb as AnyDb;
+          const previousState = context.previousState as AnyState;
           for (const { key } of keyConfigs) {
-            if (!Object.is(newDb[key], previousDb[key])) {
+            if (!Object.is(newState[key], previousState[key])) {
               context.effects.push(effect(PERSIST_IDS.WRITE, { key }));
             }
           }
@@ -643,7 +649,7 @@ export function persist<TContracts extends ReflexContracts>(
     });
 
     // Publish a fresh attachment-scoped gate. This closes writes even when a
-    // previous disposed attachment left a terminal status in app-db.
+    // previous disposed attachment left a terminal status in state.
     dispatchSyncAuthorized(PERSIST_IDS.ATTACH, {});
   } catch (error) {
     try {

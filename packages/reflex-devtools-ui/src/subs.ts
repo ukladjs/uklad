@@ -2,7 +2,7 @@ import type { TraceItem } from "./types/Trace";
 import { regSub } from './runtime';
 
 // Subscriptions for devtools state
-regSub('db');
+regSub('state');
 regSub('activeSubs');
 regSub('handlerKeys');
 regSub('handlerUsage');

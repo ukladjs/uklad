@@ -3,8 +3,8 @@ import {
   clearGlobalInterceptors,
   dispatch,
   dispatchSync,
-  getAppDb,
-  initAppDb,
+  getState,
+  initState,
   regCoeffect,
   regEffect,
   regEvent,
@@ -33,94 +33,94 @@ describe('regEvent', () => {
     registerHandler('error', 'event-handler', () => undefined);
   });
 
-  describe('Initialize db', () => {
-    it('should handle db initialized', () => {
-      initAppDb({ counter: 0, items: [] });
-      expect(getAppDb()).toEqual(expect.objectContaining({ counter: 0, items: [] }));
+  describe('Initialize state', () => {
+    it('should handle state initialized', () => {
+      initState({ counter: 0, items: [] });
+      expect(getState()).toEqual(expect.objectContaining({ counter: 0, items: [] }));
     });
   });
 
   describe('Event dispatch async and handling', () => {
     it('should handle async event dispatch with queue management', async () => {
-      const initialDb = getAppDb();
-      expect(initialDb.counter).toBe(0);
+      const initialState = getState();
+      expect(initialState.counter).toBe(0);
 
-      regEvent('incrementCounter', ({ draftDb }) => {
-        draftDb.counter += 1;
+      regEvent('incrementCounter', ({ draftState }) => {
+        draftState.counter += 1;
       });
 
       dispatch(['incrementCounter']);
 
       // dispatch queues work; it must not commit synchronously.
-      expect(getAppDb().counter).toBe(0);
+      expect(getState().counter).toBe(0);
 
       await waitForScheduled();
 
-      expect(getAppDb().counter).toBe(1);
+      expect(getState().counter).toBe(1);
     });
   });
 
   describe('Event dispatch async and handling with Immer', () => {
-    it('should handle async event dispatch with Immer dbUpdate effect', async () => {
-      const initialDb = getAppDb();
-      const initialCounter = initialDb.counter;
+    it('should handle async event dispatch with Immer stateUpdate effect', async () => {
+      const initialState = getState();
+      const initialCounter = initialState.counter;
 
-      const originalDbReference = initialDb;
+      const originalStateReference = initialState;
 
-      regEvent('incrementCounterImmer', ({ draftDb }) => {
-        draftDb.counter += 1;
-        draftDb.lastUpdated = Date.now();
+      regEvent('incrementCounterImmer', ({ draftState }) => {
+        draftState.counter += 1;
+        draftState.lastUpdated = Date.now();
       });
 
       dispatch(['incrementCounterImmer']);
 
       // The queued handler must not mutate the current snapshot.
-      expect(getAppDb().counter).toBe(initialCounter);
+      expect(getState().counter).toBe(initialCounter);
 
       await waitForScheduled();
 
-      const updatedDb = getAppDb();
+      const updatedState = getState();
 
-      expect(updatedDb.counter).toBe(initialCounter + 1);
-      expect(updatedDb.lastUpdated).toBeDefined();
+      expect(updatedState.counter).toBe(initialCounter + 1);
+      expect(updatedState.lastUpdated).toBeDefined();
 
-      expect(originalDbReference.counter).toBe(initialCounter);
-      expect(originalDbReference.lastUpdated).toBeUndefined();
+      expect(originalStateReference.counter).toBe(initialCounter);
+      expect(originalStateReference.lastUpdated).toBeUndefined();
 
-      expect(updatedDb).not.toBe(originalDbReference);
+      expect(updatedState).not.toBe(originalStateReference);
     });
 
     it('should handle async event dispatch with complex Immer mutations', async () => {
-      const initialDb = getAppDb();
+      const initialState = getState();
 
-      regEvent('complexImmerUpdate', ({ draftDb }) => {
-        draftDb.counter += 5;
+      regEvent('complexImmerUpdate', ({ draftState }) => {
+        draftState.counter += 5;
 
-        if (!draftDb.todos) draftDb.todos = [];
-        draftDb.todos.push({ id: 1, text: 'Async todo 1', completed: false });
-        draftDb.todos.push({ id: 2, text: 'Async todo 2', completed: true });
+        if (!draftState.todos) draftState.todos = [];
+        draftState.todos.push({ id: 1, text: 'Async todo 1', completed: false });
+        draftState.todos.push({ id: 2, text: 'Async todo 2', completed: true });
 
-        if (!draftDb.user) draftDb.user = {};
-        draftDb.user.lastAction = 'complex-update';
-        draftDb.user.actionCount = (draftDb.user.actionCount || 0) + 1;
+        if (!draftState.user) draftState.user = {};
+        draftState.user.lastAction = 'complex-update';
+        draftState.user.actionCount = (draftState.user.actionCount || 0) + 1;
       });
 
       dispatch(['complexImmerUpdate']);
 
-      expect(getAppDb().counter).toBe(initialDb.counter);
+      expect(getState().counter).toBe(initialState.counter);
 
       await waitForScheduled();
 
-      const updatedDb = getAppDb();
+      const updatedState = getState();
 
-      expect(updatedDb.counter).toBe(initialDb.counter + 5);
-      expect(updatedDb.todos).toHaveLength(2);
-      expect(updatedDb.todos[0]).toEqual({ id: 1, text: 'Async todo 1', completed: false });
-      expect(updatedDb.todos[1]).toEqual({ id: 2, text: 'Async todo 2', completed: true });
-      expect(updatedDb.user.lastAction).toBe('complex-update');
-      expect(updatedDb.user.actionCount).toBe(1);
+      expect(updatedState.counter).toBe(initialState.counter + 5);
+      expect(updatedState.todos).toHaveLength(2);
+      expect(updatedState.todos[0]).toEqual({ id: 1, text: 'Async todo 1', completed: false });
+      expect(updatedState.todos[1]).toEqual({ id: 2, text: 'Async todo 2', completed: true });
+      expect(updatedState.user.lastAction).toBe('complex-update');
+      expect(updatedState.user.actionCount).toBe(1);
 
-      expect(updatedDb).not.toBe(initialDb);
+      expect(updatedState).not.toBe(initialState);
     });
 
     it('should allow effects through fx properly', async () => {
@@ -129,8 +129,8 @@ describe('regEvent', () => {
         capturedEvents.push('captured');
       });
 
-      regEvent('effectsTest', ({ draftDb }) => {
-        draftDb.fxTestValue = 'updated-via-fx';
+      regEvent('effectsTest', ({ draftState }) => {
+        draftState.fxTestValue = 'updated-via-fx';
         return [['dispatch', ['captureTestEvent']]];
       });
 
@@ -143,7 +143,7 @@ describe('regEvent', () => {
 
         const checkForCompletion = () => {
           if (resolved) return;
-          if (capturedEvents.length > 0 && getAppDb().fxTestValue === 'updated-via-fx') {
+          if (capturedEvents.length > 0 && getState().fxTestValue === 'updated-via-fx') {
             resolved = true;
             timeouts.forEach(clearTimeout);
             resolve();
@@ -165,9 +165,9 @@ describe('regEvent', () => {
         );
       });
 
-      const updatedDb = getAppDb();
+      const updatedState = getState();
 
-      expect(updatedDb.fxTestValue).toBe('updated-via-fx');
+      expect(updatedState.fxTestValue).toBe('updated-via-fx');
 
       expect(capturedEvents).toContain('captured');
     });
@@ -189,118 +189,118 @@ describe('Type-safe Event Handlers', () => {
         notifications: true,
       },
     };
-    initAppDb<EventTestState>(initialState);
+    initState<EventTestState>(initialState);
   });
 
   describe('Type-safe event registration and handling', () => {
     it('should handle type-safe counter increment', async () => {
-      regEvent<EventTestState>('increment-counter', ({ draftDb }) => {
-        const currentCounter = draftDb.counter;
+      regEvent<EventTestState>('increment-counter', ({ draftState }) => {
+        const currentCounter = draftState.counter;
         expect(typeof currentCounter).toBe('number');
-        draftDb.counter += 1;
+        draftState.counter += 1;
       });
 
       dispatch(['increment-counter']);
 
       await waitForScheduled();
 
-      const db = getAppDb<EventTestState>();
-      expect(db.counter).toBe(1);
+      const state = getState<EventTestState>();
+      expect(state.counter).toBe(1);
     });
 
     it('should handle type-safe array operations', async () => {
-      regEvent<EventTestState>('add-message', ({ draftDb }, ...params) => {
+      regEvent<EventTestState>('add-message', ({ draftState }, ...params) => {
         const [message] = params as [string];
-        draftDb.messages.push(message);
+        draftState.messages.push(message);
       });
 
       dispatch(['add-message', 'Hello World']);
       await waitForScheduled();
 
-      const db = getAppDb<EventTestState>();
-      expect(db.messages).toContain('Hello World');
-      expect(db.messages).toHaveLength(1);
+      const state = getState<EventTestState>();
+      expect(state.messages).toContain('Hello World');
+      expect(state.messages).toHaveLength(1);
     });
 
     it('should handle type-safe nested object updates', async () => {
-      regEvent<EventTestState>('update-user', ({ draftDb }, ...params) => {
+      regEvent<EventTestState>('update-user', ({ draftState }, ...params) => {
         const [name, isActive] = params as [string, boolean];
-        draftDb.user.name = name;
-        draftDb.user.isActive = isActive;
+        draftState.user.name = name;
+        draftState.user.isActive = isActive;
       });
 
       dispatch(['update-user', 'John Doe', false]);
       await waitForScheduled();
 
-      const db = getAppDb<EventTestState>();
-      expect(db.user.name).toBe('John Doe');
-      expect(db.user.isActive).toBe(false);
-      expect(db.user.id).toBe(1);
+      const state = getState<EventTestState>();
+      expect(state.user.name).toBe('John Doe');
+      expect(state.user.isActive).toBe(false);
+      expect(state.user.id).toBe(1);
     });
 
     it('should handle type-safe union type fields', async () => {
-      regEvent<EventTestState>('toggle-theme', ({ draftDb }) => {
-        draftDb.settings.theme = draftDb.settings.theme === 'light' ? 'dark' : 'light';
+      regEvent<EventTestState>('toggle-theme', ({ draftState }) => {
+        draftState.settings.theme = draftState.settings.theme === 'light' ? 'dark' : 'light';
       });
 
       dispatch(['toggle-theme']);
       await waitForScheduled();
 
-      let db = getAppDb<EventTestState>();
-      expect(db.settings.theme).toBe('dark');
+      let state = getState<EventTestState>();
+      expect(state.settings.theme).toBe('dark');
 
       dispatch(['toggle-theme']);
       await waitForScheduled();
 
-      db = getAppDb<EventTestState>();
-      expect(db.settings.theme).toBe('light');
+      state = getState<EventTestState>();
+      expect(state.settings.theme).toBe('light');
     });
 
     it('should handle complex type-safe updates', async () => {
-      regEvent<EventTestState>('complex-update', ({ draftDb }, ...params) => {
+      regEvent<EventTestState>('complex-update', ({ draftState }, ...params) => {
         const [userId, userName, messages] = params as [number, string, string[]];
-        draftDb.user.id = userId;
-        draftDb.user.name = userName;
-        draftDb.messages = [...draftDb.messages, ...messages];
-        draftDb.counter += messages.length;
-        draftDb.settings.notifications = !draftDb.settings.notifications;
+        draftState.user.id = userId;
+        draftState.user.name = userName;
+        draftState.messages = [...draftState.messages, ...messages];
+        draftState.counter += messages.length;
+        draftState.settings.notifications = !draftState.settings.notifications;
       });
 
       dispatch(['complex-update', 42, 'Complex User', ['msg1', 'msg2', 'msg3']]);
       await waitForScheduled();
 
-      const db = getAppDb<EventTestState>();
-      expect(db.user.id).toBe(42);
-      expect(db.user.name).toBe('Complex User');
-      expect(db.messages).toEqual(['msg1', 'msg2', 'msg3']);
-      expect(db.counter).toBe(3);
-      expect(db.settings.notifications).toBe(false);
+      const state = getState<EventTestState>();
+      expect(state.user.id).toBe(42);
+      expect(state.user.name).toBe('Complex User');
+      expect(state.messages).toEqual(['msg1', 'msg2', 'msg3']);
+      expect(state.counter).toBe(3);
+      expect(state.settings.notifications).toBe(false);
     });
 
     it('should maintain type safety with multiple event handlers', async () => {
-      regEvent<EventTestState>('multi-test-1', ({ draftDb }) => {
-        draftDb.counter += 10;
+      regEvent<EventTestState>('multi-test-1', ({ draftState }) => {
+        draftState.counter += 10;
       });
 
-      regEvent<EventTestState>('multi-test-2', ({ draftDb }) => {
-        draftDb.messages.push('From handler 2');
+      regEvent<EventTestState>('multi-test-2', ({ draftState }) => {
+        draftState.messages.push('From handler 2');
       });
 
-      regEvent<EventTestState>('multi-test-3', ({ draftDb }) => {
-        draftDb.user.isActive = !draftDb.user.isActive;
+      regEvent<EventTestState>('multi-test-3', ({ draftState }) => {
+        draftState.user.isActive = !draftState.user.isActive;
       });
 
       dispatch(['multi-test-1']);
       dispatch(['multi-test-2']);
       dispatch(['multi-test-3']);
 
-      // All three queued events must drain before reading the database.
+      // All three queued events must drain before reading the state.
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      const db = getAppDb<EventTestState>();
-      expect(db.counter).toBe(10);
-      expect(db.messages).toContain('From handler 2');
-      expect(db.user.isActive).toBe(false);
+      const state = getState<EventTestState>();
+      expect(state.counter).toBe(10);
+      expect(state.messages).toContain('From handler 2');
+      expect(state.user.isActive).toBe(false);
     });
   });
 
@@ -308,13 +308,13 @@ describe('Type-safe Event Handlers', () => {
     it('should handle type-safe events with fx effects', async () => {
       let fxExecuted = false;
 
-      regEvent<EventTestState>('fx-helper', ({ draftDb }) => {
+      regEvent<EventTestState>('fx-helper', ({ draftState }) => {
         fxExecuted = true;
-        draftDb.messages.push('FX executed');
+        draftState.messages.push('FX executed');
       });
 
-      regEvent<EventTestState>('main-with-effects', ({ draftDb }) => {
-        draftDb.counter += 5;
+      regEvent<EventTestState>('main-with-effects', ({ draftState }) => {
+        draftState.counter += 5;
         return [['dispatch', ['fx-helper']]];
       });
 
@@ -323,22 +323,22 @@ describe('Type-safe Event Handlers', () => {
       // The dispatch effect requires another queue cycle.
       await new Promise((resolve) => setTimeout(resolve, 20));
 
-      const db = getAppDb<EventTestState>();
-      expect(db.counter).toBe(5);
-      expect(db.messages).toContain('FX executed');
+      const state = getState<EventTestState>();
+      expect(state.counter).toBe(5);
+      expect(state.messages).toContain('FX executed');
       expect(fxExecuted).toBe(true);
     });
   });
 
   describe('Type-safe backward compatibility', () => {
     it('should allow mixing typed and untyped event handlers', async () => {
-      regEvent<EventTestState>('typed-handler', ({ draftDb }) => {
-        draftDb.counter += 1;
+      regEvent<EventTestState>('typed-handler', ({ draftState }) => {
+        draftState.counter += 1;
       });
 
-      regEvent('untyped-handler', ({ draftDb }) => {
-        (draftDb as any).counter += 10;
-        (draftDb as any).untypedField = 'added';
+      regEvent('untyped-handler', ({ draftState }) => {
+        (draftState as any).counter += 10;
+        (draftState as any).untypedField = 'added';
       });
 
       dispatch(['typed-handler']);
@@ -346,28 +346,28 @@ describe('Type-safe Event Handlers', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      const db = getAppDb<EventTestState>();
-      expect(db.counter).toBe(11);
-      expect((db as any).untypedField).toBe('added');
+      const state = getState<EventTestState>();
+      expect(state.counter).toBe(11);
+      expect((state as any).untypedField).toBe('added');
     });
   });
 });
 
 describe('regEvent with cofx', () => {
   beforeEach(() => {
-    initAppDb({ counter: 0, messages: [], timestamp: 0, randomValue: 0 });
+    initState({ counter: 0, messages: [], timestamp: 0, randomValue: 0 });
   });
 
   describe('Basic cofx functionality', () => {
     it('should inject built-in cofx like now', async () => {
       regEvent(
         'test-now-cofx',
-        ({ draftDb, now }) => {
+        ({ draftState, now }) => {
           expect(now).toBeDefined();
           expect(typeof now).toBe('number');
           expect(now).toBeGreaterThan(0);
 
-          (draftDb as any).timestamp = now;
+          (draftState as any).timestamp = now;
         },
         [['now']],
       );
@@ -375,20 +375,20 @@ describe('regEvent with cofx', () => {
       dispatch(['test-now-cofx']);
       await waitForScheduled();
 
-      const db = getAppDb();
-      expect(db.timestamp).toBeGreaterThan(0);
+      const state = getState();
+      expect(state.timestamp).toBeGreaterThan(0);
     });
 
     it('should inject built-in cofx like random', async () => {
       regEvent(
         'test-random-cofx',
-        ({ draftDb, random }) => {
+        ({ draftState, random }) => {
           expect(random).toBeDefined();
           expect(typeof random).toBe('number');
           expect(random).toBeGreaterThanOrEqual(0);
           expect(random).toBeLessThan(1);
 
-          (draftDb as any).randomValue = random;
+          (draftState as any).randomValue = random;
         },
         [['random']],
       );
@@ -396,26 +396,26 @@ describe('regEvent with cofx', () => {
       dispatch(['test-random-cofx']);
       await waitForScheduled();
 
-      const db = getAppDb();
-      expect(db.randomValue).toBeGreaterThanOrEqual(0);
-      expect(db.randomValue).toBeLessThan(1);
+      const state = getState();
+      expect(state.randomValue).toBeGreaterThanOrEqual(0);
+      expect(state.randomValue).toBeLessThan(1);
     });
 
-    it('should inject db cofx', async () => {
-      const initialDb = getAppDb();
+    it('should inject state cofx', async () => {
+      const initialState = getState();
 
-      regEvent('test-db-cofx', ({ draftDb }) => {
-        expect(draftDb).toBeDefined();
-        expect(draftDb).toEqual(initialDb);
+      regEvent('test-state-cofx', ({ draftState }) => {
+        expect(draftState).toBeDefined();
+        expect(draftState).toEqual(initialState);
 
-        (draftDb as any).counter = draftDb.counter + 5;
+        (draftState as any).counter = draftState.counter + 5;
       });
 
-      dispatch(['test-db-cofx']);
+      dispatch(['test-state-cofx']);
       await waitForScheduled();
 
-      const db = getAppDb();
-      expect(db.counter).toBe(5);
+      const state = getState();
+      expect(state.counter).toBe(5);
     });
   });
 
@@ -423,14 +423,14 @@ describe('regEvent with cofx', () => {
     it('should inject multiple cofx in a single registration', async () => {
       regEvent(
         'test-multiple-cofx',
-        ({ draftDb, now, random }) => {
+        ({ draftState, now, random }) => {
           expect(now).toBeDefined();
           expect(random).toBeDefined();
-          expect(draftDb).toBeDefined();
+          expect(draftState).toBeDefined();
 
-          (draftDb as any).timestamp = now;
-          (draftDb as any).randomValue = random;
-          (draftDb as any).counter = draftDb.counter + 1;
+          (draftState as any).timestamp = now;
+          (draftState as any).randomValue = random;
+          (draftState as any).counter = draftState.counter + 1;
         },
         [['now'], ['random']],
       );
@@ -438,10 +438,10 @@ describe('regEvent with cofx', () => {
       dispatch(['test-multiple-cofx']);
       await waitForScheduled();
 
-      const db = getAppDb();
-      expect(db.timestamp).toBeGreaterThan(0);
-      expect(db.randomValue).toBeGreaterThanOrEqual(0);
-      expect(db.counter).toBe(1);
+      const state = getState();
+      expect(state.timestamp).toBeGreaterThan(0);
+      expect(state.randomValue).toBeGreaterThanOrEqual(0);
+      expect(state.counter).toBe(1);
     });
   });
 
@@ -467,9 +467,9 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-registration-options',
-        ({ draftDb, now }) => {
+        ({ draftState, now }) => {
           executionOrder.push('handler');
-          draftDb.timestamp = now;
+          draftState.timestamp = now;
         },
         options,
       );
@@ -477,7 +477,7 @@ describe('regEvent with cofx', () => {
       dispatch(['test-registration-options']);
       await waitForScheduled();
 
-      expect(getAppDb().timestamp).toBeGreaterThan(0);
+      expect(getState().timestamp).toBeGreaterThan(0);
       expect(executionOrder).toEqual(['before', 'handler', 'after']);
     });
 
@@ -503,12 +503,12 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-cofx-with-interceptors',
-        ({ draftDb, now }) => {
+        ({ draftState, now }) => {
           expect(now).toBeDefined();
-          expect(draftDb).toBeDefined();
+          expect(draftState).toBeDefined();
 
-          (draftDb as any).timestamp = now;
-          (draftDb as any).counter = draftDb.counter + 10;
+          (draftState as any).timestamp = now;
+          (draftState as any).counter = draftState.counter + 10;
         },
         [['now']],
         [beforeInterceptor, afterInterceptor],
@@ -517,17 +517,17 @@ describe('regEvent with cofx', () => {
       dispatch(['test-cofx-with-interceptors']);
       await waitForScheduled();
 
-      const db = getAppDb();
-      expect(db.timestamp).toBeGreaterThan(0);
-      expect(db.counter).toBe(10);
+      const state = getState();
+      expect(state.timestamp).toBeGreaterThan(0);
+      expect(state.counter).toBe(10);
       expect(beforeCalled).toBe(true);
       expect(afterCalled).toBe(true);
     });
   });
 
   describe('Backward compatibility', () => {
-    it('should commit DB changes when an untyped interceptor omits effects', () => {
-      initAppDb({ counter: 0 });
+    it('should commit STATE changes when an untyped interceptor omits effects', () => {
+      initState({ counter: 0 });
       const legacyInterceptor: Interceptor = {
         id: 'legacy-context-without-effects',
         before: (context) => {
@@ -538,15 +538,15 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-context-without-effects',
-        ({ draftDb }) => {
-          draftDb.counter += 1;
+        ({ draftState }) => {
+          draftState.counter += 1;
         },
         { interceptors: [legacyInterceptor] },
       );
 
       dispatchSync(['test-context-without-effects']);
 
-      expect(getAppDb().counter).toBe(1);
+      expect(getState().counter).toBe(1);
     });
 
     it('should honor fourth-argument interceptors after an empty cofx array', () => {
@@ -561,8 +561,8 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-empty-cofx-with-interceptors',
-        ({ draftDb }) => {
-          draftDb.counter += 1;
+        ({ draftState }) => {
+          draftState.counter += 1;
         },
         [],
         [testInterceptor],
@@ -570,15 +570,15 @@ describe('regEvent with cofx', () => {
 
       dispatchSync(['test-empty-cofx-with-interceptors']);
 
-      expect(getAppDb().counter).toBe(1);
+      expect(getState().counter).toBe(1);
       expect(interceptorCall).toHaveBeenCalledTimes(1);
     });
 
     it('should replace and clear event interceptors when re-registering an id', () => {
       const staleCall = jest.fn();
       const replacementCall = jest.fn();
-      const handler = ({ draftDb }: CoEffects) => {
-        draftDb.counter += 1;
+      const handler = ({ draftState }: CoEffects) => {
+        draftState.counter += 1;
       };
 
       regEvent('test-reregister-interceptors', handler, {
@@ -614,7 +614,7 @@ describe('regEvent with cofx', () => {
 
       expect(staleCall).not.toHaveBeenCalled();
       expect(replacementCall).toHaveBeenCalledTimes(1);
-      expect(getAppDb().counter).toBe(2);
+      expect(getState().counter).toBe(2);
     });
 
     it('should maintain backward compatibility with interceptor-only registration', async () => {
@@ -630,8 +630,8 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-backward-compat',
-        ({ draftDb }) => {
-          (draftDb as any).counter += 1;
+        ({ draftState }) => {
+          (draftState as any).counter += 1;
         },
         [testInterceptor],
       );
@@ -639,21 +639,21 @@ describe('regEvent with cofx', () => {
       dispatch(['test-backward-compat']);
       await waitForScheduled();
 
-      const db = getAppDb();
-      expect(db.counter).toBe(1);
+      const state = getState();
+      expect(state.counter).toBe(1);
       expect(interceptorCalled).toBe(true);
     });
 
     it('should maintain backward compatibility with handler-only registration', async () => {
-      regEvent('test-handler-only', ({ draftDb }) => {
-        (draftDb as any).counter += 2;
+      regEvent('test-handler-only', ({ draftState }) => {
+        (draftState as any).counter += 2;
       });
 
       dispatch(['test-handler-only']);
       await waitForScheduled();
 
-      const db = getAppDb();
-      expect(db.counter).toBe(2);
+      const state = getState();
+      expect(state.counter).toBe(2);
     });
   });
 
@@ -661,8 +661,8 @@ describe('regEvent with cofx', () => {
     it('should warn about invalid cofx specifications', async () => {
       regEvent(
         'test-invalid-cofx',
-        ({ draftDb }) => {
-          (draftDb as any).counter += 1;
+        ({ draftState }) => {
+          (draftState as any).counter += 1;
         },
         [['now', 'extra', 'invalid']],
       );
@@ -683,10 +683,10 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-custom-cofx',
-        ({ draftDb, customValue }) => {
+        ({ draftState, customValue }) => {
           expect(customValue).toBe('default-custom-value');
 
-          (draftDb as any).messages.push(customValue);
+          (draftState as any).messages.push(customValue);
         },
         [['custom-test']],
       );
@@ -694,8 +694,8 @@ describe('regEvent with cofx', () => {
       dispatch(['test-custom-cofx']);
       await waitForScheduled();
 
-      const db = getAppDb();
-      expect(db.messages).toContain('default-custom-value');
+      const state = getState();
+      expect(state.messages).toContain('default-custom-value');
     });
 
     it('should work with custom cofx with values', async () => {
@@ -706,10 +706,10 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-custom-cofx-with-value',
-        ({ draftDb, customValue }) => {
+        ({ draftState, customValue }) => {
           expect(customValue).toBe('processed-test-input');
 
-          (draftDb as any).messages.push(customValue);
+          (draftState as any).messages.push(customValue);
         },
         [['custom-with-value', 'test-input']],
       );
@@ -717,8 +717,8 @@ describe('regEvent with cofx', () => {
       dispatch(['test-custom-cofx-with-value']);
       await waitForScheduled();
 
-      const db = getAppDb();
-      expect(db.messages).toContain('processed-test-input');
+      const state = getState();
+      expect(state.messages).toContain('processed-test-input');
     });
   });
 
@@ -745,17 +745,17 @@ describe('regEvent with cofx', () => {
 
       regGlobalInterceptor(globalInterceptor);
 
-      regEvent('test-global-injection', ({ draftDb, globalData }) => {
+      regEvent('test-global-injection', ({ draftState, globalData }) => {
         expect(globalData).toBe('injected-by-global');
-        (draftDb as any).processedByGlobal = true;
+        (draftState as any).processedByGlobal = true;
       });
 
       dispatch(['test-global-injection']);
       await waitForScheduled();
 
       expect(globalInterceptorCalled).toBe(true);
-      const db = getAppDb();
-      expect(db.processedByGlobal).toBe(true);
+      const state = getState();
+      expect(state.processedByGlobal).toBe(true);
     });
 
     it('should execute multiple global interceptors in order', async () => {
@@ -790,10 +790,10 @@ describe('regEvent with cofx', () => {
       regGlobalInterceptor(globalInterceptor1);
       regGlobalInterceptor(globalInterceptor2);
 
-      regEvent('test-multiple-globals', ({ draftDb, order }) => {
+      regEvent('test-multiple-globals', ({ draftState, order }) => {
         executionOrder.push('handler');
         expect(order).toEqual(['global-1', 'global-2']);
-        (draftDb as any).executionOrder = [...executionOrder];
+        (draftState as any).executionOrder = [...executionOrder];
       });
 
       dispatch(['test-multiple-globals']);
@@ -840,9 +840,9 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-execution-order',
-        ({ draftDb }) => {
+        ({ draftState }) => {
           executionOrder.push('handler');
-          (draftDb as any).counter += 1;
+          (draftState as any).counter += 1;
         },
         [customInterceptor],
       );
@@ -870,20 +870,20 @@ describe('regEvent with cofx', () => {
       };
 
       let secondaryEventCalled = false;
-      regEvent('secondary-event', ({ draftDb }) => {
+      regEvent('secondary-event', ({ draftState }) => {
         secondaryEventCalled = true;
-        (draftDb as any).secondaryProcessed = true;
+        (draftState as any).secondaryProcessed = true;
       });
 
       regGlobalInterceptor(globalInterceptor);
 
-      regEvent('test-fx-modification', ({ draftDb }) => {
-        (draftDb as any).primaryProcessed = true;
+      regEvent('test-fx-modification', ({ draftState }) => {
+        (draftState as any).primaryProcessed = true;
         return [['dispatch', ['primary-effect']]];
       });
 
-      regEvent('primary-effect', ({ draftDb }) => {
-        (draftDb as any).primaryEffectProcessed = true;
+      regEvent('primary-effect', ({ draftState }) => {
+        (draftState as any).primaryEffectProcessed = true;
       });
 
       dispatch(['test-fx-modification']);
@@ -891,30 +891,30 @@ describe('regEvent with cofx', () => {
       // Both dispatch effects enqueue another event cycle.
       await waitForScheduled();
 
-      const db = getAppDb();
-      expect(db.primaryProcessed).toBe(true);
-      expect(db.primaryEffectProcessed).toBe(true);
-      expect(db.secondaryProcessed).toBe(true);
+      const state = getState();
+      expect(state.primaryProcessed).toBe(true);
+      expect(state.primaryEffectProcessed).toBe(true);
+      expect(state.secondaryProcessed).toBe(true);
       expect(secondaryEventCalled).toBe(true);
     });
 
-    it('should expose the final db to global after hooks and commit before appended effects', async () => {
+    it('should expose the final state to global after hooks and commit before appended effects', async () => {
       let committedCounter: number | undefined;
 
       regEffect('observe-committed-counter', () => {
-        committedCounter = getAppDb().counter;
+        committedCounter = getState().counter;
       });
       regGlobalInterceptor({
         id: 'append-post-commit-effect',
         after: (context: Context) => {
-          expect(context.previousDb.counter).toBe(0);
-          expect(context.newDb?.counter).toBe(1);
+          expect(context.previousState.counter).toBe(0);
+          expect(context.newState?.counter).toBe(1);
           context.effects.push(['observe-committed-counter']);
           return context;
         },
       });
-      regEvent('test-post-commit-effect', ({ draftDb }) => {
-        (draftDb as any).counter += 1;
+      regEvent('test-post-commit-effect', ({ draftState }) => {
+        (draftState as any).counter += 1;
       });
 
       dispatch(['test-post-commit-effect']);
@@ -936,13 +936,13 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-global-with-cofx',
-        ({ draftDb, now, globalValue }) => {
+        ({ draftState, now, globalValue }) => {
           expect(now).toBeDefined();
           expect(globalValue).toBe('from-global');
 
-          (draftDb as any).timestamp = now;
-          (draftDb as any).globalValue = globalValue;
-          (draftDb as any).counter += 1;
+          (draftState as any).timestamp = now;
+          (draftState as any).globalValue = globalValue;
+          (draftState as any).counter += 1;
         },
         [['now']],
       );
@@ -950,10 +950,10 @@ describe('regEvent with cofx', () => {
       dispatch(['test-global-with-cofx']);
       await waitForScheduled();
 
-      const db = getAppDb();
-      expect(db.timestamp).toBeGreaterThan(0);
-      expect(db.globalValue).toBe('from-global');
-      expect(db.counter).toBe(1);
+      const state = getState();
+      expect(state.timestamp).toBeGreaterThan(0);
+      expect(state.globalValue).toBe('from-global');
+      expect(state.counter).toBe(1);
     });
 
     it('should not execute cleared global interceptors', async () => {
@@ -970,16 +970,16 @@ describe('regEvent with cofx', () => {
       regGlobalInterceptor(globalInterceptor);
       clearGlobalInterceptors();
 
-      regEvent('test-cleared-global', ({ draftDb }) => {
-        (draftDb as any).counter += 1;
+      regEvent('test-cleared-global', ({ draftState }) => {
+        (draftState as any).counter += 1;
       });
 
       dispatch(['test-cleared-global']);
       await waitForScheduled();
 
       expect(globalInterceptorCalled).toBe(false);
-      const db = getAppDb();
-      expect(db.counter).toBe(1);
+      const state = getState();
+      expect(state.counter).toBe(1);
     });
 
     it('should clear specific global interceptor by ID', async () => {
@@ -1008,10 +1008,10 @@ describe('regEvent with cofx', () => {
       regGlobalInterceptor(globalInterceptor2);
       clearGlobalInterceptors('clear-this-one');
 
-      regEvent('test-selective-clear', ({ draftDb, from1, from2 }) => {
+      regEvent('test-selective-clear', ({ draftState, from1, from2 }) => {
         expect(from1).toBe('interceptor1');
         expect(from2).toBeUndefined();
-        (draftDb as any).counter += 1;
+        (draftState as any).counter += 1;
       });
 
       dispatch(['test-selective-clear']);
@@ -1019,8 +1019,8 @@ describe('regEvent with cofx', () => {
 
       expect(interceptor1Called).toBe(true);
       expect(interceptor2Called).toBe(false);
-      const db = getAppDb();
-      expect(db.counter).toBe(1);
+      const state = getState();
+      expect(state.counter).toBe(1);
     });
 
     it('should handle errors in global interceptors gracefully', async () => {
@@ -1036,8 +1036,8 @@ describe('regEvent with cofx', () => {
 
       regGlobalInterceptor(faultyGlobalInterceptor);
 
-      regEvent('test-global-error', ({ draftDb }) => {
-        (draftDb as any).counter += 1;
+      regEvent('test-global-error', ({ draftState }) => {
+        (draftState as any).counter += 1;
       });
 
       dispatch(['test-global-error']);

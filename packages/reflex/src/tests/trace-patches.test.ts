@@ -9,8 +9,8 @@ import {
   disableTracing,
   dispatch,
   enableTracing,
-  getAppDb,
-  initAppDb,
+  getState,
+  initState,
   regEffect,
   regEvent,
   regGlobalInterceptor,
@@ -24,13 +24,13 @@ const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80)
 describe('Conditional patch generation', () => {
   let collected: any[] = [];
 
-  regEvent('tp-set-value', ({ draftDb }, value) => {
-    draftDb.value = value;
+  regEvent('tp-set-value', ({ draftState }, value) => {
+    draftState.value = value;
   });
 
   beforeEach(() => {
     collected = [];
-    initAppDb({ value: 0 });
+    initState({ value: 0 });
   });
 
   afterEach(() => {
@@ -49,7 +49,7 @@ describe('Conditional patch generation', () => {
     await waitForScheduled();
     await waitForTraceFlush();
 
-    expect(getAppDb().value).toBe(42);
+    expect(getState().value).toBe(42);
 
     const trace = collected.find((t) => t.operation === 'tp-set-value' && t.opType === 'event');
     expect(trace).toBeDefined();
@@ -58,11 +58,11 @@ describe('Conditional patch generation', () => {
     expect(trace.tags.effects).toEqual([]);
   });
 
-  it('should still commit db updates with tracing disabled (plain produce path)', async () => {
+  it('should still commit state updates with tracing disabled (plain produce path)', async () => {
     dispatch(['tp-set-value', 7]);
     await waitForScheduled();
 
-    expect(getAppDb().value).toBe(7);
+    expect(getState().value).toBe(7);
   });
 
   it('should trace effects contributed by after interceptors', async () => {

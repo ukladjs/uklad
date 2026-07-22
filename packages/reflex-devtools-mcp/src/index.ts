@@ -39,10 +39,10 @@ export interface MCPServerConfig {
 // Sent to every client at initialize time — for most agents this is the only
 // usage documentation they ever see, so it must stay in sync with the actual
 // tool set (the stdio integration test checks every tool is mentioned).
-const SERVER_INSTRUCTIONS = `Reflex DevTools: inspect and drive a live Reflex app (re-frame-style — events mutate a central app-db through pure handlers, subscriptions derive values from it).
+const SERVER_INSTRUCTIONS = `Reflex DevTools: inspect and drive a live Reflex app (re-frame-style — events mutate a central state through pure handlers, subscriptions derive values from it).
 
 Retrieval order (cheapest first):
-1. app_status — discover runtimes and select one. It lists stable runtimeId values and reports whether the selected app is connected, browser/React Native/headless, tracing state, handler counts, and sessionEpoch. Call it first after a cold start and after any reload; a changed sessionEpoch means the DevTools connection session changed and server-stored trace ids were invalidated. A transient reconnect can leave the runtime database intact.
+1. app_status — discover runtimes and select one. It lists stable runtimeId values and reports whether the selected app is connected, browser/React Native/headless, tracing state, handler counts, and sessionEpoch. Call it first after a cold start and after any reload; a changed sessionEpoch means the DevTools connection session changed and server-stored trace ids were invalidated. A transient reconnect can leave the runtime state intact.
 2. get_handlers — registered event/sub/effect ids; learn what exists before reading state.
 3. get_app_state with "path" — read only the state slice you need; avoid full dumps on real apps.
 4. eval_sub — evaluate any registered subscription against live state, whether or not a component has mounted it. Use get_active_subs only when you need the current mounted-subscription set.

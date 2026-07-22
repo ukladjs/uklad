@@ -1,34 +1,34 @@
 import { NOW, type ReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import type { PlaygroundContracts } from './db';
+import type { PlaygroundContracts } from './state';
 
 /** Install the environment-independent event and effect handlers. */
 export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContracts>): void {
   runtime.regEvent('increment-counter', (coeffects) => {
-    const { draftDb } = coeffects;
-    draftDb.counter = draftDb.counter + 1;
-    draftDb.field1 = {};
-    draftDb.field1.field2 = 'test';
-    draftDb.field1.field4 = {};
-    draftDb.field1.field4.field3 = 'test2';
+    const { draftState } = coeffects;
+    draftState.counter = draftState.counter + 1;
+    draftState.field1 = {};
+    draftState.field1.field2 = 'test';
+    draftState.field1.field4 = {};
+    draftState.field1.field4.field3 = 'test2';
   });
 
   runtime.regEvent('toggle-user', (coeffects, userId: number) => {
-    const { draftDb } = coeffects;
-    const user = draftDb.users.find((u: any) => u.id === userId);
+    const { draftState } = coeffects;
+    const user = draftState.users.find((u: any) => u.id === userId);
     if (user) {
       user.active = !user.active;
     }
   });
 
   runtime.regEvent('set-loading', (coeffects, isLoading: boolean) => {
-    const { draftDb } = coeffects;
-    draftDb.isLoading = isLoading;
+    const { draftState } = coeffects;
+    draftState.isLoading = isLoading;
     return [['fake-effect']];
   });
 
   runtime.regEvent('add-user', (coeffects, newUser: any) => {
-    const { draftDb } = coeffects;
-    draftDb.users.push(newUser);
+    const { draftState } = coeffects;
+    draftState.users.push(newUser);
   });
 
   runtime.regEvent('simulate-error', () => {
@@ -43,58 +43,58 @@ export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContrac
     { coeffects: [[NOW]] },
   );
 
-  runtime.regEvent('test-event-with-bad-params', ({ draftDb }, badPayload: any) => {
-    draftDb.badPayload = badPayload;
+  runtime.regEvent('test-event-with-bad-params', ({ draftState }, badPayload: any) => {
+    draftState.badPayload = badPayload;
   });
 
-  runtime.regEvent('test-event-with-immer-proxy', ({ draftDb }) => {
-    return [['fake-effect', draftDb.immerPayloadTest]];
+  runtime.regEvent('test-event-with-immer-proxy', ({ draftState }) => {
+    return [['fake-effect', draftState.immerPayloadTest]];
   });
 
   // Map and Set manipulation events
-  runtime.regEvent('add-user-to-map', ({ draftDb }, userId: string, userData: any) => {
-    if (!draftDb.userMap) {
-      draftDb.userMap = new Map();
+  runtime.regEvent('add-user-to-map', ({ draftState }, userId: string, userData: any) => {
+    if (!draftState.userMap) {
+      draftState.userMap = new Map();
     }
-    draftDb.userMap.set(userId, userData);
+    draftState.userMap.set(userId, userData);
   });
 
-  runtime.regEvent('remove-user-from-map', ({ draftDb }, userId: string) => {
-    if (draftDb.userMap) {
-      draftDb.userMap.delete(userId);
+  runtime.regEvent('remove-user-from-map', ({ draftState }, userId: string) => {
+    if (draftState.userMap) {
+      draftState.userMap.delete(userId);
     }
   });
 
-  runtime.regEvent('update-user-in-map', ({ draftDb }, userId: string, updates: any) => {
-    if (draftDb.userMap && draftDb.userMap.has(userId)) {
-      const user = draftDb.userMap.get(userId);
+  runtime.regEvent('update-user-in-map', ({ draftState }, userId: string, updates: any) => {
+    if (draftState.userMap && draftState.userMap.has(userId)) {
+      const user = draftState.userMap.get(userId);
       if (user) Object.assign(user, updates);
     }
   });
 
-  runtime.regEvent('add-permission', ({ draftDb }, permission: string) => {
-    if (!draftDb.permissionsSet) {
-      draftDb.permissionsSet = new Set();
+  runtime.regEvent('add-permission', ({ draftState }, permission: string) => {
+    if (!draftState.permissionsSet) {
+      draftState.permissionsSet = new Set();
     }
-    draftDb.permissionsSet.add(permission);
+    draftState.permissionsSet.add(permission);
   });
 
-  runtime.regEvent('remove-permission', ({ draftDb }, permission: string) => {
-    if (draftDb.permissionsSet) {
-      draftDb.permissionsSet.delete(permission);
+  runtime.regEvent('remove-permission', ({ draftState }, permission: string) => {
+    if (draftState.permissionsSet) {
+      draftState.permissionsSet.delete(permission);
     }
   });
 
-  runtime.regEvent('toggle-user-role', ({ draftDb }, userId: string, newRole: string) => {
-    if (draftDb.nestedCollections?.userPermissions && draftDb.nestedCollections?.rolesMap) {
-      const rolePermissions = draftDb.nestedCollections.rolesMap.get(newRole);
+  runtime.regEvent('toggle-user-role', ({ draftState }, userId: string, newRole: string) => {
+    if (draftState.nestedCollections?.userPermissions && draftState.nestedCollections?.rolesMap) {
+      const rolePermissions = draftState.nestedCollections.rolesMap.get(newRole);
       if (rolePermissions) {
-        draftDb.nestedCollections.userPermissions.set(userId, new Set(rolePermissions));
+        draftState.nestedCollections.userPermissions.set(userId, new Set(rolePermissions));
       }
     }
   });
 
-  runtime.regEvent('create-complex-map-set-structure', ({ draftDb }) => {
+  runtime.regEvent('create-complex-map-set-structure', ({ draftState }) => {
     // Create a complex nested structure with Maps and Sets
     const projectsMap = new Map<string, any>();
     projectsMap.set('project-1', {
@@ -124,27 +124,27 @@ export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContrac
     settingsMap.set('notifications', new Set(['email', 'push']));
     settingsMap.set('features', featuresMap);
 
-    draftDb.complexData = new Map<string, any>();
-    draftDb.complexData.set('projects', projectsMap);
-    draftDb.complexData.set('settings', settingsMap);
+    draftState.complexData = new Map<string, any>();
+    draftState.complexData.set('projects', projectsMap);
+    draftState.complexData.set('settings', settingsMap);
   });
 
   // Persistence pair exercising the browser/headless effect adapter split:
   // the handlers only emit/consume the effect contract; whether that hits
   // window.localStorage or an in-memory map is decided by which adapter
   // module the entry point imported (effects.browser.ts vs effects.headless.ts).
-  runtime.regEvent('persist-counter', ({ draftDb }) => {
+  runtime.regEvent('persist-counter', ({ draftState }) => {
     return [
-      ['local-storage-set', { key: 'test-app.counter', value: draftDb.counter }],
-      ['set-document-title', `Counter: ${draftDb.counter}`],
+      ['local-storage-set', { key: 'test-app.counter', value: draftState.counter }],
+      ['set-document-title', `Counter: ${draftState.counter}`],
     ];
   });
 
   runtime.regEvent(
     'load-counter',
-    ({ draftDb, localStorageValue }) => {
+    ({ draftState, localStorageValue }) => {
       if (localStorageValue != null) {
-        draftDb.counter = JSON.parse(localStorageValue);
+        draftState.counter = JSON.parse(localStorageValue);
       }
     },
     { coeffects: [['local-storage-get', 'test-app.counter']] },

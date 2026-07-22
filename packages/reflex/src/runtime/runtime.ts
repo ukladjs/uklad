@@ -1,5 +1,5 @@
 import type {
-  ContractDb,
+  ContractState,
   ContractDispatchVector,
   ContractEffectParams,
   ContractEffects,
@@ -56,7 +56,7 @@ import {
   isEventQueueRunningForKernel,
 } from '../events/router';
 import { createReflexInspectorForKernel } from '../inspector';
-import { getAppDbForKernel, getAppDbRevisionsForKernel, initAppDbForKernel } from './app-db';
+import { getStateForKernel, getStateRevisionsForKernel, initStateForKernel } from './state';
 import { clearInterceptorsForKernel } from './event-metadata';
 import { isEventVector } from '../core/validation';
 import {
@@ -114,7 +114,7 @@ import type {
 } from '../types';
 
 export type RuntimeEventHandler<TContracts extends ReflexContracts, TId extends string> = (
-  coeffects: CoEffects<ContractDb<TContracts>>,
+  coeffects: CoEffects<ContractState<TContracts>>,
   ...params: ContractEventParams<TContracts, TId>
 ) => ContractEffects<TContracts> | void;
 
@@ -122,7 +122,7 @@ export type RuntimeSubscriptionHandler<TContracts extends ReflexContracts, TId e
   ...values: any[]
 ) => ContractSubscriptionResult<TContracts, TId>;
 
-/** Monotonic committed and render-published app-db generations. */
+/** Monotonic committed and render-published state generations. */
 export interface RuntimeStateRevisions {
   readonly committedRevision: number;
   readonly publishedRevision: number;
@@ -133,9 +133,9 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
   readonly runtimeInstanceId: string;
   readonly runtimeName: string;
 
-  getAppDb(): ContractDb<TContracts>;
+  getState(): ContractState<TContracts>;
   getStateRevisions(): RuntimeStateRevisions;
-  restoreAppDb(nextDb: ContractDb<TContracts>): void;
+  restoreState(nextState: ContractState<TContracts>): void;
   dispatch(event: ContractDispatchVector<TContracts>): void;
   dispatchSync(event: ContractDispatchVector<TContracts>): void;
   flush(): Promise<void>;
@@ -144,13 +144,14 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
     id: TId,
     handler: RuntimeEventHandler<TContracts, TId>,
     options?:
-      EventRegistrationOptions<ContractDb<TContracts>> | Interceptor<ContractDb<TContracts>>[],
+      | EventRegistrationOptions<ContractState<TContracts>>
+      | Interceptor<ContractState<TContracts>>[],
   ): void;
   regEffect<TId extends string>(
     id: TId,
     handler: (value: ContractEffectParams<TContracts, TId>) => void,
   ): void;
-  regCoeffect(id: string, handler: CoEffectHandler<ContractDb<TContracts>>): void;
+  regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void;
   regEventErrorHandler(handler: ErrorHandler): void;
   regSub<TId extends string>(id: TId): void;
   regSub<TId extends string>(id: TId, sourceKey: string): void;
@@ -172,8 +173,8 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
     options?: WatchSubscriptionOptions,
   ): ReflexDisposer;
 
-  regGlobalInterceptor(interceptor: Interceptor<ContractDb<TContracts>>): void;
-  getGlobalInterceptors(): Interceptor<ContractDb<TContracts>>[];
+  regGlobalInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void;
+  getGlobalInterceptors(): Interceptor<ContractState<TContracts>>[];
   clearGlobalInterceptors(id?: string): void;
   setGlobalEqualityCheck(equalityCheck: EqualityCheckFn): void;
   getGlobalEqualityCheck(): EqualityCheckFn;
@@ -225,9 +226,9 @@ interface ModuleInstallation {
   disposed: boolean;
 }
 
-function assertRuntimeDb(
+function assertRuntimeState(
   value: unknown,
-  field: 'initialDb' | 'restoreAppDb nextDb',
+  field: 'initialState' | 'restoreState nextState',
 ): asserts value is Record<string, any> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`[reflex] ${field} must be a non-null, non-array object.`);
@@ -242,13 +243,13 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   private readonly watches = new Set<ReflexDisposer>();
   private readonly renderSubscriptions = new Set<ReflexDisposer>();
 
-  constructor(kernel: RuntimeKernel, initialDb: ContractDb<TContracts>) {
-    assertRuntimeDb(initialDb, 'initialDb');
+  constructor(kernel: RuntimeKernel, initialState: ContractState<TContracts>) {
+    assertRuntimeState(initialState, 'initialState');
     this.#kernel = kernel;
     registerBuiltInErrorHandler(kernel);
     registerBuiltInCoeffects(kernel);
     initializeEventRouterForKernel(kernel);
-    initAppDbForKernel<ContractDb<TContracts>>(kernel, initialDb);
+    initStateForKernel<ContractState<TContracts>>(kernel, initialState);
   }
 
   static getKernelForTests(runtime: ReflexRuntimeImplementation<any>): RuntimeKernel {
@@ -267,19 +268,19 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return this.#kernel.runtimeName;
   }
 
-  getAppDb(): ContractDb<TContracts> {
+  getState(): ContractState<TContracts> {
     this.assertUsable();
-    return getAppDbForKernel<ContractDb<TContracts>>(this.#kernel);
+    return getStateForKernel<ContractState<TContracts>>(this.#kernel);
   }
 
   getStateRevisions(): RuntimeStateRevisions {
     this.assertUsable();
-    return getAppDbRevisionsForKernel(this.#kernel);
+    return getStateRevisionsForKernel(this.#kernel);
   }
 
-  restoreAppDb(nextDb: ContractDb<TContracts>): void {
+  restoreState(nextState: ContractState<TContracts>): void {
     this.assertUsable();
-    assertRuntimeDb(nextDb, 'restoreAppDb nextDb');
+    assertRuntimeState(nextState, 'restoreState nextState');
     if (
       !isEventQueueIdleForKernel(this.#kernel) ||
       getHandlingEventIdForKernel(this.#kernel) !== null
@@ -289,7 +290,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
       );
     }
     assertPublicationAllowedForKernel(this.#kernel);
-    initAppDbForKernel<ContractDb<TContracts>>(this.#kernel, nextDb);
+    initStateForKernel<ContractState<TContracts>>(this.#kernel, nextState);
   }
 
   dispatch(event: ContractDispatchVector<TContracts>): void {
@@ -313,7 +314,8 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     id: Id,
     handler: RuntimeEventHandler<TContracts, any>,
     options?:
-      EventRegistrationOptions<ContractDb<TContracts>> | Interceptor<ContractDb<TContracts>>[],
+      | EventRegistrationOptions<ContractState<TContracts>>
+      | Interceptor<ContractState<TContracts>>[],
   ): void {
     this.assertUsable();
     regEventForKernel(this.#kernel, id, handler as any, options);
@@ -326,7 +328,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     this.recordHandler('fx', id, false);
   }
 
-  regCoeffect(id: string, handler: CoEffectHandler<ContractDb<TContracts>>): void {
+  regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void {
     this.assertUsable();
     regCoeffectForKernel(this.#kernel, id, handler as unknown as CoEffectHandler);
     this.recordHandler('cofx', id, false);
@@ -440,7 +442,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return dispose;
   }
 
-  regGlobalInterceptor(interceptor: Interceptor<ContractDb<TContracts>>): void {
+  regGlobalInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void {
     this.assertUsable();
     regGlobalInterceptorForKernel(this.#kernel, interceptor as unknown as Interceptor);
     const version = getGlobalInterceptorRegistrationVersionForKernel(this.#kernel, interceptor.id);
@@ -453,10 +455,10 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     }
   }
 
-  getGlobalInterceptors(): Interceptor<ContractDb<TContracts>>[] {
+  getGlobalInterceptors(): Interceptor<ContractState<TContracts>>[] {
     this.assertUsable();
     return getGlobalInterceptorsForKernel(this.#kernel) as unknown as Interceptor<
-      ContractDb<TContracts>
+      ContractState<TContracts>
     >[];
   }
 
@@ -704,25 +706,25 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   }
 }
 
-type DbInferredContracts<TDb extends Record<string, any>> = ReflexContracts & {
-  readonly db: TDb;
+type StateInferredContracts<TState extends Record<string, any>> = ReflexContracts & {
+  readonly state: TState;
 };
 
-type NonArrayRuntimeOptions<TDb extends Record<string, any>> = CreateReflexRuntimeOptions<TDb> &
-  (TDb extends readonly any[] ? never : unknown);
+type NonArrayRuntimeOptions<TState extends Record<string, any>> =
+  CreateReflexRuntimeOptions<TState> & (TState extends readonly any[] ? never : unknown);
 
 export function createReflexRuntime<
   TContracts extends ReflexContracts,
-  TDb extends ContractDb<TContracts> = ContractDb<TContracts>,
->(options: NonArrayRuntimeOptions<TDb>): ReflexRuntime<TContracts>;
-export function createReflexRuntime<TDb extends Record<string, any>>(
-  options: NonArrayRuntimeOptions<TDb>,
-): ReflexRuntime<DbInferredContracts<TDb>>;
+  TState extends ContractState<TContracts> = ContractState<TContracts>,
+>(options: NonArrayRuntimeOptions<TState>): ReflexRuntime<TContracts>;
+export function createReflexRuntime<TState extends Record<string, any>>(
+  options: NonArrayRuntimeOptions<TState>,
+): ReflexRuntime<StateInferredContracts<TState>>;
 export function createReflexRuntime(options: CreateReflexRuntimeOptions<any>): ReflexRuntime<any> {
   const kernel = createRuntimeKernel(options);
   return new ReflexRuntimeImplementation(
     kernel,
-    options.initialDb,
+    options.initialState,
   ) as unknown as ReflexRuntime<any>;
 }
 

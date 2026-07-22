@@ -3,7 +3,7 @@ import { persist } from '@flexsurfer/reflex-persist';
 import type { SyncPersistStorage } from '@flexsurfer/reflex-persist';
 import { describe, expect, it } from 'vitest';
 
-import type { Todo, Todos } from './db';
+import type { Todo, Todos } from './state';
 
 enableMapSet();
 
@@ -40,14 +40,14 @@ describe('TodoMVC persistence integration', () => {
       deserialize: (stored: unknown) => new Map(stored as [number, Todo][]),
     };
 
-    const firstRuntime = createReflexRuntime({ initialDb: { todos: new Map() as Todos } });
+    const firstRuntime = createReflexRuntime({ initialState: { todos: new Map() as Todos } });
     const first = persist(firstRuntime, { storage, keys: [keyConfig] });
-    firstRuntime.regEvent('todos/add', ({ draftDb }, todo: Todo) => {
-      draftDb.todos.set(todo.id, todo);
+    firstRuntime.regEvent('todos/add', ({ draftState }, todo: Todo) => {
+      draftState.todos.set(todo.id, todo);
     });
 
     first.hydrate();
-    expect(firstRuntime.getAppDb().todos.get(1)?.title).toBe('stored');
+    expect(firstRuntime.getState().todos.get(1)?.title).toBe('stored');
 
     firstRuntime.dispatch(['todos/add', { id: 2, title: 'new', done: false }]);
     await firstRuntime.flush();
@@ -55,13 +55,13 @@ describe('TodoMVC persistence integration', () => {
     first.dispose();
     firstRuntime.dispose();
 
-    const reloadRuntime = createReflexRuntime({ initialDb: { todos: new Map() as Todos } });
+    const reloadRuntime = createReflexRuntime({ initialState: { todos: new Map() as Todos } });
     const reload = persist(reloadRuntime, { storage, keys: [keyConfig] });
     reload.hydrate();
 
     expect(writes).toBe(1);
-    expect(reloadRuntime.getAppDb().todos).toBeInstanceOf(Map);
-    expect(Array.from(reloadRuntime.getAppDb().todos.values())).toEqual([
+    expect(reloadRuntime.getState().todos).toBeInstanceOf(Map);
+    expect(Array.from(reloadRuntime.getState().todos.values())).toEqual([
       { id: 1, title: 'stored', done: false },
       { id: 2, title: 'new', done: false },
     ]);

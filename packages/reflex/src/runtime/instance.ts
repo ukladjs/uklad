@@ -64,7 +64,7 @@ export function registerRuntimeInstance(instance: object): void {
   try {
     consoleLog(
       'warn',
-      '[reflex] Multiple Reflex runtimes detected in the same JavaScript realm. Each copy owns a separate app-db, handler registry, subscription cache, and trace callback registry; Reflex will not merge state across copies. Ensure your application resolves a single copy of @flexsurfer/reflex.',
+      '[reflex] Multiple Reflex runtimes detected in the same JavaScript realm. Each copy owns a separate state, handler registry, subscription cache, and trace callback registry; Reflex will not merge state across copies. Ensure your application resolves a single copy of @flexsurfer/reflex.',
     );
   } catch {
     // A diagnostic must not make module initialization fail.

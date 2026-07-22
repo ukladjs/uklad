@@ -30,7 +30,7 @@ export interface MutableEvent {
     committedPatches: OperationPatch[];
     truncated: boolean;
   };
-  plannedDb: unknown;
+  plannedState: unknown;
   effectIds: string[];
   errors: OperationError[];
 }

@@ -4,7 +4,7 @@
 // consumable there. Must compile under TypeScript 4.9.
 import { createReflexRuntime, useSubscription } from '@flexsurfer/reflex';
 
-const runtime = createReflexRuntime({ initialDb: { count: 0 } });
+const runtime = createReflexRuntime({ initialState: { count: 0 } });
 runtime.regEvent('legacy/node10', () => undefined);
 runtime.regEffect('legacy/effect', (value: unknown) => {
   void value;
@@ -13,7 +13,7 @@ runtime.regSub('count');
 runtime.dispatch(['legacy/node10']);
 
 const count: number = useSubscription<number>(['count']);
-const db = runtime.getAppDb();
+const state = runtime.getState();
 
 void count;
-void db;
+void state;

@@ -6,7 +6,7 @@ describe('immer-utils', () => {
   describe('enableMapSet', () => {
     it('keeps equality overrides isolated between explicit runtimes', () => {
       const runtime = createReflexRuntime({
-        initialDb: {},
+        initialState: {},
         runtimeId: 'map-set-explicit-runtime',
       });
       const customRuntimeEquality = () => true;
@@ -20,13 +20,19 @@ describe('immer-utils', () => {
 
     it('uses the ES6 equality fallback for runtimes created after Map and Set support is enabled', () => {
       enableMapSet();
-      const runtime = createReflexRuntime({ initialDb: {}, runtimeId: 'map-set-default-runtime' });
+      const runtime = createReflexRuntime({
+        initialState: {},
+        runtimeId: 'map-set-default-runtime',
+      });
       expect(runtime.getGlobalEqualityCheck()).toBe(isEqualEs6);
       runtime.dispose();
     });
 
     it('does not override a custom equality check when Map and Set support is enabled', () => {
-      const runtime = createReflexRuntime({ initialDb: {}, runtimeId: 'map-set-custom-runtime' });
+      const runtime = createReflexRuntime({
+        initialState: {},
+        runtimeId: 'map-set-custom-runtime',
+      });
       const customEquality = () => true;
       runtime.setGlobalEqualityCheck(customEquality);
 
@@ -55,7 +61,10 @@ describe('immer-utils', () => {
       const set3 = new Set(['a', 'b', 'd']);
 
       enableMapSet();
-      const runtime = createReflexRuntime({ initialDb: {}, runtimeId: 'map-set-values-runtime' });
+      const runtime = createReflexRuntime({
+        initialState: {},
+        runtimeId: 'map-set-values-runtime',
+      });
       const equalityCheck = runtime.getGlobalEqualityCheck();
 
       expect(equalityCheck(map1, map2)).toBe(true);

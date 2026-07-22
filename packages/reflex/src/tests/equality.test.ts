@@ -4,10 +4,10 @@ import {
   flushSubscriptions,
   getOrCreateSubscription,
   getSubscriptionSnapshot,
-  initAppDb,
+  initState,
   regSub,
   subscribeToSubscription,
-  updateAppDb,
+  updateState,
 } from './runtime-test-api';
 
 describe('shallowEqual', () => {
@@ -64,7 +64,7 @@ describe('per-sub equalityCheck config with shallowEqual', () => {
 
   beforeEach(() => {
     clearSubscriptionCache();
-    initAppDb({ 'se-items': [1, 2, 3] });
+    initState({ 'se-items': [1, 2, 3] });
   });
 
   it('should gate recompute propagation with the configured check', () => {
@@ -77,7 +77,7 @@ describe('per-sub equalityCheck config with shallowEqual', () => {
 
     // Publish a fresh root identity with unchanged elements. The mapped sub
     // creates a different array, but shallowEqual gates observable propagation.
-    updateAppDb({ 'se-items': [1, 2, 3] });
+    updateState({ 'se-items': [1, 2, 3] });
     flushSubscriptions();
 
     expect(callback).not.toHaveBeenCalled();
@@ -93,7 +93,7 @@ describe('per-sub equalityCheck config with shallowEqual', () => {
     const unsubscribe = subscribeToSubscription(subscription, callback);
     expect(getSubscriptionSnapshot(subscription)).toBe(3);
 
-    updateAppDb({ 'se-items': [1, 2, 3] });
+    updateState({ 'se-items': [1, 2, 3] });
     flushSubscriptions();
 
     expect(callback).toHaveBeenCalledTimes(1);
@@ -113,7 +113,7 @@ describe('per-sub equalityCheck config with shallowEqual', () => {
     const unsubscribe = subscribeToSubscription(subscription, callback);
     const first = getSubscriptionSnapshot(subscription);
 
-    updateAppDb({ 'se-items': [1, 2, 3] });
+    updateState({ 'se-items': [1, 2, 3] });
     flushSubscriptions();
 
     expectLogCall(

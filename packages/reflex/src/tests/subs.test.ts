@@ -5,7 +5,7 @@ import {
   getSubConfig,
   getSubscriptionValue,
   hasCachedSubscription,
-  initAppDb,
+  initState,
   regSub,
   subscribeToSubscription,
   sweepProvisionalSubscriptions,
@@ -60,7 +60,7 @@ describe('Subscription registry lifecycle', () => {
   const rootKey = JSON.stringify(['sweep-todos']);
 
   beforeEach(() => {
-    initAppDb({ 'sweep-todos': [1, 2, 3] });
+    initState({ 'sweep-todos': [1, 2, 3] });
     clearSubscriptionCache();
   });
 
@@ -78,7 +78,7 @@ describe('Subscription registry lifecycle', () => {
       expect(hasCachedSubscription(rootKey)).toBe(true);
 
       // Second flush cycle: the computed cell is swept. Canonical roots are
-      // persistent db wake-up anchors and remain registered while dormant.
+      // persistent state wake-up anchors and remain registered while dormant.
       sweepProvisionalSubscriptions();
       expect(hasCachedSubscription(countKey)).toBe(false);
       expect(hasCachedSubscription(rootKey)).toBe(true);
@@ -115,7 +115,7 @@ describe('Subscription registry lifecycle', () => {
       expect(hasCachedSubscription(countKey)).toBe(true);
     });
 
-    it('should sweep via the runtime scheduler without manual sweeps or db updates', async () => {
+    it('should sweep via the runtime scheduler without manual sweeps or state updates', async () => {
       getSubscriptionValue(['sweep-count']);
       expect(hasCachedSubscription(countKey)).toBe(true);
       expect(hasCachedSubscription(rootKey)).toBe(true);
@@ -192,7 +192,7 @@ describe('Subscription registry lifecycle', () => {
 
     it('supports an empty string as an explicit root source key', () => {
       regSub('sweep-empty-source', '');
-      initAppDb({ '': 'empty-key-value' });
+      initState({ '': 'empty-key-value' });
 
       expect(getSubscriptionValue(['sweep-empty-source'])).toBe('empty-key-value');
     });

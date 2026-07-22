@@ -72,7 +72,7 @@ export function observeOperationLifecycle(runtime: DevtoolsOperationRuntime, sta
       const patches = plan.patches.slice(0, MAX_PATCHES_PER_EVENT).map(copyPatch);
       record.state.plannedPatches = patches;
       record.state.truncated = plan.patches.length > patches.length;
-      record.plannedDb = plan.plannedDb;
+      record.plannedState = plan.plannedState;
     },
     onStateCommitted(_previous, next, revision) {
       const metadata = state.currentEvent;
@@ -84,7 +84,7 @@ export function observeOperationLifecycle(runtime: DevtoolsOperationRuntime, sta
       eventRecord.state.status = 'committed';
       eventRecord.state.committedRevision = revision;
       eventRecord.state.committedPatches =
-        eventRecord.plannedDb === next
+        eventRecord.plannedState === next
           ? eventRecord.state.plannedPatches.map(copyOperationPatch)
           : [{ op: 'replace', path: [], value: snapshotValue(next) }];
     },

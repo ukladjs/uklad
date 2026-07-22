@@ -3,7 +3,7 @@ import { createReflexRuntime, type RuntimeEventHandler } from '../runtime/runtim
 import { waitForScheduled } from './test-utils';
 
 interface CounterContracts extends ReflexContracts {
-  db: { count: number; label: string };
+  state: { count: number; label: string };
   events: {
     increment: [amount: number];
     cascade: [amount: number];
@@ -15,13 +15,13 @@ interface CounterContracts extends ReflexContracts {
 
 function createCounterRuntime(runtimeId: string, count: number) {
   const runtime = createReflexRuntime<CounterContracts>({
-    initialDb: { count, label: runtimeId },
+    initialState: { count, label: runtimeId },
     runtimeId,
     name: `Runtime ${runtimeId}`,
   });
   runtime.regSub('count');
-  runtime.regEvent('increment', ({ draftDb }, amount) => {
-    draftDb.count += amount;
+  runtime.regEvent('increment', ({ draftState }, amount) => {
+    draftState.count += amount;
   });
   runtime.regEvent('cascade', (_coeffects, amount) => [['dispatch', ['increment', amount]]]);
   return runtime;
@@ -34,14 +34,14 @@ describe('instance-scoped runtime', () => {
     const publicRuntime = runtime as unknown as Record<string, unknown>;
     expect(Object.hasOwn(publicRuntime, 'kernel')).toBe(false);
     expect(publicRuntime.kernel).toBeUndefined();
-    expect(publicRuntime.appDb).toBeUndefined();
+    expect(publicRuntime.appState).toBeUndefined();
     expect(publicRuntime.handlers).toBeUndefined();
     expect(publicRuntime.extensions).toBeUndefined();
 
     runtime.dispose();
   });
 
-  it('isolates db heads, handlers, queues, subscriptions, and inspectors', async () => {
+  it('isolates state heads, handlers, queues, subscriptions, and inspectors', async () => {
     const first = createCounterRuntime('first', 1);
     const second = createCounterRuntime('second', 10);
 
@@ -54,8 +54,8 @@ describe('instance-scoped runtime', () => {
     second.dispatch(['increment', 5]);
     await Promise.all([first.flush(), second.flush()]);
 
-    expect(first.getAppDb()).toEqual({ count: 3, label: 'first' });
-    expect(second.getAppDb()).toEqual({ count: 15, label: 'second' });
+    expect(first.getState()).toEqual({ count: 3, label: 'first' });
+    expect(second.getState()).toEqual({ count: 15, label: 'second' });
     expect(firstValues).toEqual([1, 3]);
     expect(secondValues).toEqual([10, 15]);
 
@@ -71,8 +71,8 @@ describe('instance-scoped runtime', () => {
       runtimeId: 'second',
       runtimeName: 'Runtime second',
     });
-    expect(firstInspector.getSnapshot().appDb).toBe(first.getAppDb());
-    expect(secondInspector.getSnapshot().appDb).toBe(second.getAppDb());
+    expect(firstInspector.getSnapshot().appState).toBe(first.getState());
+    expect(secondInspector.getSnapshot().appState).toBe(second.getState());
 
     first.clearHandlers('event');
     expect(first.getHandlers().event.increment).toBeUndefined();
@@ -90,7 +90,7 @@ describe('instance-scoped runtime', () => {
     runtime.dispatch(['cascade', 4]);
     await runtime.flush();
 
-    expect(runtime.getAppDb().count).toBe(4);
+    expect(runtime.getState().count).toBe(4);
     runtime.dispose();
   });
 
@@ -103,12 +103,12 @@ describe('instance-scoped runtime', () => {
     runtime.dispatch(['increment', 1]);
     await expect(runtime.flush()).rejects.toThrow('queue failed');
 
-    runtime.regEvent('increment', ({ draftDb }, amount) => {
-      draftDb.count += amount;
+    runtime.regEvent('increment', ({ draftState }, amount) => {
+      draftState.count += amount;
     });
     runtime.dispatch(['increment', 2]);
     await expect(runtime.flush()).resolves.toBeUndefined();
-    expect(runtime.getAppDb().count).toBe(2);
+    expect(runtime.getState().count).toBe(2);
     runtime.dispose();
   });
 
@@ -121,14 +121,14 @@ describe('instance-scoped runtime', () => {
     runtime.dispatch(['increment', 1]);
     await waitForScheduled();
 
-    runtime.regEvent('increment', ({ draftDb }, amount) => {
-      draftDb.count += amount;
+    runtime.regEvent('increment', ({ draftState }, amount) => {
+      draftState.count += amount;
     });
     runtime.dispatch(['increment', 2]);
 
     await expect(runtime.flush()).rejects.toThrow('unobserved queue failure');
     await expect(runtime.flush()).resolves.toBeUndefined();
-    expect(runtime.getAppDb().count).toBe(2);
+    expect(runtime.getState().count).toBe(2);
     runtime.dispose();
   });
 
@@ -136,16 +136,16 @@ describe('instance-scoped runtime', () => {
     const runtime = createCounterRuntime('restore', 0);
 
     runtime.dispatch(['increment', 1]);
-    expect(() => runtime.restoreAppDb({ count: 20, label: 'bad-order' })).toThrow(
+    expect(() => runtime.restoreState({ count: 20, label: 'bad-order' })).toThrow(
       'while an event is pending',
     );
     await runtime.flush();
 
     const values: number[] = [];
     const unwatch = runtime.watchSubscription(['count'], (value) => values.push(value));
-    runtime.restoreAppDb({ count: 20, label: 'restored' });
+    runtime.restoreState({ count: 20, label: 'restored' });
 
-    expect(runtime.getAppDb()).toEqual({ count: 20, label: 'restored' });
+    expect(runtime.getState()).toEqual({ count: 20, label: 'restored' });
     expect(values).toEqual([1, 20]);
     unwatch();
     runtime.dispose();
@@ -160,7 +160,7 @@ describe('instance-scoped runtime', () => {
       if (value === 0 && previousValue === undefined) runtime.dispatchSync(['increment', 1]);
     });
 
-    expect(runtime.getAppDb().count).toBe(1);
+    expect(runtime.getState().count).toBe(1);
     expect(values).toEqual([
       [0, undefined],
       [1, 0],
@@ -184,28 +184,28 @@ describe('instance-scoped runtime', () => {
     runtime.dispose();
   });
 
-  it('rejects invalid runtime database values at creation and restore boundaries', () => {
+  it('rejects invalid runtime state values at creation and restore boundaries', () => {
     expect(() =>
-      createReflexRuntime({ initialDb: null, runtimeId: 'invalid-null-db' } as any),
-    ).toThrow('initialDb must be a non-null, non-array object');
+      createReflexRuntime({ initialState: null, runtimeId: 'invalid-null-state' } as any),
+    ).toThrow('initialState must be a non-null, non-array object');
     expect(() =>
-      createReflexRuntime({ initialDb: [], runtimeId: 'invalid-array-db' } as any),
-    ).toThrow('initialDb must be a non-null, non-array object');
+      createReflexRuntime({ initialState: [], runtimeId: 'invalid-array-state' } as any),
+    ).toThrow('initialState must be a non-null, non-array object');
     expect(() =>
-      createReflexRuntime({ initialDb: 1, runtimeId: 'invalid-primitive-db' } as any),
-    ).toThrow('initialDb must be a non-null, non-array object');
+      createReflexRuntime({ initialState: 1, runtimeId: 'invalid-primitive-state' } as any),
+    ).toThrow('initialState must be a non-null, non-array object');
 
     const runtime = createCounterRuntime('restore-validation', 3);
-    expect(() => (runtime.restoreAppDb as (value: unknown) => void)(null)).toThrow(
-      'restoreAppDb nextDb must be a non-null, non-array object',
+    expect(() => (runtime.restoreState as (value: unknown) => void)(null)).toThrow(
+      'restoreState nextState must be a non-null, non-array object',
     );
-    expect(() => (runtime.restoreAppDb as (value: unknown) => void)([])).toThrow(
-      'restoreAppDb nextDb must be a non-null, non-array object',
+    expect(() => (runtime.restoreState as (value: unknown) => void)([])).toThrow(
+      'restoreState nextState must be a non-null, non-array object',
     );
-    expect(() => (runtime.restoreAppDb as (value: unknown) => void)(1)).toThrow(
-      'restoreAppDb nextDb must be a non-null, non-array object',
+    expect(() => (runtime.restoreState as (value: unknown) => void)(1)).toThrow(
+      'restoreState nextState must be a non-null, non-array object',
     );
-    expect(runtime.getAppDb()).toEqual({ count: 3, label: 'restore-validation' });
+    expect(runtime.getState()).toEqual({ count: 3, label: 'restore-validation' });
     runtime.dispose();
   });
 
@@ -227,24 +227,24 @@ describe('instance-scoped runtime', () => {
     expect(() => runtime.watchSubscription(['missing-sub'] as never, () => {})).toThrow(
       "No subscription registered for 'missing-sub' in runtime 'fail-loud'",
     );
-    expect(runtime.getAppDb().count).toBe(0);
+    expect(runtime.getState().count).toBe(0);
     runtime.dispose();
   });
 
   it('rejects non-string runtime identities at the JavaScript boundary', () => {
-    expect(() => createReflexRuntime({ initialDb: {}, runtimeId: 1 } as any)).toThrow(
+    expect(() => createReflexRuntime({ initialState: {}, runtimeId: 1 } as any)).toThrow(
       'runtimeId must be 1-128 characters',
     );
     expect(() =>
-      createReflexRuntime({ initialDb: {}, runtimeId: 'valid-id', name: 1 } as any),
+      createReflexRuntime({ initialState: {}, runtimeId: 'valid-id', name: 1 } as any),
     ).toThrow('runtime name must be between 1 and 128 characters');
   });
 
   it('installs and disposes feature registrations idempotently by generation', () => {
     const runtime = createCounterRuntime('modules', 0);
     const builtInDispatchEffect = runtime.getHandlers().fx.dispatch;
-    const sharedHandler: RuntimeEventHandler<CounterContracts, 'increment'> = ({ draftDb }) => {
-      draftDb.count += 1;
+    const sharedHandler: RuntimeEventHandler<CounterContracts, 'increment'> = ({ draftState }) => {
+      draftState.count += 1;
     };
 
     const disposeFirst = runtime.registerModule((scope) => {
@@ -259,7 +259,7 @@ describe('instance-scoped runtime', () => {
 
     disposeFirst();
     runtime.dispatchSync(['increment', 999]);
-    expect(runtime.getAppDb().count).toBe(1);
+    expect(runtime.getState().count).toBe(1);
 
     disposeSecond();
     disposeSecond();
@@ -271,7 +271,7 @@ describe('instance-scoped runtime', () => {
 
   it('refuses to dispose a feature while its subscription graph is active', () => {
     const runtime = createReflexRuntime({
-      initialDb: { value: 1 },
+      initialState: { value: 1 },
       runtimeId: 'active-module',
     });
     let cleanedUp = false;
@@ -294,7 +294,7 @@ describe('instance-scoped runtime', () => {
 
   it('disposes an inactive feature while an unrelated subscription remains active', () => {
     const runtime = createReflexRuntime({
-      initialDb: { feature: 1, shell: 2 },
+      initialState: { feature: 1, shell: 2 },
       runtimeId: 'unrelated-active-module',
     });
     runtime.regSub('shell');
@@ -353,7 +353,7 @@ describe('instance-scoped runtime', () => {
     removeTraceListener();
     removeTraceListener();
 
-    expect(() => runtime.getAppDb()).toThrow("Runtime 'disposed' has been disposed");
+    expect(() => runtime.getState()).toThrow("Runtime 'disposed' has been disposed");
     expect(() => runtime.dispatch(['increment', 1])).toThrow(
       "Runtime 'disposed' has been disposed",
     );
@@ -370,10 +370,13 @@ describe('instance-scoped runtime', () => {
 
     disposed.dispose();
 
-    expect(() => disposed.getAppDb()).toThrow("Runtime 'dispose-first' has been disposed");
+    expect(() => disposed.getState()).toThrow("Runtime 'dispose-first' has been disposed");
     surviving.dispatchSync(['increment', 5]);
-    expect(surviving.getAppDb()).toEqual({ count: 15, label: 'dispose-second' });
-    expect(survivingInspector.getSnapshot().appDb).toEqual({ count: 15, label: 'dispose-second' });
+    expect(surviving.getState()).toEqual({ count: 15, label: 'dispose-second' });
+    expect(survivingInspector.getSnapshot().appState).toEqual({
+      count: 15,
+      label: 'dispose-second',
+    });
 
     surviving.dispose();
   });

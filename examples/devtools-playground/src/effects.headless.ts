@@ -1,5 +1,5 @@
 import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import type { PlaygroundContracts } from './db';
+import type { PlaygroundContracts } from './state';
 import { memoryStorage } from './headless-env';
 
 // Headless adapters: same effect ids as effects.browser.ts, safe by

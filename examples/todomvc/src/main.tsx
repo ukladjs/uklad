@@ -18,7 +18,7 @@ import { todoRuntime } from './runtime';
 enableMapSet();
 enableDevtools(todoRuntime);
 
-// Synchronous for localStorage: todos are in app-db before the first render.
+// Synchronous for localStorage: todos are in state before the first render.
 persistence.hydrate();
 void persistence.whenHydrated().catch(() => {
   const warning = document.createElement('aside');

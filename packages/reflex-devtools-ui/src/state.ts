@@ -1,9 +1,9 @@
 import { loadSettings } from "./utils/settingsStorage";
 
 /** Create fresh dashboard state for its explicitly owned Reflex runtime. */
-export function createDevtoolsDb() {
+export function createDevtoolsState() {
   return {
-    db: "",
+    state: "",
     traces: [],
     isConnected: false,
     capabilities: [],

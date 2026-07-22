@@ -1,4 +1,4 @@
-// Runtime smoke test for CommonJS consumers: drives a real event -> app-db ->
+// Runtime smoke test for CommonJS consumers: drives a real event -> state ->
 // subscription cycle against the packed tarball, not the repo sources.
 const assert = require('node:assert');
 const reflex = require('@flexsurfer/reflex');
@@ -10,9 +10,9 @@ assert.strictEqual(typeof reflex.useSubscription, 'function');
 assert.strictEqual(reflex.defaultRuntime, undefined);
 assert.strictEqual(reflex.ReflexProvider, reflexReact.ReflexProvider);
 
-const runtime = reflex.createReflexRuntime({ initialDb: { count: 0 } });
-runtime.regEvent('inc', ({ draftDb }) => {
-  draftDb.count += 1;
+const runtime = reflex.createReflexRuntime({ initialState: { count: 0 } });
+runtime.regEvent('inc', ({ draftState }) => {
+  draftState.count += 1;
 });
 runtime.regSub('count');
 runtime.regSub(
@@ -23,7 +23,7 @@ runtime.regSub(
 
 runtime.dispatchSync(['inc']);
 
-assert.strictEqual(runtime.getAppDb().count, 1);
+assert.strictEqual(runtime.getState().count, 1);
 assert.strictEqual(runtime.getSubscriptionValue(['count']), 1);
 assert.strictEqual(runtime.getSubscriptionValue(['doubled']), 2);
 

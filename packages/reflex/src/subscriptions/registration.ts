@@ -1,5 +1,5 @@
 import { consoleLog } from '../core/logging';
-import { getRenderDbForKernel } from '../runtime/app-db';
+import { getRenderStateForKernel } from '../runtime/state';
 import {
   hasHandlerForKernel,
   registerHandlerForKernel,
@@ -21,7 +21,7 @@ import type { Id, SubConfig, SubResult, SubVector } from '../types';
 /**
  * Register a root or computed subscription.
  *
- * `regSub(id)` reads the top-level DB key named by `id`; `regSub(id, key)`
+ * `regSub(id)` reads the top-level STATE key named by `id`; `regSub(id, key)`
  * maps a root subscription to another top-level key. Passing a compute function
  * requires a dependency function and optionally accepts a local equality check.
  * A registration cannot be replaced while one of its queries remains cached.
@@ -103,12 +103,12 @@ function registerRootSubscription(runtime: RuntimeKernel, id: Id, sourceKey: str
 
   setRootSubSourceForKernel(runtime, id, sourceKey);
   // Root handlers read the last flushed generation so new and cached queries
-  // cannot observe different DB versions between an event and its flush.
+  // cannot observe different STATE versions between an event and its flush.
   registerHandlerForKernel(
     runtime,
     SUB_HANDLER_KIND,
     id,
-    () => getRenderDbForKernel<Record<string, any>>(runtime)[sourceKey],
+    () => getRenderStateForKernel<Record<string, any>>(runtime)[sourceKey],
   );
   registerHandlerForKernel(runtime, SUB_DEPS_HANDLER_KIND, id, () => []);
   return true;

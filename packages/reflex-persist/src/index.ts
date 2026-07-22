@@ -11,7 +11,7 @@ export { PERSIST_IDS } from './ids';
 export { persist } from './persist';
 export type {
   AsyncPersistStorage,
-  PersistContractDb,
+  PersistContractState,
   PersistContracts,
   PersistData,
   PersistDiagnostic,

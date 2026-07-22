@@ -29,7 +29,7 @@ describe('duplicate Reflex runtime detection', () => {
     expect(getTestLogCalls().warn).toEqual([
       [expect.stringContaining('Multiple Reflex runtimes detected in the same JavaScript realm')],
     ]);
-    expect(getTestLogCalls().warn[0]![0]).toContain('separate app-db');
+    expect(getTestLogCalls().warn[0]![0]).toContain('separate state');
     expect(getTestLogCalls().warn[0]![0]).toContain('will not merge state across copies');
     expect(getTestLogCalls().warn[0]![0]).toContain('single copy of @flexsurfer/reflex');
   });

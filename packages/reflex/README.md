@@ -4,7 +4,7 @@
 
 **Reactive state management for React & React Native — built for AI agentic development**
 
-Pure event handlers over an instance-owned app-db, derived subscriptions, isolated side effects. An architecture coding agents can generate, observe at runtime, and verify — and humans can still read.
+Pure event handlers over an instance-owned state, derived subscriptions, isolated side effects. An architecture coding agents can generate, observe at runtime, and verify — and humans can still read.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![NPM Version](https://img.shields.io/npm/v/%40flexsurfer%2Freflex)](https://www.npmjs.com/package/@flexsurfer/reflex)
@@ -42,7 +42,7 @@ The plugin ships the Reflex skill (workflow, conventions, progressive references
 
 ### Why agents are effective with Reflex
 
-- **All logic is pure functions** over an instance-owned app-db. Every change is small, isolated, and deterministic — easy to generate, easy to review.
+- **All logic is pure functions** over an instance-owned state. Every change is small, isolated, and deterministic — easy to generate, easy to review.
 - **Everything is addressable by id.** Events, subscriptions, and effects are registered under ids, so an agent looks up the one handler it needs instead of reading store files end-to-end.
 - **The running app is observable.** Through the DevTools MCP an agent checks app health, lists handlers, reads state by path, watches live subscription values, and inspects traces of everything that happened — including what it didn't initiate.
 - **No browser required.** The state layer is React-free: a headless entry runs the full app under Node, so autonomous agent loops and CI drive the real thing.
@@ -94,15 +94,15 @@ import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
 import { ReflexProvider, useSubscription } from '@flexsurfer/reflex/react';
 
 const runtime = createReflexRuntime({
-  initialDb: { counter: 0 },
+  initialState: { counter: 0 },
   runtimeId: 'counter-app',
   name: 'Counter app',
 });
 
 // A module owns its registrations and can be disposed safely.
 runtime.registerModule((scope) => {
-  scope.regEvent('counter/increment', ({ draftDb }) => {
-    draftDb.counter += 1;
+  scope.regEvent('counter/increment', ({ draftState }) => {
+    draftState.counter += 1;
   });
   scope.regSub('counter');
 });
@@ -121,7 +121,7 @@ function Root() {
 }
 ```
 
-Each runtime owns its database, event queue, handlers, subscription graph,
+Each runtime owns its state, event queue, handlers, subscription graph,
 tracing, and inspector. Create one per browser root, SSR request, embedded
 widget, story, test, or agent sandbox whenever those worlds must be isolated.
 
@@ -131,7 +131,7 @@ through the runtime your application explicitly created.
 
 ### Subscription runtime
 
-Reflex settles changed subscription graphs in one DB-driven topological wave before notifying React. Active snapshots are cache-only, dormant reads are memoized pulls, equality cuts off downstream work, and computed nodes are evicted when their last consumer leaves. The runtime invariants and work budgets are documented in [`docs/subscription-runtime.md`](./docs/subscription-runtime.md).
+Reflex settles changed subscription graphs in one STATE-driven topological wave before notifying React. Active snapshots are cache-only, dormant reads are memoized pulls, equality cuts off downstream work, and computed nodes are evicted when their last consumer leaves. The runtime invariants and work budgets are documented in [`docs/subscription-runtime.md`](./docs/subscription-runtime.md).
 
 Side effects (HTTP, storage, timers, navigation) live in **effects/coeffects**, registered by id and emitted from event handlers as data — which is what keeps handlers pure, apps portable across web/mobile/desktop, and behavior verifiable by tools.
 

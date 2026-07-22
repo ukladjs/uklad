@@ -161,7 +161,7 @@ import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
 const runtime = createReflexRuntime({
-  initialDb,
+  initialState,
   runtimeId: 'app.headless',
   name: 'App (Headless)',
 });
@@ -175,7 +175,7 @@ enableDevtools(runtime);
 
 Run the entry under `tsx watch` (or `vite-node --watch`).
 
-The SDK auto-detects `runtime: 'headless'` and connects exactly like a browser tab. `app_status` reports the runtime, the effect adapter modes (so the agent knows `local-storage-set` is memory-backed, not real), and a `sessionEpoch` for the DevTools connection. A changed epoch invalidates server-stored trace IDs; reload is one cause, while a transient SDK reconnect can leave the runtime database intact.
+The SDK auto-detects `runtime: 'headless'` and connects exactly like a browser tab. `app_status` reports the runtime, the effect adapter modes (so the agent knows `local-storage-set` is memory-backed, not real), and a `sessionEpoch` for the DevTools connection. A changed epoch invalidates server-stored trace IDs; reload is one cause, while a transient SDK reconnect can leave the runtime state intact.
 
 Headless mode requires **Node.js 22+** (the SDK connects through the global `WebSocket`). On older Node it refuses loudly instead of half-working.
 
@@ -192,7 +192,7 @@ import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
 const runtime = createReflexRuntime({
-  initialDb,
+  initialState,
   runtimeId: 'checkout-widget',
   name: 'Checkout widget',
 });
@@ -230,7 +230,7 @@ Authentication protects the DevTools interface; it does not make arbitrary netwo
 
 The same server hosts a web dashboard — pleasant for humans, and the visual counterpart of everything the agent sees:
 
-- **📊 Database State Inspection** — visualize your entire application state in real-time
+- **📊 State State Inspection** — visualize your entire application state in real-time
 - **🔄 Real-time Event Tracing** — watch events and state changes as they happen
 - **🔥 Subscriptions & Render Tracing** — see subscriptions being created, run, and disposed
 - **⏱ Performance Profiling** — find slow events and subscriptions as they happen
@@ -370,7 +370,7 @@ does not inspect every arbitrary free-form application string; add a custom
 hook when domain-specific secrets or PII may be embedded in prose.
 
 The inspector is created by the same Reflex module instance as the application,
-so DevTools cannot resolve a different app-db, handler registry, subscription
+so DevTools cannot resolve a different state, handler registry, subscription
 cache, or trace callback registry. The returned cleanup function is idempotent
 and closes the connection, trace subscription, and pending dispatch timers.
 The inspector keeps tracing active only while DevTools is subscribed, so the

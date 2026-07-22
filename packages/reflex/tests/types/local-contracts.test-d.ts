@@ -1,5 +1,5 @@
 import type {
-  ContractDb,
+  ContractState,
   ContractDispatchVector,
   ContractEffectVector,
   ContractEventId,
@@ -14,7 +14,7 @@ import type {
 } from '../../src/contracts';
 
 interface CounterContracts extends ReflexContracts {
-  db: { count: number };
+  state: { count: number };
   events: {
     set: [value: number];
     reset: [];
@@ -30,7 +30,7 @@ interface CounterContracts extends ReflexContracts {
 }
 
 interface SessionContracts extends ReflexContracts {
-  db: { value: string };
+  state: { value: string };
   events: {
     set: [value: string];
   };
@@ -40,7 +40,7 @@ interface SessionContracts extends ReflexContracts {
 }
 
 interface ContractRuntime<TContracts extends ReflexContracts> {
-  getAppDb(): ContractDb<TContracts>;
+  getState(): ContractState<TContracts>;
   dispatch(event: ContractDispatchVector<TContracts>): void;
   emit(effect: ContractEffectVector<TContracts>): void;
   getSubscriptionValue<TId extends ContractSubscriptionId<TContracts>>(
@@ -64,10 +64,10 @@ counter.dispatch(['missing']);
 // @ts-expect-error `reset` has no payload.
 counter.dispatch(['reset', 1]);
 
-const counterDb: { count: number } = counter.getAppDb();
-const sessionDb: { value: string } = session.getAppDb();
-void counterDb;
-void sessionDb;
+const counterState: { count: number } = counter.getState();
+const sessionState: { value: string } = session.getState();
+void counterState;
+void sessionState;
 
 counter.emit(['log', { value: 1 }]);
 counter.emit(['ping']);

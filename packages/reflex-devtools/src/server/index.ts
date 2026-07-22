@@ -2218,7 +2218,7 @@ export class DevtoolsServer {
           return storage.addTraces(event.payload);
         }
         break;
-      case 'reflex-app-db':
+      case 'reflex-state':
         if (event.payload !== undefined) {
           storage.updateAppState(event.payload);
         }
@@ -2523,7 +2523,7 @@ export class DevtoolsServer {
       }
     }
     this.sendTaggedRuntimeEventToUi(client, runtime, {
-      type: 'reflex-app-db',
+      type: 'reflex-state',
       payload: storage.getAppState(),
       timestamp: Date.now(),
     });
@@ -2712,7 +2712,7 @@ export class DevtoolsServer {
     switch (event.type) {
       case 'reflex-traces':
         return this.validTraceBatch(event.payload);
-      case 'reflex-app-db':
+      case 'reflex-state':
         return event.payload !== undefined;
       case 'reflex-active-subs':
         return this.validActiveSubscriptions(event.payload);

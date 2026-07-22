@@ -62,12 +62,12 @@ These items do not win an evaluation by themselves, but each removes a common re
 
 ## Phase 2 — Instance-scoped runtime (the quarter's architecture project, gates 1.0 RC)
 
-Before this phase, the database and registries were module-level globals ([app-db.ts](packages/reflex/src/runtime/app-db.ts), [handlers.ts](packages/reflex/src/runtime/handlers.ts)). That blocked or complicated SSR/per-request stores, microfrontends, embedded widgets, parallel tests, Storybook isolation — and, most on-thesis, multiple agent sandboxes running side by side. This phase moves those owners behind explicit runtime scopes while preserving the default-runtime facade.
+Before this phase, the state and registries were module-level globals ([state.ts](packages/reflex/src/runtime/state.ts), [handlers.ts](packages/reflex/src/runtime/handlers.ts)). That blocked or complicated SSR/per-request stores, microfrontends, embedded widgets, parallel tests, Storybook isolation — and, most on-thesis, multiple agent sandboxes running side by side. This phase moves those owners behind explicit runtime scopes while preserving the default-runtime facade.
 
 Target shape:
 
 ```ts
-const runtime = createReflexRuntime<Contracts>({ initialDb });
+const runtime = createReflexRuntime<Contracts>({ initialState });
 
 runtime.registerModule(feature);
 
@@ -76,13 +76,13 @@ runtime.registerModule(feature);
 </ReflexProvider>;
 ```
 
-- [x] **Runtime RFC first.** Define ownership and lifecycle for the db heads, event queue, handler registries, event metadata, global interceptors, subscription engine/cache, tracing, schedulers, built-ins, reset behavior, and DevTools inspector. Specify compatibility and migration constraints before moving code.
+- [x] **Runtime RFC first.** Define ownership and lifecycle for the state heads, event queue, handler registries, event metadata, global interceptors, subscription engine/cache, tracing, schedulers, built-ins, reset behavior, and DevTools inspector. Specify compatibility and migration constraints before moving code.
 - [x] `createReflexRuntime` + `ReflexProvider`; applications explicitly own their runtime and no package-global facade is created.
 - [x] `@flexsurfer/reflex/vanilla` and `/react` entrypoints.
 - [x] Store-local typed contracts as an alternative to global module augmentation.
 - [x] Public `watchSubscription` for non-React consumers (services, headless logic).
 - [x] Scoped feature registration returning an idempotent disposer; safe lazy loading and HMR without clearing every handler.
-- [x] Headless-friendly primitives finished on the instance API: safe app-db restore, non-React subscription evaluation/watching, and an explicit flush contract after restore/dispatch.
+- [x] Headless-friendly primitives finished on the instance API: safe state restore, non-React subscription evaluation/watching, and an explicit flush contract after restore/dispatch.
 - [x] SSR/per-request stores, with request-isolation and hydration tests.
 - [x] **Multi-runtime DevTools routing.** Add stable `runtimeId`/runtime names, multiple simultaneous runtime sessions per server, runtime selection in the dashboard and MCP tools, and per-runtime state, handlers, traces, dispatch, evaluation, and reconnect-session semantics. The former single-session server superseded the previous SDK client, so instance ownership alone would not have delivered parallel agent sandboxes. `sinceId` pagination remains in the Phase 3 MCP backlog.
 - [ ] **Architecture acceptance gates.** Prove two independent runtimes in one realm, parallel-test isolation, SSR request isolation, module install/dispose, explicit-runtime package consumption, and no material regression against Phase 1 performance budgets.
@@ -99,7 +99,7 @@ runtime.registerModule(feature);
 This phase begins once the instance API is stable enough that persistence, templates, examples, and public benchmarks will not be rewritten around a moving foundation.
 
 - [ ] **Persistence + versioned migrations.** Ship an instance-aware persistence API with version migrations, partial persistence, hydration state/barriers, custom merge behavior, and async storage adapters for localStorage, AsyncStorage, and SecureStore. Define SSR skip/defer behavior, per-runtime storage, restore publication semantics, redaction, and module disposal.
-- [ ] **`create-reflex-app` scaffolder.** Pin the intended convention: `db.ts` / `events.ts` / `subs.ts` / `effects.ts` / `*-ids.ts`, store-local or typed payload contracts, dev-only inspector wiring, CLAUDE.md/AGENTS.md routers, pinned MCP config, and a `reflex-map` script entry.
+- [ ] **`create-reflex-app` scaffolder.** Pin the intended convention: `state.ts` / `events.ts` / `subs.ts` / `effects.ts` / `*-ids.ts`, store-local or typed payload contracts, dev-only inspector wiring, CLAUDE.md/AGENTS.md routers, pinned MCP config, and a `reflex-map` script entry.
 - [ ] **Official Expo reference app, built by agents using the Reflex toolkit.** Include Metro/Hermes CI, AsyncStorage + SecureStore adapters, hydration migrations, background transitions, reconnect handling, and an offline command outbox. Dogfood the workflow in a public demo showing an agent building and verifying the application with metrics on screen.
 - [ ] **Public agent benchmark.** Compare the same tested tasks in Reflex, Zustand, and Redux Toolkit only after the internal harness is stable. Fix model and tool versions, publish prompts and source, use identical acceptance tests and time limits, run multiple repetitions, disclose failures and variance, and make the harness reproducible.
 - [ ] **MCP backlog prioritized by harness data** (tracked in [docs/devtools-roadmap.md](docs/devtools-roadmap.md)): `get_client_logs`, `find_state_changes(path)`, `sinceId` pagination with explicit cursor-reset responses, `reflex-map` static manifest + source locations through MCP, shape mode, snapshot/restore, `explain_event`, deterministic replay, and runtime schema validation for external tool payloads. Predicted winners remain hypotheses until measured.

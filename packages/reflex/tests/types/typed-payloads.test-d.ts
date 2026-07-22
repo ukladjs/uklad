@@ -1,6 +1,6 @@
 /**
  * Compile-time tests for the opt-in typed payload maps (EventPayloads /
- * SubPayloads) and the typed app db (AppDb). Run with `npm run test:types` —
+ * SubPayloads) and the typed app state (AppState). Run with `npm run test:types` —
  * tsc fails if a positive case stops compiling or an `@ts-expect-error` case
  * starts compiling.
  *
@@ -43,13 +43,13 @@ declare module '../../src/types' {
     dispatch: number;
     'dispatch-later': string;
   }
-  interface AppDb {
+  interface AppState {
     todos: Todo[];
   }
 }
 
 const runtime = createReflexRuntime<DefaultReflexContracts>({
-  initialDb: { todos: [] },
+  initialState: { todos: [] },
 });
 const { useSubscription } = createReflexHooks<DefaultReflexContracts>();
 
@@ -84,11 +84,11 @@ runtime.dispatchSync(['todos/add', 42]);
 
 // ---- regEvent --------------------------------------------------------
 
-// handler params are inferred from EventPayloads, draftDb from AppDb —
+// handler params are inferred from EventPayloads, draftState from AppState —
 // no generics needed
-runtime.regEvent('todos/add', ({ draftDb }, title) => {
+runtime.regEvent('todos/add', ({ draftState }, title) => {
   const _title: string = title;
-  const _first: string | undefined = draftDb.todos[0]?.title;
+  const _first: string | undefined = draftState.todos[0]?.title;
   void _title;
   void _first;
 });
@@ -99,9 +99,9 @@ const registrationOptions: EventRegistrationOptions = {
 };
 runtime.regEvent('app/init', () => undefined, registrationOptions);
 
-runtime.regEvent('app/init', ({ draftDb }) => {
-  // @ts-expect-error unknown db key is rejected once AppDb is augmented
-  draftDb.nope = 1;
+runtime.regEvent('app/init', ({ draftState }) => {
+  // @ts-expect-error unknown state key is rejected once AppState is augmented
+  draftState.nope = 1;
 });
 
 // @ts-expect-error handler params must match the declared payload
@@ -114,24 +114,24 @@ runtime.regEvent('not-in-map', (_cofx, anything: number) => {
   void anything;
 });
 
-// A separate runtime can combine a custom database with the event contract.
-interface LegacyDb {
+// A separate runtime can combine a custom state with the event contract.
+interface LegacyState {
   anything: string;
 }
-type LegacyContracts = { db: LegacyDb; events: EventPayloads };
+type LegacyContracts = { state: LegacyState; events: EventPayloads };
 const legacyRuntime = createReflexRuntime<LegacyContracts>({
-  initialDb: { anything: '' },
+  initialState: { anything: '' },
 });
-legacyRuntime.regEvent('todos/toggle', ({ draftDb }: CoEffects<LegacyDb>, id) => {
+legacyRuntime.regEvent('todos/toggle', ({ draftState }: CoEffects<LegacyState>, id) => {
   const _id: number = id;
-  const _s: string = draftDb.anything;
+  const _s: string = draftState.anything;
   void _id;
   void _s;
 });
 
-// A separately owned runtime may use a different database contract.
-legacyRuntime.regEvent('todos/add', ({ draftDb }, whatever) => {
-  void draftDb;
+// A separately owned runtime may use a different state contract.
+legacyRuntime.regEvent('todos/add', ({ draftState }, whatever) => {
+  void draftState;
   void whatever;
 });
 
@@ -139,8 +139,8 @@ legacyRuntime.regEvent('todos/add', ({ draftDb }, whatever) => {
 
 // declared effect ids with matching payloads, including the built-in
 // dispatch effects whose event vectors are checked against EventPayloads
-runtime.regEvent('todos/add', ({ draftDb }, title) => {
-  void draftDb;
+runtime.regEvent('todos/add', ({ draftState }, title) => {
+  void draftState;
   void title;
   return [
     ['storage/set-todos', []],
@@ -183,18 +183,18 @@ runtime.regEffect('undeclared-effect', (anything: number) => {
   void anything;
 });
 
-// ---- getAppDb / initAppDb --------------------------------------------
+// ---- getState / initState --------------------------------------------
 
-const db = runtime.getAppDb();
-const _all: Todo[] = db.todos;
+const state = runtime.getState();
+const _all: Todo[] = state.todos;
 void _all;
 
-runtime.restoreAppDb({ todos: [] });
-// @ts-expect-error initial state must match the augmented AppDb
-runtime.restoreAppDb({});
+runtime.restoreState({ todos: [] });
+// @ts-expect-error initial state must match the augmented AppState
+runtime.restoreState({});
 
-const legacyDb = legacyRuntime.getAppDb();
-const _s2: string = legacyDb.anything;
+const legacyState = legacyRuntime.getState();
+const _s2: string = legacyState.anything;
 void _s2;
 
 // ---- useSubscription -------------------------------------------------

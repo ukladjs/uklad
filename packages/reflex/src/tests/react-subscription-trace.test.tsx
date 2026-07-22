@@ -12,11 +12,11 @@ const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80)
 
 describe('React subscription tracing', () => {
   it('records hook notifications as render traces rather than watches', async () => {
-    const runtime = createReflexRuntime({ initialDb: { value: 1 }, runtimeId: 'render-trace' });
+    const runtime = createReflexRuntime({ initialState: { value: 1 }, runtimeId: 'render-trace' });
     const traces: Array<{ opType?: string }> = [];
     runtime.regSub('value');
-    runtime.regEvent('set-value', ({ draftDb }, value: number) => {
-      draftDb.value = value;
+    runtime.regEvent('set-value', ({ draftState }, value: number) => {
+      draftState.value = value;
     });
     runtime.enableTracing();
     runtime.registerTraceCallback('react-render-trace', (batch) => traces.push(...batch));

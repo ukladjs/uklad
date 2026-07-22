@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import { useSubscription } from '@flexsurfer/reflex';
 
-import type { Showing, Todo } from './db';
+import type { Showing, Todo } from './state';
 import { EVENT_IDS } from './event-ids';
 import { SUB_IDS } from './sub-ids';
 import { dispatch } from './runtime';

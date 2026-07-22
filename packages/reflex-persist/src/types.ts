@@ -1,5 +1,5 @@
 import type {
-  ContractDb,
+  ContractState,
   ContractEventPayloads,
   ContractSubscriptionPayloads,
   ReflexContracts,
@@ -41,22 +41,23 @@ export type PersistData =
   | readonly PersistData[]
   | { readonly [key: string]: PersistData };
 
-/** A configured app-db root, optionally with value transforms. */
+/** A configured state root, optionally with value transforms. */
 export interface PersistKeyConfig<TKey extends string = string, TValue = unknown> {
   readonly key: TKey;
-  /** App-db value to JSON-compatible stored data. Must be synchronous. */
+  /** App-state value to JSON-compatible stored data. Must be synchronous. */
   readonly serialize?: (value: TValue) => PersistData;
-  /** JSON-parsed stored data to an app-db value. Must be synchronous. */
+  /** JSON-parsed stored data to an state value. Must be synchronous. */
   readonly deserialize?: (data: unknown) => TValue;
 }
 
-export type AnyDb = Record<string, any>;
-type DbStringKey<TDb extends AnyDb> = Extract<keyof TDb, string>;
-type PersistKeyConfigForDb<TDb extends AnyDb> = {
-  [TKey in DbStringKey<TDb>]: PersistKeyConfig<TKey, TDb[TKey]>;
-}[DbStringKey<TDb>];
+export type AnyState = Record<string, any>;
+type StateStringKey<TState extends AnyState> = Extract<keyof TState, string>;
+type PersistKeyConfigForState<TState extends AnyState> = {
+  [TKey in StateStringKey<TState>]: PersistKeyConfig<TKey, TState[TKey]>;
+}[StateStringKey<TState>];
 
-export type PersistKey<TDb extends AnyDb = AnyDb> = DbStringKey<TDb> | PersistKeyConfigForDb<TDb>;
+export type PersistKey<TState extends AnyState = AnyState> =
+  StateStringKey<TState> | PersistKeyConfigForState<TState>;
 
 export type PersistErrorPhase =
   | 'read'
@@ -94,9 +95,9 @@ export interface PersistDiagnostic {
   readonly key?: string;
 }
 
-interface PersistBaseOptions<TDb extends AnyDb> {
-  /** Non-empty list of app-db root keys to persist. */
-  readonly keys: readonly PersistKey<TDb>[];
+interface PersistBaseOptions<TState extends AnyState> {
+  /** Non-empty list of state root keys to persist. */
+  readonly keys: readonly PersistKey<TState>[];
   /** Positive safe-integer schema version written into every entry. Default 1. */
   readonly version?: number;
   /** Migrates serialized data from an older version. Must be synchronous and pure. */
@@ -111,7 +112,7 @@ interface PersistBaseOptions<TDb extends AnyDb> {
  * Persistence configuration. The beta.1 product contract is the synchronous
  * branch; the async branch requires an explicit experimental opt-in.
  */
-export type PersistOptions<TDb extends AnyDb = AnyDb> = PersistBaseOptions<TDb> &
+export type PersistOptions<TState extends AnyState = AnyState> = PersistBaseOptions<TState> &
   (
     | {
         readonly storage: SyncPersistStorage;
@@ -129,14 +130,14 @@ export interface PersistHandle {
   hydrate(): void;
   /** Wait for hydration; waits for a future attempt when the attachment is idle. */
   whenHydrated(): Promise<void>;
-  /** Remove configured entries and reopen writes from the current app-db on success. */
+  /** Remove configured entries and reopen writes from the current state on success. */
   purge(): Promise<void>;
   /** Detach the module. Pending barriers reject deterministically. */
   dispose(): void;
 }
 
-/** Optional db field contributed by persistence to a strict runtime contract. */
-export interface PersistContractDb {
+/** Optional state field contributed by persistence to a strict runtime contract. */
+export interface PersistContractState {
   readonly [PERSIST_IDS.STATUS]?: PersistStatus;
 }
 
@@ -154,9 +155,9 @@ export interface PersistSubscriptionPayloads {
 /** Add the public persistence protocol to an existing strict runtime contract. */
 export type PersistContracts<TContracts extends ReflexContracts> = Omit<
   TContracts,
-  'db' | 'events' | 'subscriptions'
+  'state' | 'events' | 'subscriptions'
 > & {
-  readonly db: ContractDb<TContracts> & PersistContractDb;
+  readonly state: ContractState<TContracts> & PersistContractState;
   readonly events: ContractEventPayloads<TContracts> & PersistEventPayloads;
   readonly subscriptions: ContractSubscriptionPayloads<TContracts> & PersistSubscriptionPayloads;
 };

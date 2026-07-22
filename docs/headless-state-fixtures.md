@@ -12,9 +12,9 @@ In an agentic loop, code changes are frequent:
 
 1. the agent creates a state that reproduces a bug;
 2. the agent dispatches the event that fails;
-3. the agent edits an event, subscription, effect, or db shape;
+3. the agent edits an event, subscription, effect, or state shape;
 4. the headless runtime reloads or restarts;
-5. the in-memory app db is back to its default state;
+5. the in-memory app state is back to its default state;
 6. the agent must rebuild the repro state before it can test again.
 
 For simple examples this is a few dispatches. For real bugs it can be dozens of setup events, external fixtures, route changes, persisted values, or timers. Repeating that setup after every reload becomes the iteration tax.
@@ -37,10 +37,10 @@ The important distinction: the snapshot is usually taken **before** the event un
 
 ## Goals
 
-1. **Fast reload recovery.** After a headless restart, the agent can restore a known app-db state in one call.
+1. **Fast reload recovery.** After a headless restart, the agent can restore a known state state in one call.
 2. **Reproducible bug loops.** A bug can be represented as `state before action + event under test + expected observations`.
 3. **Bounded tool responses.** The agent should not dump full state just to know whether a fixture was restored.
-4. **Explicit staleness.** If a snapshot may not match the current db contract, the tool says so instead of restoring silently.
+4. **Explicit staleness.** If a snapshot may not match the current state contract, the tool says so instead of restoring silently.
 5. **Replay when semantics matter.** Snapshots optimize iteration; event replay remains available when the setup must be re-derived through new handlers.
 
 ---
@@ -65,7 +65,7 @@ agent/MCP
        stores snapshots, event logs, scenarios
        survives SDK reconnects
   -> headless app process
-       imports db/events/subs/effects
+       imports state/events/subs/effects
        enables tracing/devtools
        receives dispatch/restore/eval messages
 ```
@@ -79,7 +79,7 @@ Current trace storage is session-scoped and is cleared on SDK reconnect. Fixture
 Headless mode must not import the same browser adapters blindly. The shared application logic is:
 
 ```text
-db
+state
 events
 subs
 ids
@@ -98,7 +98,7 @@ A scaffolded project should make that split explicit (✅ the convention ships i
 
 ```text
 src/
-  db.ts
+  state.ts
   event-ids.ts
   events.ts
   sub-ids.ts
@@ -118,7 +118,7 @@ src/
 Browser entry:
 
 ```ts
-import './db';
+import './state';
 import './events';
 import './subs';
 import './effects.browser';
@@ -128,7 +128,7 @@ import './coeffects.browser';
 Headless entry:
 
 ```ts
-import './db';
+import './state';
 import './events';
 import './subs';
 import './effects.headless';
@@ -262,7 +262,7 @@ This tells the agent which effects are actually executed, which are fixture-back
 
 ### `snapshot_state`
 
-Capture the current app db under a generated id and optional name.
+Capture the current app state under a generated id and optional name.
 
 ```text
 snapshot_state { name: "category-filter-before-action" }
@@ -270,7 +270,7 @@ snapshot_state { name: "category-filter-before-action" }
     snapshotId: "snap_01J...",
     name: "category-filter-before-action",
     sessionEpoch: 7,
-    dbVersion: 3,
+    stateVersion: 3,
     appMapHash: "a13f...",
     stateShape: { expenses: "array[3]", selectedCategory: "string" }
   }
@@ -280,7 +280,7 @@ The response should include shape/metadata, not the full state.
 
 ### `restore_state`
 
-Restore a captured app-db snapshot into the currently connected app.
+Restore a captured state snapshot into the currently connected app.
 
 ```text
 restore_state { name: "category-filter-before-action" }
@@ -314,7 +314,7 @@ list_snapshots {}
         id: "snap_01J...",
         name: "category-filter-before-action",
         createdAt: "2026-07-06T10:15:00.000Z",
-        dbVersion: 3,
+        stateVersion: 3,
         appMapHash: "a13f...",
         stateShape: { expenses: "array[3]", selectedCategory: "string" }
       }
@@ -344,7 +344,7 @@ replay_events { recordingId: "rec_category_filter_setup" }
   }
 ```
 
-Replay is slower than snapshot restore, but safer after db-shape or handler changes because it re-derives state through the edited code.
+Replay is slower than snapshot restore, but safer after state-shape or handler changes because it re-derives state through the edited code.
 
 ### `save_scenario`
 
@@ -396,12 +396,12 @@ Use snapshots when:
 
 - the setup state is expensive to reach;
 - the code edit is localized to the event/sub/effect under test;
-- the db shape is unchanged or has a compatible migration;
+- the state shape is unchanged or has a compatible migration;
 - the agent is iterating rapidly on one bug.
 
 Use replay when:
 
-- the db shape changed;
+- the state shape changed;
 - setup event handlers changed;
 - coeffects/effects involved in setup changed;
 - the agent wants to verify that the user journey still constructs the same state.
@@ -427,7 +427,7 @@ Every snapshot should store enough metadata to detect risk:
   "name": "category-filter-before-action",
   "createdAt": "2026-07-06T10:15:00.000Z",
   "sessionEpoch": 7,
-  "dbVersion": 3,
+  "stateVersion": 3,
   "appMapHash": "a13f...",
   "schemaHash": "d9cc...",
   "stateShape": {
@@ -443,7 +443,7 @@ Every snapshot should store enough metadata to detect risk:
 
 Recommended fields:
 
-- `dbVersion`: app-provided version, usually from `appDb.meta.dbVersion` or a configured getter.
+- `stateVersion`: app-provided version, usually from `appState.meta.stateVersion` or a configured getter.
 - `appMapHash`: hash of `.reflex/map.json` when available.
 - `schemaHash`: hash of top-level keys and coarse value types.
 - `stateShape`: bounded summary for agent visibility.
@@ -465,7 +465,7 @@ MCP restore_state
        { type: "restore-state-to-client", payload: { restoreId, state } }
   -> SDK calls the injected Reflex inspector:
        inspector.restoreState(state)
-  -> app replaces appDb and flushes subscriptions
+  -> app replaces appState and flushes subscriptions
   -> SDK sends restore result:
        { type: "reflex-restore-result", payload: { restoreId, trace } }
   -> server resolves MCP call
@@ -483,14 +483,14 @@ The restore response should include:
 
 ## Internal restore event
 
-The Reflex library should provide a dev-only primitive for replacing app db safely. The current public API does not expose `updateAppDb` directly, and that is good; restore should remain a devtools/testing capability.
+The Reflex library should provide a dev-only primitive for replacing app state safely. The current public API does not expose `updateState` directly, and that is good; restore should remain a devtools/testing capability.
 
 Options:
 
 1. **The injected Reflex inspector exposes a traced restore operation.**
 
    ```ts
-   inspector.restoreState(nextDb)
+   inspector.restoreState(nextState)
    ```
 
    Reflex owns the internal event or publication-safe primitive; DevTools only
@@ -499,7 +499,7 @@ Options:
 2. **Reflex exports a dev-only helper used by the inspector.**
 
    ```ts
-   restoreAppDbForDevtools(nextDb)
+   restoreStateForDevtools(nextState)
    ```
 
    The inspector calls it after DevTools forwards the restore message.
@@ -632,7 +632,7 @@ State snapshots may contain user data, tokens, or local test secrets. Guardrails
 
 - Optional disk persistence.
 - Snapshot redaction hooks.
-- App-provided db version/migration hooks.
+- App-provided state version/migration hooks.
 - `appMapHash` and schema compatibility checks.
 - App-provided redaction and adapter-policy hooks for sensitive side-effect payloads.
 

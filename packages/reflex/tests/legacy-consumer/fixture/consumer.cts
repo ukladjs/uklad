@@ -5,16 +5,16 @@ import reflexReact = require('@flexsurfer/reflex/react');
 import reflexVanilla = require('@flexsurfer/reflex/vanilla');
 import type { EventRegistrationOptions, Trace } from '@flexsurfer/reflex';
 
-const runtime = reflexVanilla.createReflexRuntime({ initialDb: {} });
+const runtime = reflexVanilla.createReflexRuntime({ initialState: {} });
 runtime.dispatch(['legacy/cjs']);
 runtime.regEvent('legacy/cjs', () => undefined);
 const value: unknown = reflex.useSubscription(['legacy/cjs']);
-const db = runtime.getAppDb();
+const state = runtime.getState();
 const options: EventRegistrationOptions = { coeffects: [['now']] };
 const trace: Trace | undefined = undefined;
 
 void value;
-void db;
+void state;
 void options;
 void trace;
 void reflexReact.ReflexProvider;

@@ -1,28 +1,28 @@
 import type { Draft } from 'immer';
 
-// Database and shared identifiers
+// State and shared identifiers
 
-export type Db<T = Record<string, any>> = T;
+export type State<T = Record<string, any>> = T;
 export type Id = string;
 
 /**
- * Opt-in typed app-db shape. Empty by default; augment it from app code so
- * db-typed APIs infer the application state without explicit generics:
+ * Opt-in typed state shape. Empty by default; augment it from app code so
+ * state-typed APIs infer the application state without explicit generics:
  *
  * ```ts
  * declare module '@flexsurfer/reflex' {
- *   interface AppDb { todos: Todo[]; showing: Showing }
- *   // Or reuse an existing type: interface AppDb extends MyDbShape {}
+ *   interface AppState { todos: Todo[]; showing: Showing }
+ *   // Or reuse an existing type: interface AppState extends MyStateShape {}
  * }
  * ```
  *
- * While this interface is empty, db-typed APIs use `Record<string, any>` for
+ * While this interface is empty, state-typed APIs use `Record<string, any>` for
  * backward compatibility.
  */
-export interface AppDb {}
+export interface AppState {}
 
-/** The augmented `AppDb`, or `Record<string, any>` while it is empty. */
-export type DefaultAppDb = [keyof AppDb] extends [never] ? Record<string, any> : AppDb;
+/** The augmented `AppState`, or `Record<string, any>` while it is empty. */
+export type DefaultAppState = [keyof AppState] extends [never] ? Record<string, any> : AppState;
 
 export type EqualityCheckFn = (a: any, b: any) => boolean;
 
@@ -65,7 +65,7 @@ export type DispatchVector = [keyof EventPayloads] extends [never]
         : never;
     }[keyof EventPayloads];
 
-export type EventHandler<T = DefaultAppDb, P extends readonly any[] = any[]> = (
+export type EventHandler<T = DefaultAppState, P extends readonly any[] = any[]> = (
   coeffects: CoEffects<T>,
   ...params: P
 ) => Effects | void;
@@ -75,7 +75,7 @@ export type EventHandler<T = DefaultAppDb, P extends readonly any[] = any[]> = (
  * coeffects or interceptors. Positional arrays remain available for backward
  * compatibility, but an empty positional array cannot communicate its intent.
  */
-export interface EventRegistrationOptions<T = DefaultAppDb> {
+export interface EventRegistrationOptions<T = DefaultAppState> {
   coeffects?: ReadonlyArray<readonly [id: Id] | readonly [id: Id, value: unknown]>;
   interceptors?: ReadonlyArray<Interceptor<T>>;
 }
@@ -128,13 +128,13 @@ export type Effects = ([keyof EffectPayloads] extends [never]
 
 export type EffectHandler<V = any> = (value: V) => void;
 
-export interface CoEffects<T = DefaultAppDb> {
+export interface CoEffects<T = DefaultAppState> {
   event: EventVector;
-  draftDb: Draft<Db<T>>;
+  draftState: Draft<State<T>>;
   [key: string]: any;
 }
 
-export type CoEffectHandler<T = DefaultAppDb> = (
+export type CoEffectHandler<T = DefaultAppState> = (
   coeffects: CoEffects<T>,
   value?: any,
 ) => CoEffects<T>;
@@ -144,17 +144,17 @@ export type CoEffectHandler<T = DefaultAppDb> = (
 export interface Context<T = Record<string, any>> {
   coeffects: CoEffects<T>;
   /**
-   * The app-db generation captured before this event's interceptor chain
+   * The state generation captured before this event's interceptor chain
    * begins. Interceptors may observe it but must not replace it.
    */
-  readonly previousDb: Db<T>;
+  readonly previousState: State<T>;
   /** The shared effect list. Interceptors may append entries but must not replace it. */
   readonly effects: Effects;
   /**
-   * The final db generation produced by the event handler; unset until it
+   * The final state generation produced by the event handler; unset until it
    * runs. Interceptors may observe it but must not replace it.
    */
-  readonly newDb?: Db<T>;
+  readonly newState?: State<T>;
   queue: Interceptor<T>[];
   stack: Interceptor<T>[];
   originalException: boolean;

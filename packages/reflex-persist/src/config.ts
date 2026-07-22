@@ -1,6 +1,6 @@
 import { PERSIST_IDS } from './ids';
 import type {
-  AnyDb,
+  AnyState,
   PersistData,
   PersistDiagnostic,
   PersistKeyConfig,
@@ -19,7 +19,7 @@ export interface NormalizedOptions {
 }
 
 /** Validate and freeze one persistence attachment's static configuration. */
-export function normalizeOptions(options: PersistOptions<AnyDb>): NormalizedOptions {
+export function normalizeOptions(options: PersistOptions<AnyState>): NormalizedOptions {
   if (typeof options !== 'object' || options === null) {
     throw new Error('[reflex-persist] options must be an object.');
   }
@@ -67,7 +67,7 @@ export function normalizeOptions(options: PersistOptions<AnyDb>): NormalizedOpti
       throw new Error('[reflex-persist] configured keys must be non-empty strings.');
     }
     if (config.key === PERSIST_IDS.STATUS) {
-      throw new Error(`[reflex-persist] '${PERSIST_IDS.STATUS}' is a reserved app-db root.`);
+      throw new Error(`[reflex-persist] '${PERSIST_IDS.STATUS}' is a reserved state root.`);
     }
     if (seen.has(config.key)) {
       throw new Error(`[reflex-persist] Duplicate configured key '${config.key}'.`);

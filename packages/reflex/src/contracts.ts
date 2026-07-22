@@ -1,4 +1,4 @@
-import type { DefaultAppDb, EffectPayloads, EventPayloads, SubPayloads } from './types';
+import type { DefaultAppState, EffectPayloads, EventPayloads, SubPayloads } from './types';
 
 /**
  * Store-local type contract consumed by an explicit Reflex runtime.
@@ -8,7 +8,7 @@ import type { DefaultAppDb, EffectPayloads, EventPayloads, SubPayloads } from '.
  * behavior; a non-empty section narrows the corresponding runtime API.
  */
 export interface ReflexContracts {
-  readonly db?: Record<string, any>;
+  readonly state?: Record<string, any>;
   readonly events?: object;
   readonly effects?: object;
   readonly subscriptions?: object;
@@ -28,7 +28,7 @@ export type PermissiveSubscriptionPayloads = Record<
 
 /** Fully permissive contract for incrementally typed or JavaScript runtimes. */
 export interface PermissiveReflexContracts extends ReflexContracts {
-  readonly db: Record<string, any>;
+  readonly state: Record<string, any>;
   readonly events: PermissiveEventPayloads;
   readonly effects: PermissiveEffectPayloads;
   readonly subscriptions: PermissiveSubscriptionPayloads;
@@ -41,15 +41,15 @@ export interface PermissiveReflexContracts extends ReflexContracts {
  * payload maps are normalized to permissive maps by the extraction helpers.
  */
 export interface DefaultReflexContracts extends ReflexContracts {
-  readonly db: DefaultAppDb;
+  readonly state: DefaultAppState;
   readonly events: EventPayloads;
   readonly effects: EffectPayloads;
   readonly subscriptions: SubPayloads;
 }
 
 /** Options shared by `createReflexRuntime` implementations. */
-export interface CreateReflexRuntimeOptions<TDb extends Record<string, any>> {
-  readonly initialDb: TDb;
+export interface CreateReflexRuntimeOptions<TState extends Record<string, any>> {
+  readonly initialState: TState;
   readonly runtimeId?: string;
   readonly name?: string;
 }
@@ -76,10 +76,10 @@ type EffectTupleFor<TKey extends string, TPayload> = 0 extends 1 & TPayload
       ? [id: TKey, value?: TPayload]
       : [id: TKey, value: TPayload];
 
-/** Database shape owned by `TContracts`, with the legacy db as fallback. */
-export type ContractDb<TContracts> = TContracts extends { readonly db: infer TDb }
-  ? TDb extends Record<string, any>
-    ? TDb
+/** State shape owned by `TContracts`, with the legacy state as fallback. */
+export type ContractState<TContracts> = TContracts extends { readonly state: infer TState }
+  ? TState extends Record<string, any>
+    ? TState
     : Record<string, any>
   : Record<string, any>;
 

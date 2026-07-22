@@ -560,7 +560,7 @@ test('failed or incompatible SDK authentication cannot supersede a valid runtime
   const { baseUrl, wsUrl, sessions } = await startServer();
   const validSocket = await connectSdk(wsUrl, () => {});
   sendSdkEvent(validSocket, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { retained: true },
   });
   await waitForStatus(
@@ -642,7 +642,7 @@ test('runtime HTTP fallback rejects a stale session after SDK reconnect', async 
       'X-Reflex-Runtime-Session': staleSessionId,
     },
     body: JSON.stringify({
-      type: 'reflex-app-db',
+      type: 'reflex-state',
       payload: { stale: true },
     }),
   }, 'runtime');
@@ -704,7 +704,7 @@ test('retention-limit rejection sends a bounded notice and keeps the runtime soc
       && message.payload?.code === 'RUNTIME_TELEMETRY_DROPPED',
   );
   sendSdkEvent(socket, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { data: 'x'.repeat(512) },
   });
   const notice = await noticePromise;
@@ -712,13 +712,13 @@ test('retention-limit rejection sends a bounded notice and keeps the runtime soc
   assert.deepEqual(notice.payload, {
     code: 'RUNTIME_TELEMETRY_DROPPED',
     reason: 'retention-limit',
-    eventType: 'reflex-app-db',
+    eventType: 'reflex-state',
   });
   assert(JSON.stringify(notice).length < 512);
   assert.equal(socket.readyState, WebSocket.OPEN);
 
   sendSdkEvent(socket, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { retained: true },
   });
   const status = await waitForStatus(
@@ -747,7 +747,7 @@ test('server redaction failure drops telemetry nonfatally with no exception deta
   );
 
   sendSdkEvent(socket, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { value: marker },
   });
   const notice = await noticePromise;
@@ -755,7 +755,7 @@ test('server redaction failure drops telemetry nonfatally with no exception deta
   assert.deepEqual(notice.payload, {
     code: 'RUNTIME_TELEMETRY_DROPPED',
     reason: 'redaction-failed',
-    eventType: 'reflex-app-db',
+    eventType: 'reflex-state',
   });
   assert.equal(JSON.stringify(notice).includes(marker), false);
   assert.equal(socket.readyState, WebSocket.OPEN);
@@ -786,7 +786,7 @@ test('hard WebSocket frame limits may close oversized senders with 1009', async 
   const closed = waitForSocketClose(socket);
 
   sendSdkEvent(socket, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { data: 'x'.repeat(1024) },
   });
 
@@ -882,7 +882,7 @@ test('server-side redaction prevents state, trace, dispatch, and audit secret le
     });
   });
   sendSdkEvent(sdkSocket, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: {
       account: {
         displayName: 'Ada',
@@ -1597,7 +1597,7 @@ test('two runtimes coexist with isolated status, state, handlers, traces, dispat
     payload: { runtime: 'headless', tracing: true },
   });
   sendSdkEvent(alpha, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { owner: 'alpha', value: 1 },
   });
   sendSdkEvent(alpha, {
@@ -1618,7 +1618,7 @@ test('two runtimes coexist with isolated status, state, handlers, traces, dispat
     payload: { runtime: 'browser', tracing: false },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { owner: 'beta', value: 2 },
   });
   sendSdkEvent(beta, {
@@ -1753,11 +1753,11 @@ test('same-id reconnect supersedes and clears only that runtime and only its pen
     { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
   );
   sendSdkEvent(firstAlpha, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { owner: 'alpha-before-reconnect' },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { owner: 'beta-retained' },
   });
   await waitForStatus(
@@ -1836,11 +1836,11 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
     { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
   );
   sendSdkEvent(alpha, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { owner: 'alpha-retained' },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { owner: 'beta-retained' },
   });
   await waitForStatus(
@@ -1866,7 +1866,7 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
   const alphaSnapshotPromise = waitForSocketMessage(
     ui,
     (message) =>
-      message.type === 'reflex-app-db'
+      message.type === 'reflex-state'
       && message.runtimeId === 'runtime-alpha'
       && message.payload?.owner === 'alpha-retained',
   );
@@ -1890,7 +1890,7 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
 
   const retainedAlphaReplayCount = ui.receivedMessages.filter(
     (message) =>
-      message.type === 'reflex-app-db'
+      message.type === 'reflex-state'
       && message.runtimeId === 'runtime-alpha'
       && message.payload?.owner === 'alpha-retained',
   ).length;
@@ -1927,7 +1927,7 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
   assert.equal(
     ui.receivedMessages.filter(
       (message) =>
-        message.type === 'reflex-app-db'
+        message.type === 'reflex-state'
         && message.runtimeId === 'runtime-alpha'
         && message.payload?.owner === 'alpha-retained',
     ).length,
@@ -1936,12 +1936,12 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
 
   const betaLiveMessageCount = () => ui.receivedMessages.filter(
     (message) =>
-      message.type === 'reflex-app-db'
+      message.type === 'reflex-state'
       && message.runtimeId === 'runtime-beta'
       && message.payload?.owner === 'beta-live',
   ).length;
   sendSdkEvent(beta, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { owner: 'beta-live' },
   });
   await waitForRuntimeState(
@@ -1954,12 +1954,12 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
   const alphaLivePromise = waitForSocketMessage(
     ui,
     (message) =>
-      message.type === 'reflex-app-db'
+      message.type === 'reflex-state'
       && message.runtimeId === 'runtime-alpha'
       && message.payload?.owner === 'alpha-live',
   );
   sendSdkEvent(alpha, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { owner: 'alpha-live' },
   });
   const alphaLive = await alphaLivePromise;
@@ -1969,7 +1969,7 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
   const betaSnapshotPromise = waitForSocketMessage(
     ui,
     (message) =>
-      message.type === 'reflex-app-db'
+      message.type === 'reflex-state'
       && message.runtimeId === 'runtime-beta'
       && message.payload?.owner === 'beta-live',
   );
@@ -2009,7 +2009,7 @@ test('UI runtime selection replays a minimal snapshot when MCP storage is disabl
   );
 
   sendSdkEvent(beta, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { owner: 'beta', value: 1 },
   });
   sendSdkEvent(beta, {
@@ -2043,7 +2043,7 @@ test('UI runtime selection replays a minimal snapshot when MCP storage is disabl
   const statePromise = waitForSocketMessage(
     ui,
     (message) =>
-      message.type === 'reflex-app-db'
+      message.type === 'reflex-state'
       && message.runtimeId === 'runtime-beta'
       && message.payload?.value === 2,
   );
@@ -2091,7 +2091,7 @@ test('UI snapshot replay requires inspect capability', async () => {
     { runtimeId: 'runtime-private', runtimeName: 'Private Runtime' },
   );
   sendSdkEvent(runtime, {
-    type: 'reflex-app-db',
+    type: 'reflex-state',
     payload: { secretProfile: 'must-not-replay' },
   });
   await waitForCondition(() =>
@@ -2104,7 +2104,7 @@ test('UI snapshot replay requires inspect capability', async () => {
   await new Promise((resolve) => setTimeout(resolve, 25));
   assert.equal(
     ui.receivedMessages.some((message) =>
-      message.type === 'reflex-app-db'
+      message.type === 'reflex-state'
       || message.type === 'reflex-traces'
       || message.type === 'reflex-active-subs'
       || message.type === 'reflex-handler-keys'),

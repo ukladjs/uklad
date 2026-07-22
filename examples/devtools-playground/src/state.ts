@@ -1,6 +1,6 @@
 import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
 
-export interface PlaygroundDb extends Record<string, any> {
+export interface PlaygroundState extends Record<string, any> {
   users: Array<{ id: number; name: string; active: boolean }>;
   counter: number;
   isLoading: boolean;
@@ -14,14 +14,14 @@ export interface PlaygroundDb extends Record<string, any> {
 }
 
 export interface PlaygroundContracts extends ReflexContracts {
-  readonly db: PlaygroundDb;
+  readonly state: PlaygroundState;
   readonly events: Record<string, readonly any[]>;
   readonly effects: Record<string, any>;
   readonly subscriptions: Record<string, { readonly params: readonly any[]; readonly result: any }>;
 }
 
 /** Create fresh state for one independently owned playground runtime. */
-export function createInitialAppDb(): PlaygroundDb {
+export function createInitialAppState(): PlaygroundState {
   return {
     users: [
       { id: 1, name: 'John Doe', active: true },

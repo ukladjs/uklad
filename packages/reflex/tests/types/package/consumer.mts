@@ -14,10 +14,10 @@ import type {
 
 const options: EventRegistrationOptions = { coeffects: [['now']] };
 const trace: Trace | undefined = undefined;
-const runtime = createReflexRuntime({ initialDb: { package: 'esm' } });
+const runtime = createReflexRuntime({ initialState: { package: 'esm' } });
 runtime.regEvent('package/esm', () => undefined);
 runtime.dispatch(['package/esm']);
-const runtimeDb: unknown = runtime.getAppDb();
+const runtimeState: unknown = runtime.getState();
 const inspector: ReflexInspector = runtime.createInspector();
 const snapshot: ReflexInspectorSnapshot = inspector.getSnapshot();
 const removeTraceListener = inspector.subscribeTraces(() => {});
@@ -27,7 +27,7 @@ const hooks = createReflexHooks();
 void options;
 void trace;
 void snapshot;
-void runtimeDb;
+void runtimeState;
 void ReflexProvider;
 void useReflexRuntime;
 void useReactSubscription;

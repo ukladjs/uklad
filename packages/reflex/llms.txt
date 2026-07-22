@@ -26,7 +26,7 @@ src/state/
 
 Rules:
 - Keep IDs centralized in `event-ids.ts`, `effect-ids.ts`, `sub-ids.ts`.
-- Create an explicit runtime in `runtime.ts` with `createReflexRuntime({ initialDb })`.
+- Create an explicit runtime in `runtime.ts` with `createReflexRuntime({ initialState })`.
 - Express feature registrations as `runtime.registerModule((scope) => { ... })`; keep and invoke its disposer for lazy loading/HMR.
 - Mount React below `<ReflexProvider runtime={runtime}>`. The package-root API remains available only as the single-runtime compatibility facade.
 - Instance methods (`runtime.dispatch`, `dispatchSync`, `getSubscriptionValue`, `watchSubscription`, and `useSubscription` through them) throw on unregistered event/subscription ids — register before dispatching or subscribing.
@@ -36,20 +36,20 @@ Rules:
 
 - Grow horizontally (new top-level feature keys), avoid deep nesting.
 - Keep UI state explicit and separate from domain entities. Use a plain prefix on field names to group by domain (e.g. `uiSidebarOpen`, `uiSelectedTab`, `uiModalVisible` for UI state; `todosMap`, `todosFilter` for domain state). Avoid separators like `/` or `.` in field names — flat `camelCase` with a domain prefix keeps keys simple, grep-friendly, and avoids issues with object path accessors.
-- If using `Map`/`Set` in DB, call `enableMapSet()` before creating the runtime.
+- If using `Map`/`Set` in STATE, call `enableMapSet()` before creating the runtime.
 
 ## 3) Events `regEvent`
 
 - Events must be synchronous and focused on state transitions.
-- Events should read all required data from `draftDb` (or via coeffects) — never rely on callers passing subscription-derived state; dispatch calls from views should only carry user intent (IDs, input values, flags).
+- Events should read all required data from `draftState` (or via coeffects) — never rely on callers passing subscription-derived state; dispatch calls from views should only carry user intent (IDs, input values, flags).
 - Validate inputs and guard clauses first; return early on invalid state.
-- Mutate only required fields on `draftDb`.
+- Mutate only required fields on `draftState`.
 - Avoid unnecessary object/array recreation (`{...obj}`, `[...arr]`) when no actual change is needed.
 - Never perform async/API/localStorage work directly in events.
 - Return effect tuples for side effects.
 - When sending mutated draft data to effects, always use `current(...)`.
 - Prefer deterministic coeffects (time/id/random/env) instead of direct globals for testability.
-- `dispatch` is async (queued; on the next animation-frame flush the subscription graph settles and listeners run synchronously inside that scheduled flush task). `dispatchSync` commits and notifies subscribers before returning — use it only where that timing is load-bearing (controlled inputs bound to db state). Never call `dispatchSync` from inside an event handler (it throws) — return a `['dispatch', ...]` effect instead. Calling plain `dispatch` from inside a handler warns in dev for the same reason: emit follow-up events through the `['dispatch', ...]` effect.
+- `dispatch` is async (queued; on the next animation-frame flush the subscription graph settles and listeners run synchronously inside that scheduled flush task). `dispatchSync` commits and notifies subscribers before returning — use it only where that timing is load-bearing (controlled inputs bound to state state). Never call `dispatchSync` from inside an event handler (it throws) — return a `['dispatch', ...]` effect instead. Calling plain `dispatch` from inside a handler warns in dev for the same reason: emit follow-up events through the `['dispatch', ...]` effect.
 
 Event naming:
 - Keep exported constant keys in `UPPER_SNAKE_CASE`.
@@ -81,7 +81,7 @@ For compile-checked dispatch payloads, declare the typed payload maps (section 1
 
 - Components should only:
   - subscribe to minimal required data
-  - dispatch events on user intent (pass only user-provided values — e.g. input text, selected id — never forward subscription data back through dispatch; the event handler should read everything it needs from the DB itself)
+  - dispatch events on user intent (pass only user-provided values — e.g. input text, selected id — never forward subscription data back through dispatch; the event handler should read everything it needs from the STATE itself)
   - render UI
 - Always pass the component name as the second argument to `useSubscription` for devtools tracing:
   `const todos = useSubscription<Todo[]>([SUB_IDS.TODOS], 'TodoList');`
@@ -91,7 +91,7 @@ For compile-checked dispatch payloads, declare the typed payload maps (section 1
   - UI-only toggles scoped to one component (hover/open/focus)
   - refs, DOM measurement, animation lifecycle
 - Do not mirror runtime-owned Reflex state in `useState`/`useReducer`.
-- If state is shared, persisted, or business-relevant, keep it in Reflex DB via events/subscriptions.
+- If state is shared, persisted, or business-relevant, keep it in Reflex STATE via events/subscriptions.
 - Keep `useEffect` thin in components; business side effects belong in Reflex effects/coeffects.
 - Do not place business rules/validation pipelines in component handlers.
 - Avoid over-subscription (row/item components should not subscribe to full collections).
@@ -125,7 +125,7 @@ Events and subscriptions are pure functions. In explicit-runtime code, install t
 
 ### Testing Events
 
-Use `runtime.getHandlers().event[EVENT_ID]` to get the raw handler after installing the feature. Build a mock `coeffects` object with `draftDb` (and any injected coeffects), call the handler, then assert mutations on `draftDb` and the returned effect tuples.
+Use `runtime.getHandlers().event[EVENT_ID]` to get the raw handler after installing the feature. Build a mock `coeffects` object with `draftState` (and any injected coeffects), call the handler, then assert mutations on `draftState` and the returned effect tuples.
 
 ```ts
 import { getHandler } from '@flexsurfer/reflex';
@@ -135,32 +135,32 @@ import './events'; // side-effect import registers handlers
 it('ADD_TODO should add a todo and persist', () => {
   const handler = getHandler('event', EVENT_IDS.ADD_TODO) as EventHandler;
 
-  const mockDB = { todos: [], showing: 'all' };
+  const mockSTATE = { todos: [], showing: 'all' };
   const coeffects = {
     event: [EVENT_IDS.ADD_TODO, 'Buy milk'],
-    draftDb: mockDB,
+    draftState: mockSTATE,
     now: 12345,
   } as CoEffects;
 
   const effects = handler(coeffects, 'Buy milk');
 
   // Assert state mutation
-  expect(mockDB.todos).toHaveLength(1);
-  expect(mockDB.todos[0]).toEqual({ id: 12345, title: 'Buy milk', done: false });
+  expect(mockSTATE.todos).toHaveLength(1);
+  expect(mockSTATE.todos[0]).toEqual({ id: 12345, title: 'Buy milk', done: false });
 
   // Assert emitted effects
-  expect(effects).toEqual([[EFFECT_IDS.SET_TODOS, mockDB.todos]]);
+  expect(effects).toEqual([[EFFECT_IDS.SET_TODOS, mockSTATE.todos]]);
 });
 
 it('ADD_TODO should ignore empty input', () => {
   const handler = getHandler('event', EVENT_IDS.ADD_TODO) as EventHandler;
 
-  const mockDB = { todos: [], showing: 'all' };
-  const coeffects = { event: [EVENT_IDS.ADD_TODO, '  '], draftDb: mockDB, now: 1 } as CoEffects;
+  const mockSTATE = { todos: [], showing: 'all' };
+  const coeffects = { event: [EVENT_IDS.ADD_TODO, '  '], draftState: mockSTATE, now: 1 } as CoEffects;
 
   const effects = handler(coeffects, '  ');
 
-  expect(mockDB.todos).toHaveLength(0);
+  expect(mockSTATE.todos).toHaveLength(0);
   expect(effects).toBeUndefined();
 });
 ```
@@ -169,7 +169,7 @@ it('ADD_TODO should ignore empty input', () => {
 Computed subscriptions: call `handler(inputFromParentSub1, inputFromParentSub2, ...)` directly — the handler receives its parent subscription values as positional arguments.
 
 ```ts
-import { getHandler, initAppDb } from '@flexsurfer/reflex';
+import { getHandler, initState } from '@flexsurfer/reflex';
 import type { SubHandler, SubDepsHandler } from '@flexsurfer/reflex';
 import './subs';
 
@@ -195,7 +195,7 @@ Before finalizing generated code:
 - No unnecessary object/array recreation in events.
 - Expensive work not placed in frequently re-run subscriptions.
 - Subscriptions return view-ready data; components do not reshape subscription output.
-- Dispatch calls from components pass only user intent, not subscription data; events read from DB.
+- Dispatch calls from components pass only user intent, not subscription data; events read from STATE.
 - Tests added for new event/subscription behavior.
 
 ## 10) Working in an Existing Reflex Codebase (context-efficient navigation)
@@ -204,7 +204,7 @@ A Reflex app is fully indexed by its ID files. Follow this protocol instead of e
 
 Build the map from IDs, not from code:
 - Read the `*-ids.ts` files first. Together they are a complete index of everything the app can do (events), every side effect it performs (effects), and every view of its state (subs). Do not read `events.ts`/`subs.ts` end-to-end.
-- Read `db.ts` for the state shape. IDs + db shape are usually all the context needed to plan a change.
+- Read `state.ts` for the state shape. IDs + state shape are usually all the context needed to plan a change.
 
 Find code by exact-match grep, never by browsing:
 - Implementation: grep `regEvent(EVENT_IDS.TODOS_ADD` or `regSub(SUB_IDS.TODOS_LIST` — exactly one match.
@@ -212,17 +212,17 @@ Find code by exact-match grep, never by browsing:
 - Every ID appears in exactly three roles: definition (ids file), one registration, and call sites. Apart from the application-level `ReflexProvider` runtime boundary, there is no per-feature provider or middleware wiring to trace.
 
 Read only the handler, trust the contract:
-- Event handlers are pure: inputs = coeffects + event params, outputs = `draftDb` mutations + returned effect tuples. Nothing outside the function body changes its behavior, so reading the one function is sufficient to understand or safely modify it.
+- Event handlers are pure: inputs = coeffects + event params, outputs = `draftState` mutations + returned effect tuples. Nothing outside the function body changes its behavior, so reading the one function is sufficient to understand or safely modify it.
 - Subscription `computeFn` inputs are exactly the parent sub values declared in `depsFn` — the data-flow graph is declared, not inferred.
 - Views only subscribe/dispatch/render. Changing state logic never requires reading component code, and changing markup never requires reading handlers.
 
 Bounded file sets for common tasks:
 - New behavior: add event ID → handler in `events.ts` → (optional) effect → dispatch from view.
 - New derived data: add sub ID → `regSub` → `useSubscription` in component.
-- State shape change: `db.ts` + root subs + handlers touching that key (grep the db key).
+- State shape change: `state.ts` + root subs + handlers touching that key (grep the state key).
 - State bug: reproduce → devtools event trace (event sequence + Immer patches show exactly which event wrote what) → read that one handler. Prefer the trace over reading code.
 - Failed events are visible in traces with a normalized error shape (`phase`, `message`, `stack`, plus `interceptor`/`direction` or `effect`): an event whose handler/interceptor threw carries `tags.error` with `phase: 'handler'`; dispatching an unregistered event id produces a trace with `tags.error.phase: 'missing-handler'`; effects that threw after a committed event are listed in `tags.effectErrors` with `phase: 'effect'`. Check these tags before assuming a dispatch worked.
-- If the `reflex-devtools` MCP server is connected, call `app_status` first, select the intended `runtimeId`, and use the per-runtime tools instead of reading code: `get_app_state` (current db, supports path), `get_active_subs` (computed sub values), `get_handlers` (all registered event/fx/cofx/sub ids — a runtime index of the app), and `get_traces` (events, sub runs, renders, timings). Pass `runtimeId` to every call when multiple runtimes are connected. `dispatch_event` is always listed but succeeds only after an explicit `--allow-dispatch` grant; DevTools is read-only by default.
+- If the `reflex-devtools` MCP server is connected, call `app_status` first, select the intended `runtimeId`, and use the per-runtime tools instead of reading code: `get_app_state` (current state, supports path), `get_active_subs` (computed sub values), `get_handlers` (all registered event/fx/cofx/sub ids — a runtime index of the app), and `get_traces` (events, sub runs, renders, timings). Pass `runtimeId` to every call when multiple runtimes are connected. `dispatch_event` is always listed but succeeds only after an explicit `--allow-dispatch` grant; DevTools is read-only by default.
 
 Keep the index self-documenting:
 - Put a one-line signature comment on each ID so the ids file alone is enough to dispatch or subscribe correctly, without opening handlers:
@@ -258,7 +258,7 @@ import {
 type Todo = { id: string; text: string; done: boolean };
 
 export const runtime = createReflexRuntime({
-  initialDb: { todos: [] as Todo[] },
+  initialState: { todos: [] as Todo[] },
   runtimeId: 'todos',
 });
 
@@ -266,11 +266,11 @@ runtime.regEffect('storage/set_todos', (todos: Todo[]) => {
   localStorage.setItem('todos', JSON.stringify(todos));
 });
 
-runtime.regEvent('todos/add', ({ draftDb }, text: string) => {
+runtime.regEvent('todos/add', ({ draftState }, text: string) => {
   const clean = text.trim();
   if (!clean) return;
-  draftDb.todos.push({ id: `todo_${Date.now()}`, text: clean, done: false });
-  return [['storage/set_todos', current(draftDb.todos)]];
+  draftState.todos.push({ id: `todo_${Date.now()}`, text: clean, done: false });
+  return [['storage/set_todos', current(draftState.todos)]];
 });
 
 runtime.regSub('todos/list', 'todos');
@@ -291,12 +291,12 @@ runtime.dispatch(['todos/add', 'Buy milk']);
 ```
 ## 12) Typed Payload Maps (opt-in compile-time checking)
 
-Reflex ships four empty, augmentable interfaces: `EventPayloads` (event id → params tuple), `SubPayloads` (sub id → `{ params; result }`), `EffectPayloads` (effect id → payload type), and `AppDb` (the db shape). While unaugmented, the whole API stays untyped and everything above works as written. Declaring them turns `tsc` into a wiring verifier — typo'd ids, wrong payloads, wrong subscription usage, invalid effect tuples, and unknown db keys become compile errors.
+Reflex ships four empty, augmentable interfaces: `EventPayloads` (event id → params tuple), `SubPayloads` (sub id → `{ params; result }`), `EffectPayloads` (effect id → payload type), and `AppState` (the state shape). While unaugmented, the whole API stays untyped and everything above works as written. Declaring them turns `tsc` into a wiring verifier — typo'd ids, wrong payloads, wrong subscription usage, invalid effect tuples, and unknown state keys become compile errors.
 
 Declare them once, next to the ids files (e.g. `src/state/payload-maps.d.ts`):
 
 ```ts
-import type { Todo, Showing } from './db';
+import type { Todo, Showing } from './state';
 
 declare module '@flexsurfer/reflex' {
   interface EventPayloads {
@@ -312,20 +312,20 @@ declare module '@flexsurfer/reflex' {
     'storage/set_todos': Todo[];
     'ui/scroll_top': void; // no payload → the tuple is just ['ui/scroll_top']
   }
-  interface AppDb {
+  interface AppState {
     todos: Todo[];
     showing: Showing;
-    // or reuse an existing type: interface AppDb extends MyDbShape {}
+    // or reuse an existing type: interface AppState extends MyStateShape {}
   }
 }
 ```
 
 What this changes:
 - `dispatch([EVENT_IDS.TODOS_ADD, title])` — id must be declared, payload must match the tuple. Also applies to `debounceAndDispatch`/`throttleAndDispatch`.
-- `regEvent(EVENT_IDS.TODOS_ADD, ({ draftDb }, title) => ...)` — handler params are inferred from `EventPayloads` and `draftDb` from `AppDb`, with no generics. Avoid the explicit db generic (`regEvent<MyDb>(id, ...)`): it disables param inference — augment `AppDb` instead, or annotate coeffects inline (`({ draftDb }: CoEffects<MyDb>, title) => ...`). Undeclared ids stay permissive in `regEvent`.
+- `regEvent(EVENT_IDS.TODOS_ADD, ({ draftState }, title) => ...)` — handler params are inferred from `EventPayloads` and `draftState` from `AppState`, with no generics. Avoid the explicit state generic (`regEvent<MyState>(id, ...)`): it disables param inference — augment `AppState` instead, or annotate coeffects inline (`({ draftState }: CoEffects<MyState>, title) => ...`). Undeclared ids stay permissive in `regEvent`.
 - Effect tuples returned from handlers are checked against `EffectPayloads`: declared ids with matching payloads only. The built-in `'dispatch'` and `'dispatch-later'` effects are always included, their ids are reserved and cannot be overridden by `EffectPayloads`, and their event vectors are checked against `EventPayloads` — so `return [['dispatch', [EVENT_IDS.X, payload]]]` gets the same checking as a direct `dispatch`. `regEffect` infers the handler's value param from the map.
 - `useSubscription([SUB_IDS.TODO_BY_ID, id])` — params checked, result type inferred (no explicit generic needed). Same for `getSubscriptionValue`. `regSub` checks the computeFn return type against the declared result.
-- `initAppDb(...)` is checked against `AppDb`; `getAppDb()` returns it.
+- `initState(...)` is checked against `AppState`; `getState()` returns it.
 
 Rules:
 - Event/sub payloads must be tuples; use `[]` for no params. Use labeled tuple members (`[title: string]`) — they double as documentation. Effect payloads are single values; use `void` for effects with no payload.

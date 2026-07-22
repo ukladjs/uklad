@@ -1,7 +1,7 @@
 /**
  * Headless runtime entry — the full Reflex state layer with no React mount.
  *
- * Installs the exact same db/events/subs modules as main.tsx; only the
+ * Installs the exact same state/events/subs modules as main.tsx; only the
  * side-effect adapters differ (effects.headless / coeffects.headless are
  * Node-safe: memory-backed or no-op). The devtools SDK connects over
  * WebSocket exactly as in the browser, so every MCP tool — app_status,
@@ -19,7 +19,7 @@
 import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex/vanilla';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 import { coeffectModes, installHeadlessCoeffects } from './coeffects.headless';
-import { createInitialAppDb, type PlaygroundContracts } from './db';
+import { createInitialAppState, type PlaygroundContracts } from './state';
 import { effectModes, installHeadlessEffects } from './effects.headless';
 import { installPlaygroundEvents } from './events';
 import { installPlaygroundSubscriptions } from './subs';
@@ -29,7 +29,7 @@ const serverUrl = process.env.REFLEX_DEVTOOLS_SERVER_URL ?? '127.0.0.1:4000';
 enableMapSet();
 
 const headlessRuntime = createReflexRuntime<PlaygroundContracts>({
-  initialDb: createInitialAppDb(),
+  initialState: createInitialAppState(),
   runtimeId: 'devtools-playground.headless',
   name: 'DevTools Playground (Headless)',
 });

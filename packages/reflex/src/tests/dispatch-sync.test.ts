@@ -3,11 +3,11 @@ import {
   clearSubscriptionCache,
   dispatch,
   dispatchSync,
-  getAppDb,
+  getState,
   getOrCreateSubscription,
   getSubscriptionSnapshot,
   getSubscriptionValue,
-  initAppDb,
+  initState,
   regEffect,
   regEvent,
   regEventErrorHandler,
@@ -24,19 +24,19 @@ describe('dispatchSync', () => {
     () => [['ds-counter']],
   );
 
-  regEvent('ds-inc', ({ draftDb }) => {
-    draftDb['ds-counter'] += 1;
+  regEvent('ds-inc', ({ draftState }) => {
+    draftState['ds-counter'] += 1;
   });
 
   beforeEach(() => {
     clearSubscriptionCache();
-    initAppDb({ 'ds-counter': 0 });
+    initState({ 'ds-counter': 0 });
   });
 
-  it('should commit the db synchronously', () => {
+  it('should commit the state synchronously', () => {
     dispatchSync(['ds-inc']);
 
-    expect(getAppDb()['ds-counter']).toBe(1);
+    expect(getState()['ds-counter']).toBe(1);
     expect(getSubscriptionValue(['ds-counter'])).toBe(1);
   });
 
@@ -97,10 +97,10 @@ describe('dispatchSync', () => {
     dispatch(['ds-inc']);
 
     expect(() => dispatchSync(['ds-inc'])).toThrow(/cannot overtake/);
-    expect(getAppDb()['ds-counter']).toBe(0);
+    expect(getState()['ds-counter']).toBe(0);
 
     await waitForScheduled();
-    expect(getAppDb()['ds-counter']).toBe(1);
+    expect(getState()['ds-counter']).toBe(1);
   });
 
   it('should throw when called from within an event handler', () => {
@@ -109,7 +109,7 @@ describe('dispatchSync', () => {
     });
 
     expect(() => dispatchSync(['ds-reentrant'])).toThrow(/dispatchSync/);
-    expect(getAppDb()['ds-counter']).toBe(0);
+    expect(getState()['ds-counter']).toBe(0);
 
     regEventErrorHandler(defaultErrorHandler);
   });
@@ -125,8 +125,8 @@ describe('dispatchSync', () => {
         effectError = e;
       }
     });
-    regEvent('ds-with-reentrant-effect', ({ draftDb }) => {
-      draftDb['ds-counter'] += 10;
+    regEvent('ds-with-reentrant-effect', ({ draftState }) => {
+      draftState['ds-counter'] += 10;
       return [['ds-reentrant-effect']];
     });
 
@@ -134,7 +134,7 @@ describe('dispatchSync', () => {
 
     expect(effectError).toBeDefined();
     expect(String(effectError?.message)).toMatch(/dispatchSync/);
-    expect(getAppDb()['ds-counter']).toBe(10);
+    expect(getState()['ds-counter']).toBe(10);
   });
 
   it('should reject dispatchSync from a subscription listener before mutation', () => {
@@ -152,7 +152,7 @@ describe('dispatchSync', () => {
     dispatchSync(['ds-inc']);
 
     expect(nestedError?.message).toMatch(/publication is not allowed/);
-    expect(getAppDb()['ds-counter']).toBe(1);
+    expect(getState()['ds-counter']).toBe(1);
     expect(getSubscriptionSnapshot(subscription)).toBe(1);
     unsubscribe();
   });

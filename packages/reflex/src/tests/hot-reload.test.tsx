@@ -25,7 +25,7 @@ describe('Hot Reload System', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     runtime = createReflexRuntime({
-      initialDb: {},
+      initialState: {},
       runtimeId: `hot-reload-test-${++runtimeSequence}`,
     });
   });
@@ -199,7 +199,7 @@ describe('Hot Reload System', () => {
 
     it('clears an explicit runtime while its current React-style graph is active', () => {
       const runtime = createReflexRuntime({
-        initialDb: { value: 1 },
+        initialState: { value: 1 },
         runtimeId: 'explicit-hmr-runtime',
       });
       runtime.regSub('value');
@@ -215,7 +215,7 @@ describe('Hot Reload System', () => {
 
     it('can clear only module-owned subscription definitions', () => {
       const runtime = createReflexRuntime({
-        initialDb: { value: 1, persistStatus: 'idle' },
+        initialState: { value: 1, persistStatus: 'idle' },
         runtimeId: 'scoped-hmr-runtime',
       });
       runtime.regSub('value');

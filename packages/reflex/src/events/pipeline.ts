@@ -4,7 +4,7 @@ import { IS_DEV } from '../core/environment';
 import { ensurePatchesEnabled } from '../core/immer';
 import { consoleLog } from '../core/logging';
 import { isTraceEnabledForKernel, mergeTraceForKernel, withTraceForKernel } from '../core/tracing';
-import { getAppDbRevisionsForKernel } from '../runtime/app-db';
+import { getStateRevisionsForKernel } from '../runtime/state';
 import { getInterceptorsForKernel } from '../runtime/event-metadata';
 import {
   getHandlerForKernel,
@@ -29,7 +29,7 @@ import { executeForKernel } from './interceptors';
 
 import type {
   Context,
-  Db,
+  State,
   ErrorHandler,
   Effects,
   EventHandler,
@@ -89,7 +89,7 @@ export function handleForKernel(runtime: RuntimeKernel, event: EventVector): voi
     beginRuntimeLifecycleEventForKernel(
       runtime,
       event,
-      getAppDbRevisionsForKernel(runtime).committedRevision,
+      getStateRevisionsForKernel(runtime).committedRevision,
     )
   ) {
     notifyRuntimeLifecycleForKernel(runtime, 'onEventFinished', event);
@@ -173,10 +173,10 @@ function createEventHandlerInterceptor(
       const event = context.coeffects.event;
       const params = event.slice(1);
       let effects: Effects = [];
-      let newDb: Db;
+      let newState: State;
 
-      const recipe = (draftDb: Draft<Db>) => {
-        const coeffects = { ...context.coeffects, draftDb };
+      const recipe = (draftState: Draft<State>) => {
+        const coeffects = { ...context.coeffects, draftState };
         const state = getPipelineState(runtime);
         state.runningHandlerEventId = event[0];
         try {
@@ -189,21 +189,21 @@ function createEventHandlerInterceptor(
       const tracingEnabled = isTraceEnabledForKernel(runtime);
       if (tracingEnabled || hasRuntimeLifecycleObservers(runtime)) {
         ensurePatchesEnabled();
-        const [producedDb, patches, reversePatches] = produceWithPatches(
-          context.previousDb as Db,
+        const [producedState, patches, reversePatches] = produceWithPatches(
+          context.previousState as State,
           recipe,
         );
-        newDb = producedDb;
+        newState = producedState;
         notifyRuntimeLifecycleForKernel(runtime, 'onStatePlanned', {
-          previousDb: context.previousDb,
-          plannedDb: producedDb,
+          previousState: context.previousState,
+          plannedState: producedState,
           patches,
         });
         if (tracingEnabled) {
           mergeTraceForKernel(runtime, { tags: { patches, reversePatches, effects } });
         }
       } else {
-        newDb = produce(context.previousDb as Db, recipe);
+        newState = produce(context.previousState as State, recipe);
       }
 
       if (IS_DEV) {
@@ -212,7 +212,7 @@ function createEventHandlerInterceptor(
         } catch {
           consoleLog(
             'warn',
-            `[reflex] Effects ${effects} contain Proxy (probably an Immer draft). Use current() for draftDb values.`,
+            `[reflex] Effects ${effects} contain Proxy (probably an Immer draft). Use current() for draftState values.`,
           );
         }
       }
@@ -228,12 +228,12 @@ function createEventHandlerInterceptor(
         });
       } else {
         // Untyped interceptors historically could return a context without an
-        // effects field. Preserve that JS boundary fallback so the produced DB
+        // effects field. Preserve that JS boundary fallback so the produced STATE
         // still reaches the commit interceptor.
         nextEffects = [...(context.effects || []), ...effects];
       }
 
-      return { ...context, effects: nextEffects, newDb };
+      return { ...context, effects: nextEffects, newState };
     },
   };
 }

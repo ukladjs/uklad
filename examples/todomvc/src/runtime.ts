@@ -1,10 +1,10 @@
 import { createReflexRuntime } from '@flexsurfer/reflex';
 
-import { createTodoDb } from './db';
+import { createTodoState } from './state';
 
 /** The TodoMVC application explicitly owns its single Reflex runtime. */
 export const todoRuntime = createReflexRuntime({
-  initialDb: createTodoDb(),
+  initialState: createTodoState(),
   runtimeId: 'todomvc',
   name: 'TodoMVC',
 });

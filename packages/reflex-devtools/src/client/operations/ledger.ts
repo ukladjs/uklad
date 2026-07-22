@@ -113,7 +113,7 @@ export function appendEvent(
       committedPatches: [],
       truncated: false,
     },
-    plannedDb: undefined,
+    plannedState: undefined,
     effectIds: [],
     errors: [],
   };

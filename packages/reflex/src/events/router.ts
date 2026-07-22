@@ -2,7 +2,7 @@ import { IS_DEV } from '../core/environment';
 import { consoleLog } from '../core/logging';
 import { scheduleAfterRender, scheduleNextTick } from '../core/scheduling';
 import { isEventVector } from '../core/validation';
-import { flushSubscriptionsForKernel } from '../runtime/app-db';
+import { flushSubscriptionsForKernel } from '../runtime/state';
 import { isRuntimeDisposed, type RuntimeKernel } from '../runtime/kernel';
 import { notifyRuntimeLifecycleForKernel } from '../runtime/lifecycle';
 import { cloneStructuredValue } from '../runtime/ownership';
@@ -305,7 +305,7 @@ export function dispatchSyncForKernel(runtime: RuntimeKernel, event: DispatchVec
   flushSubscriptionsForKernel(runtime);
 }
 
-/** @internal Wait for one runtime's accepted queue work and publish its db head. */
+/** @internal Wait for one runtime's accepted queue work and publish its state head. */
 export async function flushRuntime(runtime: RuntimeKernel): Promise<void> {
   if (isRuntimeDisposed(runtime)) {
     throw new Error(`[reflex] Runtime '${runtime.runtimeId}' has been disposed.`);

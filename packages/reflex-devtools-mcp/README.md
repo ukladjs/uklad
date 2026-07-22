@@ -179,7 +179,7 @@ Cheap health/session and runtime-discovery check — the intended first call aft
 
 - `runtimes` and `selectedRuntimeId` — every known runtime, its stable id/name, connection state, and selected runtime
 - `appConnected` — is the selected app (browser or headless) connected to the DevTools server
-- `runtimeId`, `runtimeName`, and `sessionEpoch` — identity and DevTools connection generation for the selected runtime. A changed epoch invalidates server-stored trace IDs; an app reload is one cause, but a transient SDK reconnect can change the epoch without resetting the runtime database.
+- `runtimeId`, `runtimeName`, and `sessionEpoch` — identity and DevTools connection generation for the selected runtime. A changed epoch invalidates server-stored trace IDs; an app reload is one cause, but a transient SDK reconnect can change the epoch without resetting the runtime state.
 - `runtime` — `"browser"`, `"react-native"`, or `"headless"`, plus `effectMode` and per-effect adapter modes when the app declares them
 - `tracing`, handler counts per type, `stateAvailable`, `traceCount`, `mcpEnabled`
 - `capabilities` and `readOnly` — the effective least-privilege tool surface
@@ -245,7 +245,7 @@ Get the full detail of a single trace by id: for events, the state patches commi
 
 ### 4. `get_app_state`
 
-Retrieve the current application database state — scoped by path whenever possible.
+Retrieve the current application state state — scoped by path whenever possible.
 
 **Parameters:**
 
@@ -372,7 +372,7 @@ import { headlessModule } from './module.headless';
 const runtime = createReflexRuntime({
   runtimeId: 'agent-headless',
   name: 'Agent headless runtime',
-  initialDb: {},
+  initialState: {},
 });
 runtime.registerModule(headlessModule); // events, subs, and Node-safe adapters
 

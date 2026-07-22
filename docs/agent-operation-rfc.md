@@ -118,7 +118,7 @@ The following is the status as of 2026-07-20.
 
 | Area | Exists now | Missing or misleading |
 | --- | --- | --- |
-| Runtime ownership | Explicit isolated runtimes own db heads, queues, handlers, subscriptions, tracing, timers, modules, inspectors, and a process-local `runtimeInstanceId`. | The operation registry is in-memory only; restart and eviction recovery are not durable. |
+| Runtime ownership | Explicit isolated runtimes own state heads, queues, handlers, subscriptions, tracing, timers, modules, inspectors, and a process-local `runtimeInstanceId`. | The operation registry is in-memory only; restart and eviction recovery are not durable. |
 | Event API | `dispatch`, `dispatchSync`, `startOperation`, `dispatchAndWait`, `getOperation`, and runtime-global `flush`. Instance APIs validate event IDs. | Raw event vectors remain a development/test API, not the future command plane. |
 | State | Separate committed/write and published/render heads, monotonic committed/published revisions, tracked-operation patches even with tracing disabled, and owned/frozen state ingress. | Bytes and result artifacts are not yet bounded/redacted at the core-to-wire boundary. |
 | Queue | Per-runtime serial FIFO queue, exact synchronous child parentage for tracked operations, failure isolation, and `dispatchSync` ordering protection. | General event envelopes and explicit causal links from a child to its emitting effect remain future work. |
@@ -309,7 +309,7 @@ The boundaries are intentional:
   results.
 - **DevTools server** routes, authenticates, redacts, bounds, audits, and
   transports operation resources. It does not infer them from traces or a
-  mirrored database.
+  mirrored state.
 - **MCP** exposes structured tools/tasks. MCP task IDs may map to operation IDs,
   but MCP is not the internal state machine.
 - **Tracing** derives spans from operation lifecycle events and may be disabled.

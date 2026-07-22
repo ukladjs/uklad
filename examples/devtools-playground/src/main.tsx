@@ -6,7 +6,7 @@ import { enableDevtools } from '@flexsurfer/reflex-devtools';
 import './index.css';
 import App from './App';
 import { coeffectModes, installBrowserCoeffects } from './coeffects.browser';
-import { createInitialAppDb, type PlaygroundContracts } from './db';
+import { createInitialAppState, type PlaygroundContracts } from './state';
 import { effectModes, installBrowserEffects } from './effects.browser';
 import { installPlaygroundEvents } from './events';
 import { installPlaygroundSubscriptions } from './subs';
@@ -14,7 +14,7 @@ import { installPlaygroundSubscriptions } from './subs';
 enableMapSet();
 
 const browserRuntime = createReflexRuntime<PlaygroundContracts>({
-  initialDb: createInitialAppDb(),
+  initialState: createInitialAppState(),
   runtimeId: 'devtools-playground.browser',
   name: 'DevTools Playground (Browser)',
 });

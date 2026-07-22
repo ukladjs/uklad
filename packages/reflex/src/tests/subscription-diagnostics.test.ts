@@ -3,7 +3,7 @@ import {
   getOrCreateSubscription,
   getSubscriptionDiagnostics,
   getSubscriptionSnapshot,
-  initAppDb,
+  initState,
   regSub,
   subscribeToSubscription,
 } from './runtime-test-api';
@@ -41,7 +41,7 @@ describe('subscription diagnostics', () => {
   beforeEach(() => {
     clearSubscriptionCache();
     computedRuns = 0;
-    initAppDb({ 'diagnostic-source': 1 });
+    initState({ 'diagnostic-source': 1 });
   });
 
   it('reports cache state without evaluating subscriptions', () => {
@@ -83,7 +83,7 @@ describe('subscription diagnostics', () => {
       (item) => item.key === JSON.stringify(['diagnostic-double']),
     )!;
 
-    initAppDb({ 'diagnostic-source': 2 });
+    initState({ 'diagnostic-source': 2 });
     const after = getSubscriptionDiagnostics().find(
       (item) => item.key === JSON.stringify(['diagnostic-double']),
     )!;
@@ -105,7 +105,7 @@ describe('subscription diagnostics', () => {
     const unsubscribe = subscribeToSubscription(subscription, () => {});
     expect(getSubscriptionSnapshot(subscription)).toBe(1);
 
-    initAppDb({ 'diagnostic-source': -1 });
+    initState({ 'diagnostic-source': -1 });
 
     expect(() => getSubscriptionDiagnostics()).not.toThrow();
     expect(getSubscriptionDiagnostics()).toEqual(
@@ -127,7 +127,7 @@ describe('subscription diagnostics', () => {
     const unsubscribe = subscribeToSubscription(subscription, () => {});
     expect(getSubscriptionSnapshot(subscription)).toBe(1);
 
-    initAppDb({ 'diagnostic-source': -1 });
+    initState({ 'diagnostic-source': -1 });
 
     expect(getSubscriptionDiagnostics()).toEqual(
       expect.arrayContaining([

@@ -18,7 +18,7 @@ src/
     tracing.ts                     trace collection and delivery
     validation.ts                  untyped-boundary guards
   runtime/
-    app-db.ts                      live/published DB generations
+    state.ts                      live/published STATE generations
     event-metadata.ts              per-event interceptor metadata
     handlers.ts                    typed handler stores
     reset.ts                       cross-store reset coordination

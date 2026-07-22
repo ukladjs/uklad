@@ -32,7 +32,7 @@ export function createGraphData(traces: Trace[]): GraphData {
     });
 
     // Add root node
-    nodes.set('appdb', { id: 'appdb', type: 'appdb', label: 'appdb', level: 0, order: 0 });
+    nodes.set('state', { id: 'state', type: 'state', label: 'state', level: 0, order: 0 });
 
     // Track render node IDs for later path tracing
     const renderNodeIds: string[] = [];
@@ -47,7 +47,7 @@ export function createGraphData(traces: Trace[]): GraphData {
                 }
                 const deps = trace.tags?.deps || [];
                 if (deps.length === 0) {
-                    links.push({ source: 'appdb', target: subscriptionKey });
+                    links.push({ source: 'state', target: subscriptionKey });
                 } else {
                     deps.forEach((dep: string) => {
                         if (existingSubscriptions.has(dep)) {

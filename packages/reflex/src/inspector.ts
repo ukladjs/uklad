@@ -6,7 +6,7 @@ import {
 import { NOW, RANDOM } from './events/coeffects';
 import { DISPATCH, DISPATCH_LATER } from './events/effects';
 import { dispatchForKernel, flushRuntime } from './events/router';
-import { getAppDbForKernel, getAppDbRevisionsForKernel } from './runtime/app-db';
+import { getStateForKernel, getStateRevisionsForKernel } from './runtime/state';
 import { getHandlersForKernel } from './runtime/handlers';
 import {
   createRuntimeStateKey,
@@ -33,8 +33,8 @@ export interface ReflexHandlerKeys {
 }
 
 export interface ReflexInspectorSnapshot {
-  /** The live app-db write head. The value is not cloned or deep-frozen. */
-  readonly appDb: unknown;
+  /** The live state write head. The value is not cloned or deep-frozen. */
+  readonly appState: unknown;
   /** User-facing handler ids; framework-owned effect and coeffect ids are omitted. */
   readonly handlerKeys: ReflexHandlerKeys;
   /** Cache-only diagnostics. Reading a snapshot never evaluates subscriptions. */
@@ -56,7 +56,7 @@ export interface ReflexDevtoolsOperationRuntime {
  * The Reflex-owned side of a development-tools integration.
  *
  * The adapter closes over the module instance that created it, so injected
- * consumers inspect and control that exact app-db, registry, subscription
+ * consumers inspect and control that exact state, registry, subscription
  * cache, and trace callback registry.
  */
 export interface ReflexInspector {
@@ -94,7 +94,7 @@ export function createReflexInspectorForKernel(runtime: RuntimeKernel): ReflexIn
     runtimeInstanceId: runtime.runtimeInstanceId,
     getStateRevisions() {
       assertRuntimeActive();
-      return getAppDbRevisionsForKernel(runtime);
+      return getStateRevisionsForKernel(runtime);
     },
     dispatch(event: never) {
       assertRuntimeActive();
@@ -120,7 +120,7 @@ export function createReflexInspectorForKernel(runtime: RuntimeKernel): ReflexIn
     getSnapshot(): ReflexInspectorSnapshot {
       assertRuntimeActive();
       return {
-        appDb: getAppDbForKernel(runtime),
+        appState: getStateForKernel(runtime),
         handlerKeys: getHandlerKeys(runtime),
         subscriptions: getSubscriptionDiagnosticsForKernel(runtime),
       };

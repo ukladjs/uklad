@@ -1,6 +1,6 @@
 import Header from './components/Header';
 import TracesListPanel from './components/TracesListPanel';
-import DatabasePanel from './components/DatabasePanel';
+import StatePanel from './components/StatePanel';
 import TraceDetailsPanel from './components/trace/TraceDetailsPanel';
 import Splitter from './components/ui/Splitter';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -17,7 +17,7 @@ function App() {
             <TracesListPanel />
             <Splitter />
             <div className="vertical-split-layout" style={{'--vertical-split-position': '70%'} as React.CSSProperties}>
-              <DatabasePanel />
+              <StatePanel />
               <Splitter orientation="vertical" />
               <TraceDetailsPanel />
             </div>

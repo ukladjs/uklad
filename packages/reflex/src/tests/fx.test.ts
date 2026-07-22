@@ -1,10 +1,10 @@
 import { consoleLog } from '../core/logging';
-import { dispatch, getAppDb, initAppDb, regEffect, regEvent } from './runtime-test-api';
+import { dispatch, getState, initState, regEffect, regEvent } from './runtime-test-api';
 import { waitForScheduled } from './test-utils';
 
 describe('regFx - Custom Effects', () => {
   beforeEach(() => {
-    initAppDb({ counter: 0, logs: [] });
+    initState({ counter: 0, logs: [] });
   });
 
   describe('Custom Effect Registration', () => {
@@ -84,32 +84,32 @@ describe('regFx - Custom Effects', () => {
       expect(externalState.messages).toEqual(['State modified']);
     });
 
-    it('should combine custom effects with dbUpdate', async () => {
+    it('should combine custom effects with stateUpdate', async () => {
       const apiCallSpy = jest.fn();
 
       regEffect('api-call', (endpoint: string) => {
         apiCallSpy(endpoint);
       });
 
-      regEvent('test-combined-effects', ({ draftDb }) => {
-        draftDb.counter += 1;
-        draftDb.status = 'processing';
+      regEvent('test-combined-effects', ({ draftState }) => {
+        draftState.counter += 1;
+        draftState.status = 'processing';
         return [
           ['api-call', '/api/users'],
           ['api-call', '/api/data'],
         ];
       });
 
-      const initialDb = getAppDb();
-      expect(initialDb.counter).toBe(0);
+      const initialState = getState();
+      expect(initialState.counter).toBe(0);
 
       dispatch(['test-combined-effects']);
 
       await waitForScheduled();
 
-      const updatedDb = getAppDb();
-      expect(updatedDb.counter).toBe(1);
-      expect(updatedDb.status).toBe('processing');
+      const updatedState = getState();
+      expect(updatedState.counter).toBe(1);
+      expect(updatedState.status).toBe('processing');
 
       expect(apiCallSpy).toHaveBeenCalledTimes(2);
       expect(apiCallSpy).toHaveBeenNthCalledWith(1, '/api/users');
@@ -169,16 +169,16 @@ describe('regFx - Custom Effects', () => {
       expectLogCall('warn', '[reflex] effects expects a vector, but was given string');
     });
 
-    it('should warn for a falsy non-array effect result and still commit the DB', async () => {
-      regEvent('test-falsy-effects', ({ draftDb }) => {
-        draftDb.counter += 1;
+    it('should warn for a falsy non-array effect result and still commit the STATE', async () => {
+      regEvent('test-falsy-effects', ({ draftState }) => {
+        draftState.counter += 1;
         return false as any;
       });
 
       dispatch(['test-falsy-effects']);
       await waitForScheduled();
 
-      expect(getAppDb().counter).toBe(1);
+      expect(getState().counter).toBe(1);
       expectLogCall('warn', '[reflex] effects expects a vector, but was given boolean');
     });
   });
@@ -191,8 +191,8 @@ describe('regFx - Custom Effects', () => {
         customEffectSpy(action);
       });
 
-      regEvent('target-event', ({ draftDb }) => {
-        draftDb.counter += 10;
+      regEvent('target-event', ({ draftState }) => {
+        draftState.counter += 10;
       });
 
       regEvent('test-dispatch-integration', () => [
@@ -210,8 +210,8 @@ describe('regFx - Custom Effects', () => {
       expect(customEffectSpy).toHaveBeenNthCalledWith(1, 'Before dispatch');
       expect(customEffectSpy).toHaveBeenNthCalledWith(2, 'After dispatch');
 
-      const db = getAppDb();
-      expect(db.counter).toBe(10);
+      const state = getState();
+      expect(state.counter).toBe(10);
     });
 
     it('should work with dispatch-later effect in fx', async () => {
@@ -221,8 +221,8 @@ describe('regFx - Custom Effects', () => {
         customEffectSpy(timestamp);
       });
 
-      regEvent('delayed-event', ({ draftDb }) => {
-        draftDb.counter += 5;
+      regEvent('delayed-event', ({ draftState }) => {
+        draftState.counter += 5;
       });
 
       regEvent('test-dispatch-later-integration', () => {
@@ -241,11 +241,11 @@ describe('regFx - Custom Effects', () => {
 
       expect(customEffectSpy).toHaveBeenCalledTimes(2);
 
-      expect(getAppDb().counter).toBe(0);
+      expect(getState().counter).toBe(0);
 
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      expect(getAppDb().counter).toBe(5);
+      expect(getState().counter).toBe(5);
     });
   });
 

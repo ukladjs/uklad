@@ -1,7 +1,7 @@
 /**
  * Subscription flush semantics: the shallow top-level diff wake-up, event
- * coalescing, and db generation reads (subscriptions serve the last flushed
- * generation, not the live db).
+ * coalescing, and state generation reads (subscriptions serve the last flushed
+ * generation, not the live state).
  */
 import {
   clearHandlers,
@@ -9,16 +9,16 @@ import {
   clearSubs,
   dispatch,
   flushSubscriptions,
-  getAppDb,
+  getState,
   getOrCreateSubscription,
-  getRenderDb,
+  getRenderState,
   getSubscriptionSnapshot,
   getSubscriptionValue,
-  initAppDb,
+  initState,
   regEvent,
   regSub,
   subscribeToSubscription,
-  updateAppDb,
+  updateState,
 } from './runtime-test-api';
 import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './test-utils';
 import { produce } from 'immer';
@@ -37,20 +37,20 @@ describe('Subscription flush', () => {
     () => [['flush-counter']],
   );
 
-  regEvent('flush-inc', ({ draftDb }) => {
-    draftDb['flush-counter'] += 1;
+  regEvent('flush-inc', ({ draftState }) => {
+    draftState['flush-counter'] += 1;
   });
   regEvent('flush-noop', () => {});
-  regEvent('flush-del-other', ({ draftDb }) => {
-    delete draftDb['flush-other'];
+  regEvent('flush-del-other', ({ draftState }) => {
+    delete draftState['flush-other'];
   });
 
   beforeEach(() => {
     clearSubscriptionCache();
-    initAppDb({ 'flush-counter': 0, 'flush-other': 'unchanged' });
+    initState({ 'flush-counter': 0, 'flush-other': 'unchanged' });
   });
 
-  describe('db generation reads', () => {
+  describe('state generation reads', () => {
     it('should reject registry clearing while a mounted graph is active', () => {
       const subscription = getOrCreateSubscription(['flush-counter'])!;
       const callback = jest.fn();
@@ -66,7 +66,7 @@ describe('Subscription flush', () => {
       expect(() => clearSubs()).toThrow(
         'Cannot clear subscriptions while a subscription graph is active',
       );
-      initAppDb({ 'flush-counter': 2, 'flush-other': 'replacement' });
+      initState({ 'flush-counter': 2, 'flush-other': 'replacement' });
       expect(callback).toHaveBeenCalledTimes(1);
       expect(getSubscriptionSnapshot(subscription)).toBe(2);
 
@@ -74,13 +74,13 @@ describe('Subscription flush', () => {
       expect(() => clearSubscriptionCache()).not.toThrow();
     });
 
-    it('publishes a replaced app-db baseline to an already-active graph', () => {
+    it('publishes a replaced state baseline to an already-active graph', () => {
       const subscription = getOrCreateSubscription(['flush-double'])!;
       const callback = jest.fn();
       const unsubscribe = subscribeToSubscription(subscription, callback);
       expect(getSubscriptionSnapshot(subscription)).toBe(0);
 
-      initAppDb({ 'flush-counter': 7, 'flush-other': 'replacement' });
+      initState({ 'flush-counter': 7, 'flush-other': 'replacement' });
 
       expect(callback).toHaveBeenCalledTimes(1);
       expect(getSubscriptionSnapshot(subscription)).toBe(14);
@@ -96,12 +96,12 @@ describe('Subscription flush', () => {
       dispatch(['flush-inc']);
       await waitForScheduled();
 
-      // The event committed: the live db is ahead of the render generation
-      expect(getAppDb()['flush-counter']).toBe(1);
-      expect(getRenderDb()['flush-counter']).toBe(0);
+      // The event committed: the live state is ahead of the render generation
+      expect(getState()['flush-counter']).toBe(1);
+      expect(getRenderState()['flush-counter']).toBe(0);
 
       // Every subscription read — cached or fresh — serves the flushed
-      // generation, so nothing on screen can mix db versions
+      // generation, so nothing on screen can mix state versions
       expect(getSubscriptionSnapshot(subscription)).toBe(0);
       expect(getSubscriptionValue(['flush-counter'])).toBe(0);
       expect(getSubscriptionValue(['flush-double'])).toBe(0);
@@ -109,7 +109,7 @@ describe('Subscription flush', () => {
 
       await waitForFlush();
 
-      expect(getRenderDb()['flush-counter']).toBe(1);
+      expect(getRenderState()['flush-counter']).toBe(1);
       expect(getSubscriptionSnapshot(subscription)).toBe(1);
       expect(getSubscriptionValue(['flush-double'])).toBe(2);
       expect(callback).toHaveBeenCalledTimes(1);
@@ -171,15 +171,15 @@ describe('Subscription flush', () => {
       unsubscribeOther();
     });
 
-    it('should not schedule anything when the handler leaves the db untouched', async () => {
-      const dbBefore = getAppDb();
+    it('should not schedule anything when the handler leaves the state untouched', async () => {
+      const stateBefore = getState();
 
       dispatch(['flush-noop']);
       await waitForScheduled();
 
       // produce returned the same reference: no new generation committed
-      expect(getAppDb()).toBe(dbBefore);
-      expect(getRenderDb()).toBe(dbBefore);
+      expect(getState()).toBe(stateBefore);
+      expect(getRenderState()).toBe(stateBefore);
     });
 
     it('should wake subscriptions when a top-level key is deleted', async () => {
@@ -218,8 +218,8 @@ describe('Subscription flush', () => {
       const unsubscribe = subscribeToSubscription(subscription, callback);
       expect(getSubscriptionSnapshot(subscription)).toBe(0);
 
-      updateAppDb(
-        produce(getAppDb(), (draft: any) => {
+      updateState(
+        produce(getState(), (draft: any) => {
           draft['flush-counter'] = 5;
         }),
       );
@@ -231,15 +231,15 @@ describe('Subscription flush', () => {
       unsubscribe();
     });
 
-    it('should guard renderDb before a reentrant direct flush can promote it', () => {
+    it('should guard renderState before a reentrant direct flush can promote it', () => {
       const subscription = getOrCreateSubscription(['flush-counter'])!;
       let nestedError: Error | undefined;
       let attempted = false;
       const unsubscribe = subscribeToSubscription(subscription, () => {
         if (attempted) return;
         attempted = true;
-        updateAppDb(
-          produce(getAppDb(), (draft: any) => {
+        updateState(
+          produce(getState(), (draft: any) => {
             draft['flush-counter'] = 5;
           }),
         );
@@ -251,19 +251,19 @@ describe('Subscription flush', () => {
       });
       expect(getSubscriptionSnapshot(subscription)).toBe(0);
 
-      updateAppDb(
-        produce(getAppDb(), (draft: any) => {
+      updateState(
+        produce(getState(), (draft: any) => {
           draft['flush-counter'] = 1;
         }),
       );
       flushSubscriptions();
 
       expect(nestedError?.message).toMatch(/publication is not allowed/);
-      expect(getRenderDb()['flush-counter']).toBe(1);
+      expect(getRenderState()['flush-counter']).toBe(1);
       expect(getSubscriptionSnapshot(subscription)).toBe(1);
 
       flushSubscriptions();
-      expect(getRenderDb()['flush-counter']).toBe(5);
+      expect(getRenderState()['flush-counter']).toBe(5);
       expect(getSubscriptionSnapshot(subscription)).toBe(5);
       unsubscribe();
     });

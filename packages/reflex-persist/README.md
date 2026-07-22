@@ -19,7 +19,7 @@ import { createReflexRuntime } from '@flexsurfer/reflex';
 import { localStorageAdapter, persist } from '@flexsurfer/reflex-persist';
 
 const runtime = createReflexRuntime({
-  initialDb: { todos: [], settings: {} },
+  initialState: { todos: [], settings: {} },
   runtimeId: 'my-app',
 });
 
@@ -80,7 +80,7 @@ import { localStorageAdapter, persist } from '@flexsurfer/reflex-persist';
 type Todo = { id: number; title: string; done: boolean };
 
 const runtime = createReflexRuntime({
-  initialDb: { todos: new Map<number, Todo>() },
+  initialState: { todos: new Map<number, Todo>() },
 });
 
 persist(runtime, {
@@ -131,13 +131,13 @@ try {
 }
 ```
 
-`purge()` does not reset app-db roots. After a successful purge, the current app-db becomes the source for later writes. A failed removal leaves status `failed` and rejects the purge promise.
+`purge()` does not reset state roots. After a successful purge, the current state becomes the source for later writes. A failed removal leaves status `failed` and rejects the purge promise.
 
 Serialization and storage-write failures are reported through `onError` without aborting the application event that caused them.
 
 ## Lifecycle and strict contracts
 
-`dispose()` removes the module's handlers, status subscription, and writer interceptor. Runtime disposal uses the same cleanup path, and pending barriers reject. Disposing and reattaching starts from a fresh `idle` gate even if app-db still contains an older terminal status.
+`dispose()` removes the module's handlers, status subscription, and writer interceptor. Runtime disposal uses the same cleanup path, and pending barriers reject. Disposing and reattaching starts from a fresh `idle` gate even if state still contains an older terminal status.
 
 `PersistHandle` is the primary typed API. Applications that intentionally dispatch the public hydrate/purge events or query status on a strict runtime can compose its contract:
 
@@ -149,7 +149,7 @@ import type { PersistContracts } from '@flexsurfer/reflex-persist';
 // AppContracts is the application's existing strict Reflex contract.
 type AppWithPersist = PersistContracts<AppContracts>;
 
-const runtime = createReflexRuntime<AppWithPersist>({ initialDb });
+const runtime = createReflexRuntime<AppWithPersist>({ initialState });
 runtime.dispatch([PERSIST_IDS.HYDRATE]);
 runtime.getSubscriptionValue([PERSIST_IDS.STATUS]);
 ```

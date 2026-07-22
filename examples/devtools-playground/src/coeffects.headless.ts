@@ -1,5 +1,5 @@
 import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import type { PlaygroundContracts } from './db';
+import type { PlaygroundContracts } from './state';
 import { memoryStorage } from './headless-env';
 
 // Headless coeffect adapters: same coeffect ids as coeffects.browser.ts,

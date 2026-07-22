@@ -4,7 +4,7 @@
 // 2. Install the React-free vanilla entrypoint with peer dependencies omitted
 //    and prove that it creates and runs an explicit runtime without React.
 // 3. Install the tarball into a fresh project with React 18 (the oldest
-//    supported peer line), then run an event -> app-db -> subscription cycle
+//    supported peer line), then run an event -> state -> subscription cycle
 //    via both
 //    `require()` and `import`.
 // 4. Typecheck the published declarations with legacy TypeScript versions in
@@ -79,10 +79,10 @@ function main() {
          import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
          const require = createRequire(import.meta.url);
          assert.throws(() => require.resolve('react'));
-         const runtime = createReflexRuntime({ initialDb: { count: 0 }, runtimeId: 'packed-vanilla' });
-         runtime.regEvent('increment', ({ draftDb }) => { draftDb.count += 1; });
+         const runtime = createReflexRuntime({ initialState: { count: 0 }, runtimeId: 'packed-vanilla' });
+         runtime.regEvent('increment', ({ draftState }) => { draftState.count += 1; });
          runtime.dispatchSync(['increment']);
-         assert.deepEqual(runtime.getAppDb(), { count: 1 });
+         assert.deepEqual(runtime.getState(), { count: 1 });
          runtime.dispose();`,
       ],
       vanillaConsumerDir,

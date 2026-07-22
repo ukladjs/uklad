@@ -13,14 +13,14 @@ import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
 import { ReflexProvider, useSubscription } from '@flexsurfer/reflex/react';
 
 const runtime = createReflexRuntime({
-  initialDb: { count: 0 },
+  initialState: { count: 0 },
   runtimeId: 'counter-widget',
   name: 'Counter widget',
 });
 
 const disposeFeature = runtime.registerModule((scope) => {
-  scope.regEvent('count/increment', ({ draftDb }) => {
-    draftDb.count += 1;
+  scope.regEvent('count/increment', ({ draftState }) => {
+    draftState.count += 1;
   });
   scope.regSub('count');
 });
@@ -40,7 +40,7 @@ Each runtime exclusively owns:
 
 | Concern              | Instance-owned state                                                                                        |
 | -------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Database             | live write head, render/read head, pending publication flag                                                 |
+| State             | live write head, render/read head, pending publication flag                                                 |
 | Events               | queue, queue state, current event/handler metadata, event interceptors                                      |
 | Registries           | event, effect, coeffect, subscription, dependency, and error handlers; framework built-ins                  |
 | Cross-cutting policy | ordered global interceptors and default subscription equality function                                      |
@@ -58,7 +58,7 @@ No instance operation consults an ambient “current runtime.” Scheduled work 
 
 ```ts
 const runtime = createReflexRuntime<Contracts>({
-  initialDb,
+  initialState,
   runtimeId?: string,
   name?: string,
 });
@@ -66,7 +66,7 @@ const runtime = createReflexRuntime<Contracts>({
 
 `runtimeId` is immutable and identifies the runtime in DevTools and reconnects for the lifetime of the application runtime. Callers that need identity to survive reloads supply it; otherwise Reflex generates a process-unique ID. Simultaneously connected runtimes must use distinct IDs; reusing an ID deliberately means “this is the next session of the same runtime” and supersedes its prior DevTools connection. `name` is an immutable human-readable label and defaults to the ID.
 
-Runtime methods are the instance equivalents of the legacy functions: database access and restore, event/effect/coeffect/subscription registration, dispatch, subscription evaluation and watching, global interceptors, equality, tracing, registry diagnostics, reset, module installation, and inspector creation.
+Runtime methods are the instance equivalents of the legacy functions: state access and restore, event/effect/coeffect/subscription registration, dispatch, subscription evaluation and watching, global interceptors, equality, tracing, registry diagnostics, reset, module installation, and inspector creation.
 
 ### Store-local contracts
 
@@ -74,7 +74,7 @@ Global module augmentation remains supported by the compatibility facade. New co
 
 ```ts
 interface Contracts extends ReflexContracts {
-  db: { count: number };
+  state: { count: number };
   events: {
     'count/increment': [amount?: number];
   };
@@ -107,9 +107,9 @@ Instance entry points throw on malformed vectors and unregistered ids: `dispatch
 
 ### Restore and flush
 
-`runtime.restoreAppDb(nextDb)` replaces both database heads and synchronously publishes changed roots. It is rejected while event work is pending or being handled, and during subscription computation or listener delivery. Await `runtime.flush()` before restoring after asynchronous dispatch. Restore does not run event handlers or effects.
+`runtime.restoreState(nextState)` replaces both state heads and synchronously publishes changed roots. It is rejected while event work is pending or being handled, and during subscription computation or listener delivery. Await `runtime.flush()` before restoring after asynchronous dispatch. Restore does not run event handlers or effects.
 
-`await runtime.flush()` is the explicit quiescence boundary for headless code and tests. It waits until events already accepted by the runtime (including events synchronously enqueued by their effects) leave the queue, then promotes the latest committed database generation and completes listener delivery. It does not wait for future work such as `dispatch-later`, arbitrary effect promises, or events dispatched after the flush call. `dispatchSync` remains a synchronous handle-and-publish boundary.
+`await runtime.flush()` is the explicit quiescence boundary for headless code and tests. It waits until events already accepted by the runtime (including events synchronously enqueued by their effects) leave the queue, then promotes the latest committed state generation and completes listener delivery. It does not wait for future work such as `dispatch-later`, arbitrary effect promises, or events dispatched after the flush call. `dispatchSync` remains a synchronous handle-and-publish boundary.
 
 ### React binding
 
@@ -117,7 +117,7 @@ Instance entry points throw on malformed vectors and unregistered ids: `dispatch
 
 ## Lifecycle and reset
 
-Creation installs fresh framework built-ins (`dispatch`, `dispatch-later`, `now`, `random`, and the default event error handler) into that instance only. `clearHandlers` restores those built-ins and removes user definitions in the target instance. Clearing subscriptions remains illegal while an active graph exists. `restoreAppDb` is the supported state-restoration primitive; `initAppDb` remains the compatibility/bootstrap name on the default runtime.
+Creation installs fresh framework built-ins (`dispatch`, `dispatch-later`, `now`, `random`, and the default event error handler) into that instance only. `clearHandlers` restores those built-ins and removes user definitions in the target instance. Clearing subscriptions remains illegal while an active graph exists. `restoreState` is the supported state-restoration primitive; `initState` remains the compatibility/bootstrap name on the default runtime.
 
 `runtime.dispose()` terminally releases instance-owned watches, module installations, delayed dispatches and rate-limit timers, event-queue waiters, tracing timers/callbacks, handlers, and subscription definitions. It is idempotent. Applications must first unmount or unsubscribe consumers that were created outside the runtime's own `watchSubscription` API; disposal fails loudly while such a subscription graph remains active and can be retried after the consumer releases it. Later instance and inspector read/control operations fail as disposed; previously returned cleanup functions remain safe idempotent no-ops. The compatibility `defaultRuntime` is process-owned and cannot be disposed.
 
@@ -135,15 +135,15 @@ Legacy and instance calls deliberately interoperate when they target `defaultRun
 
 ## SSR and hydration
 
-Server code creates a runtime inside the request boundary and never exports it from a shared module. Rendering reads that request's render head. The serialized database can be passed to a newly created client runtime as `initialDb`; handlers/modules are registered independently on each side. A runtime and its cached subscription nodes must never be reused across requests.
+Server code creates a runtime inside the request boundary and never exports it from a shared module. Rendering reads that request's render head. The serialized state can be passed to a newly created client runtime as `initialState`; handlers/modules are registered independently on each side. A runtime and its cached subscription nodes must never be reused across requests.
 
-Hydration does not require a provider-global singleton. Multiple roots on one page may hydrate with independent runtimes, IDs, databases, queues, and caches.
+Hydration does not require a provider-global singleton. Multiple roots on one page may hydrate with independent runtimes, IDs, states, queues, and caches.
 
 ## DevTools routing
 
 Inspectors expose immutable `runtimeId` and `runtimeName`. Runtime connections identify themselves with both values. The server stores simultaneous runtime sessions keyed by runtime ID, gives each connection a new session epoch while that bounded registry entry is retained, and scopes snapshots, handler lists, traces, dispatch, and subscription evaluation to a selected runtime. Restore and `sinceId` cursor APIs remain follow-up work.
 
-Control requests carry `runtimeId`. Omitting it is accepted only when exactly one runtime is connected, preserving single-runtime clients without ambiguous mutation. A reconnect with the same runtime ID supersedes only that runtime's older socket and starts a new DevTools session epoch; it does not disconnect other runtimes. The epoch means server-side session storage was reset, not necessarily that the application runtime or its database restarted. If a disconnected entry is evicted from the bounded registry, a later connection with that ID starts a fresh epoch history. UI and MCP status responses list runtimes and the active/default selection explicitly.
+Control requests carry `runtimeId`. Omitting it is accepted only when exactly one runtime is connected, preserving single-runtime clients without ambiguous mutation. A reconnect with the same runtime ID supersedes only that runtime's older socket and starts a new DevTools session epoch; it does not disconnect other runtimes. The epoch means server-side session storage was reset, not necessarily that the application runtime or its state restarted. If a disconnected entry is evicted from the bounded registry, a later connection with that ID starts a fresh epoch history. UI and MCP status responses list runtimes and the active/default selection explicitly.
 
 ## Migration and stability constraints
 
@@ -157,7 +157,7 @@ Control requests carry `runtimeId`. Omitting it is accepted only when exactly on
 
 The architecture is accepted only when automated tests prove:
 
-- two runtimes in one JavaScript realm have independent db heads, handlers, queues, subscriptions, tracing, and resets;
+- two runtimes in one JavaScript realm have independent state heads, handlers, queues, subscriptions, tracing, and resets;
 - parallel tests and concurrent SSR requests cannot observe each other's state;
 - module installation/disposal is scoped and idempotent;
 - React providers select and nest runtimes correctly;

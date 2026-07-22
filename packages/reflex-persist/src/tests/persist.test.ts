@@ -83,16 +83,16 @@ function entry(version: number, data: unknown): string {
 }
 
 let runtimeCounter = 0;
-function makeRuntime<TDb extends Record<string, any>>(initialDb: TDb) {
+function makeRuntime<TState extends Record<string, any>>(initialState: TState) {
   runtimeCounter += 1;
-  return createReflexRuntime<ReflexContracts & { readonly db: TDb }>({
-    initialDb,
+  return createReflexRuntime<ReflexContracts & { readonly state: TState }>({
+    initialState,
     runtimeId: `persist-test-${runtimeCounter}`,
   } as never);
 }
 
-function statusOf(runtime: { getAppDb(): unknown }): unknown {
-  return (runtime.getAppDb() as Record<string, unknown>)[PERSIST_IDS.STATUS];
+function statusOf(runtime: { getState(): unknown }): unknown {
+  return (runtime.getState() as Record<string, unknown>)[PERSIST_IDS.STATUS];
 }
 
 describe('persist', () => {
@@ -131,7 +131,7 @@ describe('persist', () => {
     handle.hydrate();
     await pending;
 
-    expect(runtime.getAppDb()).toMatchObject({
+    expect(runtime.getState()).toMatchObject({
       todos: ['A', 'B'],
       settings: { theme: 'dark' },
       ui: 'untouched',
@@ -152,7 +152,7 @@ describe('persist', () => {
 
     runtime.dispatchSync([PERSIST_IDS.HYDRATE]);
 
-    expect(runtime.getAppDb().todos).toEqual(['stored']);
+    expect(runtime.getState().todos).toEqual(['stored']);
     expect(memory.setCalls).toBe(0);
     handle.dispose();
     runtime.dispose();
@@ -193,7 +193,7 @@ describe('persist', () => {
     expect(statusOf(runtime)).toBe('idle');
 
     handle.hydrate();
-    expect(runtime.getAppDb().count).toBe(41);
+    expect(runtime.getState().count).toBe(41);
     expect(statusOf(runtime)).toBe('hydrated');
     handle.dispose();
     runtime.dispose();
@@ -206,11 +206,11 @@ describe('persist', () => {
       storage: memory.storage,
       keys: ['todos', 'settings'],
     });
-    runtime.regEvent('todos/add', ({ draftDb }, text: string) => {
-      draftDb.todos.push(text);
+    runtime.regEvent('todos/add', ({ draftState }, text: string) => {
+      draftState.todos.push(text);
     });
-    runtime.regEvent('ui/bump', ({ draftDb }) => {
-      draftDb.ui += 1;
+    runtime.regEvent('ui/bump', ({ draftState }) => {
+      draftState.ui += 1;
     });
 
     handle.hydrate();
@@ -241,8 +241,8 @@ describe('persist', () => {
       ],
       onError: (value) => diagnostics.push(value),
     });
-    runtime.regEvent('settings/change', ({ draftDb }) => {
-      draftDb.settings = { theme: 'dark' };
+    runtime.regEvent('settings/change', ({ draftState }) => {
+      draftState.settings = { theme: 'dark' };
     });
 
     handle.hydrate();
@@ -277,8 +277,8 @@ describe('persist', () => {
         },
       ],
     });
-    runtime.regEvent('settings/change', ({ draftDb }) => {
-      draftDb.settings = { theme: 'dark' };
+    runtime.regEvent('settings/change', ({ draftState }) => {
+      draftState.settings = { theme: 'dark' };
     });
 
     handle.hydrate();
@@ -295,11 +295,11 @@ describe('persist', () => {
     const memory = createMemoryStorage();
     const runtime = makeRuntime({ value: Number.NaN, ui: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['value'] });
-    runtime.regEvent('ui/bump', ({ draftDb }) => {
-      draftDb.ui += 1;
+    runtime.regEvent('ui/bump', ({ draftState }) => {
+      draftState.ui += 1;
     });
-    runtime.regEvent('value/delete', ({ draftDb }) => {
-      delete (draftDb as { value?: number }).value;
+    runtime.regEvent('value/delete', ({ draftState }) => {
+      delete (draftState as { value?: number }).value;
     });
 
     handle.hydrate();
@@ -335,12 +335,12 @@ describe('persist', () => {
         },
       ],
     });
-    runtime.regEvent('todos/add', ({ draftDb }, todo: Todo) => {
-      draftDb.todos.set(todo.id, todo);
+    runtime.regEvent('todos/add', ({ draftState }, todo: Todo) => {
+      draftState.todos.set(todo.id, todo);
     });
 
     handle.hydrate();
-    expect(runtime.getAppDb().todos.get(2)).toEqual({
+    expect(runtime.getState().todos.get(2)).toEqual({
       id: 2,
       title: 'also stored',
       done: true,
@@ -420,7 +420,7 @@ describe('persist', () => {
 
     handle.hydrate();
 
-    expect(runtime.getAppDb().todos).toEqual(['old']);
+    expect(runtime.getState().todos).toEqual(['old']);
     expect(statusOf(runtime)).toBe('failed');
     expect(memory.setCalls).toBe(0);
     expect(memory.data.get('reflex/todos')).toBe(originalTodos);
@@ -444,7 +444,7 @@ describe('persist', () => {
       migrate: (_key, data) => data as readonly PersistData[],
     });
     deserializeHandle.hydrate();
-    expect(deserializeRuntime.getAppDb().todos).toEqual(['initial']);
+    expect(deserializeRuntime.getState().todos).toEqual(['initial']);
     expect(deserializeMemory.setCalls).toBe(0);
     expect(deserializeMemory.data.get('reflex/todos')).toBe(originalTodos);
     deserializeHandle.dispose();
@@ -466,7 +466,7 @@ describe('persist', () => {
 
     handle.hydrate();
 
-    expect(runtime.getAppDb().settings).toEqual({ count: 0 });
+    expect(runtime.getState().settings).toEqual({ count: 0 });
     expect(statusOf(runtime)).toBe('failed');
     expect(memory.data.get('reflex/settings')).toBe(original);
     expect(memory.setCalls).toBe(0);
@@ -516,7 +516,7 @@ describe('persist', () => {
     const syncPending = syncHandle.whenHydrated();
     syncRuntime.dispatchSync([PERSIST_IDS.HYDRATE]);
     await expect(syncPending).resolves.toBeUndefined();
-    expect(syncRuntime.getAppDb().count).toBe(1);
+    expect(syncRuntime.getState().count).toBe(1);
     syncHandle.dispose();
     syncRuntime.dispose();
 
@@ -528,7 +528,7 @@ describe('persist', () => {
     const queuedPending = queuedHandle.whenHydrated();
     queuedRuntime.dispatch([PERSIST_IDS.HYDRATE]);
     await expect(queuedPending).resolves.toBeUndefined();
-    expect(queuedRuntime.getAppDb().count).toBe(2);
+    expect(queuedRuntime.getState().count).toBe(2);
     queuedHandle.dispose();
     queuedRuntime.dispose();
   });
@@ -537,8 +537,8 @@ describe('persist', () => {
     const memory = createMemoryStorage({ 'reflex/count': entry(1, 10) });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
-    runtime.regEvent('count/set', ({ draftDb }, count: number) => {
-      draftDb.count = count;
+    runtime.regEvent('count/set', ({ draftState }, count: number) => {
+      draftState.count = count;
     });
 
     handle.hydrate();
@@ -549,7 +549,7 @@ describe('persist', () => {
     handle.hydrate();
     runtime.dispatchSync([PERSIST_IDS.HYDRATE]);
 
-    expect(runtime.getAppDb().count).toBe(20);
+    expect(runtime.getState().count).toBe(20);
     expect(memory.getCalls).toBe(readsAfterFirstAttempt);
     handle.dispose();
     runtime.dispose();
@@ -614,8 +614,8 @@ describe('persist', () => {
   it('closes the stale write gate across dispose and reattach', async () => {
     const memory = createMemoryStorage();
     const runtime = makeRuntime({ count: 0 });
-    runtime.regEvent('count/bump', ({ draftDb }) => {
-      draftDb.count += 1;
+    runtime.regEvent('count/bump', ({ draftState }) => {
+      draftState.count += 1;
     });
     const first = persist(runtime, { storage: memory.storage, keys: ['count'] });
     first.hydrate();
@@ -641,8 +641,8 @@ describe('persist', () => {
   it('purges corrupt entries as explicit recovery and reopens writes', async () => {
     const memory = createMemoryStorage({ 'reflex/count': 'CORRUPT_PURGE_SECRET' });
     const runtime = makeRuntime({ count: 0 });
-    runtime.regEvent('count/bump', ({ draftDb }) => {
-      draftDb.count += 1;
+    runtime.regEvent('count/bump', ({ draftState }) => {
+      draftState.count += 1;
     });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
     handle.hydrate();
@@ -676,7 +676,7 @@ describe('persist', () => {
     expect(() => handle.hydrate()).toThrow('Cannot hydrate while purge is in progress');
 
     await expect(purge).rejects.toThrow('Purge failed');
-    expect(runtime.getAppDb().count).toBe(0);
+    expect(runtime.getState().count).toBe(0);
     expect(statusOf(runtime)).toBe('failed');
     handle.dispose();
     runtime.dispose();
@@ -861,8 +861,8 @@ describe('persist', () => {
     runtime.enableTracing();
     runtime.registerTraceCallback('persist-test', (traces) => collected.push(...traces));
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
-    runtime.regEvent('bump', ({ draftDb }) => {
-      draftDb.count += 1;
+    runtime.regEvent('bump', ({ draftState }) => {
+      draftState.count += 1;
     });
 
     handle.hydrate();
@@ -884,30 +884,30 @@ describe('persist', () => {
     const memory = createMemoryStorage({ 'reflex/count': entry(1, 41) });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
-    runtime.regEvent('bump', ({ draftDb }) => {
-      draftDb.count += 1;
+    runtime.regEvent('bump', ({ draftState }) => {
+      draftState.count += 1;
     });
 
     handle.hydrate();
-    const getCommittedDb = jest.spyOn(runtime, 'getAppDb');
+    const getCommittedState = jest.spyOn(runtime, 'getState');
     runtime.dispatchSync(['bump']);
 
-    // The writer compares context.previousDb and context.newDb. The single
+    // The writer compares context.previousState and context.newState. The single
     // runtime read belongs to WRITE after do-fx committed the new generation.
-    expect(getCommittedDb).toHaveBeenCalledTimes(1);
+    expect(getCommittedState).toHaveBeenCalledTimes(1);
     expect(memory.data.get('reflex/count')).toBe(entry(1, 42));
-    getCommittedDb.mockRestore();
+    getCommittedState.mockRestore();
     handle.dispose();
     runtime.dispose();
   });
 
   it('attaches persistence to an explicitly owned runtime', async () => {
     const runtime = createReflexRuntime({
-      initialDb: { count: 0 },
+      initialState: { count: 0 },
       runtimeId: 'persist-explicit-attachment',
     });
-    runtime.regEvent('increment', ({ draftDb }) => {
-      (draftDb as { count: number }).count += 1;
+    runtime.regEvent('increment', ({ draftState }) => {
+      (draftState as { count: number }).count += 1;
     });
     const memory = createMemoryStorage({ 'reflex/count': entry(1, 40) });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
@@ -917,7 +917,7 @@ describe('persist', () => {
     runtime.dispatch(['increment']);
     await runtime.flush();
 
-    expect((runtime.getAppDb() as { count: number }).count).toBe(42);
+    expect((runtime.getState() as { count: number }).count).toBe(42);
     expect(memory.data.get('reflex/count')).toBe(entry(1, 42));
     handle.dispose();
     runtime.dispose();
@@ -931,20 +931,20 @@ describe('persist', () => {
       keys: ['count'],
       experimentalAsync: true,
     });
-    runtime.regEvent('boot', ({ draftDb }) => {
-      draftDb.count += 1;
-      draftDb.ui.ready = true;
+    runtime.regEvent('boot', ({ draftState }) => {
+      draftState.count += 1;
+      draftState.ui.ready = true;
     });
 
     handle.hydrate();
     runtime.dispatch(['boot']);
     await runtime.flush();
-    expect(runtime.getAppDb().count).toBe(1);
+    expect(runtime.getState().count).toBe(1);
     expect(deferred.setCalls).toBe(0);
 
     deferred.release();
     await handle.whenHydrated();
-    expect(runtime.getAppDb()).toMatchObject({ count: 100, ui: { ready: true } });
+    expect(runtime.getState()).toMatchObject({ count: 100, ui: { ready: true } });
     handle.dispose();
     runtime.dispose();
   });
@@ -964,7 +964,7 @@ describe('persist', () => {
 
     deferred.release();
     await expect(handle.whenHydrated()).resolves.toBeUndefined();
-    expect(runtime.getAppDb().count).toBe(100);
+    expect(runtime.getState().count).toBe(100);
     handle.dispose();
     runtime.dispose();
   });
@@ -992,7 +992,7 @@ describe('persist', () => {
     await expect(handle.whenHydrated()).resolves.toBeUndefined();
 
     expect(statusOf(runtime)).toBe('hydrated');
-    expect(runtime.getAppDb().count).toBe(100);
+    expect(runtime.getState().count).toBe(100);
     handle.dispose();
     runtime.dispose();
   });
@@ -1058,15 +1058,15 @@ describe('persist', () => {
     const memory = createMemoryStorage();
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
-    runtime.regEvent('bump', ({ draftDb }) => {
-      draftDb.count += 1;
+    runtime.regEvent('bump', ({ draftState }) => {
+      draftState.count += 1;
     });
     handle.hydrate();
     handle.dispose();
 
     runtime.dispatch(['bump']);
     await runtime.flush();
-    expect(runtime.getAppDb().count).toBe(1);
+    expect(runtime.getState().count).toBe(1);
     expect(memory.setCalls).toBe(0);
     expect(() => runtime.dispatchSync([PERSIST_IDS.HYDRATE])).toThrow('No event handler');
     runtime.dispose();

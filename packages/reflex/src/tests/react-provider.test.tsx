@@ -9,10 +9,10 @@ import { useSubscription } from '../react/use-subscription';
 import { createReflexRuntime, type ReflexRuntime } from '../runtime/runtime';
 
 function createValueRuntime(runtimeId: string, value: number) {
-  const runtime = createReflexRuntime({ initialDb: { value }, runtimeId });
+  const runtime = createReflexRuntime({ initialState: { value }, runtimeId });
   runtime.regSub('value');
-  runtime.regEvent('set', ({ draftDb }, nextValue: number) => {
-    draftDb.value = nextValue;
+  runtime.regEvent('set', ({ draftState }, nextValue: number) => {
+    draftState.value = nextValue;
   });
   return runtime;
 }

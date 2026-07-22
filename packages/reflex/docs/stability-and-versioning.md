@@ -89,7 +89,7 @@ therefore local to the application-owned instance.
 
 ## Instance-runtime guarantees
 
-Each runtime exclusively owns its database heads, event queue, registries,
+Each runtime exclusively owns its state heads, event queue, registries,
 event metadata, global interceptors, subscription engine and cache, tracing,
 schedulers, built-ins, module installations, and inspector.
 

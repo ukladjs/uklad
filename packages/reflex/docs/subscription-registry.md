@@ -46,7 +46,7 @@ Two architectural facts explain why the instance-side metadata exists at all:
 | -------------------------------------------- | -------------------------------- | ---------------------------------------- |
 | `handlers`                                   | `runtime/handlers.ts`            | All handler definitions                  |
 | `systemHandlers`                             | `runtime/handlers.ts`            | Framework handlers restored after clears |
-| `rootSubIdBySource`                          | `runtime/subscriptions/cache.ts` | Changed DB key → owning root             |
+| `rootSubIdBySource`                          | `runtime/subscriptions/cache.ts` | Changed STATE key → owning root          |
 | `rootSubSourceById`                          | `runtime/subscriptions/cache.ts` | Is this id a root; what key it reads     |
 | `rootSubscriptionKeys`                       | `runtime/subscriptions/cache.ts` | Persistence guard for root cells         |
 | `subscriptionCache`                          | `runtime/subscriptions/cache.ts` | Canonical built instances                |
@@ -62,7 +62,7 @@ One typed nested record keyed by `HandlerKind` (`event`, `fx`, `cofx`, `sub`,
 valid string ids such as `constructor` and `__proto__` cannot collide with
 `Object.prototype`. `regSub` writes two entries for a computed subscription:
 the compute function under `sub` and the dependency function under `subDeps`.
-A root subscription registers a `sub` handler that reads one top-level db key
+A root subscription registers a `sub` handler that reads one top-level state key
 and a `subDeps` handler returning `[]`.
 
 This is the only registry devtools reads directly (`getHandlers`) to enumerate
@@ -79,13 +79,13 @@ default error handler for the rest of the process lifetime.
 
 ## Root source registry — three stores
 
-Root subscriptions are the DB wake-up anchors, and the cache module tracks them
+Root subscriptions are the STATE wake-up anchors, and the cache module tracks them
 in three complementary structures because three different questions are asked
 on three different hot paths.
 
 - **`rootSubIdBySource` (`sourceKey → subId`)** answers the flush question:
-  a top-level db key changed identity — which root subscription owns it? The
-  DB flush diff walks changed keys and looks the owner up here.
+  a top-level state key changed identity — which root subscription owns it? The
+  STATE flush diff walks changed keys and looks the owner up here.
 - **`rootSubSourceById` (`subId → sourceKey`)** is the reverse. Subscription
   construction asks "is this id a root?" to decide the node's kind and to
   reject parameters on roots. With opaque nodes this fact cannot come from the
@@ -161,7 +161,7 @@ unsubscribe path can never dispose it. The provisional maps catch these.
 
 `provisionalCurrent` and `provisionalPrevious` implement a two-generation
 grace period. A newly created computed instance is marked in `current`. A sweep
-(scheduled independently of db updates, so an idle app still cleans up) promotes
+(scheduled independently of state updates, so an idle app still cleans up) promotes
 `current → previous` and deletes anything still in `previous` that never went
 live. Surviving one full cycle without activation is the eviction condition;
 sweeping is always safe because a late subscriber simply rebuilds the instance.

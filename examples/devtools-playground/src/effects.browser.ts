@@ -1,5 +1,5 @@
 import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import type { PlaygroundContracts } from './db';
+import type { PlaygroundContracts } from './state';
 
 // Browser adapters: real side effects against real browser APIs.
 // effects.headless.ts registers the same effect ids with Node-safe

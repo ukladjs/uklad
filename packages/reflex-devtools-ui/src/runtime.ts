@@ -1,10 +1,10 @@
 import { createReflexRuntime } from '@flexsurfer/reflex';
 
-import { createDevtoolsDb } from './db';
+import { createDevtoolsState } from './state';
 
 /** The dashboard owns one explicit Reflex runtime for its UI state. */
 export const devtoolsRuntime = createReflexRuntime({
-  initialDb: createDevtoolsDb(),
+  initialState: createDevtoolsState(),
   runtimeId: 'reflex-devtools-ui',
   name: 'Reflex DevTools UI',
 });

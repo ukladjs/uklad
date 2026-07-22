@@ -10,7 +10,7 @@ import { useSubscription } from '../react/use-subscription';
 import {
   clearSubscriptionCache,
   getOrCreateSubscription,
-  initAppDb,
+  initState,
   ReflexTestProvider,
   regSub,
 } from './runtime-test-api';
@@ -42,7 +42,7 @@ describe('Dev warnings for non-serializable subscription params', () => {
     getTestLogCalls().warn.filter((call: any[]) => String(call[0]).includes(fragment));
 
   beforeEach(() => {
-    initAppDb({ 'warn-items': [] });
+    initState({ 'warn-items': [] });
     clearSubscriptionCache();
     clearTestLogCalls();
   });

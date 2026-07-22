@@ -6,7 +6,7 @@ import {
   dispatch,
   enableTracing,
   getHandlers,
-  initAppDb,
+  initState,
   regEffect,
   regEvent,
   regEventErrorHandler,
@@ -21,7 +21,7 @@ describe('Error tracing', () => {
   let collected: any[] = [];
 
   beforeAll(() => {
-    initAppDb({});
+    initState({});
     enableTracing();
     registerTraceCallback('trace-errors-test', (traces) => {
       collected.push(...traces);
@@ -148,7 +148,7 @@ describe('Error tracing', () => {
 
 describe('Queue failure isolation', () => {
   beforeAll(() => {
-    initAppDb({});
+    initState({});
     // Default handler rethrows, so the exception reaches the router.
     regEventErrorHandler(defaultErrorHandler);
   });

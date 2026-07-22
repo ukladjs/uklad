@@ -8,10 +8,10 @@ import { createOperationInspector } from '../dist/client/operations/inspector.js
 test('records a runtime-local receipt after the queue publishes', async () => {
   const runtime = createReflexRuntime({
     runtimeId: 'operations-test',
-    initialDb: { count: 0 },
+    initialState: { count: 0 },
   });
-  runtime.regEvent('increment', ({ draftDb }, amount) => {
-    draftDb.count += amount;
+  runtime.regEvent('increment', ({ draftState }, amount) => {
+    draftState.count += amount;
   });
   runtime.regSub('count');
 
@@ -32,17 +32,17 @@ test('records a runtime-local receipt after the queue publishes', async () => {
     observe: [['count']],
   });
   assert.equal(replay.replayed, true);
-  assert.equal(runtime.getAppDb().count, 2);
+  assert.equal(runtime.getState().count, 2);
   runtime.dispose();
 });
 
 test('returns the fully settled subscription wave, including equal-value recomputations', async () => {
   const runtime = createReflexRuntime({
     runtimeId: 'operations-subscriptions',
-    initialDb: { count: 0, label: 'initial' },
+    initialState: { count: 0, label: 'initial' },
   });
-  runtime.regEvent('increment', ({ draftDb }) => {
-    draftDb.count += 1;
+  runtime.regEvent('increment', ({ draftState }) => {
+    draftState.count += 1;
   });
   runtime.regSub('count');
   runtime.regSub(
@@ -86,11 +86,11 @@ test('returns the fully settled subscription wave, including equal-value recompu
 test('does not attribute another operation’s publication wave to an unchanged operation', async () => {
   const runtime = createReflexRuntime({
     runtimeId: 'operations-unrelated-publication',
-    initialDb: { count: 0 },
+    initialState: { count: 0 },
   });
   runtime.regEvent('noop', () => {});
-  runtime.regEvent('increment', ({ draftDb }) => {
-    draftDb.count += 1;
+  runtime.regEvent('increment', ({ draftState }) => {
+    draftState.count += 1;
   });
   runtime.regSub('count');
   const unwatch = runtime.watchSubscription(['count'], () => {});
@@ -108,10 +108,10 @@ test('does not attribute another operation’s publication wave to an unchanged 
 });
 
 test('captures a dispatch-effect cascade, effects, and committed patches', async () => {
-  const runtime = createReflexRuntime({ runtimeId: 'operations-cascade', initialDb: { count: 0 } });
+  const runtime = createReflexRuntime({ runtimeId: 'operations-cascade', initialState: { count: 0 } });
   runtime.regEvent('root', () => [['dispatch', ['child', 3]]]);
-  runtime.regEvent('child', ({ draftDb }, amount) => {
-    draftDb.count += amount;
+  runtime.regEvent('child', ({ draftState }, amount) => {
+    draftState.count += amount;
   });
 
   const { operation } = await createOperationClient(runtime).dispatchAndWait(['root']);
@@ -139,24 +139,24 @@ test('captures a dispatch-effect cascade, effects, and committed patches', async
 });
 
 test('keeps synchronous cascades causally separate while queue work interleaves', async () => {
-  const runtime = createReflexRuntime({ runtimeId: 'operations-interleaving', initialDb: { count: 0, nested: 0 } });
+  const runtime = createReflexRuntime({ runtimeId: 'operations-interleaving', initialState: { count: 0, nested: 0 } });
   runtime.regEvent('a/root', () => [['dispatch', ['a/child']], ['dispatch', ['a/branch']]]);
-  runtime.regEvent('a/child', ({ draftDb }) => {
-    draftDb.count += 1;
+  runtime.regEvent('a/child', ({ draftState }) => {
+    draftState.count += 1;
     return [['dispatch', ['a/grandchild']]];
   });
-  runtime.regEvent('a/branch', ({ draftDb }) => {
-    draftDb.nested += 1;
+  runtime.regEvent('a/branch', ({ draftState }) => {
+    draftState.nested += 1;
   });
-  runtime.regEvent('a/grandchild', ({ draftDb }) => {
-    draftDb.count += 1;
+  runtime.regEvent('a/grandchild', ({ draftState }) => {
+    draftState.count += 1;
   });
-  runtime.regEvent('b/root', ({ draftDb }) => {
-    draftDb.count += 10;
+  runtime.regEvent('b/root', ({ draftState }) => {
+    draftState.count += 10;
     return [['dispatch', ['b/child']]];
   });
-  runtime.regEvent('b/child', ({ draftDb }) => {
-    draftDb.count += 10;
+  runtime.regEvent('b/child', ({ draftState }) => {
+    draftState.count += 10;
   });
 
   const operations = createOperationClient(runtime);
@@ -175,19 +175,19 @@ test('keeps synchronous cascades causally separate while queue work interleaves'
   assert.equal(a.operation.events[3].parentEventInstanceId, a.operation.events[1].eventInstanceId);
   assert.equal(a.operation.revisions.concurrentChangesObserved, true);
   assert.equal(b.operation.revisions.concurrentChangesObserved, true);
-  assert.deepEqual(runtime.getAppDb(), { count: 22, nested: 1 });
+  assert.deepEqual(runtime.getState(), { count: 22, nested: 1 });
   runtime.dispose();
 });
 
 test('records failure, detached, returned, malformed, and unhandled effect outcomes', async () => {
-  const runtime = createReflexRuntime({ runtimeId: 'operations-effects', initialDb: { count: 0 } });
+  const runtime = createReflexRuntime({ runtimeId: 'operations-effects', initialState: { count: 0 } });
   runtime.regEffect('explode', () => {
     throw new Error('external write failed');
   });
   runtime.regEffect('void-effect', () => {});
   runtime.regEffect('promise-effect', () => Promise.resolve());
-  runtime.regEvent('explode', ({ draftDb }) => {
-    draftDb.count += 1;
+  runtime.regEvent('explode', ({ draftState }) => {
+    draftState.count += 1;
     return [['explode']];
   });
   runtime.regEvent('returned', () => [['void-effect']]);
@@ -217,12 +217,12 @@ test('records failure, detached, returned, malformed, and unhandled effect outco
 });
 
 test('records missing coeffects before a state commit and rejects stale revisions', async () => {
-  const runtime = createReflexRuntime({ runtimeId: 'operations-preconditions', initialDb: { count: 0 } });
-  runtime.regEvent('needs-coeffect', ({ draftDb }) => {
-    draftDb.count = 10;
+  const runtime = createReflexRuntime({ runtimeId: 'operations-preconditions', initialState: { count: 0 } });
+  runtime.regEvent('needs-coeffect', ({ draftState }) => {
+    draftState.count = 10;
   }, { coeffects: [['missing-coeffect']] });
-  runtime.regEvent('increment', ({ draftDb }, amount) => {
-    draftDb.count += amount;
+  runtime.regEvent('increment', ({ draftState }, amount) => {
+    draftState.count += amount;
   });
   const operations = createOperationClient(runtime);
 
@@ -231,7 +231,7 @@ test('records missing coeffects before a state commit and rejects stale revision
   assert.equal(coeffect.operation.state.status, 'failed');
   assert.equal(coeffect.operation.events[0].state.status, 'not-attempted');
   assert.ok(coeffect.operation.errors.some((error) => error.kind === 'missing-coeffect'));
-  assert.equal(runtime.getAppDb().count, 0);
+  assert.equal(runtime.getState().count, 0);
 
   const [first, stale] = await Promise.all([
     operations.dispatchAndWait(['increment', 1]),
@@ -241,15 +241,15 @@ test('records missing coeffects before a state commit and rejects stale revision
   assert.equal(stale.operation.status, 'rejected');
   assert.equal(stale.operation.errors[0].kind, 'revision-conflict');
   assert.equal(stale.operation.revisions.rootStart, 1);
-  assert.equal(runtime.getAppDb().count, 1);
+  assert.equal(runtime.getState().count, 1);
   runtime.dispose();
 });
 
 test('times out only delivery, supports idempotent lookup, and returns isolated snapshots', async () => {
-  const runtime = createReflexRuntime({ runtimeId: 'operations-ledger', initialDb: { count: 0 } });
+  const runtime = createReflexRuntime({ runtimeId: 'operations-ledger', initialState: { count: 0 } });
   runtime.regEvent('blocker', () => {});
-  runtime.regEvent('increment', ({ draftDb }, amount) => {
-    draftDb.count += amount;
+  runtime.regEvent('increment', ({ draftState }, amount) => {
+    draftState.count += amount;
   });
   const operations = createOperationClient(runtime);
   const blocker = ['blocker'];
@@ -276,9 +276,9 @@ test('times out only delivery, supports idempotent lookup, and returns isolated 
 });
 
 test('owns caller input, settles disposal, and exposes the optional inspector adapter', async () => {
-  const runtime = createReflexRuntime({ runtimeId: 'operations-ownership', initialDb: { count: 0 } });
-  runtime.regEvent('from-input', ({ draftDb }, input) => {
-    draftDb.count += input.amount;
+  const runtime = createReflexRuntime({ runtimeId: 'operations-ownership', initialState: { count: 0 } });
+  runtime.regEvent('from-input', ({ draftState }, input) => {
+    draftState.count += input.amount;
   });
   const operations = createOperationClient(runtime);
   const input = { amount: 2 };
@@ -286,7 +286,7 @@ test('owns caller input, settles disposal, and exposes the optional inspector ad
   input.amount = 100;
   const result = await handle.result;
   assert.equal(result.operation.events[0].event[1].amount, 2);
-  assert.equal(runtime.getAppDb().count, 2);
+  assert.equal(runtime.getState().count, 2);
 
   const inspector = createOperationInspector(runtime.createInspector());
   assert.equal(inspector.operationApiVersion, 1);
@@ -302,24 +302,24 @@ test('owns caller input, settles disposal, and exposes the optional inspector ad
 });
 
 test('captures final interceptor commits and keeps a failed operation from contaminating later queue work', async () => {
-  const runtime = createReflexRuntime({ runtimeId: 'operations-final-db', initialDb: { count: 0 } });
-  runtime.regEvent('replace-final-db', ({ draftDb }) => {
-    draftDb.count = 1;
+  const runtime = createReflexRuntime({ runtimeId: 'operations-final-state', initialState: { count: 0 } });
+  runtime.regEvent('replace-final-state', ({ draftState }) => {
+    draftState.count = 1;
   }, [{
-    id: 'replace-final-db',
+    id: 'replace-final-state',
     after(context) {
-      return { ...context, newDb: { count: 42 } };
+      return { ...context, newState: { count: 42 } };
     },
   }]);
   runtime.regEvent('boom', () => {
     throw new Error('queue failed');
   });
-  runtime.regEvent('increment', ({ draftDb }) => {
-    draftDb.count += 1;
+  runtime.regEvent('increment', ({ draftState }) => {
+    draftState.count += 1;
   });
   const operations = createOperationClient(runtime);
 
-  const replaced = await operations.dispatchAndWait(['replace-final-db']);
+  const replaced = await operations.dispatchAndWait(['replace-final-state']);
   assert.deepEqual(replaced.operation.events[0].state.plannedPatches, [
     { op: 'replace', path: ['count'], value: 1 },
   ]);
@@ -334,19 +334,19 @@ test('captures final interceptor commits and keeps a failed operation from conta
   assert.equal(failed.operation.status, 'failed');
   assert.equal(failed.operation.outcome, 'failed');
   assert.equal(unaffected.operation.outcome, 'succeeded');
-  assert.equal(runtime.getAppDb().count, 43);
+  assert.equal(runtime.getState().count, 43);
   runtime.dispose();
 });
 
 test('validates operation input, records invalid dispatch effects, and rejects disposal from an effect', async () => {
-  const runtime = createReflexRuntime({ runtimeId: 'operations-guards', initialDb: { count: 0 } });
-  runtime.regEvent('from-input', ({ draftDb }, input) => {
-    draftDb.count += input.amount;
+  const runtime = createReflexRuntime({ runtimeId: 'operations-guards', initialState: { count: 0 } });
+  runtime.regEvent('from-input', ({ draftState }, input) => {
+    draftState.count += input.amount;
   });
   runtime.regEvent('bad-dispatch', () => [['dispatch', 'not-an-event-vector']]);
   runtime.regEffect('dispose-runtime', () => runtime.dispose());
-  runtime.regEvent('dispose-from-effect', ({ draftDb }) => {
-    draftDb.count += 1;
+  runtime.regEvent('dispose-from-effect', ({ draftState }) => {
+    draftState.count += 1;
     return [['dispose-runtime']];
   });
   const operations = createOperationClient(runtime);
@@ -366,6 +366,6 @@ test('validates operation input, records invalid dispatch effects, and rejects d
   const disposeAttempt = await operations.dispatchAndWait(['dispose-from-effect']);
   assert.equal(disposeAttempt.operation.outcome, 'effects-failed');
   assert.equal(disposeAttempt.operation.effects.items[0].status, 'failed');
-  assert.equal(runtime.getAppDb().count, 1);
+  assert.equal(runtime.getState().count, 1);
   runtime.dispose();
 });

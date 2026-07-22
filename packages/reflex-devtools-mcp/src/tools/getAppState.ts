@@ -1,6 +1,6 @@
 /**
  * MCP Tool: get_app_state
- * Retrieve current application database state
+ * Retrieve current application state state
  */
 
 import { DevToolsAPIClient } from '../httpClient.js';
@@ -21,14 +21,14 @@ export interface GetAppStateParams extends RuntimeSelectionParams {
 export function getAppStateTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'get_app_state',
-    description: 'Retrieve current Reflex app-db state. Pass a path for a narrow slice; omit it only for intentionally small state because a full dump spends context. This does NOT include computed subscription values — use get_active_subs for mounted values.',
+    description: 'Retrieve current Reflex state state. Pass a path for a narrow slice; omit it only for intentionally small state because a full dump spends context. This does NOT include computed subscription values — use get_active_subs for mounted values.',
     inputSchema: {
       type: 'object',
       properties: {
         path: {
           type: 'string',
           maxLength: 512,
-          description: 'JSON path for one state slice (e.g., "user.profile" or "items[0]"). Strongly prefer this over an unscoped app-db dump.'
+          description: 'JSON path for one state slice (e.g., "user.profile" or "items[0]"). Strongly prefer this over an unscoped state dump.'
         },
         runtimeId: runtimeIdInputProperty,
       },

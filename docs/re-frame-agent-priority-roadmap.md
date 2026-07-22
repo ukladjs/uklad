@@ -106,7 +106,7 @@ unknown
 
 ```text
 event handler completed
-+ app-db commit completed
++ state commit completed
 + synchronous child-event cascade completed
 + subscriptions flushed
 ```
@@ -228,7 +228,7 @@ This tells the agent whether it verified a real side effect, a safe fixture, or 
 
 ### 7. Optional semantic observations
 
-Patches describe the technical database diff, but agents often need to know what the application now observes. Dispatch should optionally accept bounded observations:
+Patches describe the technical state diff, but agents often need to know what the application now observes. Dispatch should optionally accept bounded observations:
 
 ```ts
 await runtime.dispatchAndSettle(['expense/add', expense], {
@@ -344,7 +344,7 @@ The schema should cover at least:
 
 - event dispatch;
 - event handler execution;
-- database commit;
+- state commit;
 - effect execution;
 - subscription creation, computation, and disposal;
 - render notifications;
@@ -374,7 +374,7 @@ Provide a way to restore a known state and replay a sequence of events:
 
 ```ts
 await runtime.replay({
-  initialDb,
+  initialState,
   events: [
     ['user/load'],
     ['user/loaded', user],
@@ -386,7 +386,7 @@ await runtime.replay({
 Useful capabilities:
 
 - named fixtures;
-- database snapshots;
+- state snapshots;
 - state-version metadata;
 - replay with captured coeffects;
 - effect suppression or replacement;
@@ -513,7 +513,7 @@ Hot reload may need a separate, explicitly identified policy so legitimate reloa
 
 ### 14. Flows / `regFlow()`
 
-Flows maintain derived values inside `app-db`, unlike subscriptions whose values remain in the subscription graph.
+Flows maintain derived values inside `state`, unlike subscriptions whose values remain in the subscription graph.
 
 ```ts
 runtime.regFlow({
@@ -535,7 +535,7 @@ Potential uses:
 - multi-stage dataflow;
 - derived values shared by events, persistence, DevTools, and subscriptions.
 
-This should remain below the observability and replay work because Flows introduce implicit database writes and can make causality harder to understand.
+This should remain below the observability and replay work because Flows introduce implicit state writes and can make causality harder to understand.
 
 ### 15. Flow lifecycle and cleanup
 
@@ -548,7 +548,7 @@ If Flows are implemented, support:
 - cycle detection;
 - trace records for each flow computation and cleanup.
 
-The trace must make Flow-induced database patches distinguishable from patches produced directly by an event handler.
+The trace must make Flow-induced state patches distinguishable from patches produced directly by an event handler.
 
 ### 16. Generic time travel and undo/redo
 

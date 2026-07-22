@@ -1,8 +1,8 @@
 # Reflex architecture (compact spec)
 
-Each `ReflexRuntime` owns one central db. Events are pure functions that
-describe a new db plus effects. Effects are the only side effects.
-Subscriptions are a cached, reactive DAG derived from that runtime's db. React
+Each `ReflexRuntime` owns one central state. Events are pure functions that
+describe a new state plus effects. Effects are the only side effects.
+Subscriptions are a cached, reactive DAG derived from that runtime's state. React
 reads subscriptions through `useSyncExternalStore` and the nearest explicit
 `ReflexProvider`.
 
@@ -16,12 +16,12 @@ dispatch(['todos/add', 'milk'])
   ├─ events/interceptors.ts   execute(): before phase (queue→stack), after phase (unwind)
   │     cofx inject → global interceptors → custom → event handler
   ├─ events/pipeline.ts       handler(coeffects, ...params) runs inside Immer produce
-  │                   → context.newDb   (pure, no side effects)
+  │                   → context.newState   (pure, no side effects)
   │                   → context.effects  [['http', {...}]]  (data, not calls)
-  ├─ events/effects.ts        doFx (after phase): updateAppDb(newDb), then run effects
-  ├─ runtime/app-db.ts        appDb advances; flush scheduled (coalesced, rAF)
-  │        ~~~~~~~~~~ window: appDb ahead, renderDb behind; ALL subs still read renderDb
-  ├─ runtime/app-db.ts        flushSubscriptions(): renderDb advances, diff top-level keys
+  ├─ events/effects.ts        doFx (after phase): updateState(newState), then run effects
+  ├─ runtime/state.ts        appState advances; flush scheduled (coalesced, rAF)
+  │        ~~~~~~~~~~ window: appState ahead, renderState behind; ALL subs still read renderState
+  ├─ runtime/state.ts        flushSubscriptions(): renderState advances, diff top-level keys
   ├─ runtime/subscriptions/engine.ts
   │                           roots refresh → rank-ordered settle → freeze → notify
   └─ react/use-subscription.ts
@@ -43,7 +43,7 @@ Paths in this document are relative to `src/`.
 | `runtime/runtime.ts`              | `createReflexRuntime`, modules, watches, restore/flush                      |
 | `runtime/kernel.ts`               | Instance-owned runtime kernel, identity, and terminal lifecycle             |
 | `core/*`                          | Environment, equality, Immer, logging, scheduling, tracing, and validation  |
-| `runtime/app-db.ts`               | `appDb`/`renderDb`, coalesced flush, and changed-root publication           |
+| `runtime/state.ts`                | `appState`/`renderState`, coalesced flush, and changed-root publication     |
 | `runtime/handlers.ts`             | Typed handler definitions and framework-owned handler baselines             |
 | `runtime/event-metadata.ts`       | Per-event interceptor metadata                                              |
 | `runtime/reset.ts`                | Cross-store clear coordination                                              |
@@ -74,7 +74,7 @@ rules for this tree.
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `regEvent(id, handler, options?)`                 | Register a pure handler. Prefer `{ coeffects, interceptors }`; coeffect specs become inject-interceptors. Legacy positional arrays remain supported |
 | `handle(eventV)`                                  | Assemble the chain: `doFx → globals → custom → handler`, run it                                                                                     |
-| `createEventHandlerInterceptor`                   | Builds the interceptor that runs the handler inside `produce`, captures `newDb` + `effects`, and emits patches only while tracing                   |
+| `createEventHandlerInterceptor`                   | Builds the interceptor that runs the handler inside `produce`, captures `newState` + `effects`, and emits patches only while tracing                |
 | `getHandlingEventId` / `getRunningHandlerEventId` | Reentrance guards (`dispatchSync` refusal, dev `dispatch`-in-handler warning)                                                                       |
 | `regEventErrorHandler`                            | Override the framework-owned catch-all for exceptions in the chain; clearing the override restores the default                                      |
 
@@ -90,27 +90,27 @@ regEvent('todos/load', handler, {
 });
 ```
 
-**`events/interceptors.ts`** — `execute(eventV, interceptors)`; `Context = { coeffects, previousDb, effects, queue, stack, newDb }`. `previousDb` is the immutable app-db generation captured at event start; `newDb` is the final Immer generation after the handler, or unset until it runs. `before` walks queue→stack, `after` unwinds the stack. Every `after` hook may compare the read-only db generations and append to the shared `effects` list. Hooks must not replace or mutate either db generation, or replace `effects`; `doFx` is the outermost unwind step, so it commits `newDb` before running the final list. Event traces record that final list, including effects contributed by interceptors.
+**`events/interceptors.ts`** — `execute(eventV, interceptors)`; `Context = { coeffects, previousState, effects, queue, stack, newState }`. `previousState` is the immutable state generation captured at event start; `newState` is the final Immer generation after the handler, or unset until it runs. `before` walks queue→stack, `after` unwinds the stack. Every `after` hook may compare the read-only state generations and append to the shared `effects` list. Hooks must not replace or mutate either state generation, or replace `effects`; `doFx` is the outermost unwind step, so it commits `newState` before running the final list. Event traces record that final list, including effects contributed by interceptors.
 
-**`events/effects.ts`** — `regEffect(id, handler)`. `doFxInterceptor` (after phase) commits `newDb` via `updateAppDb`, then invokes each effect handler; failures are isolated and tagged onto the event's trace. Built-ins: `DISPATCH`, `DISPATCH_LATER`. The router injects its `dispatch` function when composing these built-ins, so the write path has no `pipeline → effects → router → pipeline` module cycle.
+**`events/effects.ts`** — `regEffect(id, handler)`. `doFxInterceptor` (after phase) commits `newState` via `updateState`, then invokes each effect handler; failures are isolated and tagged onto the event's trace. Built-ins: `DISPATCH`, `DISPATCH_LATER`. The router injects its `dispatch` function when composing these built-ins, so the write path has no `pipeline → effects → router → pipeline` module cycle.
 
 **`events/coeffects.ts`** — `regCoeffect(id, handler)`. `getInjectCofxInterceptor(id, value?)` injects into `context.coeffects` before the handler runs. Built-ins: `NOW`, `RANDOM`.
 
 ## State
 
-**`runtime/app-db.ts`** — every operation receives the explicit runtime kernel
+**`runtime/state.ts`** — every operation receives the explicit runtime kernel
 that owns its state.
 
-| Item                                                | What / why                                                                      |
-| --------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `appDb`                                             | Live write head. Events commit new generations here                             |
-| `renderDb`                                          | Published read head. Every subscription reads this, never `appDb`               |
-| `updateAppDb(newDb)`                                | Commit + schedule a flush. Consecutive events coalesce into one                 |
-| `flushSubscriptions()`                              | Promote `renderDb`, diff top-level keys with `Object.is`, publish changed roots |
-| `initAppDb(value)` / `getAppDb()` / `getRenderDb()` | Bootstrap and accessors                                                         |
+| Item                                                   | What / why                                                                         |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `appState`                                             | Live write head. Events commit new generations here                                |
+| `renderState`                                          | Published read head. Every subscription reads this, never `appState`               |
+| `updateState(newState)`                                | Commit + schedule a flush. Consecutive events coalesce into one                    |
+| `flushSubscriptions()`                                 | Promote `renderState`, diff top-level keys with `Object.is`, publish changed roots |
+| `initState(value)` / `getState()` / `getRenderState()` | Bootstrap and accessors                                                            |
 
 Why two heads: between a commit and the flush, cached subscriptions and newly
-mounting components must serve the **same** db generation. `renderDb` advances
+mounting components must serve the **same** state generation. `renderState` advances
 only inside a publication, which is what makes the flush the single publication
 boundary.
 
@@ -151,7 +151,7 @@ Internal engine operations: `createSubscription`, `readSubscription`, `getSubscr
 
 | Item                                     | What / why                                                                                                                                         |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `regSub(id)` / `regSub(id, 'dbKey')`     | Root: reads one top-level db key from `renderDb`. No parameters allowed                                                                            |
+| `regSub(id)` / `regSub(id, 'stateKey')`  | Root: reads one top-level state key from `renderState`. No parameters allowed                                                                      |
 | `regSub(id, computeFn, depsFn, config?)` | Computed: static dependency vectors from `depsFn(...params)`                                                                                       |
 | `getOrCreateSubscription(vector)`        | Builds (or reuses) the whole graph. Iterative — `frames` is an explicit DFS stack, so depth can't blow the JS stack. `buildingKeys` detects cycles |
 | `getSubVectorKey(vector)`                | Runtime-owned canonical cache key. Dev-warns on params that don't survive JSON serialization                                                       |
@@ -183,11 +183,11 @@ subscription engines.
 
 ## Invariants
 
-- Every mutable db, queue, registry, cache, trace, and callback store is keyed
+- Every mutable state, queue, registry, cache, trace, and callback store is keyed
   by an explicit runtime kernel. Scheduled callbacks capture that kernel.
-- `renderDb` advances **only** inside a publication. The flush is the single publication boundary.
+- `renderState` advances **only** inside a publication. The flush is the single publication boundary.
 - One canonical node per serialized query key. Duplicates are an error.
-- Roots are persistent db anchors; computed cells are terminal and evicted when unused.
+- Roots are persistent state anchors; computed cells are terminal and evicted when unused.
 - A cached entry never retains a terminal dependency node.
 - Compute and equality functions are pure. Reads, creates, and publications are rejected while the runtime is settling.
 - Listeners are zero-argument invalidation signals; they read a settled snapshot themselves.

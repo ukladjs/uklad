@@ -1,5 +1,5 @@
 import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import type { PlaygroundContracts } from './db';
+import type { PlaygroundContracts } from './state';
 
 /** Install the shared subscription graph on one runtime. */
 export function installPlaygroundSubscriptions(runtime: ReflexRuntime<PlaygroundContracts>): void {

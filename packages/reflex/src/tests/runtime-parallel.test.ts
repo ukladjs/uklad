@@ -8,12 +8,12 @@ describe('parallel runtime isolation', () => {
     ['delta', 100, -25],
   ])('keeps test worker %s independent', async (runtimeId, initial, amount) => {
     const runtime = createReflexRuntime({
-      initialDb: { value: initial },
+      initialState: { value: initial },
       runtimeId: `parallel-${runtimeId}`,
     });
     runtime.regSub('value');
-    runtime.regEvent('increment', ({ draftDb }, delta: number) => {
-      draftDb.value += delta;
+    runtime.regEvent('increment', ({ draftState }, delta: number) => {
+      draftState.value += delta;
     });
 
     const observed: number[] = [];
@@ -21,7 +21,7 @@ describe('parallel runtime isolation', () => {
     runtime.dispatch(['increment', amount]);
     await runtime.flush();
 
-    expect(runtime.getAppDb()).toEqual({ value: initial + amount });
+    expect(runtime.getState()).toEqual({ value: initial + amount });
     expect(observed).toEqual([initial, initial + amount]);
 
     unwatch();

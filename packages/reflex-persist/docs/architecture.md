@@ -6,7 +6,7 @@ state changes only through events, storage calls only happen in effects, and
 the module owns no private runtime hooks.
 
 `0.1.0-beta.1` is deliberately sync-safe and browser-CSR focused. Each
-configured app-db root is stored independently in a versioned envelope.
+configured state root is stored independently in a versioned envelope.
 
 ```text
 <prefix>/<encoded-root-key> -> {"v": <version>, "data": <JSON data>}
@@ -20,10 +20,10 @@ uses only documented Reflex APIs:
 
 - `registerModule()` for attachment-scoped installation and cleanup;
 - events, effects, coeffects, subscriptions, and one global interceptor;
-- `getAppDb()` only to read current committed state in a post-commit write
+- `getState()` only to read current committed state in a post-commit write
   effect.
 
-It does **not** import Reflex internals, mutate a runtime's db head directly,
+It does **not** import Reflex internals, mutate a runtime's state head directly,
 register watches, or require a persistence-specific core hook. There is one
 attachment per runtime in beta.1; duplicate attachments and protocol ID
 collisions fail before installation.
@@ -46,12 +46,12 @@ handle.hydrate()
   ├─ SNAPSHOT coeffect → synchronously read every configured storage entry
   ├─ HYDRATE handler → parse → validate → migrate → deserialize → stage values
   │                    → overlay valid roots and set terminal status
-  └─ do-fx → commit the db, then REPORT / migration WRITE / COMPLETE effects
+  └─ do-fx → commit the state, then REPORT / migration WRITE / COMPLETE effects
                  │
                  └─ COMPLETE settles whenHydrated() waiters
 ```
 
-Each entry is staged before it reaches `draftDb`. A failed entry does not stop
+Each entry is staged before it reaches `draftState`. A failed entry does not stop
 valid staged roots from publishing, but makes the terminal status `failed`,
 keeps normal writes closed, and suppresses **all** migration rewrites. This is
 the fail-closed storage policy: original entries are never partially migrated.
@@ -61,14 +61,14 @@ the fail-closed storage policy: original entries are never partially migrated.
 ```text
 dispatch(['todos/add', ...])
   │
-  ├─ event handler produces context.newDb
+  ├─ event handler produces context.newState
   ├─ persist writer (global after interceptor)
   │    ├─ ignores persistence protocol events
-  │    ├─ requires both lifecycle state and newDb status to be "hydrated"
-  │    └─ compares newDb with context.previousDb by configured root and Object.is
+  │    ├─ requires both lifecycle state and newState status to be "hydrated"
+  │    └─ compares newState with context.previousState by configured root and Object.is
   │          → appends WRITE effects for changed roots
   └─ do-fx
-       ├─ commits newDb
+       ├─ commits newState
        └─ WRITE reads the committed root, serializes its envelope, and calls storage
 ```
 
@@ -83,8 +83,8 @@ root is `undefined`, the write effect removes its storage entry instead.
 `hydrating` and contributes a `REMOVE` effect. That effect removes every
 configured entry, then an authenticated `PURGED` completion publishes either
 `hydrated` or `failed` and settles accepted purge waiters after the commit.
-Purge does not mutate persisted roots in app-db; after a successful purge, the
-current db is the source of future writes.
+Purge does not mutate persisted roots in state; after a successful purge, the
+current state is the source of future writes.
 
 `dispose()` and runtime disposal share the `registerModule()` cleanup path.
 Cleanup rejects outstanding hydration and purge barriers, removes the module's
@@ -150,7 +150,7 @@ cannot open the write gate or settle a handle barrier.
 - Storage write/remove errors are reported but cannot abort the domain event
   that caused the write.
 - Both lifecycle state and committed status must be `hydrated` before the
-  writer can append effects. A stale app-db status after disposal therefore
+  writer can append effects. A stale state status after disposal therefore
   cannot reopen writes after reattachment.
 
 ## Async roadmap boundary
@@ -169,7 +169,7 @@ coordinator is introduced.
 ## Invariants
 
 - One attachment owns one runtime and one fixed persistence configuration.
-- Storage work is represented by effects and happens only after the causing db
+- Storage work is represented by effects and happens only after the causing state
   commit.
 - Hydration never writes its own snapshot back through the writer.
 - Every hydration/purge barrier either settles at a terminal state or rejects

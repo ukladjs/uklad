@@ -1,26 +1,26 @@
 # Subscription runtime
 
 Reflex has one subscription runtime built around an opaque `SubscriptionNode`.
-React, the DB, the registry, and devtools never receive mutable runtime nodes.
-They use narrow operations for reads, subscriptions, DB publication, lifecycle,
+React, the STATE, the registry, and devtools never receive mutable runtime nodes.
+They use narrow operations for reads, subscriptions, STATE publication, lifecycle,
 and cache-only diagnostics.
 
 ## Execution model
 
 The runtime has two evaluation paths:
 
-- A live graph is pushed once from all changed DB roots in topological-rank
+- A live graph is pushed once from all changed STATE roots in topological-rank
   order. Every cache settles before the first listener runs.
 - A dormant read uses an iterative post-order pull. A publication epoch makes
-  repeated reads between DB waves constant-time cache hits.
+  repeated reads between STATE waves constant-time cache hits.
 
-The DB's coalesced flush is the only publication boundary. There is no
+The STATE's coalesced flush is the only publication boundary. There is no
 per-subscription task queue, dirty propagation, notification debt, dependency
 resolver, or node revival.
 
 ## Per-publication budgets
 
-For one DB publication:
+For one STATE publication:
 
 - Each changed root is read exactly once.
 - Each affected computed node runs at most once.
@@ -38,7 +38,7 @@ active/dormant boundaries, and deep registered graphs.
 
 ## Lifecycle and correctness rules
 
-- Root cells are persistent DB anchors and never accept query parameters.
+- Root cells are persistent STATE anchors and never accept query parameters.
 - Computed dependencies are static for one serialized subscription key.
 - Computed nodes have a terminal live lifecycle. Their last consumer evicts
   them; a later key lookup creates a fresh graph.
@@ -52,7 +52,7 @@ active/dormant boundaries, and deep registered graphs.
   edge; release-hook and listener failures cannot interrupt other cleanup or
   delivery.
 - Direct publication and `dispatchSync` are rejected during computation or
-  listener delivery before `appDb` or `renderDb` can advance. Ordinary async
+  listener delivery before `appState` or `renderState` can advance. Ordinary async
   `dispatch` remains safe because its flush runs later while the runtime is
   idle.
 - Computation errors are retained. A dependency publication or subsequent
@@ -63,12 +63,12 @@ active/dormant boundaries, and deep registered graphs.
   active and cascades through cached dependents. HMR uses an internal reset
   followed by a keyed remount.
 
-## React and DB timing
+## React and STATE timing
 
-`renderDb` is the published generation. Async events may advance `appDb`, but
-all subscriptions continue to expose `renderDb` until the scheduled flush:
+`renderState` is the published generation. Async events may advance `appState`, but
+all subscriptions continue to expose `renderState` until the scheduled flush:
 
-1. `renderDb` advances.
+1. `renderState` advances.
 2. Changed top-level keys identify persistent root cells with `Object.is`.
 3. All changed roots update and the live DAG settles in rank order.
 4. Listener lists are frozen.
@@ -95,7 +95,7 @@ Terminology is now consistent across the public API, runtime, and tracing:
 ## Worked examples
 
 All examples share one registered graph. `todos` and `filter` are top-level
-db keys. Each cell's rank is fixed at construction: roots are rank 0, a
+state keys. Each cell's rank is fixed at construction: roots are rank 0, a
 computed cell is `1 + max(rank of its dependencies)`. A publication wave
 processes rank buckets in ascending order, so every dependency settles
 before any cell that reads it.
@@ -119,13 +119,13 @@ Components watch `[visible]` and `[stats]`. Two events dispatch within one
 frame:
 
 ```
-dispatch(['add-todo'])     appDb = G1    renderDb = G0
-dispatch(['set-filter'])   appDb = G2    renderDb = G0
+dispatch(['add-todo'])     appState = G1    renderState = G0
+dispatch(['set-filter'])   appState = G2    renderState = G0
      every subscription read in this window still serves G0,
      including subscriptions created by components mounting now
 
 scheduled flush (one task):
-  renderDb = G2; keys changed since G0: todos, filter
+  renderState = G2; keys changed since G0: todos, filter
   rank 0: [todos] and [filter] each refresh exactly once
   rank 1: [count] runs once; [visible] runs once and sees the new
           todos AND the new filter together - no torn input

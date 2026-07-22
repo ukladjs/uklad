@@ -1,9 +1,9 @@
 import {
   clearGlobalInterceptors,
   dispatch,
-  getAppDb,
+  getState,
   getInjectCofxInterceptor,
-  initAppDb,
+  initState,
   regCoeffect,
   regEvent,
 } from './runtime-test-api';
@@ -13,24 +13,24 @@ import { waitForScheduled } from './test-utils';
 
 describe('regCofx - Co-Effects', () => {
   beforeEach(() => {
-    initAppDb({ counter: 0, messages: [] });
+    initState({ counter: 0, messages: [] });
     clearGlobalInterceptors();
   });
 
   describe('Built-in Co-Effects', () => {
-    it('should inject db co-effect', async () => {
+    it('should inject state co-effect', async () => {
       let capturedCoeffects: CoEffects | null = null;
 
-      regEvent('test-db-cofx', (coeffects: CoEffects) => {
+      regEvent('test-state-cofx', (coeffects: CoEffects) => {
         capturedCoeffects = coeffects;
       });
 
-      dispatch(['test-db-cofx']);
+      dispatch(['test-state-cofx']);
 
       await waitForScheduled();
 
       expect(capturedCoeffects).not.toBeNull();
-      expect(capturedCoeffects!.event).toEqual(['test-db-cofx']);
+      expect(capturedCoeffects!.event).toEqual(['test-state-cofx']);
     });
 
     it('should inject now co-effect', async () => {
@@ -209,11 +209,11 @@ describe('regCofx - Co-Effects', () => {
 
       regEvent(
         'test-cofx-logic',
-        ({ config, draftDb }) => {
-          const newCounter = Math.min(draftDb.counter + 10, config.maxCounter);
+        ({ config, draftState }) => {
+          const newCounter = Math.min(draftState.counter + 10, config.maxCounter);
 
-          draftDb.counter = newCounter;
-          draftDb.messages.push(config.defaultMessage);
+          draftState.counter = newCounter;
+          draftState.messages.push(config.defaultMessage);
         },
         [['app-config']],
       );
@@ -222,9 +222,9 @@ describe('regCofx - Co-Effects', () => {
 
       await waitForScheduled();
 
-      const updatedDb = getAppDb();
-      expect(updatedDb.counter).toBe(10);
-      expect(updatedDb.messages).toEqual(['Hello World']);
+      const updatedState = getState();
+      expect(updatedState.counter).toBe(10);
+      expect(updatedState.messages).toEqual(['Hello World']);
     });
 
     it('should chain multiple co-effects for complex data preparation', async () => {
@@ -340,8 +340,8 @@ describe('regCofx - Co-Effects', () => {
         (coeffects, ...params) => {
           capturedCoeffects = coeffects;
           capturedParams = params;
-          const draftDb = coeffects.draftDb;
-          draftDb.lastRequest = {
+          const draftState = coeffects.draftState;
+          draftState.lastRequest = {
             id: coeffects.requestId,
             params: params,
             timestamp: coeffects.timestamp,
@@ -359,12 +359,12 @@ describe('regCofx - Co-Effects', () => {
       expect(typeof capturedCoeffects!.requestId).toBe('string');
       expect(capturedCoeffects!.requestId.startsWith('req-')).toBe(true);
 
-      const updatedDb = getAppDb();
-      expect(updatedDb.lastRequest).toMatchObject({
+      const updatedState = getState();
+      expect(updatedState.lastRequest).toMatchObject({
         params: ['param1', { key: 'value' }, 123],
       });
-      expect(typeof updatedDb.lastRequest.id).toBe('string');
-      expect(typeof updatedDb.lastRequest.timestamp).toBe('number');
+      expect(typeof updatedState.lastRequest.id).toBe('string');
+      expect(typeof updatedState.lastRequest.timestamp).toBe('number');
     });
   });
 

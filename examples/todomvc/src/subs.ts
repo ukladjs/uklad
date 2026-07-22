@@ -1,6 +1,6 @@
 import { setupSubsHotReload } from '@flexsurfer/reflex';
 
-import type { Showing, Todos } from './db';
+import type { Showing, Todos } from './state';
 import { SUB_IDS } from './sub-ids';
 import { todoRuntime } from './runtime';
 

@@ -16,25 +16,27 @@ function ValueView() {
 
 function installValueFeature(runtime: ReflexRuntime<any>) {
   runtime.regSub('value');
-  runtime.regEvent('set', ({ draftDb }, value: number) => {
-    draftDb.value = value;
+  runtime.regEvent('set', ({ draftState }, value: number) => {
+    draftState.value = value;
   });
 }
 
 describe('runtime hydration', () => {
   it('hydrates a fresh client runtime without retaining the request runtime', async () => {
     const serverRuntime = createReflexRuntime({
-      initialDb: { value: 7 },
+      initialState: { value: 7 },
       runtimeId: 'hydration-server',
     });
     installValueFeature(serverRuntime);
     const html = renderToString(
       createElement(ReflexProvider, { runtime: serverRuntime }, createElement(ValueView)),
     );
-    const serializedDb = JSON.parse(JSON.stringify(serverRuntime.getAppDb())) as { value: number };
+    const serializedState = JSON.parse(JSON.stringify(serverRuntime.getState())) as {
+      value: number;
+    };
 
     const clientRuntime = createReflexRuntime({
-      initialDb: serializedDb,
+      initialState: serializedState,
       runtimeId: 'hydration-client',
     });
     installValueFeature(clientRuntime);
@@ -55,7 +57,7 @@ describe('runtime hydration', () => {
 
     act(() => clientRuntime.dispatchSync(['set', 9]));
     expect(container.textContent).toBe('9');
-    expect(serverRuntime.getAppDb()).toEqual({ value: 7 });
+    expect(serverRuntime.getState()).toEqual({ value: 7 });
 
     await act(async () => root!.unmount());
     consoleError.mockRestore();

@@ -1,5 +1,5 @@
 // A hidden browser tab can suspend requestAnimationFrame indefinitely while
-// events continue committing app DB changes. The fallback bounds that delay
+// events continue committing app STATE changes. The fallback bounds that delay
 // without preempting a normally scheduled frame.
 const FRAME_FALLBACK_DELAY_MS = 100;
 const TIMER_FRAME_DELAY_MS = 16;

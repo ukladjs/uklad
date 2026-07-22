@@ -16,15 +16,15 @@ Tool responses shown are abbreviated.
 
 > *"In the expense-tracker app, add category filtering: a category picker, the expense list filtered by the selected category, and a running total for it. Persist the selection."*
 
-A mid-size task on purpose: it touches the db shape, two events, two subscriptions, an effect, and two components — and it contains a bug class that only runtime observation can catch.
+A mid-size task on purpose: it touches the state shape, two events, two subscriptions, an effect, and two components — and it contains a bug class that only runtime observation can catch.
 
-The app follows the scaffolded convention: `src/db.ts`, `src/event-ids.ts`, `src/events.ts`, `src/sub-ids.ts`, `src/subs.ts`, `src/effects.ts`, `src/components/`.
+The app follows the scaffolded convention: `src/state.ts`, `src/event-ids.ts`, `src/events.ts`, `src/sub-ids.ts`, `src/subs.ts`, `src/effects.ts`, `src/components/`.
 
 ---
 
 ## Phase 0 — Orient: what exists?
 
-The agent's first question is never "what is the state?" — the app isn't even running. It's *"what ids, handlers, and db keys already exist, and where?"*
+The agent's first question is never "what is the state?" — the app isn't even running. It's *"what ids, handlers, and state keys already exist, and where?"*
 
 - **Today:** read `*-ids.ts` (they are the index), exact-match `rg` for the few ids that matter. Cheap and reliable — but text-based, and says nothing about payload shapes or the sub dependency graph.
 - 🚧 **Roadmap:** `get_reflex_map` / `find_reflex_id` / `get_event_contract` backed by `.reflex/map.json` (lib: static manifest generator). No running app required; replaces every orientation grep with indexed lookups.
@@ -35,9 +35,9 @@ What the agent must *not* need to do: read `events.ts` / `subs.ts` end-to-end. O
 
 ## Phase 1 — Write the code (the compiler is the loop)
 
-The agent writes, in order: the db key (`selectedCategory: null`), event ids, handlers (`expenses/set-category`, extend `expenses/add` with a category), sub ids and subs (`expenses/visible`, `expenses/category-total`), the persistence effect wiring, and the two components.
+The agent writes, in order: the state key (`selectedCategory: null`), event ids, handlers (`expenses/set-category`, extend `expenses/add` with a category), sub ids and subs (`expenses/visible`, `expenses/category-total`), the persistence effect wiring, and the two components.
 
-**No MCP is used in this phase, and that is by design.** The verification signal here is `tsc` against the typed payload maps (`EventPayloads` / `SubPayloads` / `AppDb`): a wrong payload, a typo'd id in `dispatch`, a mis-shaped sub result — all become compile errors, the cheapest feedback there is. Roughly 70% of the agent's total effort on this task happens in this phase, which is why the scaffolder, the typed maps, and the static manifest matter more to overall context cost than any runtime tool.
+**No MCP is used in this phase, and that is by design.** The verification signal here is `tsc` against the typed payload maps (`EventPayloads` / `SubPayloads` / `AppState`): a wrong payload, a typo'd id in `dispatch`, a mis-shaped sub result — all become compile errors, the cheapest feedback there is. Roughly 70% of the agent's total effort on this task happens in this phase, which is why the scaffolder, the typed maps, and the static manifest matter more to overall context cost than any runtime tool.
 
 The MCP earns its keep in everything that follows.
 
@@ -57,7 +57,7 @@ Bash: tsx watch src/headless.ts      # the app, headless — no browser needed
 
 The first wall used to be here: **the SDK runs inside the app, and the app historically ran in a browser tab** an autonomous agent doesn't have.
 
-- ✅ **Today: headless and parallel runtimes.** Reflex's state layer is React-free, so the scaffolded `src/headless.ts` installs the same db/events/subscriptions as `main.tsx` on an explicit runtime and calls `enableDevtools(runtime, { operations: {} })` — run via `tsx`/`vite-node` with a watcher (`pnpm dev:playground:headless` in this repo) — a live, dispatchable, fully traceable app with no browser. Views are excluded, which is acceptable: the state layer is where Reflex's guarantees live, and view-file correctness is covered by tsc plus the browser smoke check below. Side effects are safe by default through the adapter split (`effects.headless.ts` / `coeffects.headless.ts` install the same effect ids against memory-backed or no-op adapters; policy in [headless-state-fixtures.md](headless-state-fixtures.md)), and the declared adapter modes surface in `app_status`. Browser, headless, widget, and agent-sandbox runtimes can remain connected together under stable IDs. A reconnect supersedes only the older socket with the same `runtimeId`, preventing duplicate execution without disconnecting other sandboxes.
+- ✅ **Today: headless and parallel runtimes.** Reflex's state layer is React-free, so the scaffolded `src/headless.ts` installs the same state/events/subscriptions as `main.tsx` on an explicit runtime and calls `enableDevtools(runtime, { operations: {} })` — run via `tsx`/`vite-node` with a watcher (`pnpm dev:playground:headless` in this repo) — a live, dispatchable, fully traceable app with no browser. Views are excluded, which is acceptable: the state layer is where Reflex's guarantees live, and view-file correctness is covered by tsc plus the browser smoke check below. Side effects are safe by default through the adapter split (`effects.headless.ts` / `coeffects.headless.ts` install the same effect ids against memory-backed or no-op adapters; policy in [headless-state-fixtures.md](headless-state-fixtures.md)), and the declared adapter modes surface in `app_status`. Browser, headless, widget, and agent-sandbox runtimes can remain connected together under stable IDs. A reconnect supersedes only the older socket with the same `runtimeId`, preventing duplicate execution without disconnecting other sandboxes.
 
 ### 2. "Is it alive?"
 
@@ -85,7 +85,7 @@ get_app_state { path: "selectedCategory" }   ✅
 → { path: "selectedCategory", state: null }
 ```
 
-Path-scoped reads only. On an unfamiliar or large app the discovery step comes first: 🚧 `get_app_state { shape: true }` → keys, types, collection sizes — the runtime equivalent of reading `db.ts`. The full dump is the anti-pattern.
+Path-scoped reads only. On an unfamiliar or large app the discovery step comes first: 🚧 `get_app_state { shape: true }` → keys, types, collection sizes — the runtime equivalent of reading `state.ts`. The full dump is the anti-pattern.
 
 ### 4. Seed test state
 
@@ -108,7 +108,7 @@ dispatch_event { eventName: "expenses/set-category", params: ["food"] }   ✅
 
 **This response is the verification.** Three questions answered in one round trip, zero re-reads:
 
-- the db write happened and is exactly the intended patch;
+- the state write happened and is exactly the intended patch;
 - the persistence effect fired with the right payload — the *effect contract* is observed, not assumed;
 - failure modes are explicit: `outcome: "failed"` + normalized error for a throwing/missing handler, `"effects-failed"` when state committed but an effect threw, `"unknown"` when unobserved.
 
@@ -116,7 +116,7 @@ This tool is the center of gravity of the whole API; everything else exists to s
 
 ### 6. Verify the derived layer
 
-The db is right — but does `expenses/category-total` compute `42.5`? Evaluate the registered sub directly against current state, mounted or not:
+The state is right — but does `expenses/category-total` compute `42.5`? Evaluate the registered sub directly against current state, mounted or not:
 
 ```
 eval_sub { id: "expenses/category-total", args: ["food"] }   ✅
@@ -146,7 +146,7 @@ Note what makes this valuable as *the* canonical bug: the handler is pure and co
 
 ### 7. Explain the event
 
-The agent's question, verbatim: *"I dispatched `expenses/set-category`, state changed — why didn't the total update?"* The debugging chain is always the same three hops: **db written? → subs recomputed? → components re-rendered?**
+The agent's question, verbatim: *"I dispatched `expenses/set-category`, state changed — why didn't the total update?"* The debugging chain is always the same three hops: **state written? → subs recomputed? → components re-rendered?**
 
 - **Today** ⚠️: hop 1 is in the dispatch response; hops 2–3 mean paging `get_traces { opType: "sub/run" }` and `{ opType: "render" }` and correlating timestamps by hand — several calls, fat rows, and reflex-internals knowledge required.
 - ✳️ **Proposed: `explain_event(traceId)`** — the causality chain as one bounded response:
@@ -187,11 +187,11 @@ If the symptom had been a *wrong value* rather than a missing update — "who se
 
 The agent fixes the dep array and vite reloads the app. Consequences, all invisible today:
 
-- the db resets to initial state — the seeded expenses are gone;
+- the state resets to initial state — the seeded expenses are gone;
 - trace ids restart at 1; server storage cleared on the SDK reconnect;
 - any held cursor or remembered `traceId` now silently points at nothing.
 
-- ✅ **Today:** every successful runtime-scoped tool response carries `runtimeId`, `runtimeName`, and `sessionEpoch`. The epoch identifies a DevTools connection session: an app reload changes it, but so can a transient SDK reconnect that leaves the runtime database intact. Server trace storage and remembered IDs belong to that `(runtimeId, sessionEpoch)` pair, and `get_trace` can reject a stale expected epoch explicitly. 🚧 **Roadmap:** `get_traces(sinceId)` will make an epoch change an explicit cursor-reset result rather than requiring the caller to compare its saved epoch.
+- ✅ **Today:** every successful runtime-scoped tool response carries `runtimeId`, `runtimeName`, and `sessionEpoch`. The epoch identifies a DevTools connection session: an app reload changes it, but so can a transient SDK reconnect that leaves the runtime state intact. Server trace storage and remembered IDs belong to that `(runtimeId, sessionEpoch)` pair, and `get_trace` can reject a stale expected epoch explicitly. 🚧 **Roadmap:** `get_traces(sinceId)` will make an epoch change an explicit cursor-reset result rather than requiring the caller to compare its saved epoch.
 - 🚧 **Lib roadmap: verify/document the HMR story** — whether handler re-registration on HMR is sound determines whether a *full* reload is even necessary per edit.
 
 ### 10. Re-seed or restore in one call

@@ -807,9 +807,9 @@ class DevtoolsClient {
 
     const snapshot = this.inspector.getSnapshot();
     this.sendEvent({
-      type: 'reflex-app-db',
+      type: 'reflex-state',
       component: 'Reflex',
-      payload: snapshot.appDb
+      payload: snapshot.appState
     });
     this.sendEvent({
       type: 'reflex-active-subs',
@@ -930,7 +930,7 @@ class DevtoolsClient {
     } catch (error) {
       console.error('[Reflex Devtools] Error serializing object:', error);
       if (error instanceof Error && error.message.includes("Cannot perform 'get' on a proxy that has been revoked")) {
-        console.warn('[Reflex Devtools] ⚠️ Important: When passing data from draftDb to effects, always use the current() function to get the current (final) value. The draftDb object is an Immer draft proxy that will be finalized after the event completes, so passing draftDb data directly to effects will result in the empty proxy object.');
+        console.warn('[Reflex Devtools] ⚠️ Important: When passing data from draftState to effects, always use the current() function to get the current (final) value. The draftState object is an Immer draft proxy that will be finalized after the event completes, so passing draftState data directly to effects will result in the empty proxy object.');
       }
       return JSON.stringify({ __reflex_type: 'SerializationError', error: 'Serialization failed' });
     }

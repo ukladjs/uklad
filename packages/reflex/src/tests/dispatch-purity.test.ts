@@ -8,7 +8,7 @@
 // takes its development-only branch in this suite.
 jest.mock('../core/environment', () => ({ IS_DEV: true }));
 
-import { dispatch, dispatchSync, getAppDb, initAppDb, regEvent } from './runtime-test-api';
+import { dispatch, dispatchSync, getState, initState, regEvent } from './runtime-test-api';
 import { waitForScheduled } from './test-utils';
 
 const purityWarnings = () =>
@@ -18,15 +18,15 @@ const purityWarnings = () =>
 
 describe('dev warning: dispatch called from an event handler', () => {
   beforeEach(() => {
-    initAppDb({ outer: 0, inner: 0 });
+    initState({ outer: 0, inner: 0 });
   });
 
   it('should warn but still queue the event', async () => {
-    regEvent('purity-inner', ({ draftDb }) => {
-      draftDb.inner += 1;
+    regEvent('purity-inner', ({ draftState }) => {
+      draftState.inner += 1;
     });
-    regEvent('purity-outer', ({ draftDb }) => {
-      draftDb.outer += 1;
+    regEvent('purity-outer', ({ draftState }) => {
+      draftState.outer += 1;
       dispatch(['purity-inner']); // impure: should be a ['dispatch', ...] effect
     });
 
@@ -39,16 +39,16 @@ describe('dev warning: dispatch called from an event handler', () => {
     expect(String(warnings[0]![0])).toContain("'purity-inner'");
     expect(String(warnings[0]![0])).toContain("'purity-outer'");
 
-    expect(getAppDb().outer).toBe(1);
-    expect(getAppDb().inner).toBe(1);
+    expect(getState().outer).toBe(1);
+    expect(getState().inner).toBe(1);
   });
 
   it('should not warn for events emitted through the dispatch effect', async () => {
-    regEvent('purity-fx-inner', ({ draftDb }) => {
-      draftDb.inner += 1;
+    regEvent('purity-fx-inner', ({ draftState }) => {
+      draftState.inner += 1;
     });
-    regEvent('purity-fx-outer', ({ draftDb }) => {
-      draftDb.outer += 1;
+    regEvent('purity-fx-outer', ({ draftState }) => {
+      draftState.outer += 1;
       return [['dispatch', ['purity-fx-inner']]];
     });
 
@@ -57,12 +57,12 @@ describe('dev warning: dispatch called from an event handler', () => {
     await waitForScheduled();
 
     expect(purityWarnings()).toHaveLength(0);
-    expect(getAppDb().inner).toBe(1);
+    expect(getState().inner).toBe(1);
   });
 
   it('should not warn for dispatch outside event handling', async () => {
-    regEvent('purity-plain', ({ draftDb }) => {
-      draftDb.outer += 1;
+    regEvent('purity-plain', ({ draftState }) => {
+      draftState.outer += 1;
     });
 
     dispatch(['purity-plain']);
@@ -72,11 +72,11 @@ describe('dev warning: dispatch called from an event handler', () => {
   });
 
   it('should warn from handlers run through dispatchSync too', () => {
-    regEvent('purity-sync-inner', ({ draftDb }) => {
-      draftDb.inner += 1;
+    regEvent('purity-sync-inner', ({ draftState }) => {
+      draftState.inner += 1;
     });
-    regEvent('purity-sync-outer', ({ draftDb }) => {
-      draftDb.outer += 1;
+    regEvent('purity-sync-outer', ({ draftState }) => {
+      draftState.outer += 1;
       dispatch(['purity-sync-inner']);
     });
 

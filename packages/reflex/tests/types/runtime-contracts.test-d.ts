@@ -3,7 +3,7 @@ import { createReflexRuntime } from '../../src/vanilla';
 import type { ReflexContracts } from '../../src/vanilla';
 
 interface CounterContracts extends ReflexContracts {
-  db: { count: number };
+  state: { count: number };
   events: {
     increment: [amount: number];
     reset: [];
@@ -18,16 +18,16 @@ interface CounterContracts extends ReflexContracts {
 }
 
 const runtime = createReflexRuntime<CounterContracts>({
-  initialDb: { count: 0 },
+  initialState: { count: 0 },
   runtimeId: 'typed-counter',
 });
 
-runtime.regEvent('increment', ({ draftDb }, amount) => {
-  draftDb.count += amount;
+runtime.regEvent('increment', ({ draftState }, amount) => {
+  draftState.count += amount;
   return [['log', { message: String(amount) }]];
 });
-runtime.regEvent('reset', ({ draftDb }) => {
-  draftDb.count = 0;
+runtime.regEvent('reset', ({ draftState }) => {
+  draftState.count = 0;
 });
 runtime.regEffect('log', ({ message }) => {
   const value: string = message;
@@ -66,17 +66,17 @@ void hookResult;
 // @ts-expect-error Locally typed hooks reject invalid subscription params.
 hooks.useSubscription(['scaled', 'two']);
 
-const inferred = createReflexRuntime({ initialDb: { ready: true } });
-const ready: boolean = inferred.getAppDb().ready;
+const inferred = createReflexRuntime({ initialState: { ready: true } });
+const ready: boolean = inferred.getState().ready;
 void ready;
 
-// @ts-expect-error Runtime databases must be top-level object records.
-createReflexRuntime({ initialDb: null });
-// @ts-expect-error Runtime databases must be top-level object records.
-createReflexRuntime({ initialDb: 1 });
-// @ts-expect-error Runtime databases must not be top-level arrays.
-createReflexRuntime({ initialDb: [] });
+// @ts-expect-error Runtime states must be top-level object records.
+createReflexRuntime({ initialState: null });
+// @ts-expect-error Runtime states must be top-level object records.
+createReflexRuntime({ initialState: 1 });
+// @ts-expect-error Runtime states must not be top-level arrays.
+createReflexRuntime({ initialState: [] });
 // @ts-expect-error Runtime ids are strings at both typed and JavaScript boundaries.
-createReflexRuntime({ initialDb: {}, runtimeId: 1 });
+createReflexRuntime({ initialState: {}, runtimeId: 1 });
 // @ts-expect-error Runtime names are strings at both typed and JavaScript boundaries.
-createReflexRuntime({ initialDb: {}, name: 1 });
+createReflexRuntime({ initialState: {}, name: 1 });

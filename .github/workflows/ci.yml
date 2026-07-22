@@ -211,7 +211,7 @@ jobs:
           cd test-consumption/esm-consumer
           npm init -y
           npm install ../../reflex.tgz react@19.2.7
-          echo 'import { initAppDb, dispatch } from "@flexsurfer/reflex"; console.log("ESM import works");' > test.mjs
+          echo 'import { initState, dispatch } from "@flexsurfer/reflex"; console.log("ESM import works");' > test.mjs
           node test.mjs
 
           # Test CommonJS consumption
@@ -220,7 +220,7 @@ jobs:
           cd cjs-consumer
           npm init -y
           npm install ../../reflex.tgz react@19.2.7
-          echo 'const { initAppDb, dispatch } = require("@flexsurfer/reflex"); console.log("CommonJS require works");' > test.js
+          echo 'const { initState, dispatch } = require("@flexsurfer/reflex"); console.log("CommonJS require works");' > test.js
           node test.js
 
   devtools-workspaces:
@@ -379,8 +379,8 @@ jobs:
 
           # Create entry file that imports from the library
           cat > index.js << 'EOF'
-          import { initAppDb } from "@flexsurfer/reflex";
-          console.log("Successfully imported initAppDb:", typeof initAppDb);
+          import { initState } from "@flexsurfer/reflex";
+          console.log("Successfully imported initState:", typeof initState);
           console.log("Library bundled successfully!");
           EOF
 

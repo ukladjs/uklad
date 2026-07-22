@@ -255,8 +255,8 @@ async function connectWebSocket(): Promise<void> {
         dispatch(['runtime-selected', data.payload]);
       } else if (data.type === 'reflex-traces') {
         dispatch(['add-traces', data.payload, data.runtimeId, data.sessionEpoch]);
-      } else if (data.type === 'reflex-app-db') {
-        dispatch(['update-db', data.payload, data.runtimeId, data.sessionEpoch]);
+      } else if (data.type === 'reflex-state') {
+        dispatch(['update-state', data.payload, data.runtimeId, data.sessionEpoch]);
       } else if (data.type === 'reflex-active-subs') {
         dispatch(['update-active-subs', data.payload, data.runtimeId, data.sessionEpoch]);
       } else if (data.type === 'reflex-handler-keys') {

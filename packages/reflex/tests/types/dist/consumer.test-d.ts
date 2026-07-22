@@ -2,7 +2,7 @@
  * Compile-time regression test against the BUILT package types
  * (dist/index.d.mts), resolved as '@flexsurfer/reflex' via a paths mapping —
  * exactly how a consumer sees it. This guards the augmentation contract:
- * tsup's dts rollup must keep EventPayloads/SubPayloads/AppDb declared (not
+ * tsup's dts rollup must keep EventPayloads/SubPayloads/AppState declared (not
  * just re-exported) in the entry module, or `declare module
  * '@flexsurfer/reflex'` stops merging.
  *
@@ -19,7 +19,7 @@ import type {
 interface Todo { id: number; title: string; done: boolean }
 
 interface TestContracts extends ReflexContracts {
-  readonly db: {
+  readonly state: {
     todos: Todo[];
   };
   readonly events: {
@@ -36,7 +36,7 @@ interface TestContracts extends ReflexContracts {
   };
 }
 
-const runtime = createReflexRuntime<TestContracts>({ initialDb: { todos: [] as Todo[] } });
+const runtime = createReflexRuntime<TestContracts>({ initialState: { todos: [] as Todo[] } });
 runtime.dispatch(['todos/add', 'buy milk']);
 runtime.dispatch(['app/init']);
 // @ts-expect-error unknown event id
@@ -51,9 +51,9 @@ runtime.dispatchSync(['todos/add', 'buy milk']);
 // @ts-expect-error unknown event id
 runtime.dispatchSync(['todos/oops']);
 
-runtime.regEvent('todos/add', ({ draftDb }, title) => {
+runtime.regEvent('todos/add', ({ draftState }, title) => {
   const _title: string = title;
-  const _first: string | undefined = draftDb.todos[0]?.title;
+  const _first: string | undefined = draftState.todos[0]?.title;
   void _title; void _first;
 });
 const registrationOptions: EventRegistrationOptions<{ todos: Todo[] }> = {
@@ -61,12 +61,12 @@ const registrationOptions: EventRegistrationOptions<{ todos: Todo[] }> = {
   interceptors: [{ id: 'dist-options', before: (context) => context }],
 };
 runtime.regEvent('app/init', () => undefined, registrationOptions);
-// @ts-expect-error unknown db key
-runtime.regEvent('app/init', ({ draftDb }) => { draftDb.nope = 1; });
+// @ts-expect-error unknown state key
+runtime.regEvent('app/init', ({ draftState }) => { draftState.nope = 1; });
 
 // effect tuples are checked, including events embedded in dispatch effects
-runtime.regEvent('app/init', ({ draftDb }) => [
-  ['storage/set-todos', draftDb.todos],
+runtime.regEvent('app/init', ({ draftState }) => [
+  ['storage/set-todos', draftState.todos],
   ['dispatch', ['todos/add', 'from effect']]
 ]);
 // @ts-expect-error wrong payload inside a dispatch effect
@@ -84,8 +84,8 @@ void _check;
 // @ts-expect-error unknown sub id
 useSubscription(['todos/nope']);
 
-const db = runtime.getAppDb();
-const _all: Todo[] = db.todos;
+const state = runtime.getState();
+const _all: Todo[] = state.todos;
 void _all;
 
 const diagnostic: SubscriptionDiagnostic = {

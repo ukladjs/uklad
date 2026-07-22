@@ -11,7 +11,7 @@ interface Envelope {
   readonly data: unknown;
 }
 
-/** A decoded configured root ready to be applied to app-db. */
+/** A decoded configured root ready to be applied to state. */
 export interface StagedEntry {
   readonly key: string;
   readonly value: unknown;

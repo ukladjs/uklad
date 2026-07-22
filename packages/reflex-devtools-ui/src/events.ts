@@ -7,42 +7,42 @@ import { regEvent } from './runtime';
 // Enable Immer patches plugin for applyPatches functionality
 enablePatches();
 
-function clearRuntimeView(draftDb: any) {
-    draftDb.db = "";
-    draftDb.traces = [];
-    draftDb.activeSubs = {};
-    draftDb.handlerKeys = null;
-    draftDb.handlerUsage = {};
-    draftDb.selectedTrace = null;
-    draftDb.dispatchModalOpenState = {};
+function clearRuntimeView(draftState: any) {
+    draftState.state = "";
+    draftState.traces = [];
+    draftState.activeSubs = {};
+    draftState.handlerKeys = null;
+    draftState.handlerUsage = {};
+    draftState.selectedTrace = null;
+    draftState.dispatchModalOpenState = {};
 }
 
-function acceptsRuntimeMessage(draftDb: any, runtimeId: string, sessionEpoch: number) {
+function acceptsRuntimeMessage(draftState: any, runtimeId: string, sessionEpoch: number) {
     if (
-        runtimeId !== draftDb.selectedRuntimeId
-        || draftDb.pendingRuntimeId !== null
+        runtimeId !== draftState.selectedRuntimeId
+        || draftState.pendingRuntimeId !== null
         || !Number.isSafeInteger(sessionEpoch)
         || sessionEpoch < 1
-        || sessionEpoch < draftDb.sessionEpoch
+        || sessionEpoch < draftState.sessionEpoch
     ) {
         return false;
     }
-    if (sessionEpoch > draftDb.sessionEpoch) {
-        clearRuntimeView(draftDb);
-        draftDb.sessionEpoch = sessionEpoch;
+    if (sessionEpoch > draftState.sessionEpoch) {
+        clearRuntimeView(draftState);
+        draftState.sessionEpoch = sessionEpoch;
     }
     return true;
 }
 
 regEvent('set-runtimes', (
-    { draftDb },
+    { draftState },
     runtimes: DevtoolsRuntimeSummary[],
     serverSelectedRuntimeId?: string | null,
 ) => {
-    const previousRuntimeId = draftDb.selectedRuntimeId as string | null;
-    const previousEpoch = draftDb.sessionEpoch as number;
-    const pendingRuntimeId = draftDb.pendingRuntimeId as string | null;
-    draftDb.runtimes = runtimes;
+    const previousRuntimeId = draftState.selectedRuntimeId as string | null;
+    const previousEpoch = draftState.sessionEpoch as number;
+    const pendingRuntimeId = draftState.pendingRuntimeId as string | null;
+    draftState.runtimes = runtimes;
 
     if (pendingRuntimeId !== null) {
         const pending = runtimes.find(
@@ -53,18 +53,18 @@ regEvent('set-runtimes', (
             // in flight. Only devtools-runtime-selected commits the server's
             // acknowledgement, so an older status cannot roll the UI back.
             if (
-                draftDb.selectedRuntimeId === pending.runtimeId
-                && draftDb.sessionEpoch !== pending.sessionEpoch
+                draftState.selectedRuntimeId === pending.runtimeId
+                && draftState.sessionEpoch !== pending.sessionEpoch
             ) {
-                clearRuntimeView(draftDb);
-                draftDb.sessionEpoch = pending.sessionEpoch;
+                clearRuntimeView(draftState);
+                draftState.sessionEpoch = pending.sessionEpoch;
             }
             return undefined;
         }
 
         // The requested runtime disappeared before acknowledgement. Reconcile
         // with the server list instead of leaving dispatch pinned to a ghost.
-        draftDb.pendingRuntimeId = null;
+        draftState.pendingRuntimeId = null;
     }
 
     const selected = (
@@ -80,97 +80,97 @@ regEvent('set-runtimes', (
     const nextEpoch = selected?.sessionEpoch ?? 0;
     const selectionChanged = previousRuntimeId !== nextRuntimeId;
     if (selectionChanged || previousEpoch !== nextEpoch) {
-        clearRuntimeView(draftDb);
-        draftDb.selectedRuntimeId = nextRuntimeId;
-        draftDb.sessionEpoch = nextEpoch;
+        clearRuntimeView(draftState);
+        draftState.selectedRuntimeId = nextRuntimeId;
+        draftState.sessionEpoch = nextEpoch;
     }
 
     if (nextRuntimeId && serverSelectedRuntimeId == null) {
-        draftDb.pendingRuntimeId = nextRuntimeId;
+        draftState.pendingRuntimeId = nextRuntimeId;
         return [['send-runtime-selection', nextRuntimeId]];
     }
     return undefined;
 });
 
-regEvent('select-runtime', ({ draftDb }, runtimeId: string) => {
-    const selected = (draftDb.runtimes as DevtoolsRuntimeSummary[])
+regEvent('select-runtime', ({ draftState }, runtimeId: string) => {
+    const selected = (draftState.runtimes as DevtoolsRuntimeSummary[])
         .find((runtime) => runtime.runtimeId === runtimeId);
     if (
         !selected
         || (
-            selected.runtimeId === draftDb.selectedRuntimeId
-            && draftDb.pendingRuntimeId === null
+            selected.runtimeId === draftState.selectedRuntimeId
+            && draftState.pendingRuntimeId === null
         )
-        || selected.runtimeId === draftDb.pendingRuntimeId
+        || selected.runtimeId === draftState.pendingRuntimeId
     ) return;
 
-    clearRuntimeView(draftDb);
-    draftDb.selectedRuntimeId = selected.runtimeId;
-    draftDb.pendingRuntimeId = selected.runtimeId;
-    draftDb.sessionEpoch = selected.sessionEpoch;
+    clearRuntimeView(draftState);
+    draftState.selectedRuntimeId = selected.runtimeId;
+    draftState.pendingRuntimeId = selected.runtimeId;
+    draftState.sessionEpoch = selected.sessionEpoch;
     return [['send-runtime-selection', selected.runtimeId]];
 });
 
 regEvent('runtime-selected', (
-    { draftDb },
+    { draftState },
     identity: { runtimeId: string; runtimeName: string; sessionEpoch: number },
 ) => {
     if (
-        draftDb.pendingRuntimeId !== null
-        && draftDb.pendingRuntimeId !== identity.runtimeId
+        draftState.pendingRuntimeId !== null
+        && draftState.pendingRuntimeId !== identity.runtimeId
     ) {
         return;
     }
 
     if (
-        draftDb.selectedRuntimeId !== identity.runtimeId
-        || draftDb.sessionEpoch !== identity.sessionEpoch
+        draftState.selectedRuntimeId !== identity.runtimeId
+        || draftState.sessionEpoch !== identity.sessionEpoch
     ) {
-        clearRuntimeView(draftDb);
+        clearRuntimeView(draftState);
     }
-    draftDb.selectedRuntimeId = identity.runtimeId;
-    draftDb.sessionEpoch = identity.sessionEpoch;
-    draftDb.pendingRuntimeId = null;
+    draftState.selectedRuntimeId = identity.runtimeId;
+    draftState.sessionEpoch = identity.sessionEpoch;
+    draftState.pendingRuntimeId = null;
 });
 
 regEvent('runtime-selection-rejected', (
-    { draftDb },
+    { draftState },
     runtimes: DevtoolsRuntimeSummary[],
     serverSelectedRuntimeId: string | null,
 ) => {
-    draftDb.pendingRuntimeId = null;
-    draftDb.runtimes = runtimes;
+    draftState.pendingRuntimeId = null;
+    draftState.runtimes = runtimes;
     const selected = (
         typeof serverSelectedRuntimeId === 'string'
             ? runtimes.find(({ runtimeId }) => runtimeId === serverSelectedRuntimeId)
             : undefined
     )
-        ?? runtimes.find(({ runtimeId }) => runtimeId === draftDb.selectedRuntimeId)
+        ?? runtimes.find(({ runtimeId }) => runtimeId === draftState.selectedRuntimeId)
         ?? runtimes.find(({ connected }) => connected)
         ?? runtimes[0]
         ?? null;
 
     if (
-        draftDb.selectedRuntimeId !== (selected?.runtimeId ?? null)
-        || draftDb.sessionEpoch !== (selected?.sessionEpoch ?? 0)
+        draftState.selectedRuntimeId !== (selected?.runtimeId ?? null)
+        || draftState.sessionEpoch !== (selected?.sessionEpoch ?? 0)
     ) {
-        clearRuntimeView(draftDb);
+        clearRuntimeView(draftState);
     }
-    draftDb.selectedRuntimeId = selected?.runtimeId ?? null;
-    draftDb.sessionEpoch = selected?.sessionEpoch ?? 0;
+    draftState.selectedRuntimeId = selected?.runtimeId ?? null;
+    draftState.sessionEpoch = selected?.sessionEpoch ?? 0;
 
     if (selected && serverSelectedRuntimeId === null) {
-        draftDb.pendingRuntimeId = selected.runtimeId;
+        draftState.pendingRuntimeId = selected.runtimeId;
         return [['send-runtime-selection', selected.runtimeId]];
     }
     return undefined;
 });
 
-regEvent('add-traces', ({ draftDb }, traces: Trace[], runtimeId: string, sessionEpoch: number) => {
-    if (!acceptsRuntimeMessage(draftDb, runtimeId, sessionEpoch)) return;
+regEvent('add-traces', ({ draftState }, traces: Trace[], runtimeId: string, sessionEpoch: number) => {
+    if (!acceptsRuntimeMessage(draftState, runtimeId, sessionEpoch)) return;
     // Initialize handlerUsage if not exists
-    if (!draftDb.handlerUsage) {
-        draftDb.handlerUsage = {};
+    if (!draftState.handlerUsage) {
+        draftState.handlerUsage = {};
     }
 
     // Track handler executions
@@ -217,32 +217,32 @@ regEvent('add-traces', ({ draftDb }, traces: Trace[], runtimeId: string, session
 
             // Apply all handler operations
             handlerOperations.forEach(({ type, operation }) => {
-                if (!draftDb.handlerUsage[type]) {
-                    draftDb.handlerUsage[type] = {};
+                if (!draftState.handlerUsage[type]) {
+                    draftState.handlerUsage[type] = {};
                 }
-                if (!draftDb.handlerUsage[type][operation]) {
-                    draftDb.handlerUsage[type][operation] = 0;
+                if (!draftState.handlerUsage[type][operation]) {
+                    draftState.handlerUsage[type][operation] = 0;
                 }
-                draftDb.handlerUsage[type][operation]++;
+                draftState.handlerUsage[type][operation]++;
             });
         }
     });
 
-    // Collect all patches from traces to apply to the client app DB
+    // Collect all patches from traces to apply to the client app STATE
     const allPatches = traces
         .filter(trace => trace.tags?.patches?.length > 0)
         .flatMap(trace => trace.tags!.patches!);
 
-    // Apply patches to the client app DB copy if we have patches
-    if (allPatches.length > 0 && draftDb.db) {
-        draftDb.db = applyPatches(draftDb.db, allPatches);
+    // Apply patches to the client app STATE copy if we have patches
+    if (allPatches.length > 0 && draftState.state) {
+        draftState.state = applyPatches(draftState.state, allPatches);
     }
 
     const { eventTraceItems, renderTraceItem, badgesMap } = traces.reduce((acc, trace) => {
         if (trace.opType === 'event') {
             const badges: Badge[] = [];
             if (trace.tags?.patches?.length > 0) {
-                badges.push({ label: 'db', number: trace.tags!.patches!.length });
+                badges.push({ label: 'state', number: trace.tags!.patches!.length });
             }
             if (trace.tags?.effects?.length > 0) {
                 badges.push({ label: 'fx', number: trace.tags!.effects!.length });
@@ -281,103 +281,103 @@ regEvent('add-traces', ({ draftDb }, traces: Trace[], runtimeId: string, session
 
     const renderTraceItemUpdated = renderTraceItem.traces.length > 0 ? [{ ...renderTraceItem, id: renderTraceItem.traces[0].id }] : [];
 
-    draftDb.traces.push(...eventTraceItems, ...renderTraceItemUpdated);
+    draftState.traces.push(...eventTraceItems, ...renderTraceItemUpdated);
 });
 
-regEvent('update-db', ({ draftDb }, db: any, runtimeId: string, sessionEpoch: number) => {
-    if (!acceptsRuntimeMessage(draftDb, runtimeId, sessionEpoch)) return;
-    draftDb.db = db;
+regEvent('update-state', ({ draftState }, state: any, runtimeId: string, sessionEpoch: number) => {
+    if (!acceptsRuntimeMessage(draftState, runtimeId, sessionEpoch)) return;
+    draftState.state = state;
 });
 
-regEvent('update-active-subs', ({ draftDb }, activeSubs: any, runtimeId: string, sessionEpoch: number) => {
-    if (!acceptsRuntimeMessage(draftDb, runtimeId, sessionEpoch)) return;
-    if (!draftDb.activeSubs) {
-        draftDb.activeSubs = {};
+regEvent('update-active-subs', ({ draftState }, activeSubs: any, runtimeId: string, sessionEpoch: number) => {
+    if (!acceptsRuntimeMessage(draftState, runtimeId, sessionEpoch)) return;
+    if (!draftState.activeSubs) {
+        draftState.activeSubs = {};
     }
 
     for (const [key, value] of Object.entries(activeSubs)) {
         if (value === "reflex-tool-sub-disposed") {
-            delete draftDb.activeSubs[key];
+            delete draftState.activeSubs[key];
         } else {
-            draftDb.activeSubs[key] = value;
+            draftState.activeSubs[key] = value;
         }
     }
 });
 
-regEvent('update-handler-keys', ({ draftDb }, handlerKeys: any, runtimeId: string, sessionEpoch: number) => {
-    if (!acceptsRuntimeMessage(draftDb, runtimeId, sessionEpoch)) return;
-    draftDb.handlerKeys = handlerKeys;
+regEvent('update-handler-keys', ({ draftState }, handlerKeys: any, runtimeId: string, sessionEpoch: number) => {
+    if (!acceptsRuntimeMessage(draftState, runtimeId, sessionEpoch)) return;
+    draftState.handlerKeys = handlerKeys;
 });
 
-regEvent('clear-traces', ({ draftDb }) => {
-    draftDb.traces = [];
-    draftDb.selectedTrace = null;
-    draftDb.handlerUsage = {};
+regEvent('clear-traces', ({ draftState }) => {
+    draftState.traces = [];
+    draftState.selectedTrace = null;
+    draftState.handlerUsage = {};
 });
 
-regEvent('set-connected', ({ draftDb }, isConnected: boolean) => {
-    draftDb.isConnected = isConnected;
+regEvent('set-connected', ({ draftState }, isConnected: boolean) => {
+    draftState.isConnected = isConnected;
 });
 
-regEvent('set-capabilities', ({ draftDb }, capabilities: string[]) => {
-    draftDb.capabilities = capabilities;
+regEvent('set-capabilities', ({ draftState }, capabilities: string[]) => {
+    draftState.capabilities = capabilities;
     if (!capabilities.includes('dispatch')) {
-        draftDb.dispatchModalOpenState = {};
+        draftState.dispatchModalOpenState = {};
     }
 });
 
-regEvent('set-filter', ({ draftDb }, filter: string) => {
-    draftDb.filter = filter;
-    draftDb.selectedTrace = null;
+regEvent('set-filter', ({ draftState }, filter: string) => {
+    draftState.filter = filter;
+    draftState.selectedTrace = null;
 });
 
-regEvent('toggle-show-renders', ({ draftDb }) => {
-    draftDb.settings.showRenders = !draftDb.settings.showRenders;
-    return [['save-settings', current(draftDb.settings)]];
+regEvent('toggle-show-renders', ({ draftState }) => {
+    draftState.settings.showRenders = !draftState.settings.showRenders;
+    return [['save-settings', current(draftState.settings)]];
 });
 
-regEvent('toggle-show-badges', ({ draftDb }) => {
-    draftDb.settings.showBadges = !draftDb.settings.showBadges;
-    return [['save-settings', current(draftDb.settings)]];
+regEvent('toggle-show-badges', ({ draftState }) => {
+    draftState.settings.showBadges = !draftState.settings.showBadges;
+    return [['save-settings', current(draftState.settings)]];
 });
 
-regEvent('toggle-show-params', ({ draftDb }) => {
-    draftDb.settings.showParams = !draftDb.settings.showParams;
-    return [['save-settings', current(draftDb.settings)]];
+regEvent('toggle-show-params', ({ draftState }) => {
+    draftState.settings.showParams = !draftState.settings.showParams;
+    return [['save-settings', current(draftState.settings)]];
 });
 
-regEvent('toggle-show-timestamps', ({ draftDb }) => {
-    draftDb.settings.showTimestamps = !draftDb.settings.showTimestamps;
-    return [['save-settings', current(draftDb.settings)]];
+regEvent('toggle-show-timestamps', ({ draftState }) => {
+    draftState.settings.showTimestamps = !draftState.settings.showTimestamps;
+    return [['save-settings', current(draftState.settings)]];
 });
 
 regEvent('init-socket', () => {
     return [['init-socket']];
 });
 
-regEvent('set-selected-trace', ({ draftDb }, trace: TraceItem) => {
-    draftDb.selectedTrace = trace;
+regEvent('set-selected-trace', ({ draftState }, trace: TraceItem) => {
+    draftState.selectedTrace = trace;
 });
 
-regEvent('dispatch-to-client', ({ draftDb }, eventName: string, ...params: any[]) => {
-    if (draftDb.pendingRuntimeId !== null || !draftDb.selectedRuntimeId) return;
+regEvent('dispatch-to-client', ({ draftState }, eventName: string, ...params: any[]) => {
+    if (draftState.pendingRuntimeId !== null || !draftState.selectedRuntimeId) return;
     return [['send-dispatch-to-client', {
-        runtimeId: draftDb.selectedRuntimeId,
+        runtimeId: draftState.selectedRuntimeId,
         eventName,
         params
     }]];
 });
 
-regEvent('open-dispatch-modal', ({ draftDb }, eventName: string = 'event-id', initialParams: any[] = []) => {
-    draftDb.dispatchModalOpenState = {
+regEvent('open-dispatch-modal', ({ draftState }, eventName: string = 'event-id', initialParams: any[] = []) => {
+    draftState.dispatchModalOpenState = {
         isOpen: true,
         eventName,
         initialParams
     };
 });
 
-regEvent('close-dispatch-modal', ({ draftDb }) => {
-    draftDb.dispatchModalOpenState = {
+regEvent('close-dispatch-modal', ({ draftState }) => {
+    draftState.dispatchModalOpenState = {
         isOpen: false,
         eventName: '',
         initialParams: []

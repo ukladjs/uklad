@@ -1,6 +1,6 @@
 import { localStorageAdapter, persist } from '@flexsurfer/reflex-persist';
 
-import type { Todo, TodoId, Todos } from './db';
+import type { Todo, TodoId, Todos } from './state';
 import { todoRuntime } from './runtime';
 
 // Hydration is an event and the global writer contributes a post-commit effect

@@ -26,8 +26,8 @@ export interface RuntimeLifecycleEffect {
 }
 
 export interface RuntimeLifecycleStatePlan {
-  readonly previousDb: unknown;
-  readonly plannedDb: unknown;
+  readonly previousState: unknown;
+  readonly plannedState: unknown;
   readonly patches: readonly RuntimeLifecyclePatch[];
 }
 
@@ -38,7 +38,7 @@ export interface RuntimeLifecyclePatch {
 }
 
 /**
- * One subscription that was recomputed while a published DB generation
+ * One subscription that was recomputed while a published STATE generation
  * settled. This is deliberately a snapshot rather than a runtime node so
  * optional integrations (such as operation receipts) cannot retain or mutate
  * the subscription graph.
@@ -73,14 +73,14 @@ export interface RuntimeLifecycleObserver {
   onStatePlanned?(plan: RuntimeLifecycleStatePlan): void;
   onEffects?(effects: readonly unknown[]): void;
   onEffect?(effect: RuntimeLifecycleEffect): void;
-  onStateCommitted?(previousDb: unknown, nextDb: unknown, committedRevision: number): void;
+  onStateCommitted?(previousState: unknown, nextState: unknown, committedRevision: number): void;
   /**
    * Called only after the complete active subscription graph has settled for
    * this published revision. `recalculated` includes subscriptions that ran
    * even when their observable value was equal to the previous value.
    */
   onStatePublished?(
-    db: unknown,
+    state: unknown,
     publishedRevision: number,
     recalculated: readonly RuntimeLifecycleSubscription[],
   ): void;

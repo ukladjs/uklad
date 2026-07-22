@@ -11,7 +11,7 @@ export { current, enableMapSet, original } from './core/immer';
 
 export type {
   ContractAllEffectPayloads,
-  ContractDb,
+  ContractState,
   ContractDispatchLaterEffect,
   ContractDispatchVector,
   ContractEffectId,
@@ -57,12 +57,12 @@ export type {
   RuntimeLifecycleSubscription,
 } from './runtime/lifecycle';
 export type {
-  AppDb,
+  AppState,
   CoEffectHandler,
   CoEffects,
   Context,
-  Db,
-  DefaultAppDb,
+  State,
+  DefaultAppState,
   DispatchLaterEffect,
   DispatchVector,
   EffectHandler,

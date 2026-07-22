@@ -13,7 +13,7 @@ const DEFAULT_MAX_APP_STATE_BYTES = 8 * 1024 * 1024;
 const DEFAULT_MAX_TRACE_STORAGE_BYTES = 16 * 1024 * 1024;
 const MAX_ESTIMATE_DEPTH = 100;
 
-export type StorageRetentionKind = 'app-state' | 'active-subscriptions';
+export type StorageRetentionKind = 'state' | 'active-subscriptions';
 
 /** Expected capacity rejection, distinct from malformed data or server bugs. */
 export class StorageRetentionError extends Error {
@@ -21,7 +21,7 @@ export class StorageRetentionError extends Error {
 
   constructor(kind: StorageRetentionKind) {
     super(
-      kind === 'app-state'
+      kind === 'state'
         ? 'App state retention limit exceeded.'
         : 'Active subscription retention limit exceeded.',
     );
@@ -172,7 +172,7 @@ export class TraceStorage {
             estimateValueBytes(nextState, this.maxAppStateBytes + 1)
             > this.maxAppStateBytes
           ) {
-            throw new StorageRetentionError('app-state');
+            throw new StorageRetentionError('state');
           }
           this.appState = nextState;
         } catch (error) {
@@ -211,7 +211,7 @@ export class TraceStorage {
       estimateValueBytes(state, this.maxAppStateBytes + 1)
       > this.maxAppStateBytes
     ) {
-      throw new StorageRetentionError('app-state');
+      throw new StorageRetentionError('state');
     }
     this.appState = state;
   }

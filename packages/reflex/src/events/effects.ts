@@ -1,7 +1,7 @@
 import { consoleLog } from '../core/logging';
 import { mergeTraceForKernel } from '../core/tracing';
 import { isEventVector } from '../core/validation';
-import { updateAppDbForKernel } from '../runtime/app-db';
+import { updateStateForKernel } from '../runtime/state';
 import { notifyRuntimeLifecycleForKernel } from '../runtime/lifecycle';
 import {
   getHandlerForKernel,
@@ -57,8 +57,8 @@ function createDoFxInterceptor(runtime: RuntimeKernel): Interceptor {
   return {
     id: 'do-fx',
     after(context: Context): Context {
-      if (context.newDb !== undefined) {
-        updateAppDbForKernel(runtime, context.newDb);
+      if (context.newState !== undefined) {
+        updateStateForKernel(runtime, context.newState);
       }
 
       const effects = context.effects;

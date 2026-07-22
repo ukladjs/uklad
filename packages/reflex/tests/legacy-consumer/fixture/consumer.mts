@@ -4,7 +4,7 @@ import { createReflexRuntime, useSubscription } from '@flexsurfer/reflex';
 import { ReflexProvider } from '@flexsurfer/reflex/react';
 import type { ErrorHandler, EventRegistrationOptions, Interceptor } from '@flexsurfer/reflex';
 
-const runtime = createReflexRuntime({ initialDb: {} });
+const runtime = createReflexRuntime({ initialState: {} });
 runtime.dispatch(['legacy/esm']);
 runtime.regEvent('legacy/esm', () => undefined);
 runtime.regSub('legacy/root');
@@ -15,7 +15,7 @@ runtime.regSub(
 );
 
 const value: unknown = useSubscription(['legacy/esm']);
-const db = runtime.getAppDb();
+const state = runtime.getState();
 const options: EventRegistrationOptions = { coeffects: [['now']] };
 const interceptor: Interceptor = { id: 'legacy/noop', before: (context) => context };
 const errorHandler: ErrorHandler = (originalError, reflexError) => {
@@ -23,7 +23,7 @@ const errorHandler: ErrorHandler = (originalError, reflexError) => {
   void reflexError.data.interceptor;
 };
 void value;
-void db;
+void state;
 void options;
 void interceptor;
 void errorHandler;

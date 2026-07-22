@@ -16,7 +16,7 @@ export const PERSIST_IDS = {
   PURGED: 'reflex-persist/purged',
   /** Global interceptor contributing writes for changed configured roots. */
   WRITER: 'reflex-persist/writer',
-  /** Effect serializing one configured root from the committed db. */
+  /** Effect serializing one configured root from the committed state. */
   WRITE: 'reflex-persist/write',
   /** Internal async read effect. */
   READ: 'reflex-persist/read',

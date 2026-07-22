@@ -462,7 +462,7 @@ export function redactDevtoolsEvent<T extends { type: string; payload?: any }>(
   );
 
   switch (event.type) {
-    case 'reflex-app-db':
+    case 'reflex-state':
       return { ...event, payload: withState(event.payload, 'state') };
     case 'reflex-active-subs':
       return { ...event, payload: withState(event.payload, 'subscription') };

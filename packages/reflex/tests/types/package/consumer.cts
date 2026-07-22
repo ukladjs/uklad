@@ -10,10 +10,10 @@ import type {
 
 const options: EventRegistrationOptions = { coeffects: [['now']] };
 const trace: Trace | undefined = undefined;
-const runtime = reflexVanilla.createReflexRuntime({ initialDb: { package: 'cjs' } });
+const runtime = reflexVanilla.createReflexRuntime({ initialState: { package: 'cjs' } });
 runtime.regEvent('package/cjs', () => undefined);
 runtime.dispatch(['package/cjs']);
-const runtimeDb: unknown = runtime.getAppDb();
+const runtimeState: unknown = runtime.getState();
 const inspector: ReflexInspector = runtime.createInspector();
 const snapshot: ReflexInspectorSnapshot = inspector.getSnapshot();
 const removeTraceListener = inspector.subscribeTraces(() => {});
@@ -23,7 +23,7 @@ const hooks = reflexReact.createReflexHooks();
 void options;
 void trace;
 void snapshot;
-void runtimeDb;
+void runtimeState;
 void reflexReact.ReflexProvider;
 void reflexReact.useReflexRuntime;
 void hooks;

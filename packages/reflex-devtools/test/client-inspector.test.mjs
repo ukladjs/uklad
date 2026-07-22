@@ -109,7 +109,7 @@ async function successfulFetch(url) {
 }
 
 function createFakeInspector(
-  appDb = { count: 1 },
+  appState = { count: 1 },
   {
     runtimeId = 'runtime-test',
     runtimeName = 'Runtime test',
@@ -128,7 +128,7 @@ function createFakeInspector(
     getSnapshot() {
       snapshotCount++;
       return {
-        appDb,
+        appState,
         handlerKeys: {
           event: ['increment'],
           fx: [],
@@ -332,7 +332,7 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
     assert.equal(fake.snapshotCount, 1);
     assert.deepEqual(
       socket.sent.slice(-4).map((event) => event.type),
-      ['reflex-app-db', 'reflex-active-subs', 'reflex-handler-keys', 'reflex-runtime-info'],
+      ['reflex-state', 'reflex-active-subs', 'reflex-handler-keys', 'reflex-runtime-info'],
     );
 
     socket.emit({
@@ -468,10 +468,10 @@ test('executes a retained operation through a runtime inspector configured in De
 
   const runtime = createReflexRuntime({
     runtimeId: 'configured-operations',
-    initialDb: { count: 0 },
+    initialState: { count: 0 },
   });
-  runtime.regEvent('increment', ({ draftDb }, amount) => {
-    draftDb.count += amount;
+  runtime.regEvent('increment', ({ draftState }, amount) => {
+    draftState.count += amount;
   });
   let cleanup;
   try {
@@ -498,7 +498,7 @@ test('executes a retained operation through a runtime inspector configured in De
     await runtime.flush();
     await waitForTurn();
 
-    assert.equal(runtime.getAppDb().count, 2);
+    assert.equal(runtime.getState().count, 2);
     const result = socket.sent.find((event) => event.type === 'reflex-operation-result')?.payload;
     assert.equal(result?.dispatchId, 'configured-operation-1');
     assert.equal(result?.result.operation.status, 'completed');
@@ -1082,7 +1082,7 @@ test('redacts common secret keys before state and traces leave the runtime', asy
     });
 
     const stateEvent = socket.sent.find(
-      (event) => event.type === 'reflex-app-db',
+      (event) => event.type === 'reflex-state',
     );
     assert.equal(stateEvent.payload.user.password, '[REDACTED]');
     assert.equal(stateEvent.payload.user.apiKey, '[REDACTED]');
@@ -1222,14 +1222,14 @@ test('drops oversized telemetry before either transport and warns only once', as
     await waitForTurn();
 
     assert.equal(
-      socket.sent.some((event) => event.type === 'reflex-app-db'),
+      socket.sent.some((event) => event.type === 'reflex-state'),
       false,
     );
     assert.equal(eventRequests.length, 0);
     assert.equal(JSON.stringify(socket.sent).includes(marker), false);
 
     const payloadWarnings = warnings.filter((warning) =>
-      warning.includes('Dropped "reflex-app-db" telemetry before transport'));
+      warning.includes('Dropped "reflex-state" telemetry before transport'));
     assert.equal(payloadWarnings.length, 1);
     assert.match(payloadWarnings[0], /negotiated 512-byte runtime limit/);
     assert.match(payloadWarnings[0], /maxRuntimePayloadBytes/);
@@ -1267,7 +1267,7 @@ test('deduplicates bounded server telemetry-drop notices', async () => {
       payload: {
         code: 'RUNTIME_TELEMETRY_DROPPED',
         reason: 'retention-limit',
-        eventType: 'reflex-app-db',
+        eventType: 'reflex-state',
       },
       timestamp: Date.now(),
     };
@@ -1275,7 +1275,7 @@ test('deduplicates bounded server telemetry-drop notices', async () => {
     socket.emit(notice);
 
     const noticeWarnings = warnings.filter((warning) =>
-      warning.includes('Server dropped "reflex-app-db" telemetry'));
+      warning.includes('Server dropped "reflex-state" telemetry'));
     assert.equal(noticeWarnings.length, 1);
     assert.match(noticeWarnings[0], /retention-limit/);
     assert.match(noticeWarnings[0], /reconnecting the runtime clears session retention/);
@@ -1303,14 +1303,14 @@ test('handles typed retention rejection from the HTTP fallback without reconnect
       return successfulFetch(url, options);
     }
     const event = JSON.parse(options.body);
-    if (event.type !== 'reflex-app-db') return response({ success: true });
+    if (event.type !== 'reflex-state') return response({ success: true });
     stateRequests++;
     return response(
       {
         success: false,
         code: 'RUNTIME_TELEMETRY_DROPPED',
         reason: 'retention-limit',
-        eventType: 'reflex-app-db',
+        eventType: 'reflex-state',
         error: 'Runtime telemetry was not retained.',
       },
       { ok: false, status: 422 },
@@ -1343,7 +1343,7 @@ test('handles typed retention rejection from the HTTP fallback without reconnect
     assert.equal(FakeWebSocket.instances.length, 1);
     assert.equal(socket.readyState, FakeWebSocket.OPEN);
     const dropWarnings = warnings.filter((warning) =>
-      warning.includes('Server dropped "reflex-app-db" telemetry'));
+      warning.includes('Server dropped "reflex-state" telemetry'));
     assert.equal(dropWarnings.length, 1);
     assert.equal(
       warnings.some((warning) => warning.includes('rejected with HTTP 422')),

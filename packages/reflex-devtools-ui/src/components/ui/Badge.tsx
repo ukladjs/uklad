@@ -15,7 +15,7 @@ const getOpTypeBadgeVariant = (opType: string | undefined): BadgeOpType => {
     if (!opType) return 'neutral';
 
     switch (opType.toLowerCase()) {
-        case 'db':
+        case 'state':
             return 'success';
         case 'render':
             return 'info';

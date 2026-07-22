@@ -35,8 +35,8 @@ export interface RuntimeLifecyclePatch {
 }
 
 export interface RuntimeLifecycleStatePlan {
-  readonly previousDb: unknown;
-  readonly plannedDb: unknown;
+  readonly previousState: unknown;
+  readonly plannedState: unknown;
   readonly patches: readonly RuntimeLifecyclePatch[];
 }
 
@@ -64,9 +64,9 @@ export interface RuntimeLifecycleObserver {
   onStatePlanned?(plan: RuntimeLifecycleStatePlan): void;
   onEffects?(effects: readonly unknown[]): void;
   onEffect?(effect: RuntimeLifecycleEffect): void;
-  onStateCommitted?(previousDb: unknown, nextDb: unknown, committedRevision: number): void;
+  onStateCommitted?(previousState: unknown, nextState: unknown, committedRevision: number): void;
   onStatePublished?(
-    db: unknown,
+    state: unknown,
     publishedRevision: number,
     recalculated: readonly RuntimeLifecycleSubscription[],
   ): void;

@@ -2,23 +2,23 @@ import { describe, expect, it } from 'vitest';
 
 import type { HandlerKind, SubDepsHandler, SubHandler } from '@flexsurfer/reflex';
 
-import type { TodoDb } from './db';
+import type { TodoState } from './state';
 import { SUB_IDS } from './sub-ids';
 import { todoRuntime } from './runtime';
 
 import './subs';
 
 const getHandler = (kind: HandlerKind, id: string) => todoRuntime.getHandlers()[kind][id];
-const initAppDb = (db: TodoDb) => todoRuntime.restoreAppDb(db);
+const initState = (state: TodoState) => todoRuntime.restoreState(state);
 
 describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
   describe('Root Subscriptions', () => {
     describe('TODOS subscription', () => {
-      it('should return todos from db', () => {
+      it('should return todos from state', () => {
         const handler = getHandler('sub', SUB_IDS.TODOS) as SubHandler;
         expect(handler).toBeDefined();
 
-        const mockDb: TodoDb = {
+        const mockState: TodoState = {
           todos: new Map([
             [1, { id: 1, title: 'Todo 1', done: false }],
             [2, { id: 2, title: 'Todo 2', done: true }],
@@ -26,11 +26,11 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
           showing: 'all',
         };
 
-        initAppDb(mockDb);
+        initState(mockState);
 
         const result = handler();
 
-        expect(result).toBe(mockDb.todos);
+        expect(result).toBe(mockState.todos);
         expect(result.size).toBe(2);
         expect(result.get(1)).toEqual({ id: 1, title: 'Todo 1', done: false });
         expect(result.get(2)).toEqual({ id: 2, title: 'Todo 2', done: true });
@@ -39,31 +39,31 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       it('should handle empty todos map', () => {
         const handler = getHandler('sub', SUB_IDS.TODOS) as SubHandler;
 
-        const mockDb: TodoDb = {
+        const mockState: TodoState = {
           todos: new Map(),
           showing: 'all',
         };
 
-        initAppDb(mockDb);
+        initState(mockState);
 
         const result = handler();
 
-        expect(result).toBe(mockDb.todos);
+        expect(result).toBe(mockState.todos);
         expect(result.size).toBe(0);
       });
     });
 
     describe('SHOWING subscription', () => {
-      it('should return showing filter from db', () => {
+      it('should return showing filter from state', () => {
         const handler = getHandler('sub', SUB_IDS.SHOWING) as SubHandler;
         expect(handler).toBeDefined();
 
-        const mockDb: TodoDb = {
+        const mockState: TodoState = {
           todos: new Map(),
           showing: 'active',
         };
 
-        initAppDb(mockDb);
+        initState(mockState);
 
         const result = handler();
 
@@ -76,12 +76,12 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
         const testCases = ['all', 'active', 'done'] as const;
 
         testCases.forEach((showingState) => {
-          const mockDb: TodoDb = {
+          const mockState: TodoState = {
             todos: new Map(),
             showing: showingState,
           };
 
-          initAppDb(mockDb);
+          initState(mockState);
 
           const result = handler();
           expect(result).toBe(showingState);

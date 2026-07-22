@@ -5,7 +5,7 @@ import { PERSIST_IDS, memoryStorageAdapter, persist } from '../index';
 import type { AsyncPersistStorage, PersistContracts, PersistData, PersistStatus } from '../index';
 
 interface AppContracts extends ReflexContracts {
-  readonly db: {
+  readonly state: {
     readonly todos: Map<number, { readonly title: string }>;
     readonly ready: boolean;
   };
@@ -20,7 +20,7 @@ interface AppContracts extends ReflexContracts {
 type AppWithPersist = PersistContracts<AppContracts>;
 
 const runtime = createReflexRuntime<AppWithPersist>({
-  initialDb: { todos: new Map(), ready: false },
+  initialState: { todos: new Map(), ready: false },
 });
 const handle = persist(runtime, {
   storage: memoryStorageAdapter(),
@@ -59,10 +59,10 @@ const invalidMapData: PersistData = new Map<string, string>();
 // @ts-expect-error LOADED is library-owned, not a caller dispatch surface.
 runtime.dispatch([PERSIST_IDS.LOADED, {}]);
 
-// Configured roots are checked against the runtime db contract.
+// Configured roots are checked against the runtime state contract.
 persist(runtime, {
   storage: memoryStorageAdapter(),
-  // @ts-expect-error `missing` is not an app-db root.
+  // @ts-expect-error `missing` is not an state root.
   keys: ['missing'],
 });
 

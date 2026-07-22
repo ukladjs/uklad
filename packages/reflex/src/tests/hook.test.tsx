@@ -7,7 +7,7 @@ import {
   dispatch,
   hasCachedSubscription,
   hasHandler,
-  initAppDb,
+  initState,
   ReflexTestProvider,
   regEvent,
   regSub,
@@ -30,7 +30,7 @@ describe('React Hooks', () => {
   );
 
   beforeEach(() => {
-    initAppDb({
+    initState({
       user: {
         name: 'John Doe',
         email: 'john@example.com',
@@ -95,8 +95,8 @@ describe('React Hooks', () => {
 
       expect(result.current).toBe('john@example.com');
 
-      regEvent('set-user-email', ({ draftDb }, email) => {
-        draftDb.userEmail = email;
+      regEvent('set-user-email', ({ draftState }, email) => {
+        draftState.userEmail = email;
       });
 
       act(() => {
@@ -174,8 +174,8 @@ describe('React Hooks', () => {
 
       expect(result.current).toBe(1);
 
-      regEvent('set-todos', ({ draftDb }) => {
-        draftDb.todos = [
+      regEvent('set-todos', ({ draftState }) => {
+        draftState.todos = [
           { id: 1, text: 'Test todo', completed: false },
           { id: 2, text: 'Another todo', completed: true },
         ];
@@ -204,20 +204,20 @@ describe('React Hooks', () => {
       expect(result.current.todosCount).toBe(1);
     });
 
-    it('should re-render when AppDB changes via event dispatch', async () => {
-      regEvent('add-todo', ({ draftDb }, text) => {
-        const currentTodos = draftDb.todos || [];
+    it('should re-render when AppSTATE changes via event dispatch', async () => {
+      regEvent('add-todo', ({ draftState }, text) => {
+        const currentTodos = draftState.todos || [];
         const newTodo = {
           id: Date.now(),
           text,
           completed: false,
         };
-        draftDb.todos = [...currentTodos, newTodo];
+        draftState.todos = [...currentTodos, newTodo];
       });
 
-      regEvent('update-user-name', ({ draftDb }, newName) => {
-        if (!draftDb.user) draftDb.user = {};
-        draftDb.user.name = newName;
+      regEvent('update-user-name', ({ draftState }, newName) => {
+        if (!draftState.user) draftState.user = {};
+        draftState.user.name = newName;
       });
 
       const { result } = renderHook(
@@ -260,17 +260,17 @@ describe('React Hooks', () => {
     });
 
     it('should handle rapid event dispatches correctly', async () => {
-      regEvent('increment-counter', ({ draftDb }) => {
-        draftDb.counter = (draftDb.counter || 0) + 1;
+      regEvent('increment-counter', ({ draftState }) => {
+        draftState.counter = (draftState.counter || 0) + 1;
       });
 
-      regEvent('set-counter', ({ draftDb }, value) => {
-        draftDb.counter = value;
+      regEvent('set-counter', ({ draftState }, value) => {
+        draftState.counter = value;
       });
 
       regSub('counter');
 
-      initAppDb({
+      initState({
         counter: 0,
       });
 
@@ -326,7 +326,7 @@ describe('React Hooks', () => {
         () => [['todos']],
       );
 
-      initAppDb({
+      initState({
         todos: [
           { id: 1, text: 'First todo', completed: false },
           { id: 2, text: 'Second todo', completed: true },
@@ -347,8 +347,8 @@ describe('React Hooks', () => {
       expect(result.current).toBe('Second todo');
 
       // Updates must flow through the re-subscribed subscription
-      regEvent('rename-todo-2', ({ draftDb }) => {
-        draftDb.todos[1].text = 'Renamed todo';
+      regEvent('rename-todo-2', ({ draftState }) => {
+        draftState.todos[1].text = 'Renamed todo';
       });
 
       act(() => {
@@ -372,7 +372,7 @@ describe('React Hooks', () => {
 
       // The computed subscription and its now-unused root dependency diverge:
       // Computed cells are terminal and evicted. The lightweight root source
-      // cell stays registered so dormant graphs cannot miss DB publications.
+      // cell stays registered so dormant graphs cannot miss STATE publications.
       expect(hasCachedSubscription(JSON.stringify(['todos-count']))).toBe(false);
       expect(hasCachedSubscription(JSON.stringify(['todos']))).toBe(true);
     });
@@ -407,10 +407,10 @@ describe('React Hooks', () => {
         () => [['cons-base']],
       );
 
-      initAppDb({ 'cons-base': 1 });
+      initState({ 'cons-base': 1 });
 
-      regEvent('cons-set-base', ({ draftDb }, v: number) => {
-        draftDb['cons-base'] = v;
+      regEvent('cons-set-base', ({ draftState }, v: number) => {
+        draftState['cons-base'] = v;
       });
 
       // Capture transient renders as well as the final pair.
@@ -441,7 +441,7 @@ describe('React Hooks', () => {
         expect(result.current).toEqual({ a: 30, b: 300 });
       });
 
-      // No committed render may mix values from different db versions
+      // No committed render may mix values from different state versions
       for (const { a, b } of observed) {
         expect(b).toBe(a * 10);
       }
@@ -456,8 +456,8 @@ describe('React Hooks', () => {
       first.unmount();
       expect(hasCachedSubscription(key)).toBe(false);
 
-      regEvent('clear-todos', ({ draftDb }) => {
-        draftDb.todos = [];
+      regEvent('clear-todos', ({ draftState }) => {
+        draftState.todos = [];
       });
       act(() => {
         dispatch(['clear-todos']);

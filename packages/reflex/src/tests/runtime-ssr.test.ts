@@ -7,12 +7,12 @@ import { createReflexRuntime } from '../runtime/runtime';
 
 async function renderRequest(requestId: string, initialValue: number, increment: number) {
   const runtime = createReflexRuntime({
-    initialDb: { requestId, value: initialValue },
+    initialState: { requestId, value: initialValue },
     runtimeId: `request-${requestId}`,
   });
   runtime.regSub('value');
-  runtime.regEvent('increment', ({ draftDb }, amount: number) => {
-    draftDb.value += amount;
+  runtime.regEvent('increment', ({ draftState }, amount: number) => {
+    draftState.value += amount;
   });
   runtime.dispatch(['increment', increment]);
   await runtime.flush();
@@ -25,7 +25,7 @@ async function renderRequest(requestId: string, initialValue: number, increment:
   const html = renderToString(
     createElement(ReflexProvider, { runtime }, createElement(RequestView)),
   );
-  const snapshot = runtime.getAppDb();
+  const snapshot = runtime.getState();
   runtime.dispose();
   return { html, snapshot };
 }

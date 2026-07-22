@@ -9,7 +9,7 @@ import {
   dispatch,
   getOrCreateSubscription,
   getSubscriptionSnapshot,
-  initAppDb,
+  initState,
   regEvent,
   regSub,
   subscribeToSubscription,
@@ -41,7 +41,7 @@ describe('Mount recompute cascades', () => {
   beforeEach(() => {
     clearSubscriptionCache();
     sortCount = 0;
-    initAppDb({
+    initState({
       'mc-items': Array.from({ length: ROWS }, (_, i) => ({ id: i, order: ROWS - i })),
     });
   });
@@ -67,8 +67,8 @@ describe('Mount recompute cascades', () => {
   });
 
   it('should recompute the shared parent once per flush when data changes', async () => {
-    regEvent('mc-reorder', ({ draftDb }) => {
-      draftDb['mc-items'][0].order = 999;
+    regEvent('mc-reorder', ({ draftState }) => {
+      draftState['mc-items'][0].order = 999;
     });
 
     const cleanups: Array<() => void> = [];

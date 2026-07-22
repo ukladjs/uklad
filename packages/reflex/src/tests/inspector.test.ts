@@ -4,8 +4,8 @@ import {
   createReflexInspector,
   disableTracing,
   enableTracing,
-  getAppDb,
-  initAppDb,
+  getState,
+  initState,
   isTraceEnabled,
   regCoeffect,
   regEffect,
@@ -22,7 +22,7 @@ describe('Reflex inspector', () => {
   beforeEach(() => {
     disableTracing();
     clearHandlers();
-    initAppDb({});
+    initState({});
   });
 
   afterEach(() => {
@@ -30,8 +30,8 @@ describe('Reflex inspector', () => {
   });
 
   it('returns a frozen versioned adapter and protocol-ready snapshot', () => {
-    const appDb = { count: 1 };
-    initAppDb(appDb);
+    const appState = { count: 1 };
+    initState(appState);
     regEvent('inspector-event', () => undefined);
     regEffect('inspector-effect', () => {});
     regCoeffect('inspector-coeffect', (coeffects) => coeffects);
@@ -44,7 +44,7 @@ describe('Reflex inspector', () => {
     expect(inspector.runtimeId).toBe('reflex-unit-test-runtime');
     expect(inspector.runtimeName).toBe('Reflex unit-test runtime');
     expect(Object.isFrozen(inspector)).toBe(true);
-    expect(snapshot.appDb).toBe(appDb);
+    expect(snapshot.appState).toBe(appState);
     expect(snapshot.handlerKeys).toEqual({
       event: ['inspector-event'],
       fx: ['inspector-effect'],
@@ -60,7 +60,7 @@ describe('Reflex inspector', () => {
 
   it('evaluates subscriptions on demand without evaluating during snapshot reads', () => {
     let computedRuns = 0;
-    initAppDb({ count: 2 });
+    initState({ count: 2 });
     regSub('count');
     regSub(
       'double-count',
@@ -90,21 +90,21 @@ describe('Reflex inspector', () => {
   });
 
   it('dispatches through the bound event router', async () => {
-    initAppDb({ count: 0 });
-    regEvent<{ count: number }>('inspector-increment', ({ draftDb }, amount: number) => {
-      draftDb.count += amount;
+    initState({ count: 0 });
+    regEvent<{ count: number }>('inspector-increment', ({ draftState }, amount: number) => {
+      draftState.count += amount;
     });
 
     createReflexInspector().dispatch(['inspector-increment', 3]);
     await waitForScheduled();
 
-    expect(getAppDb<{ count: number }>().count).toBe(3);
+    expect(getState<{ count: number }>().count).toBe(3);
   });
 
   it('supports independent trace subscriptions with idempotent cleanup', async () => {
-    initAppDb({ count: 0 });
-    regEvent<{ count: number }>('inspector-trace', ({ draftDb }) => {
-      draftDb.count++;
+    initState({ count: 0 });
+    regEvent<{ count: number }>('inspector-trace', ({ draftState }) => {
+      draftState.count++;
     });
 
     const inspector = createReflexInspector();

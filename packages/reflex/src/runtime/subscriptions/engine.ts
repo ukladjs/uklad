@@ -217,8 +217,8 @@ class SubscriptionCell<T> {
 /**
  * Owns the lifecycle of opaque subscription cells.
  *
- * Active graphs settle in topological order when DB roots are published. Dormant
- * graphs are validated lazily by a memoized pull. DB publication is already the
+ * Active graphs settle in topological order when STATE roots are published. Dormant
+ * graphs are validated lazily by a memoized pull. STATE publication is already the
  * scheduler, so this engine deliberately owns no node tasks or notification debt.
  */
 export class SubscriptionEngine {
@@ -233,7 +233,7 @@ export class SubscriptionEngine {
   private wave = 0;
   /** Monotonic observable-version source shared by every cell. */
   private outputStamp = 0;
-  /** Marks the latest DB generation against which a cell was validated. */
+  /** Marks the latest STATE generation against which a cell was validated. */
   private publicationEpoch = 1;
   /** Records settle/notify phases for reentrancy guards and deferred release. */
   private phase: 'idle' | 'settling' | 'notifying' = 'idle';
@@ -468,7 +468,7 @@ export class SubscriptionEngine {
       }
 
       // Freeze every listener list before delivering the first callback. All
-      // snapshots therefore expose one fully-settled DB generation.
+      // snapshots therefore expose one fully-settled STATE generation.
       const plans = changed.map((subscription) => ({
         subscription,
         listeners: subscription.listeners.slice(),

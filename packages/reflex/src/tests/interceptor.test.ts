@@ -1,5 +1,5 @@
 import { isInterceptor } from '../events/interceptors';
-import { clearHandlers, execute, getAppDb, registerHandler } from './runtime-test-api';
+import { clearHandlers, execute, getState, registerHandler } from './runtime-test-api';
 import type { Interceptor, Context, EventVector } from '../types';
 
 function createTestInterceptor(
@@ -119,7 +119,7 @@ describe('interceptor', () => {
       expect(executionOrder).toEqual(['before-1', 'before-2', 'after-2', 'after-1']);
 
       expect(result.coeffects.event).toEqual(eventV);
-      expect(result.coeffects.draftDb).toEqual({});
+      expect(result.coeffects.draftState).toEqual({});
     });
 
     it('should handle interceptors with only before phase', () => {
@@ -238,12 +238,12 @@ describe('interceptor', () => {
       const interceptor = createTestInterceptor('test', {
         before: (ctx) => {
           expect(ctx.coeffects.event).toEqual(['test-event', 'param1', 'param2']);
-          expect(ctx.coeffects.draftDb).toEqual({});
-          expect(ctx.previousDb).toBe(getAppDb());
+          expect(ctx.coeffects.draftState).toEqual({});
+          expect(ctx.previousState).toBe(getState());
           expect(ctx.effects).toEqual([]);
-          // newDb stays unset until the event handler interceptor
+          // newState stays unset until the event handler interceptor
           // runs; patches exist only as trace tags, not on context
-          expect(ctx.newDb).toBeUndefined();
+          expect(ctx.newState).toBeUndefined();
           expect(ctx.queue).toEqual([]);
           expect(ctx.stack).toEqual([interceptor]);
 
@@ -258,8 +258,8 @@ describe('interceptor', () => {
       const result = execute(['test-event'], []);
 
       expect(result.coeffects.event).toEqual(['test-event']);
-      expect(result.coeffects.draftDb).toEqual({});
-      expect(result.previousDb).toBe(getAppDb());
+      expect(result.coeffects.draftState).toEqual({});
+      expect(result.previousState).toBe(getState());
       expect(result.effects).toEqual([]);
       expect(result.queue).toEqual([]);
       expect(result.stack).toEqual([]);

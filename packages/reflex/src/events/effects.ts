@@ -1,13 +1,6 @@
 import { consoleLog } from '../core/logging';
-import { mergeTraceForKernel } from '../core/tracing';
 import { isEventVector } from '../core/validation';
-import { updateStateForKernel } from '../runtime/state';
-import { notifyRuntimeLifecycleForKernel } from '../runtime/lifecycle';
-import {
-  getHandlerForKernel,
-  registerHandlerForKernel,
-  registerSystemHandlerForKernel,
-} from '../runtime/handlers';
+import { registerHandlerForKernel, registerSystemHandlerForKernel } from '../runtime/handlers';
 import {
   createRuntimeStateKey,
   getOrCreateRuntimeState,
@@ -15,15 +8,12 @@ import {
 } from '../runtime/kernel';
 
 import type {
-  Context,
   DispatchLaterEffect,
   DispatchVector,
   EffectHandler,
   EffectParams,
   EventVector,
   Id,
-  Interceptor,
-  TraceErrorTag,
 } from '../types';
 
 const HANDLER_KIND = 'fx';
@@ -44,134 +34,6 @@ export function regEffectForKernel<K extends Id = Id>(
   handler: EffectHandler<EffectParams<K>>,
 ): void {
   registerHandlerForKernel(runtime, HANDLER_KIND, id, handler);
-}
-
-const DO_FX_INTERCEPTOR = createRuntimeStateKey<Interceptor>('reflex.do-fx-interceptor');
-
-/** @internal Commit event state and execute its effects. */
-export function getDoFxInterceptorForKernel(runtime: RuntimeKernel): Interceptor {
-  return getOrCreateRuntimeState(runtime, DO_FX_INTERCEPTOR, () => createDoFxInterceptor(runtime));
-}
-
-function createDoFxInterceptor(runtime: RuntimeKernel): Interceptor {
-  return {
-    id: 'do-fx',
-    after(context: Context): Context {
-      if (context.newState !== undefined) {
-        updateStateForKernel(runtime, context.newState);
-      }
-
-      const effects = context.effects;
-      if (!Array.isArray(effects)) {
-        consoleLog('warn', `[reflex] effects expects a vector, but was given ${typeof effects}`);
-        notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
-          type: '<invalid>',
-          value: effects,
-          status: 'invalid',
-          startedAtMs: Date.now(),
-        });
-        return context;
-      }
-
-      notifyRuntimeLifecycleForKernel(runtime, 'onEffects', effects);
-
-      const effectErrors: TraceErrorTag[] = [];
-      for (const effect of effects as unknown[]) {
-        if (
-          !Array.isArray(effect) ||
-          effect.length === 0 ||
-          effect.length > 2 ||
-          typeof effect[0] !== 'string'
-        ) {
-          consoleLog('warn', '[reflex] invalid effect in effects:', effect);
-          notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
-            type: '<invalid>',
-            value: effect,
-            status: 'invalid',
-            startedAtMs: Date.now(),
-          });
-          continue;
-        }
-
-        const [id, value] = effect;
-        const handler = getHandlerForKernel(runtime, HANDLER_KIND, id);
-        if (!handler) {
-          consoleLog(
-            'warn',
-            `[reflex] in 'effects' found ${id} which has no associated handler. Ignoring.`,
-          );
-          notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
-            type: id,
-            value,
-            status: 'unhandled',
-            startedAtMs: Date.now(),
-          });
-          continue;
-        }
-
-        const startedAtMs = Date.now();
-        try {
-          const result = (handler as (effectValue: unknown) => unknown)(value);
-          const invalidDispatch =
-            (id === DISPATCH && !isEventVector(value)) ||
-            (id === DISPATCH_LATER && !isValidDispatchLaterEffect(value));
-          notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
-            type: id,
-            value,
-            status: invalidDispatch
-              ? 'failed'
-              : id === DISPATCH
-                ? 'succeeded'
-                : id === DISPATCH_LATER || isThenable(result)
-                  ? 'detached'
-                  : 'returned',
-            startedAtMs,
-            ...(invalidDispatch
-              ? { error: new Error(`[reflex] Invalid ${id} effect payload.`) }
-              : {}),
-          });
-        } catch (error: unknown) {
-          consoleLog('error', `[reflex] error in effects for ${id}:`, error);
-          effectErrors.push({
-            phase: 'effect',
-            effect: id,
-            message: error instanceof Error ? error.message : String(error),
-            ...(error instanceof Error && typeof error.stack === 'string'
-              ? { stack: error.stack }
-              : {}),
-          });
-          notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
-            type: id,
-            value,
-            status: 'failed',
-            startedAtMs,
-            error,
-          });
-        }
-      }
-
-      if (effectErrors.length > 0) {
-        mergeTraceForKernel(runtime, { tags: { effectErrors } });
-      }
-
-      return context;
-    },
-  };
-}
-
-function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return (
-    ((typeof value === 'object' && value !== null) || typeof value === 'function') &&
-    typeof (value as { then?: unknown }).then === 'function'
-  );
-}
-
-function isValidDispatchLaterEffect(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null) return false;
-  const effect = value as Partial<DispatchLaterEffect>;
-  return (
-    typeof effect.ms === 'number' && Number.isFinite(effect.ms) && isEventVector(effect.dispatch)
-  );
 }
 
 /** @internal Install dispatch effects in one runtime. */

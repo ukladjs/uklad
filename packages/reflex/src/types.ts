@@ -150,6 +150,8 @@ export interface Context<T = Record<string, any>> {
   readonly previousState: State<T>;
   /** The shared effect list. Interceptors may append entries but must not replace it. */
   readonly effects: Effects;
+  /** Invalid legacy effect values retained for the post-commit executor to report. */
+  readonly invalidEffects?: readonly unknown[];
   /**
    * The final state generation produced by the event handler; unset until it
    * runs. Interceptors may observe it but must not replace it.
@@ -158,6 +160,8 @@ export interface Context<T = Record<string, any>> {
   queue: Interceptor<T>[];
   stack: Interceptor<T>[];
   originalException: boolean;
+  /** Internal structured failure retained when a custom error handler recovers. */
+  readonly executionError?: unknown;
 }
 
 export interface Interceptor<T = Record<string, any>> {

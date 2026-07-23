@@ -67,7 +67,7 @@ export function executeForKernel(
     );
     traceError(runtime, reflexError, event);
     errorHandler(reflexError.cause, reflexError);
-    return context;
+    return { ...context, executionError: reflexError.cause };
   }
 }
 
@@ -75,7 +75,8 @@ function executeAndTraceFinalEffects(runtime: RuntimeKernel, context: Context): 
   const result = executeInterceptors(context);
   // Event handlers publish their initial effects while patches are produced,
   // but `after` interceptors may append or replace effects later in the same
-  // pipeline. Record the final list so traces describe what do-fx actually ran.
+  // pipeline. Record the final list so traces describe what the post-commit
+  // effect executor receives.
   mergeTraceForKernel(runtime, { tags: { effects: result.effects } });
   return result;
 }
@@ -193,6 +194,7 @@ function createContext(
     coeffects,
     previousState,
     effects: [],
+    invalidEffects: [],
     queue: [...interceptors],
     stack: [],
     originalException: false,

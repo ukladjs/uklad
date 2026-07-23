@@ -1,5 +1,6 @@
 import type { EqualityCheckFn } from '../types';
 import type { EventQueue } from '../events/router';
+import type { ExecutionEnvelope } from '../events/outcomes';
 import type { RateLimitState } from '../events/rate-limit';
 import type { TraceState } from '../core/tracing';
 import type { StateStore } from './state';
@@ -39,7 +40,7 @@ export interface RuntimeKernel {
   /** Hot-path state is typed and directly addressable. It remains lazy. */
   state?: StateStore;
   handlers?: HandlerState;
-  eventQueue?: EventQueue;
+  eventQueue?: EventQueue<ExecutionEnvelope>;
   subscriptionCache?: SubscriptionCacheState;
   subscriptionEngine?: SubscriptionEngine;
   tracing?: TraceState;

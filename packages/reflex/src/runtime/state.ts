@@ -1,4 +1,5 @@
 import { scheduleAfterRender } from '../core/scheduling';
+import { recordExecutionOutcomeForKernel } from '../events/outcomes';
 import { isRuntimeDisposed, type RuntimeKernel } from './kernel';
 import { notifyRuntimeLifecycleForKernel } from './lifecycle';
 import {
@@ -68,6 +69,11 @@ export function initStateForKernel<T = DefaultAppState>(
     state.publishedRevision,
     recalculated,
   );
+  recordExecutionOutcomeForKernel(runtime, {
+    type: 'published',
+    runtimeInstanceId: runtime.runtimeInstanceId,
+    publishedRevision: state.publishedRevision,
+  });
 }
 
 /** @internal Return the latest committed state for one runtime. */
@@ -139,6 +145,11 @@ export function flushSubscriptionsForKernel(runtime: RuntimeKernel): void {
     targetRevision,
     recalculated,
   );
+  recordExecutionOutcomeForKernel(runtime, {
+    type: 'published',
+    runtimeInstanceId: runtime.runtimeInstanceId,
+    publishedRevision: targetRevision,
+  });
 }
 
 /** @internal Return whether one runtime still has an unflushed state generation. */

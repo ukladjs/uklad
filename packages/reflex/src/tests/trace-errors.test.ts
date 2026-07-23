@@ -1,4 +1,4 @@
-import { defaultErrorHandler } from '../events/pipeline';
+import { defaultErrorHandler } from '../events/runner';
 import { waitForScheduled } from './test-utils';
 import {
   clearHandlers,

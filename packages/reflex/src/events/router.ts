@@ -2,17 +2,24 @@ import { IS_DEV } from '../core/environment';
 import { consoleLog } from '../core/logging';
 import { scheduleAfterRender, scheduleNextTick } from '../core/scheduling';
 import { isEventVector } from '../core/validation';
-import { flushSubscriptionsForKernel } from '../runtime/state';
+import { flushSubscriptionsForKernel, getStateRevisionsForKernel } from '../runtime/state';
 import { isRuntimeDisposed, type RuntimeKernel } from '../runtime/kernel';
 import { notifyRuntimeLifecycleForKernel } from '../runtime/lifecycle';
 import { cloneStructuredValue } from '../runtime/ownership';
 import { assertPublicationAllowedForKernel } from '../runtime/subscriptions/engine';
 import { registerBuiltInEffectsForKernel } from './effects';
+import { getActiveEffectExecutionForKernel } from './effect-executor';
 import {
+  createExecutionEnvelopeForKernel,
+  recordExecutionOutcomeForKernel,
+  type ExecutionEnvelope,
+} from './outcomes';
+import {
+  getHandlingEnvelopeForKernel,
   getHandlingEventIdForKernel,
   getRunningHandlerEventIdForKernel,
-  handleForKernel,
-} from './pipeline';
+} from './runner';
+import { executeEventEnvelopeForKernel } from './execution';
 
 import type { DispatchVector, EventVector } from '../types';
 
@@ -28,10 +35,10 @@ const eventSchedulers = new Map<string, ScheduleFunction>([
 ]);
 
 /** @internal Event queue finite-state machine. */
-export class EventQueue {
+export class EventQueue<WorkItem = EventVector> {
   private fsmState: FsmState = 'idle';
-  private queue: EventVector[] = [];
-  private readonly eventHandler: (event: EventVector) => void;
+  private queue: WorkItem[] = [];
+  private readonly eventHandler: (item: WorkItem) => void;
   private idleWaiters: Array<{
     resolve: () => void;
     reject: (error: unknown) => void;
@@ -40,25 +47,29 @@ export class EventQueue {
   private runError: unknown;
   private disposed = false;
   private readonly onDrop: (
-    events: readonly EventVector[],
+    items: readonly WorkItem[],
     reason: 'queue-dropped' | 'disposed',
     error: unknown,
   ) => void;
+  private readonly getScheduler: (item: WorkItem) => ScheduleFunction | undefined;
 
   constructor(
-    eventHandler: (event: EventVector) => void,
+    eventHandler: (item: WorkItem) => void,
     onDrop: (
-      events: readonly EventVector[],
+      items: readonly WorkItem[],
       reason: 'queue-dropped' | 'disposed',
       error: unknown,
     ) => void = () => {},
+    getScheduler: (item: WorkItem) => ScheduleFunction | undefined = (item) =>
+      getEventScheduler(item as EventVector),
   ) {
     this.eventHandler = eventHandler;
     this.onDrop = onDrop;
+    this.getScheduler = getScheduler;
   }
 
-  push(event: EventVector): void {
-    this.fsmTrigger('add-event', event);
+  push(item: WorkItem): void {
+    this.fsmTrigger('add-event', item);
   }
 
   purge(): void {
@@ -105,7 +116,7 @@ export class EventQueue {
     this.settleIdle(error);
   }
 
-  private fsmTrigger(trigger: 'add-event', argument: EventVector): void;
+  private fsmTrigger(trigger: 'add-event', argument: WorkItem): void;
   private fsmTrigger(trigger: 'pause', argument: ScheduleFunction): void;
   private fsmTrigger(trigger: 'run-queue' | 'finish-run' | 'resume'): void;
   private fsmTrigger(trigger: FsmTrigger, argument?: unknown): void {
@@ -117,13 +128,13 @@ export class EventQueue {
       case 'idle:add-event':
         nextState = 'scheduled';
         action = () => {
-          this.addEvent(argument as EventVector);
+          this.addEvent(argument as WorkItem);
           this.runNextTick();
         };
         break;
       case 'scheduled:add-event':
         nextState = 'scheduled';
-        action = () => this.addEvent(argument as EventVector);
+        action = () => this.addEvent(argument as WorkItem);
         break;
       case 'scheduled:run-queue':
         nextState = 'running';
@@ -131,7 +142,7 @@ export class EventQueue {
         break;
       case 'running:add-event':
         nextState = 'running';
-        action = () => this.addEvent(argument as EventVector);
+        action = () => this.addEvent(argument as WorkItem);
         break;
       case 'running:pause':
         nextState = 'paused';
@@ -148,7 +159,7 @@ export class EventQueue {
         break;
       case 'paused:add-event':
         nextState = 'paused';
-        action = () => this.addEvent(argument as EventVector);
+        action = () => this.addEvent(argument as WorkItem);
         break;
       case 'paused:resume':
         nextState = 'running';
@@ -166,16 +177,16 @@ export class EventQueue {
     action?.();
   }
 
-  private addEvent(event: EventVector): void {
-    this.queue.push(event);
+  private addEvent(item: WorkItem): void {
+    this.queue.push(item);
   }
 
   private processFirstEvent(): boolean {
-    const event = this.queue[0];
-    if (!event) return true;
+    const item = this.queue[0];
+    if (!item) return true;
 
     try {
-      this.eventHandler(event);
+      this.eventHandler(item);
       this.queue.shift();
       return true;
     } catch (error: unknown) {
@@ -193,10 +204,10 @@ export class EventQueue {
   private runQueue(): void {
     let remainingEvents = this.queue.length;
     while (remainingEvents > 0) {
-      const event = this.queue[0];
-      if (!event) break;
+      const item = this.queue[0];
+      if (!item) break;
 
-      const scheduler = getEventScheduler(event);
+      const scheduler = this.getScheduler(item);
       if (scheduler) {
         this.fsmTrigger('pause', scheduler);
         return;
@@ -239,11 +250,25 @@ export class EventQueue {
   }
 }
 
-function getEventQueue(runtime: RuntimeKernel): EventQueue {
-  return (runtime.eventQueue ??= new EventQueue(
-    (event) => handleForKernel(runtime, event),
-    (events, reason, error) =>
-      notifyRuntimeLifecycleForKernel(runtime, 'onEventDropped', events, reason, error),
+function getEventQueue(runtime: RuntimeKernel): EventQueue<ExecutionEnvelope> {
+  return (runtime.eventQueue ??= new EventQueue<ExecutionEnvelope>(
+    (envelope) => executeEventEnvelopeForKernel(runtime, envelope),
+    (envelopes, reason, error) => {
+      recordExecutionOutcomeForKernel(runtime, {
+        type: 'dropped',
+        envelopes: Object.freeze([...envelopes]),
+        reason,
+        error,
+      });
+      notifyRuntimeLifecycleForKernel(
+        runtime,
+        'onEventDropped',
+        envelopes.map((envelope) => envelope.event),
+        reason,
+        error,
+      );
+    },
+    (envelope) => getEventScheduler(envelope.event),
   ));
 }
 
@@ -265,8 +290,32 @@ export function dispatchForKernel(runtime: RuntimeKernel, event: DispatchVector)
     }
   }
 
-  notifyRuntimeLifecycleForKernel(runtime, 'onEventQueued', event as EventVector);
-  getEventQueue(runtime).push(event);
+  const activeEffect = getActiveEffectExecutionForKernel(runtime);
+  const handlingEnvelope = getHandlingEnvelopeForKernel(runtime);
+  const envelope = createExecutionEnvelopeForKernel(
+    runtime,
+    event as EventVector,
+    activeEffect === undefined
+      ? handlingEnvelope === null
+        ? undefined
+        : {
+            operationId: handlingEnvelope.operationId,
+            eventInstanceId: handlingEnvelope.eventInstanceId,
+          }
+      : {
+          operationId: activeEffect.envelope.operationId,
+          eventInstanceId: activeEffect.envelope.eventInstanceId,
+          sourceEffectId: activeEffect.effectId,
+          sourceEffectIndex: activeEffect.effectIndex,
+        },
+  );
+  getEventQueue(runtime).push(envelope);
+  recordExecutionOutcomeForKernel(runtime, {
+    type: 'queued',
+    envelope,
+    committedRevision: getStateRevisionsForKernel(runtime).committedRevision,
+  });
+  notifyRuntimeLifecycleForKernel(runtime, 'onEventQueued', envelope.event);
 }
 
 /** @internal Take ownership of caller input before accepting it into a runtime queue. */
@@ -301,7 +350,7 @@ export function dispatchSyncForKernel(runtime: RuntimeKernel, event: DispatchVec
   }
 
   assertPublicationAllowedForKernel(runtime);
-  handleForKernel(runtime, event);
+  executeEventEnvelopeForKernel(runtime, createExecutionEnvelopeForKernel(runtime, event));
   flushSubscriptionsForKernel(runtime);
 }
 

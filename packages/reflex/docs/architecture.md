@@ -11,15 +11,15 @@ reads subscriptions through `useSyncExternalStore` and the nearest explicit
 ```
 dispatch(['todos/add', 'milk'])
   │
-  ├─ events/router.ts         EventQueue (FSM) queues and runs a snapshot on the next tick
-  ├─ events/pipeline.ts       handle(): builds the interceptor chain for this event id
-  ├─ events/interceptors.ts   execute(): before phase (queue→stack), after phase (unwind)
+  ├─ events/router.ts         EventQueue<ExecutionEnvelope> queues one owned occurrence
+  ├─ events/execution.ts      coordinates runner → commit → effects for that envelope
+  ├─ events/runner.ts         interceptor chain + handler produce a TransitionOutcome
   │     cofx inject → global interceptors → custom → event handler
-  ├─ events/pipeline.ts       handler(coeffects, ...params) runs inside Immer produce
-  │                   → context.newState   (pure, no side effects)
-  │                   → context.effects  [['http', {...}]]  (data, not calls)
-  ├─ events/effects.ts        doFx (after phase): updateState(newState), then run effects
-  ├─ runtime/state.ts        state advances; flush scheduled (coalesced, rAF)
+  ├─ events/committer.ts      commits the candidate state once
+  ├─ events/effect-executor.ts executes declared effects only after the commit
+  ├─ events/outcomes.ts       immutable queue, transition, commit, effect records
+  ├─ events/operation-coordinator.ts exact root/child operation projection
+  ├─ runtime/state.ts         state advances; flush scheduled (coalesced, rAF)
   │        ~~~~~~~~~~ window: state ahead, renderState behind; ALL subs still read renderState
   ├─ runtime/state.ts        flushSubscriptions(): renderState advances, diff top-level keys
   ├─ runtime/subscriptions/engine.ts
@@ -34,26 +34,33 @@ dispatch(['todos/add', 'milk'])
 
 Paths in this document are relative to `src/`.
 
-| Path                              | Responsibility                                                              |
-| --------------------------------- | --------------------------------------------------------------------------- |
-| `index.ts`                        | Combined explicit-runtime entrypoint                                        |
-| `vanilla.ts` / `react.ts`         | React-free runtime and React-only public entrypoints                        |
-| `contracts.ts`                    | Store-local runtime contract extraction and vector/result types             |
-| `types.ts`                        | Public contracts and module-augmentation anchors                            |
-| `runtime/runtime.ts`              | `createReflexRuntime`, modules, watches, restore/flush                      |
-| `runtime/kernel.ts`               | Instance-owned runtime kernel, identity, and terminal lifecycle             |
-| `core/*`                          | Environment, equality, Immer, logging, scheduling, tracing, and validation  |
-| `runtime/state.ts`                | `state`/`renderState`, coalesced flush, and changed-root publication        |
-| `runtime/handlers.ts`             | Typed handler definitions and framework-owned handler baselines             |
-| `runtime/event-metadata.ts`       | Per-event interceptor metadata                                              |
-| `runtime/reset.ts`                | Cross-store clear coordination                                              |
-| `runtime/subscriptions/engine.ts` | Reactive graph semantics: push waves, pull reads, and live lifecycle        |
-| `runtime/subscriptions/cache.ts`  | Root metadata, canonical instances, reverse edges, leases, and sub config   |
-| `runtime/subscriptions/keys.ts`   | Canonical query-key serialization and development validation                |
-| `events/*`                        | Event registration/pipeline, routing, interceptors, effects, and coeffects  |
-| `subscriptions/registration.ts`   | Root and computed subscription definitions                                  |
-| `subscriptions/queries.ts`        | Graph construction, cache lookup, and imperative reads                      |
-| `react/*`                         | `useSubscription` and hot-reload bindings; the only React-dependent modules |
+| Path                                                                 | Responsibility                                                                         |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `index.ts`                                                           | Combined explicit-runtime entrypoint                                                   |
+| `vanilla.ts` / `react.ts`                                            | React-free runtime and React-only public entrypoints                                   |
+| `contracts.ts`                                                       | Store-local runtime contract extraction and vector/result types                        |
+| `types.ts`                                                           | Public contracts and module-augmentation anchors                                       |
+| `runtime/runtime.ts`                                                 | `createReflexRuntime`, modules, watches, restore/flush                                 |
+| `runtime/kernel.ts`                                                  | Instance-owned runtime kernel, identity, and terminal lifecycle                        |
+| `core/*`                                                             | Environment, equality, Immer, logging, scheduling, tracing, and validation             |
+| `runtime/state.ts`                                                   | `state`/`renderState`, coalesced flush, changed-root publication, publication outcomes |
+| `runtime/handlers.ts`                                                | Typed handler definitions and framework-owned handler baselines                        |
+| `runtime/event-metadata.ts`                                          | Per-event interceptor metadata                                                         |
+| `runtime/reset.ts`                                                   | Cross-store clear coordination                                                         |
+| `runtime/subscriptions/engine.ts`                                    | Reactive graph semantics: push waves, pull reads, and live lifecycle                   |
+| `runtime/subscriptions/cache.ts`                                     | Root metadata, canonical instances, reverse edges, leases, and sub config              |
+| `runtime/subscriptions/keys.ts`                                      | Canonical query-key serialization and development validation                           |
+| `events/router.ts`                                                   | FIFO queue of execution envelopes and legacy dispatch entrypoints                      |
+| `events/execution.ts`                                                | Composes runner, committer, effect executor, and execution records                     |
+| `events/runner.ts`                                                   | Interceptors and pure event-handler evaluation                                         |
+| `events/committer.ts`                                                | One state commit decision for a transition outcome                                     |
+| `events/effect-executor.ts`                                          | Post-commit effect execution and effect outcomes                                       |
+| `events/outcomes.ts`                                                 | Runtime-owned identities and passive immutable outcome projection                      |
+| `events/operation-coordinator.ts`                                    | Mandatory exact projection of outcomes into operation state                            |
+| `events/registration.ts`, `events/coeffects.ts`, `events/effects.ts` | Legacy registration and built-in effect support                                        |
+| `subscriptions/registration.ts`                                      | Root and computed subscription definitions                                             |
+| `subscriptions/queries.ts`                                           | Graph construction, cache lookup, and imperative reads                                 |
+| `react/*`                                                            | `useSubscription` and hot-reload bindings; the only React-dependent modules            |
 
 See [`code-conventions.md`](./code-conventions.md) for ownership and dependency
 rules for this tree.
@@ -62,19 +69,23 @@ rules for this tree.
 
 **`events/router.ts`**
 
-| Item                  | What / why                                                                                                                                 |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `EventQueue`          | Per-runtime FSM (`idle → scheduled → running → paused`). Events added during a run move to the next tick; idle waiters implement `flush()` |
-| `dispatch(event)`     | Async: queue the event, return immediately                                                                                                 |
-| `dispatchSync(event)` | Run handler + flush before returning. Rejected inside a handler, a computation, or a listener                                              |
+| Item                  | What / why                                                                                                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `EventQueue`          | Per-runtime FSM (`idle → scheduled → running → paused`) carrying `ExecutionEnvelope`s. Events added during a run move to the next tick; idle waiters implement `flush()` |
+| `dispatch(event)`     | Async: queue the event, return immediately                                                                                                                               |
+| `dispatchSync(event)` | Run the same envelope coordinator + flush inline. Rejected inside a handler, a computation, or a listener                                                                |
 
-**`events/registration.ts` and `events/pipeline.ts`**
+**`events/execution.ts`, `events/runner.ts`, `events/committer.ts`, and `events/effect-executor.ts`**
 
 | Item                                              | What / why                                                                                                                                          |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `regEvent(id, handler, options?)`                 | Register a pure handler. Prefer `{ coeffects, interceptors }`; coeffect specs become inject-interceptors. Legacy positional arrays remain supported |
-| `handle(eventV)`                                  | Assemble the chain: `doFx → globals → custom → handler`, run it                                                                                     |
-| `createEventHandlerInterceptor`                   | Builds the interceptor that runs the handler inside `produce`, captures `newState` + `effects`, and emits patches only while tracing                |
+| `executeEventEnvelope(envelope)`                  | Compose runner, commit, effects, lifecycle compatibility, traces, and immutable outcomes                                                            |
+| `runEvent(eventV)`                                | Assemble and run `globals → custom → handler`; return state candidate and final effect intents without committing or executing effects              |
+| `createEventHandlerInterceptor`                   | Builds the interceptor that runs the handler inside `produce`, captures a state candidate + effects, and emits patches only while tracing           |
+| `commitTransition(envelope, candidateState)`      | Make one commit decision before any external effect executes                                                                                        |
+| `executeEffects(envelope, effects)`               | Invoke effects after commit; return one outcome per effect and attach child-envelope parentage for synchronous dispatch                             |
+| `OperationCoordinator`                            | Applies canonical records before passive observers, retaining root/child membership and terminal operation status                                   |
 | `getHandlingEventId` / `getRunningHandlerEventId` | Reentrance guards (`dispatchSync` refusal, dev `dispatch`-in-handler warning)                                                                       |
 | `regEventErrorHandler`                            | Override the framework-owned catch-all for exceptions in the chain; clearing the override restores the default                                      |
 
@@ -93,9 +104,13 @@ regEvent('todos/load', handler, {
 Coeffects such as `now` must be registered by the application before the event
 is dispatched.
 
-**`events/interceptors.ts`** — `execute(eventV, interceptors)`; `Context = { coeffects, previousState, effects, queue, stack, newState }`. `previousState` is the immutable state generation captured at event start; `newState` is the final Immer generation after the handler, or unset until it runs. `before` walks queue→stack, `after` unwinds the stack. Every `after` hook may compare the read-only state generations and append to the shared `effects` list. Hooks must not replace or mutate either state generation, or replace `effects`; `doFx` is the outermost unwind step, so it commits `newState` before running the final list. Event traces record that final list, including effects contributed by interceptors.
+**`events/interceptors.ts`** — `execute(eventV, interceptors)`; `Context = { coeffects, previousState, effects, queue, stack, newState }`. `previousState` is the immutable state generation captured at event start; `newState` is the final Immer generation after the handler, or unset until it runs. `before` walks queue→stack and `after` unwinds the stack. Every `after` hook may compare the read-only state generations and append to the shared `effects` list. The runner returns the final candidate and effect intents to the coordinator, which commits once and then invokes the post-commit effect executor. Event traces record that final list, including effects contributed by interceptors.
 
-**`events/effects.ts`** — `regEffect(id, handler)`. `doFxInterceptor` (after phase) commits `newState` via `updateState`, then invokes each effect handler; failures are isolated and tagged onto the event's trace. Built-ins: `DISPATCH`, `DISPATCH_LATER`. The router injects its `dispatch` function when composing these built-ins, so the write path has no `pipeline → effects → router → pipeline` module cycle.
+**`events/effects.ts`** — `regEffect(id, handler)` plus legacy built-ins:
+`DISPATCH` and `DISPATCH_LATER`. `events/effect-executor.ts` performs the
+post-commit lookup, invocation, failure isolation, and outcome projection. The
+router injects its dispatch function when installing built-ins, so the write
+path has no `effect executor → router → effect executor` module cycle.
 
 **`events/coeffects.ts`** — `regCoeffect(id, handler)`. `getInjectCofxInterceptor(id, value?)` injects into `context.coeffects` before the handler runs. Coeffects are application-owned and must be registered explicitly.
 

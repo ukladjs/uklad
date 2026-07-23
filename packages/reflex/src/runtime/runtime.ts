@@ -28,6 +28,7 @@ import {
 import { getGlobalEqualityCheckForKernel, setGlobalEqualityCheckForKernel } from '../core/equality';
 import { regCoeffectForKernel } from '../events/coeffects';
 import { clearDelayedEffectsForKernel, regEffectForKernel } from '../events/effects';
+import { recordExecutionOutcomeForKernel } from '../events/outcomes';
 import {
   clearGlobalInterceptorRegistrationForKernel,
   clearGlobalInterceptorsForKernel,
@@ -39,7 +40,7 @@ import {
   getHandlingEventIdForKernel,
   regEventErrorHandlerForKernel,
   registerBuiltInErrorHandler,
-} from '../events/pipeline';
+} from '../events/runner';
 import {
   clearAllForKernel as clearRateLimitsForKernel,
   debounceAndDispatchForKernel,
@@ -599,6 +600,11 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     clearRateLimitsForKernel(this.#kernel);
     clearDelayedEffectsForKernel(this.#kernel);
     disposeEventQueueForKernel(this.#kernel);
+    recordExecutionOutcomeForKernel(this.#kernel, {
+      type: 'runtime-disposed',
+      runtimeInstanceId: this.#kernel.runtimeInstanceId,
+      error: new Error(`[reflex] Runtime '${this.runtimeId}' was disposed.`),
+    });
     disposeTracingForKernel(this.#kernel);
     clearGlobalInterceptorsForKernel(this.#kernel);
     clearHandlersForKernel(this.#kernel);

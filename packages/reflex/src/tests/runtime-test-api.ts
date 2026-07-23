@@ -22,7 +22,7 @@ import {
   regGlobalInterceptorForKernel,
 } from '../events/global-interceptors';
 import { executeForKernel } from '../events/interceptors';
-import { regEventErrorHandlerForKernel } from '../events/pipeline';
+import { regEventErrorHandlerForKernel } from '../events/runner';
 import { clearAllForKernel, clearForKernel } from '../events/rate-limit';
 import { regEventForKernel } from '../events/registration';
 import { dispatchForKernel, dispatchSyncForKernel } from '../events/router';

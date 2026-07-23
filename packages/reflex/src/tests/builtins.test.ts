@@ -1,5 +1,5 @@
 import { DISPATCH, DISPATCH_LATER } from '../index';
-import { defaultErrorHandler } from '../events/pipeline';
+import { defaultErrorHandler } from '../events/runner';
 import { clearHandlers, getHandler, regEffect, regEventErrorHandler } from './runtime-test-api';
 
 describe('framework handler lifecycle', () => {

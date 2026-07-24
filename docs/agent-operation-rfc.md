@@ -14,7 +14,7 @@
 > execution observer: identity, status, event lineage, committed/published
 > revisions, pending work, and errors. Core has no operation retention when
 > DevTools operations are disabled. Rich
-> receipt features discussed in this RFC—patches, effect detail,
+> receipt features discussed in this RFC—patches, effect return detail,
 > observations, idempotency, command policy, and delivery semantics—remain
 > proposals to design into a future canonical model, not current API claims.
 

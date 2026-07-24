@@ -1,4 +1,5 @@
 import { createRuntimeStateKey, getRuntimeState, type RuntimeKernel } from '../runtime/kernel';
+import { consoleLog } from '../core/logging';
 
 import type { EventVector } from '../types';
 
@@ -42,6 +43,8 @@ export interface DevelopmentExecutionObserver {
   disposed(error: unknown): void;
 }
 
+type DevelopmentExecutionNotification = Exclude<keyof DevelopmentExecutionObserver, 'accept'>;
+
 const DEVELOPMENT_EXECUTION_OBSERVER = createRuntimeStateKey<DevelopmentExecutionObserver>(
   'reflex.development-execution-observer',
 );
@@ -66,4 +69,43 @@ export function getDevelopmentExecutionObserverForKernel(
   runtime: RuntimeKernel,
 ): DevelopmentExecutionObserver | undefined {
   return getRuntimeState(runtime, DEVELOPMENT_EXECUTION_OBSERVER);
+}
+
+/**
+ * Ask the optional observer to accept an operation without allowing a
+ * diagnostic failure to block ordinary dispatch. Explicit operation callers
+ * can require the resulting reference before enqueuing work.
+ */
+export function acceptDevelopmentExecutionForKernel(
+  runtime: RuntimeKernel,
+  event: EventVector,
+  parent?: DevelopmentExecutionParent,
+): DevelopmentOperationReference | undefined {
+  const observer = getDevelopmentExecutionObserverForKernel(runtime);
+  if (!observer) return undefined;
+  try {
+    return observer.accept(event, parent);
+  } catch (error) {
+    consoleLog('warn', '[reflex] development execution observer failed during accept.', error);
+    return undefined;
+  }
+}
+
+/**
+ * Notify the optional development observer without allowing diagnostic code to
+ * change application execution.
+ */
+export function notifyDevelopmentExecutionForKernel(
+  runtime: RuntimeKernel,
+  method: DevelopmentExecutionNotification,
+  ...args: unknown[]
+): void {
+  const observer = getDevelopmentExecutionObserverForKernel(runtime);
+  if (!observer) return;
+  try {
+    const callback = observer[method] as (...values: unknown[]) => void;
+    callback.apply(observer, args);
+  } catch (error) {
+    consoleLog('warn', `[reflex] development execution observer failed during ${method}.`, error);
+  }
 }

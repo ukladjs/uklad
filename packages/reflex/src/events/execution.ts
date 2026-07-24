@@ -10,7 +10,7 @@ import { getStateRevisionsForKernel } from '../runtime/state';
 import { commitTransitionForKernel, skipCommitForKernel } from './committer';
 import { executeEffectsForKernel } from './effect-executor';
 import type { ExecutionEnvelope } from './envelope';
-import { getDevelopmentExecutionObserverForKernel } from './execution-observer';
+import { notifyDevelopmentExecutionForKernel } from './execution-observer';
 import { createExecutionEnvelopeForKernel } from './router';
 import { runEventForKernel } from './runner';
 import { beginHandlingEventForKernel, endHandlingEventForKernel } from './runner';
@@ -32,19 +32,15 @@ export function executeEventEnvelopeForKernel(
 
   if (beginRuntimeLifecycleEventForKernel(runtime, event, acceptedRevision)) {
     if (envelope.operation) {
-      const observer = getDevelopmentExecutionObserverForKernel(runtime);
-      observer?.transition(envelope.operation, 'aborted');
-      observer?.finished(envelope.operation, 'rejected');
+      notifyDevelopmentExecutionForKernel(runtime, 'transition', envelope.operation, 'aborted');
+      notifyDevelopmentExecutionForKernel(runtime, 'finished', envelope.operation, 'rejected');
     }
     notifyRuntimeLifecycleForKernel(runtime, 'onEventFinished', event);
     return;
   }
 
   if (envelope.operation)
-    getDevelopmentExecutionObserverForKernel(runtime)?.started(
-      envelope.operation,
-      acceptedRevision,
-    );
+    notifyDevelopmentExecutionForKernel(runtime, 'started', envelope.operation, acceptedRevision);
 
   let error: unknown;
   let finishedStatus: 'completed' | 'failed' = 'completed';
@@ -74,7 +70,9 @@ export function executeEventEnvelopeForKernel(
         }
 
         if (envelope.operation)
-          getDevelopmentExecutionObserverForKernel(runtime)?.transition(
+          notifyDevelopmentExecutionForKernel(
+            runtime,
+            'transition',
             envelope.operation,
             result.status,
             transitionError,
@@ -83,7 +81,9 @@ export function executeEventEnvelopeForKernel(
         if (result.status !== 'completed' || result.candidateState === undefined) {
           const commit = skipCommitForKernel(runtime);
           if (envelope.operation)
-            getDevelopmentExecutionObserverForKernel(runtime)?.committed(
+            notifyDevelopmentExecutionForKernel(
+              runtime,
+              'committed',
               envelope.operation,
               commit.status,
               commit.committedRevision,
@@ -93,7 +93,9 @@ export function executeEventEnvelopeForKernel(
 
         const commit = commitTransitionForKernel(runtime, result.candidateState);
         if (envelope.operation)
-          getDevelopmentExecutionObserverForKernel(runtime)?.committed(
+          notifyDevelopmentExecutionForKernel(
+            runtime,
+            'committed',
             envelope.operation,
             commit.status,
             commit.committedRevision,
@@ -107,7 +109,9 @@ export function executeEventEnvelopeForKernel(
     error = caughtError;
     finishedStatus = 'failed';
     if (envelope.operation)
-      getDevelopmentExecutionObserverForKernel(runtime)?.transition(
+      notifyDevelopmentExecutionForKernel(
+        runtime,
+        'transition',
         envelope.operation,
         'failed',
         caughtError,
@@ -116,7 +120,9 @@ export function executeEventEnvelopeForKernel(
   } finally {
     endHandlingEventForKernel(runtime);
     if (envelope.operation)
-      getDevelopmentExecutionObserverForKernel(runtime)?.finished(
+      notifyDevelopmentExecutionForKernel(
+        runtime,
+        'finished',
         envelope.operation,
         finishedStatus,
         error,

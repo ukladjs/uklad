@@ -323,10 +323,10 @@ enableDevtools(runtime, {
 DevTools creates the inspector from the supplied runtime automatically. When
 enabled, it advertises the capability to the server and MCP bridge. The result
 is DevTools' immutable operation snapshot, assembled from runtime execution
-facts: identity, status, event lineage,
-committed/published revisions, pending work, and errors. It intentionally does
-not include DevTools-specific patches, effect payloads, observations,
-idempotency, or delivery-timeout data.
+facts: identity, status, event lineage, committed/published revisions, pending
+work, errors, and minimal effect evidence (id, index, payload snapshot, status,
+duration, and error). It intentionally does not include patches, effect return
+values, observations, idempotency, or delivery-timeout data.
 
 Add application-specific PII keys by composing the exported default masker:
 

@@ -11,7 +11,9 @@ import { registerBuiltInEffectsForKernel } from './effects';
 import { getActiveEffectExecutionForKernel } from './effect-executor';
 import type { ExecutionEnvelope } from './envelope';
 import {
+  acceptDevelopmentExecutionForKernel,
   getDevelopmentExecutionObserverForKernel,
+  notifyDevelopmentExecutionForKernel,
   type DevelopmentExecutionParent,
 } from './execution-observer';
 import {
@@ -265,13 +267,11 @@ function getEventQueue(runtime: RuntimeKernel): EventQueue<ExecutionEnvelope> {
   return (runtime.eventQueue ??= new EventQueue<ExecutionEnvelope>(
     (envelope) => executeEventEnvelopeForKernel(runtime, envelope),
     (envelopes, reason, error) => {
-      const observer = getDevelopmentExecutionObserverForKernel(runtime);
-      if (observer) {
-        const operations = envelopes.flatMap((envelope) =>
-          envelope.operation === undefined ? [] : [envelope.operation],
-        );
-        if (operations.length > 0) observer.dropped(operations, error);
-      }
+      const operations = envelopes.flatMap((envelope) =>
+        envelope.operation === undefined ? [] : [envelope.operation],
+      );
+      if (operations.length > 0)
+        notifyDevelopmentExecutionForKernel(runtime, 'dropped', operations, error);
       notifyRuntimeLifecycleForKernel(
         runtime,
         'onEventDropped',
@@ -288,6 +288,7 @@ function getEventQueue(runtime: RuntimeKernel): EventQueue<ExecutionEnvelope> {
 export function dispatchForKernel(
   runtime: RuntimeKernel,
   event: DispatchVector,
+  requireOperation = false,
 ): ExecutionEnvelope | undefined {
   if (isRuntimeDisposed(runtime)) return;
   if (!isEventVector(event)) {
@@ -306,9 +307,16 @@ export function dispatchForKernel(
   }
 
   const envelope = createExecutionEnvelopeForKernel(runtime, event as EventVector);
+  if (requireOperation && !envelope.operation) {
+    throw new Error(
+      '[reflex] operation dispatch could not be accepted by the development observer.',
+    );
+  }
   getEventQueue(runtime).push(envelope);
   if (envelope.operation)
-    getDevelopmentExecutionObserverForKernel(runtime)?.queued(
+    notifyDevelopmentExecutionForKernel(
+      runtime,
+      'queued',
       envelope.operation,
       getStateRevisionsForKernel(runtime).committedRevision,
     );
@@ -414,7 +422,8 @@ export function createExecutionEnvelopeForKernel(
     : handlingEnvelope?.operation === undefined
       ? undefined
       : { operation: handlingEnvelope.operation };
-  return Object.freeze({ event, operation: observer.accept(event, parent) });
+  const operation = acceptDevelopmentExecutionForKernel(runtime, event, parent);
+  return operation === undefined ? Object.freeze({ event }) : Object.freeze({ event, operation });
 }
 
 function getEventScheduler(event: EventVector): ScheduleFunction | undefined {

@@ -96,7 +96,7 @@ export function createReflexInspectorForKernel(runtime: RuntimeKernel): ReflexIn
     runtimeInstanceId: runtime.runtimeInstanceId,
     dispatch(event: never) {
       assertRuntimeActive();
-      const envelope = dispatchForKernel(runtime, event);
+      const envelope = dispatchForKernel(runtime, event, true);
       if (!envelope?.operation)
         throw new Error('[reflex] operation dispatch requires an installed development observer.');
       return envelope.operation.operationId;

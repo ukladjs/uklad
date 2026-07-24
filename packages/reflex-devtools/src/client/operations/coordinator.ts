@@ -127,10 +127,10 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
     event.effects.push(Object.freeze({
       id: effect.type,
       index: effect.index,
-      value: effect.value,
+      value: snapshotValue(effect.value),
       status: effect.status,
       durationMs: effect.durationMs,
-      ...(effect.error === undefined ? {} : { error: effect.error }),
+      ...(effect.error === undefined ? {} : { error: snapshotValue(effect.error) }),
     }));
     if (!['failed', 'invalid', 'unhandled'].includes(effect.status)) return;
     operation.hasNonTerminalError = true;
@@ -264,12 +264,16 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
 
   private settle(operation: MutableOperation): void {
     if (operation.status === 'failed' || operation.status === 'rejected') return;
-    if (operation.pending.size > 0 || operation.pendingPublishedRevision !== undefined) return;
+    if (operation.pending.size > 0) return;
+    if (operation.pendingPublishedRevision !== undefined) {
+      operation.status = 'publishing';
+      return;
+    }
     operation.status = operation.hasNonTerminalError ? 'completed-with-errors' : 'completed';
   }
 
   private recordError(operation: MutableOperation, error: unknown): void {
-    if (error !== undefined) operation.errors.push(error);
+    if (error !== undefined) operation.errors.push(snapshotValue(error));
   }
 
   private isTerminal(status: OperationSnapshot['status']): boolean {
@@ -283,4 +287,50 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
       this.operations.delete(firstTerminal.operationId);
     }
   }
+}
+
+/** Copy diagnostic values before retaining them in a DevTools operation snapshot. */
+function snapshotValue(value: unknown, seen = new WeakMap<object, unknown>()): unknown {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  if (typeof value === 'undefined') return undefined;
+  if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'symbol') return String(value);
+  if (typeof value === 'function')
+    return `[Function ${(value as { name?: string }).name || 'anonymous'}]`;
+
+  const object = value as object;
+  const existing = seen.get(object);
+  if (existing !== undefined) return existing;
+  if (value instanceof Error) {
+    return Object.freeze({
+      $type: value.name,
+      message: value.message,
+      ...(typeof value.stack === 'string' ? { stack: value.stack } : {}),
+    });
+  }
+  if (value instanceof Date) return Object.freeze({ $type: 'Date', value: value.toISOString() });
+  if (Array.isArray(value)) {
+    const copy: unknown[] = [];
+    seen.set(object, copy);
+    for (const item of value) copy.push(snapshotValue(item, seen));
+    return Object.freeze(copy);
+  }
+
+  const prototype = Object.getPrototypeOf(object);
+  if (prototype !== Object.prototype && prototype !== null)
+    return Object.freeze({ $type: prototype?.constructor?.name ?? 'Object' });
+
+  const copy: Record<string, unknown> = {};
+  seen.set(object, copy);
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    copy[key] = snapshotValue(child, seen);
+  }
+  return Object.freeze(copy);
 }

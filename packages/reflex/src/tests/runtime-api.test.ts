@@ -1,5 +1,9 @@
 import type { ReflexContracts } from '../contracts';
-import { createReflexRuntime, type RuntimeEventHandler } from '../runtime/runtime';
+import {
+  createReflexRuntime,
+  getRuntimeKernelForTests,
+  type RuntimeEventHandler,
+} from '../runtime/runtime';
 import { waitForScheduled } from './test-utils';
 
 interface CounterContracts extends ReflexContracts {
@@ -28,6 +32,111 @@ function createCounterRuntime(runtimeId: string, count: number) {
 }
 
 describe('instance-scoped runtime', () => {
+  it('does not allocate development effect lineage state without an observer', async () => {
+    const runtime = createReflexRuntime({
+      initialState: { count: 0 },
+      runtimeId: 'effect-hot-path',
+    });
+    runtime.regEvent('warm-up', () => {});
+    runtime.regEffect('save', () => {});
+    runtime.regEvent('save', ({ draftState }) => {
+      draftState.count += 1;
+      return [['save', { source: 'test' }]];
+    });
+
+    try {
+      runtime.dispatch(['warm-up']);
+      await runtime.flush();
+      const extensionCount = getRuntimeKernelForTests(runtime).extensions.size;
+
+      runtime.dispatch(['save']);
+      await runtime.flush();
+
+      expect(runtime.getState().count).toBe(1);
+      expect(getRuntimeKernelForTests(runtime).extensions.size).toBe(extensionCount);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  it('isolates development observer notification failures from event execution', async () => {
+    const runtime = createReflexRuntime({
+      initialState: { count: 0 },
+      runtimeId: 'observer-isolation',
+    });
+    runtime.regEvent('increment', ({ draftState }) => {
+      draftState.count += 1;
+    });
+    const detach = runtime
+      .createInspector()
+      .getOperationRuntime()
+      .observeExecution({
+        accept: () => ({ operationId: 'test-operation', value: {} }),
+        queued: () => {
+          throw new Error('expected observer failure');
+        },
+        started: () => {},
+        transition: () => {},
+        committed: () => {},
+        finished: () => {},
+        dropped: () => {},
+        published: () => {},
+        disposed: () => {},
+      });
+
+    try {
+      runtime.dispatch(['increment']);
+      await runtime.flush();
+      expect(runtime.getState().count).toBe(1);
+    } finally {
+      detach();
+      runtime.dispose();
+    }
+  });
+
+  it('continues ordinary dispatch when a development observer rejects acceptance', async () => {
+    const runtime = createReflexRuntime({
+      initialState: { count: 0 },
+      runtimeId: 'observer-acceptance',
+    });
+    runtime.regEvent('increment', ({ draftState }) => {
+      draftState.count += 1;
+    });
+    const detach = runtime
+      .createInspector()
+      .getOperationRuntime()
+      .observeExecution({
+        accept: () => {
+          throw new Error('expected acceptance failure');
+        },
+        queued: () => {},
+        started: () => {},
+        transition: () => {},
+        committed: () => {},
+        finished: () => {},
+        dropped: () => {},
+        published: () => {},
+        disposed: () => {},
+      });
+
+    try {
+      runtime.dispatch(['increment']);
+      await runtime.flush();
+      expect(runtime.getState().count).toBe(1);
+      expect(() =>
+        runtime
+          .createInspector()
+          .getOperationRuntime()
+          .dispatch(['increment'] as never),
+      ).toThrow('operation dispatch could not be accepted');
+      await runtime.flush();
+      expect(runtime.getState().count).toBe(1);
+    } finally {
+      detach();
+      runtime.dispose();
+    }
+  });
+
   it('does not expose its kernel or direct kernel state on the runtime object', () => {
     const runtime = createCounterRuntime('private-kernel', 0);
 

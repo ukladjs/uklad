@@ -2,7 +2,7 @@ import type { ReflexInspector } from '../types.js';
 import type { OperationEventVector } from './runtime.js';
 
 /**
- * Immutable, runtime-owned record of a dispatched operation.
+ * Immutable, DevTools-owned record of a dispatched operation.
  *
  * This mirrors Reflex's canonical coordinator snapshot. It deliberately
  * contains no trace, retry, or delivery timing data. Evidence such as effects

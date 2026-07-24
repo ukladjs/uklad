@@ -121,10 +121,10 @@ package. Without it, queue envelopes contain only the event vector: no
 operation IDs, maps, snapshots, or outcome records are allocated in core.
 
 The observer receives only execution facts needed by the snapshot: acceptance,
-start, transition failure, commit, effect failure, finish, publication, drop,
-and disposal. Patches, effect payload/result detail, subscription waves,
-observations, idempotency, and delivery timing remain deferred DevTools product
-requirements.
+start, transition failure, commit, minimal effect evidence (id, index, payload
+snapshot, status, duration, and error), finish, publication, drop, and
+disposal. Patches, effect return values, subscription waves, observations,
+idempotency, and delivery timing remain deferred DevTools product requirements.
 
 **`events/coeffects.ts`** — `regCoeffect(id, handler)`. `getInjectCofxInterceptor(id, value?)` injects into `context.coeffects` before the handler runs. Coeffects are application-owned and must be registered explicitly.
 

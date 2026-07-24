@@ -7,11 +7,7 @@ import {
   type RuntimeLifecycleEffect,
 } from '../runtime/lifecycle';
 import { getHandlerForKernel } from '../runtime/handlers';
-import {
-  createRuntimeStateKey,
-  getOrCreateRuntimeState,
-  type RuntimeKernel,
-} from '../runtime/kernel';
+import { createRuntimeStateKey, getRuntimeState, type RuntimeKernel } from '../runtime/kernel';
 import { DISPATCH, DISPATCH_LATER } from './effects';
 import type { ExecutionEnvelope } from './envelope';
 
@@ -37,7 +33,7 @@ const ACTIVE_EFFECT_EXECUTION = createRuntimeStateKey<ActiveEffectExecution | un
 export function getActiveEffectExecutionForKernel(
   runtime: RuntimeKernel,
 ): ActiveEffectExecution | undefined {
-  return getOrCreateRuntimeState(runtime, ACTIVE_EFFECT_EXECUTION, () => undefined);
+  return getRuntimeState(runtime, ACTIVE_EFFECT_EXECUTION);
 }
 
 function withActiveEffectExecutionForKernel<T>(
@@ -122,11 +118,15 @@ export function executeEffectsForKernel(
 
     const startedAtMs = Date.now();
     try {
-      const result = withActiveEffectExecutionForKernel(
-        runtime,
-        { envelope, effectId, effectIndex },
-        () => (handler as (effectValue: unknown) => unknown)(value),
-      );
+      const invoke = () => (handler as (effectValue: unknown) => unknown)(value);
+      const result =
+        envelope.operation === undefined
+          ? invoke()
+          : withActiveEffectExecutionForKernel(
+              runtime,
+              { envelope, effectId, effectIndex },
+              invoke,
+            );
       const invalidDispatch =
         (effectId === DISPATCH && !isEventVector(value)) ||
         (effectId === DISPATCH_LATER && !isValidDispatchLaterEffect(value));

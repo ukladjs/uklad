@@ -3,8 +3,8 @@ import type { DevtoolsOperationRuntime, OperationEventVector } from './runtime.j
 import type { OperationClient, OperationHandle, OperationSnapshot, OperationWaitResult } from './types.js';
 
 /**
- * Thin DevTools adapter over the runtime-owned operation coordinator.
- * DevTools owns no operation ledger and does not reconstruct lifecycle events.
+ * Thin adapter over the DevTools-owned coordinator.
+ * Core reports execution facts; DevTools retains the resulting snapshots.
  */
 export function createOperationClient(runtime: DevtoolsOperationRuntime): OperationClient {
   return createOperationAttachment(runtime).client;
@@ -56,7 +56,13 @@ async function waitForOperation(
   coordinator: OperationCoordinator,
   operationId: string,
 ): Promise<OperationWaitResult> {
-  await runtime.flush();
+  try {
+    await runtime.flush();
+  } catch (error) {
+    const operation = coordinator.get(operationId);
+    if (operation) return { operation };
+    throw error;
+  }
   const operation = coordinator.get(operationId);
   if (!operation) throw new Error(`[Reflex Devtools] operation '${operationId}' was not retained.`);
   return { operation };

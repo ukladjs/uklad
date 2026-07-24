@@ -47,12 +47,7 @@ headlessRuntime.watchSubscription(['counter'], () => {});
 
 enableDevtools(headlessRuntime, {
   serverUrl,
-  operations: {
-    executionContext: {
-      profile: 'headless',
-      defaultEffectMode: 'suppressed',
-    },
-  },
+  operations: true,
   // runtime: 'headless' is auto-detected (no window); declare the
   // side-effect policy so app_status can report what really executes.
   effectMode: 'safe',

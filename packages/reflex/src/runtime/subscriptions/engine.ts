@@ -1,11 +1,13 @@
 import { consoleLog } from '../../core/logging';
-import { mergeTraceForKernel, withTraceForKernel } from '../../core/tracing';
+import { mergeOptionalTraceForKernel, withOptionalTraceForKernel } from '../../core/tracing';
 import { type RuntimeKernel } from '../kernel';
 
 import type { EqualityCheckFn, SubVector } from '../../types';
 import type { RuntimeLifecycleSubscription } from '../lifecycle';
 
 declare const subscriptionNodeType: unique symbol;
+
+const NO_RECALCULATED_SUBSCRIPTIONS: readonly RuntimeLifecycleSubscription[] = Object.freeze([]);
 
 /** Opaque runtime-owned handle. Runtime operations are the entire contract. */
 export interface SubscriptionNode<T> {
@@ -132,9 +134,9 @@ class SubscriptionCell<T> {
   private runComputation(compute: () => T): boolean {
     let observableChanged = false;
     try {
-      withTraceForKernel(
+      withOptionalTraceForKernel(
         this.engine.runtime,
-        {
+        () => ({
           operation: this.spec.query[0],
           opType: 'sub/run',
           tags: {
@@ -142,7 +144,7 @@ class SubscriptionCell<T> {
             subscriptionKey: this.spec.key,
             deps: this.dependencies.map((dependency) => dependency.spec.key),
           },
-        },
+        }),
         () => {
           const nextValue = compute();
           const valueChanged =
@@ -160,9 +162,10 @@ class SubscriptionCell<T> {
           observableChanged = valueChanged || recovered;
           if (observableChanged) this.outputStamp = this.engine.nextOutputStamp();
 
-          mergeTraceForKernel(this.engine.runtime, {
-            tags: { 'cached?': !observableChanged, version: this.outputStamp },
-          });
+          mergeOptionalTraceForKernel(this.engine.runtime, () => ({
+            'cached?': !observableChanged,
+            version: this.outputStamp,
+          }));
         },
       );
     } catch (error) {
@@ -186,13 +189,13 @@ class SubscriptionCell<T> {
   publishTo(listeners: readonly ListenerRegistration[]): void {
     for (const [listener, label, kind] of listeners) {
       try {
-        withTraceForKernel(
+        withOptionalTraceForKernel(
           this.engine.runtime,
-          {
+          () => ({
             opType: kind,
             operation: label,
             tags: { subscriptionKey: this.spec.key },
-          },
+          }),
           listener,
         );
       } catch (error) {
@@ -202,13 +205,13 @@ class SubscriptionCell<T> {
   }
 
   traceDispose(): void {
-    withTraceForKernel(
+    withOptionalTraceForKernel(
       this.engine.runtime,
-      {
+      () => ({
         operation: this.spec.query[0],
         opType: 'sub/dispose',
         tags: { queryV: this.spec.query, subscriptionKey: this.spec.key },
-      },
+      }),
       () => {},
     );
   }
@@ -314,13 +317,16 @@ export class SubscriptionEngine {
     };
   }
 
-  publish(roots: SubscriptionNode<any>[]): readonly RuntimeLifecycleSubscription[] {
+  publish(
+    roots: SubscriptionNode<any>[],
+    includeDiagnostics: boolean = false,
+  ): readonly RuntimeLifecycleSubscription[] {
     this.assertPublicationAllowed();
     const subscriptions = roots.map((root) => this.unwrap(root));
     const nonRoot = subscriptions.find((subscription) => subscription.spec.kind !== 'root');
     if (nonRoot)
       throw new Error(`[reflex] Cannot publish non-root subscription ${nonRoot.spec.key}.`);
-    return this.publishWave(Array.from(new Set(subscriptions)));
+    return this.publishWave(Array.from(new Set(subscriptions)), includeDiagnostics);
   }
 
   assertPublicationAllowed(): void {
@@ -404,14 +410,17 @@ export class SubscriptionEngine {
   }
 
   /** Push changed roots through active dependents in topological-rank order. */
-  private publishWave(roots: SubscriptionCell<any>[]): readonly RuntimeLifecycleSubscription[] {
+  private publishWave(
+    roots: SubscriptionCell<any>[],
+    includeDiagnostics: boolean,
+  ): readonly RuntimeLifecycleSubscription[] {
     const wave = ++this.wave;
     this.publicationEpoch++;
     const buckets = new Map<number, SubscriptionCell<any>[]>();
     const ranks: number[] = [];
     let rankIndex = -1;
     const changed: SubscriptionCell<any>[] = [];
-    const recalculated: SubscriptionCell<any>[] = [];
+    const recalculated = includeDiagnostics ? ([] as SubscriptionCell<any>[]) : undefined;
 
     const enqueue = (subscription: SubscriptionCell<any>) => {
       if (!subscription.active || subscription.queuedWave === wave) return;
@@ -442,7 +451,7 @@ export class SubscriptionEngine {
       for (const root of roots) {
         root.validatedEpoch = this.publicationEpoch;
         const changedRoot = root.refreshRoot();
-        recalculated.push(root);
+        recalculated?.push(root);
         if (changedRoot) {
           if (root.listeners.length > 0) changed.push(root);
           for (const dependent of root.dependents) enqueue(dependent);
@@ -460,7 +469,7 @@ export class SubscriptionEngine {
           // A cell enters a publication bucket only after an upstream
           // observable change, so this refresh evaluates (or propagates an
           // upstream error) even if its own result compares equal.
-          recalculated.push(subscription);
+          recalculated?.push(subscription);
           if (!changedSubscription) continue;
           if (subscription.listeners.length > 0) changed.push(subscription);
           for (const dependent of subscription.dependents) enqueue(dependent);
@@ -479,7 +488,9 @@ export class SubscriptionEngine {
       this.phase = 'idle';
       this.drainDeferredReleases();
     }
-    return recalculated.map((subscription) => this.snapshotRecalculated(subscription));
+    return includeDiagnostics
+      ? recalculated!.map((subscription) => this.snapshotRecalculated(subscription))
+      : NO_RECALCULATED_SUBSCRIPTIONS;
   }
 
   private snapshotRecalculated(subscription: SubscriptionCell<any>): RuntimeLifecycleSubscription {
@@ -633,8 +644,9 @@ export function subscribeToSubscriptionForKernel<T>(
 export function publishSubscriptionsForKernel(
   runtime: RuntimeKernel,
   roots: SubscriptionNode<any>[],
+  includeDiagnostics: boolean = false,
 ): readonly RuntimeLifecycleSubscription[] {
-  return getEngine(runtime).publish(roots);
+  return getEngine(runtime).publish(roots, includeDiagnostics);
 }
 
 /** @internal Inspect a node owned by one runtime. */

@@ -9,11 +9,11 @@ import { cloneStructuredValue } from '../runtime/ownership';
 import { assertPublicationAllowedForKernel } from '../runtime/subscriptions/engine';
 import { registerBuiltInEffectsForKernel } from './effects';
 import { getActiveEffectExecutionForKernel } from './effect-executor';
+import type { ExecutionEnvelope } from './envelope';
 import {
-  createExecutionEnvelopeForKernel,
-  recordExecutionOutcomeForKernel,
-  type ExecutionEnvelope,
-} from './outcomes';
+  getDevelopmentExecutionObserverForKernel,
+  type DevelopmentExecutionParent,
+} from './execution-observer';
 import {
   getHandlingEnvelopeForKernel,
   getHandlingEventIdForKernel,
@@ -38,6 +38,7 @@ const eventSchedulers = new Map<string, ScheduleFunction>([
 export class EventQueue<WorkItem = EventVector> {
   private fsmState: FsmState = 'idle';
   private queue: WorkItem[] = [];
+  private queueHead = 0;
   private readonly eventHandler: (item: WorkItem) => void;
   private idleWaiters: Array<{
     resolve: () => void;
@@ -73,8 +74,9 @@ export class EventQueue<WorkItem = EventVector> {
   }
 
   purge(): void {
-    const dropped = this.queue;
+    const dropped = this.queue.slice(this.queueHead);
     this.queue = [];
+    this.queueHead = 0;
     if (dropped.length > 0) {
       this.onDrop(dropped, 'queue-dropped', new Error('[reflex] Event queue was purged.'));
     }
@@ -85,7 +87,7 @@ export class EventQueue<WorkItem = EventVector> {
   }
 
   getQueueLength(): number {
-    return this.queue.length;
+    return this.queue.length - this.queueHead;
   }
 
   /** Resolve at the next idle boundary, rejecting if queue processing failed. */
@@ -108,8 +110,9 @@ export class EventQueue<WorkItem = EventVector> {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    const dropped = this.queue;
+    const dropped = this.queue.slice(this.queueHead);
     this.queue = [];
+    this.queueHead = 0;
     this.fsmState = 'idle';
     const error = new Error('[reflex] Runtime disposed before its event queue became idle.');
     if (dropped.length > 0) this.onDrop(dropped, 'disposed', error);
@@ -149,7 +152,7 @@ export class EventQueue<WorkItem = EventVector> {
         action = () => this.pause(argument as ScheduleFunction);
         break;
       case 'running:finish-run':
-        if (this.queue.length === 0) {
+        if (this.getQueueLength() === 0) {
           nextState = 'idle';
           action = () => this.finishRun();
         } else {
@@ -182,15 +185,15 @@ export class EventQueue<WorkItem = EventVector> {
   }
 
   private processFirstEvent(): boolean {
-    const item = this.queue[0];
+    const item = this.queue[this.queueHead];
     if (!item) return true;
 
     try {
       this.eventHandler(item);
-      this.queue.shift();
+      this.consumeFirstEvent();
       return true;
     } catch (error: unknown) {
-      this.queue.shift();
+      this.consumeFirstEvent();
       this.runError ??= error;
       consoleLog('error', '[reflex] event processing exception:', error);
       return true;
@@ -202,9 +205,9 @@ export class EventQueue<WorkItem = EventVector> {
   }
 
   private runQueue(): void {
-    let remainingEvents = this.queue.length;
+    let remainingEvents = this.getQueueLength();
     while (remainingEvents > 0) {
-      const item = this.queue[0];
+      const item = this.queue[this.queueHead];
       if (!item) break;
 
       const scheduler = this.getScheduler(item);
@@ -239,6 +242,14 @@ export class EventQueue<WorkItem = EventVector> {
     this.settleIdle(error);
   }
 
+  private consumeFirstEvent(): void {
+    this.queueHead++;
+    if (this.queueHead >= 64 && this.queueHead * 2 >= this.queue.length) {
+      this.queue = this.queue.slice(this.queueHead);
+      this.queueHead = 0;
+    }
+  }
+
   private settleIdle(error?: unknown): void {
     const waiters = this.idleWaiters;
     this.idleWaiters = [];
@@ -254,12 +265,13 @@ function getEventQueue(runtime: RuntimeKernel): EventQueue<ExecutionEnvelope> {
   return (runtime.eventQueue ??= new EventQueue<ExecutionEnvelope>(
     (envelope) => executeEventEnvelopeForKernel(runtime, envelope),
     (envelopes, reason, error) => {
-      recordExecutionOutcomeForKernel(runtime, {
-        type: 'dropped',
-        envelopes: Object.freeze([...envelopes]),
-        reason,
-        error,
-      });
+      const observer = getDevelopmentExecutionObserverForKernel(runtime);
+      if (observer) {
+        const operations = envelopes.flatMap((envelope) =>
+          envelope.operation === undefined ? [] : [envelope.operation],
+        );
+        if (operations.length > 0) observer.dropped(operations, error);
+      }
       notifyRuntimeLifecycleForKernel(
         runtime,
         'onEventDropped',
@@ -273,7 +285,10 @@ function getEventQueue(runtime: RuntimeKernel): EventQueue<ExecutionEnvelope> {
 }
 
 /** @internal Dispatch an event asynchronously in one runtime. */
-export function dispatchForKernel(runtime: RuntimeKernel, event: DispatchVector): void {
+export function dispatchForKernel(
+  runtime: RuntimeKernel,
+  event: DispatchVector,
+): ExecutionEnvelope | undefined {
   if (isRuntimeDisposed(runtime)) return;
   if (!isEventVector(event)) {
     consoleLog('error', '[reflex] invalid dispatch event vector.');
@@ -290,32 +305,15 @@ export function dispatchForKernel(runtime: RuntimeKernel, event: DispatchVector)
     }
   }
 
-  const activeEffect = getActiveEffectExecutionForKernel(runtime);
-  const handlingEnvelope = getHandlingEnvelopeForKernel(runtime);
-  const envelope = createExecutionEnvelopeForKernel(
-    runtime,
-    event as EventVector,
-    activeEffect === undefined
-      ? handlingEnvelope === null
-        ? undefined
-        : {
-            operationId: handlingEnvelope.operationId,
-            eventInstanceId: handlingEnvelope.eventInstanceId,
-          }
-      : {
-          operationId: activeEffect.envelope.operationId,
-          eventInstanceId: activeEffect.envelope.eventInstanceId,
-          sourceEffectId: activeEffect.effectId,
-          sourceEffectIndex: activeEffect.effectIndex,
-        },
-  );
+  const envelope = createExecutionEnvelopeForKernel(runtime, event as EventVector);
   getEventQueue(runtime).push(envelope);
-  recordExecutionOutcomeForKernel(runtime, {
-    type: 'queued',
-    envelope,
-    committedRevision: getStateRevisionsForKernel(runtime).committedRevision,
-  });
+  if (envelope.operation)
+    getDevelopmentExecutionObserverForKernel(runtime)?.queued(
+      envelope.operation,
+      getStateRevisionsForKernel(runtime).committedRevision,
+    );
   notifyRuntimeLifecycleForKernel(runtime, 'onEventQueued', envelope.event);
+  return envelope;
 }
 
 /** @internal Take ownership of caller input before accepting it into a runtime queue. */
@@ -395,6 +393,28 @@ function cloneAcceptedEvent(event: DispatchVector): DispatchVector {
       cause: error,
     });
   }
+}
+
+/** @internal Construct optional development operation metadata only when observed. */
+export function createExecutionEnvelopeForKernel(
+  runtime: RuntimeKernel,
+  event: EventVector,
+): ExecutionEnvelope {
+  const observer = getDevelopmentExecutionObserverForKernel(runtime);
+  if (!observer) return Object.freeze({ event });
+
+  const activeEffect = getActiveEffectExecutionForKernel(runtime);
+  const handlingEnvelope = getHandlingEnvelopeForKernel(runtime);
+  const parent: DevelopmentExecutionParent | undefined = activeEffect?.envelope.operation
+    ? {
+        operation: activeEffect.envelope.operation,
+        sourceEffectId: activeEffect.effectId,
+        sourceEffectIndex: activeEffect.effectIndex,
+      }
+    : handlingEnvelope?.operation === undefined
+      ? undefined
+      : { operation: handlingEnvelope.operation };
+  return Object.freeze({ event, operation: observer.accept(event, parent) });
 }
 
 function getEventScheduler(event: EventVector): ScheduleFunction | undefined {

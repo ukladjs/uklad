@@ -4,6 +4,7 @@
  * plain produce and no patch tags exist anywhere.
  */
 import { waitForScheduled } from './test-utils';
+import { createReflexRuntime, getRuntimeKernelForTests } from '../runtime/runtime';
 import {
   clearGlobalInterceptors,
   disableTracing,
@@ -63,6 +64,23 @@ describe('Conditional patch generation', () => {
     await waitForScheduled();
 
     expect(getState().value).toBe(7);
+  });
+
+  it('does not allocate trace state while no trace consumer is attached', async () => {
+    const runtime = createReflexRuntime({
+      runtimeId: 'trace-free-hot-path',
+      initialState: { value: 0 },
+    });
+    runtime.regEvent('set-value', ({ draftState }, value) => {
+      draftState.value = value;
+    });
+
+    runtime.dispatch(['set-value', 3]);
+    await runtime.flush();
+
+    expect(runtime.getState().value).toBe(3);
+    expect(getRuntimeKernelForTests(runtime).tracing).toBeUndefined();
+    runtime.dispose();
   });
 
   it('should trace effects contributed by after interceptors', async () => {

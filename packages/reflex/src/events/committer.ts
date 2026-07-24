@@ -1,7 +1,11 @@
 import { getStateRevisionsForKernel, updateStateForKernel } from '../runtime/state';
 
 import type { RuntimeKernel } from '../runtime/kernel';
-import type { CommitOutcome, ExecutionEnvelope } from './outcomes';
+
+export interface CommitResult {
+  readonly status: 'committed' | 'unchanged' | 'skipped';
+  readonly committedRevision: number;
+}
 
 /**
  * Install the state candidate produced by an event runner.
@@ -12,28 +16,20 @@ import type { CommitOutcome, ExecutionEnvelope } from './outcomes';
  */
 export function commitTransitionForKernel(
   runtime: RuntimeKernel,
-  envelope: ExecutionEnvelope,
   candidateState: unknown,
-): CommitOutcome {
+): CommitResult {
   const before = getStateRevisionsForKernel(runtime).committedRevision;
   const committedRevision = updateStateForKernel(runtime, candidateState);
 
   return Object.freeze({
-    type: 'commit' as const,
-    envelope,
     status: committedRevision === before ? ('unchanged' as const) : ('committed' as const),
     committedRevision,
   });
 }
 
 /** @internal Record that an event did not produce a state candidate. */
-export function skipCommitForKernel(
-  runtime: RuntimeKernel,
-  envelope: ExecutionEnvelope,
-): CommitOutcome {
+export function skipCommitForKernel(runtime: RuntimeKernel): CommitResult {
   return Object.freeze({
-    type: 'commit' as const,
-    envelope,
     status: 'skipped' as const,
     committedRevision: getStateRevisionsForKernel(runtime).committedRevision,
   });

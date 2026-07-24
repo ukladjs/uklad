@@ -1,5 +1,5 @@
 import { consoleLog } from '../core/logging';
-import { mergeTraceForKernel, withTraceForKernel } from '../core/tracing';
+import { mergeOptionalTraceForKernel, withOptionalTraceForKernel } from '../core/tracing';
 import {
   beginRuntimeLifecycleEventForKernel,
   getRuntimeLifecycleTraceTagsForKernel,
@@ -9,12 +9,9 @@ import {
 import { getStateRevisionsForKernel } from '../runtime/state';
 import { commitTransitionForKernel, skipCommitForKernel } from './committer';
 import { executeEffectsForKernel } from './effect-executor';
-import {
-  createExecutionEnvelopeForKernel,
-  recordExecutionOutcomeForKernel,
-  type ExecutionEnvelope,
-  type TransitionOutcome,
-} from './outcomes';
+import type { ExecutionEnvelope } from './envelope';
+import { getDevelopmentExecutionObserverForKernel } from './execution-observer';
+import { createExecutionEnvelopeForKernel } from './router';
 import { runEventForKernel } from './runner';
 import { beginHandlingEventForKernel, endHandlingEventForKernel } from './runner';
 
@@ -34,41 +31,32 @@ export function executeEventEnvelopeForKernel(
   const acceptedRevision = getStateRevisionsForKernel(runtime).committedRevision;
 
   if (beginRuntimeLifecycleEventForKernel(runtime, event, acceptedRevision)) {
-    const transition: TransitionOutcome = Object.freeze({
-      type: 'transition' as const,
-      envelope,
-      status: 'aborted' as const,
-      previousState: undefined,
-      effects: Object.freeze([]),
-      invalidEffects: Object.freeze([]),
-    });
-    recordExecutionOutcomeForKernel(runtime, transition);
-    recordExecutionOutcomeForKernel(runtime, {
-      type: 'finished',
-      envelope,
-      status: 'rejected',
-    });
+    if (envelope.operation) {
+      const observer = getDevelopmentExecutionObserverForKernel(runtime);
+      observer?.transition(envelope.operation, 'aborted');
+      observer?.finished(envelope.operation, 'rejected');
+    }
     notifyRuntimeLifecycleForKernel(runtime, 'onEventFinished', event);
     return;
   }
 
-  recordExecutionOutcomeForKernel(runtime, {
-    type: 'started',
-    envelope,
-    committedRevision: acceptedRevision,
-  });
+  if (envelope.operation)
+    getDevelopmentExecutionObserverForKernel(runtime)?.started(
+      envelope.operation,
+      acceptedRevision,
+    );
 
   let error: unknown;
   let finishedStatus: 'completed' | 'failed' = 'completed';
   beginHandlingEventForKernel(runtime, envelope);
   try {
-    withTraceForKernel(
+    withOptionalTraceForKernel(
       runtime,
-      {
+      () => ({
         operation: event[0],
         opType: 'event',
         tags: { event, ...getRuntimeLifecycleTraceTagsForKernel(runtime) },
-      },
+      }),
       () => {
         const result = runEventForKernel(runtime, event);
         let transitionError = result.error;
@@ -81,58 +69,58 @@ export function executeEventEnvelopeForKernel(
             eventV: event,
           };
           reportRuntimeLifecycleErrorForKernel(runtime, 'missing-handler', missingHandlerError);
-          mergeTraceForKernel(runtime, { tags: { error: traceError } });
+          mergeOptionalTraceForKernel(runtime, () => ({ error: traceError }));
           transitionError = missingHandlerError;
         }
 
-        const transition: TransitionOutcome = Object.freeze({
-          type: 'transition' as const,
-          envelope,
-          status: result.status,
-          previousState: result.previousState,
-          ...(result.candidateState === undefined ? {} : { candidateState: result.candidateState }),
-          effects: result.effects,
-          invalidEffects: result.invalidEffects,
-          ...(transitionError === undefined ? {} : { error: transitionError }),
-        });
-        recordExecutionOutcomeForKernel(runtime, transition);
+        if (envelope.operation)
+          getDevelopmentExecutionObserverForKernel(runtime)?.transition(
+            envelope.operation,
+            result.status,
+            transitionError,
+          );
 
         if (result.status !== 'completed' || result.candidateState === undefined) {
-          recordExecutionOutcomeForKernel(runtime, skipCommitForKernel(runtime, envelope));
+          const commit = skipCommitForKernel(runtime);
+          if (envelope.operation)
+            getDevelopmentExecutionObserverForKernel(runtime)?.committed(
+              envelope.operation,
+              commit.status,
+              commit.committedRevision,
+            );
           return;
         }
 
-        recordExecutionOutcomeForKernel(
-          runtime,
-          commitTransitionForKernel(runtime, envelope, result.candidateState),
-        );
-        for (const [index, invalidEffects] of result.invalidEffects.entries()) {
-          executeEffectsForKernel(runtime, envelope, invalidEffects, -1 - index);
-        }
+        const commit = commitTransitionForKernel(runtime, result.candidateState);
+        if (envelope.operation)
+          getDevelopmentExecutionObserverForKernel(runtime)?.committed(
+            envelope.operation,
+            commit.status,
+            commit.committedRevision,
+          );
+        for (const invalidEffects of result.invalidEffects)
+          executeEffectsForKernel(runtime, envelope, invalidEffects);
         executeEffectsForKernel(runtime, envelope, result.effects);
       },
     );
   } catch (caughtError: unknown) {
     error = caughtError;
     finishedStatus = 'failed';
-    recordExecutionOutcomeForKernel(runtime, {
-      type: 'transition',
-      envelope,
-      status: 'failed',
-      previousState: undefined,
-      effects: Object.freeze([]),
-      invalidEffects: Object.freeze([]),
-      error: caughtError,
-    });
+    if (envelope.operation)
+      getDevelopmentExecutionObserverForKernel(runtime)?.transition(
+        envelope.operation,
+        'failed',
+        caughtError,
+      );
     throw caughtError;
   } finally {
     endHandlingEventForKernel(runtime);
-    recordExecutionOutcomeForKernel(runtime, {
-      type: 'finished',
-      envelope,
-      status: finishedStatus,
-      ...(error === undefined ? {} : { error }),
-    });
+    if (envelope.operation)
+      getDevelopmentExecutionObserverForKernel(runtime)?.finished(
+        envelope.operation,
+        finishedStatus,
+        error,
+      );
     notifyRuntimeLifecycleForKernel(runtime, 'onEventFinished', event, error);
   }
 }

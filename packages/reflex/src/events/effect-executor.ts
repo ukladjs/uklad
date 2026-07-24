@@ -1,7 +1,11 @@
 import { consoleLog } from '../core/logging';
-import { mergeTraceForKernel } from '../core/tracing';
+import { mergeOptionalTraceForKernel } from '../core/tracing';
 import { isEventVector } from '../core/validation';
-import { notifyRuntimeLifecycleForKernel } from '../runtime/lifecycle';
+import {
+  hasRuntimeLifecycleObservers,
+  notifyRuntimeLifecycleForKernel,
+  type RuntimeLifecycleEffect,
+} from '../runtime/lifecycle';
 import { getHandlerForKernel } from '../runtime/handlers';
 import {
   createRuntimeStateKey,
@@ -9,11 +13,7 @@ import {
   type RuntimeKernel,
 } from '../runtime/kernel';
 import { DISPATCH, DISPATCH_LATER } from './effects';
-import {
-  recordExecutionOutcomeForKernel,
-  type EffectOutcome,
-  type ExecutionEnvelope,
-} from './outcomes';
+import type { ExecutionEnvelope } from './envelope';
 
 import type { DispatchLaterEffect, TraceErrorTag } from '../types';
 
@@ -63,25 +63,22 @@ export function executeEffectsForKernel(
   runtime: RuntimeKernel,
   envelope: ExecutionEnvelope,
   effects: unknown,
-  invalidEffectIndex = -1,
-): readonly EffectOutcome[] {
+): void {
   if (!Array.isArray(effects)) {
     consoleLog('warn', `[reflex] effects expects a vector, but was given ${typeof effects}`);
-    const outcome = createEffectOutcome(
-      envelope,
-      invalidEffectIndex,
+    reportEffect(
+      runtime,
       '<invalid>',
       effects,
+      -1,
       'invalid',
       Date.now(),
       new Error('[reflex] effects expects a vector.'),
     );
-    publishEffectOutcome(runtime, outcome);
-    return Object.freeze([outcome]);
+    return;
   }
 
   notifyRuntimeLifecycleForKernel(runtime, 'onEffects', effects);
-  const outcomes: EffectOutcome[] = [];
   const effectErrors: TraceErrorTag[] = [];
 
   for (const [effectIndex, effect] of effects.entries()) {
@@ -92,17 +89,15 @@ export function executeEffectsForKernel(
       typeof effect[0] !== 'string'
     ) {
       consoleLog('warn', '[reflex] invalid effect in effects:', effect);
-      const outcome = createEffectOutcome(
-        envelope,
-        effectIndex,
+      reportEffect(
+        runtime,
         '<invalid>',
         effect,
+        effectIndex,
         'invalid',
         Date.now(),
         new Error('[reflex] Invalid effect vector.'),
       );
-      outcomes.push(outcome);
-      publishEffectOutcome(runtime, outcome);
       continue;
     }
 
@@ -113,17 +108,15 @@ export function executeEffectsForKernel(
         'warn',
         `[reflex] in 'effects' found ${effectId} which has no associated handler. Ignoring.`,
       );
-      const outcome = createEffectOutcome(
-        envelope,
-        effectIndex,
+      reportEffect(
+        runtime,
         effectId,
         value,
+        effectIndex,
         'unhandled',
         Date.now(),
         new Error(`[reflex] No effect handler is registered for '${effectId}'.`),
       );
-      outcomes.push(outcome);
-      publishEffectOutcome(runtime, outcome);
       continue;
     }
 
@@ -137,11 +130,14 @@ export function executeEffectsForKernel(
       const invalidDispatch =
         (effectId === DISPATCH && !isEventVector(value)) ||
         (effectId === DISPATCH_LATER && !isValidDispatchLaterEffect(value));
-      const outcome = createEffectOutcome(
-        envelope,
-        effectIndex,
+      const error = invalidDispatch
+        ? new Error(`[reflex] Invalid ${effectId} effect payload.`)
+        : undefined;
+      reportEffect(
+        runtime,
         effectId,
         value,
+        effectIndex,
         invalidDispatch
           ? 'failed'
           : effectId === DISPATCH
@@ -150,10 +146,8 @@ export function executeEffectsForKernel(
               ? 'detached'
               : 'returned',
         startedAtMs,
-        invalidDispatch ? new Error(`[reflex] Invalid ${effectId} effect payload.`) : undefined,
+        error,
       );
-      outcomes.push(outcome);
-      publishEffectOutcome(runtime, outcome);
     } catch (error: unknown) {
       consoleLog('error', `[reflex] error in effects for ${effectId}:`, error);
       effectErrors.push({
@@ -164,54 +158,32 @@ export function executeEffectsForKernel(
           ? { stack: error.stack }
           : {}),
       });
-      const outcome = createEffectOutcome(
-        envelope,
-        effectIndex,
-        effectId,
-        value,
-        'failed',
-        startedAtMs,
-        error,
-      );
-      outcomes.push(outcome);
-      publishEffectOutcome(runtime, outcome);
+      reportEffect(runtime, effectId, value, effectIndex, 'failed', startedAtMs, error);
     }
   }
 
-  if (effectErrors.length > 0) mergeTraceForKernel(runtime, { tags: { effectErrors } });
-  return Object.freeze(outcomes);
+  if (effectErrors.length > 0) mergeOptionalTraceForKernel(runtime, () => ({ effectErrors }));
 }
 
-function createEffectOutcome(
-  envelope: ExecutionEnvelope,
-  effectIndex: number,
-  effectId: string,
+/** Report optional lifecycle facts without coupling effect execution to DevTools operations. */
+function reportEffect(
+  runtime: RuntimeKernel,
+  type: string,
   value: unknown,
-  status: EffectOutcome['status'],
+  index: number,
+  status: RuntimeLifecycleEffect['status'],
   startedAtMs: number,
   error?: unknown,
-): EffectOutcome {
-  return Object.freeze({
-    type: 'effect' as const,
-    envelope,
-    effectIndex,
-    effectInstanceId: `${envelope.eventInstanceId}:fx:${effectIndex}`,
-    effectId,
+): void {
+  if (!hasRuntimeLifecycleObservers(runtime)) return;
+  notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
+    type,
     value,
+    index,
     status,
     startedAtMs,
+    durationMs: Math.max(0, Date.now() - startedAtMs),
     ...(error === undefined ? {} : { error }),
-  });
-}
-
-function publishEffectOutcome(runtime: RuntimeKernel, outcome: EffectOutcome): void {
-  recordExecutionOutcomeForKernel(runtime, outcome);
-  notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
-    type: outcome.effectId,
-    value: outcome.value,
-    status: outcome.status,
-    startedAtMs: outcome.startedAtMs,
-    ...(outcome.error === undefined ? {} : { error: outcome.error }),
   });
 }
 

@@ -3,7 +3,7 @@ import { produce, produceWithPatches, type Draft } from 'immer';
 import { IS_DEV } from '../core/environment';
 import { ensurePatchesEnabled } from '../core/immer';
 import { consoleLog } from '../core/logging';
-import { isTraceEnabledForKernel, mergeTraceForKernel } from '../core/tracing';
+import { isTraceEnabledForKernel, mergeOptionalTraceForKernel } from '../core/tracing';
 import { getInterceptorsForKernel } from '../runtime/event-metadata';
 import {
   getHandlerForKernel,
@@ -23,7 +23,7 @@ import { getStateForKernel } from '../runtime/state';
 import { getGlobalInterceptorsForKernel } from './global-interceptors';
 import { executeForKernel } from './interceptors';
 
-import type { ExecutionEnvelope } from './outcomes';
+import type { ExecutionEnvelope } from './envelope';
 
 import type {
   Context,
@@ -203,7 +203,7 @@ function createEventHandlerInterceptor(
           patches,
         });
         if (tracingEnabled)
-          mergeTraceForKernel(runtime, { tags: { patches, reversePatches, effects } });
+          mergeOptionalTraceForKernel(runtime, () => ({ patches, reversePatches, effects }));
       } else {
         newState = produce(context.previousState as State, recipe);
       }

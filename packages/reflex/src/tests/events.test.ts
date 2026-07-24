@@ -136,7 +136,7 @@ describe('regEvent', () => {
 
       dispatch(['effectsTest']);
 
-      // The dispatched effect runs in a later queue cycle, so poll both outcomes.
+      // The dispatched effect runs in a later queue cycle, so wait for both events.
       await new Promise<void>((resolve) => {
         let resolved = false;
         const timeouts: ReturnType<typeof setTimeout>[] = [];

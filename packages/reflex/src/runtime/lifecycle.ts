@@ -1,4 +1,9 @@
-import { createRuntimeStateKey, getOrCreateRuntimeState, type RuntimeKernel } from './kernel';
+import {
+  createRuntimeStateKey,
+  getOrCreateRuntimeState,
+  getRuntimeState,
+  type RuntimeKernel,
+} from './kernel';
 
 import type { EventVector, SubVector } from '../types';
 
@@ -20,8 +25,11 @@ export type RuntimeLifecycleEffectStatus =
 export interface RuntimeLifecycleEffect {
   readonly type: string;
   readonly value: unknown;
+  /** Position within the effect vector; -1 denotes an invalid effect collection. */
+  readonly index: number;
   readonly status: RuntimeLifecycleEffectStatus;
   readonly startedAtMs: number;
+  readonly durationMs: number;
   readonly error?: unknown;
 }
 
@@ -40,7 +48,7 @@ export interface RuntimeLifecyclePatch {
 /**
  * One subscription that was recomputed while a published STATE generation
  * settled. This is deliberately a snapshot rather than a runtime node so
- * optional integrations (such as operation receipts) cannot retain or mutate
+ * optional integrations (such as development telemetry) cannot retain or mutate
  * the subscription graph.
  */
 export interface RuntimeLifecycleSubscription {
@@ -92,9 +100,14 @@ export interface RuntimeLifecycleObserver {
 const LIFECYCLE_OBSERVERS = createRuntimeStateKey<Set<RuntimeLifecycleObserver>>(
   'reflex.lifecycle-observers',
 );
+const EMPTY_TRACE_TAGS: Readonly<Record<string, unknown>> = Object.freeze({});
 
 function getObservers(runtime: RuntimeKernel): Set<RuntimeLifecycleObserver> {
   return getOrCreateRuntimeState(runtime, LIFECYCLE_OBSERVERS, () => new Set());
+}
+
+function peekObservers(runtime: RuntimeKernel): Set<RuntimeLifecycleObserver> | undefined {
+  return getRuntimeState(runtime, LIFECYCLE_OBSERVERS);
 }
 
 /** @internal Register an observer without exposing the kernel to it. */
@@ -109,7 +122,7 @@ export function observeRuntimeLifecycleForKernel(
 
 /** @internal Return whether an optional lifecycle integration is installed. */
 export function hasRuntimeLifecycleObservers(runtime: RuntimeKernel): boolean {
-  return getObservers(runtime).size > 0;
+  return (peekObservers(runtime)?.size ?? 0) > 0;
 }
 
 /** @internal Notify optional runtime integrations. Observer failures are isolated. */
@@ -118,7 +131,10 @@ export function notifyRuntimeLifecycleForKernel<K extends keyof RuntimeLifecycle
   method: K,
   ...args: Parameters<NonNullable<RuntimeLifecycleObserver[K]>>
 ): void {
-  for (const observer of getObservers(runtime)) {
+  const observers = peekObservers(runtime);
+  if (!observers) return;
+
+  for (const observer of observers) {
     try {
       const callback = observer[method] as ((...values: unknown[]) => void) | undefined;
       callback?.(...args);
@@ -135,7 +151,10 @@ export function beginRuntimeLifecycleEventForKernel(
   committedRevision: number,
 ): boolean {
   let rejected = false;
-  for (const observer of getObservers(runtime)) {
+  const observers = peekObservers(runtime);
+  if (!observers) return false;
+
+  for (const observer of observers) {
     try {
       rejected = observer.onEventStarted?.(event, committedRevision) === true || rejected;
     } catch {
@@ -152,7 +171,10 @@ export function reportRuntimeLifecycleErrorForKernel(
   error: unknown,
 ): boolean {
   let shouldAbort = false;
-  for (const observer of getObservers(runtime)) {
+  const observers = peekObservers(runtime);
+  if (!observers) return false;
+
+  for (const observer of observers) {
     try {
       shouldAbort = observer.onEventError?.(kind, error) === true || shouldAbort;
     } catch {
@@ -166,8 +188,11 @@ export function reportRuntimeLifecycleErrorForKernel(
 export function getRuntimeLifecycleTraceTagsForKernel(
   runtime: RuntimeKernel,
 ): Readonly<Record<string, unknown>> {
+  const observers = peekObservers(runtime);
+  if (!observers) return EMPTY_TRACE_TAGS;
+
   const tags: Record<string, unknown> = {};
-  for (const observer of getObservers(runtime)) {
+  for (const observer of observers) {
     try {
       Object.assign(tags, observer.getTraceTags?.());
     } catch {

@@ -50,14 +50,14 @@ export interface ReflexInspector {
   subscribeTraces(callback: ReflexTraceCallback): () => void;
   dispatch(event: [string, ...any[]]): void;
   evaluateSubscription(query: [string, ...any[]]): unknown;
-  /** Optional internal port exposed by Reflex inspectors for operation receipts. */
+  /** Optional internal port exposed by Reflex inspectors for operation snapshots. */
   getOperationRuntime?(): DevtoolsOperationRuntime;
-  /** Optional retained-operation receipt capability enabled through DevtoolsConfig. */
+  /** Optional runtime-owned operation snapshot capability. */
   readonly operationApiVersion?: 1;
-  /** Exact runtime-instance identity for retained operation receipts. */
+  /** Exact runtime-instance identity for operation snapshots. */
   readonly runtimeInstanceId?: string;
-  executeEvent?(event: [string, ...any[]], options?: unknown): Promise<unknown>;
-  getOperation?(lookup: unknown): unknown;
+  executeEvent?(event: [string, ...any[]]): Promise<unknown>;
+  getOperation?(operationId: string): unknown;
 }
 
 /** A Reflex runtime capable of creating an inspector for DevTools. */

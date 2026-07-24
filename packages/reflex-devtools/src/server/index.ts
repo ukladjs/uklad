@@ -1,28 +1,12 @@
-import express, {
-  type NextFunction,
-  type Request,
-  type Response,
-} from 'express';
-import {
-  createServer,
-  type IncomingMessage,
-  type Server as HttpServer,
-} from 'node:http';
+import express, { type NextFunction, type Request, type Response } from 'express';
+import { createServer, type IncomingMessage, type Server as HttpServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StorageRetentionError, TraceStorage } from './storage.js';
-import {
-  mapSetReflexReplacer,
-  reflexReplacer,
-  reflexReviver,
-} from '../serialization.js';
-import {
-  createKeyRedactor,
-  redactDevtoolsEvent,
-  type DevtoolsRedaction,
-} from '../redaction.js';
+import { mapSetReflexReplacer, reflexReplacer, reflexReviver } from '../serialization.js';
+import { createKeyRedactor, redactDevtoolsEvent, type DevtoolsRedaction } from '../redaction.js';
 import {
   REFLEX_DEVTOOLS_CLIENT_HEADER,
   REFLEX_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES,
@@ -54,10 +38,7 @@ import {
   type SessionTokens,
 } from './security.js';
 
-export {
-  createKeyRedactor,
-  DEFAULT_SENSITIVE_KEYS,
-} from '../redaction.js';
+export { createKeyRedactor, DEFAULT_SENSITIVE_KEYS } from '../redaction.js';
 export type {
   DevtoolsRedaction,
   KeyRedactorOptions,
@@ -88,13 +69,7 @@ export interface AuditRecord {
   readonly action: 'dispatch' | 'restore';
   readonly capability: 'dispatch' | 'restore';
   readonly target?: string;
-  readonly status:
-    | 'accepted'
-    | 'denied'
-    | 'succeeded'
-    | 'failed'
-    | 'effects-failed'
-    | 'unknown';
+  readonly status: 'accepted' | 'denied' | 'succeeded' | 'failed' | 'effects-failed' | 'unknown';
   readonly reason?: string;
   readonly traceId?: number;
   readonly durationMs?: number;
@@ -146,7 +121,7 @@ interface PendingDispatch {
   readonly startedAt: number;
   readonly target: string;
   readonly client: string;
-  readonly expectsOperationReceipt: boolean;
+  readonly expectsOperationSnapshot: boolean;
 }
 
 interface PendingSubEval {
@@ -205,10 +180,7 @@ type RuntimeSelectionResult =
   | {
       readonly ok: false;
       readonly status: 400 | 404 | 409;
-      readonly code:
-        | 'INVALID_RUNTIME_ID'
-        | 'RUNTIME_NOT_FOUND'
-        | 'RUNTIME_SELECTION_REQUIRED';
+      readonly code: 'INVALID_RUNTIME_ID' | 'RUNTIME_NOT_FOUND' | 'RUNTIME_SELECTION_REQUIRED';
       readonly error: string;
     };
 
@@ -234,11 +206,13 @@ const MAX_DIAGNOSTIC_KEY_LENGTH = 4096;
 const MAX_RUNTIME_NAME_LENGTH = 256;
 
 function isRecord(value: unknown): value is Record<string, any> {
-  return value !== null
-    && typeof value === 'object'
-    && !Array.isArray(value)
-    && !(value instanceof Map)
-    && !(value instanceof Set);
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    !(value instanceof Map) &&
+    !(value instanceof Set)
+  );
 }
 
 function boundedInteger(
@@ -248,14 +222,8 @@ function boundedInteger(
   maximum: number,
 ): number {
   const resolved = value ?? fallback;
-  if (
-    !Number.isInteger(resolved)
-    || resolved < 1
-    || resolved > maximum
-  ) {
-    throw new Error(
-      `[Reflex Devtools] ${name} must be an integer from 1 to ${maximum}.`,
-    );
+  if (!Number.isInteger(resolved) || resolved < 1 || resolved > maximum) {
+    throw new Error(`[Reflex Devtools] ${name} must be an integer from 1 to ${maximum}.`);
   }
   return resolved;
 }
@@ -323,7 +291,7 @@ export class DevtoolsServer {
       if (!config.allowRemote) {
         throw new Error(
           `[Reflex Devtools] Refusing non-loopback host "${host}". ` +
-          'Use allowRemote only with explicit credentials, Host/Origin allowlists, and a trusted TLS boundary.',
+            'Use allowRemote only with explicit credentials, Host/Origin allowlists, and a trusted TLS boundary.',
         );
       }
       if (!config.allowedHosts?.length) {
@@ -348,12 +316,7 @@ export class DevtoolsServer {
     this.config = {
       ...config,
       host,
-      maxTraces: boundedInteger(
-        'maxTraces',
-        config.maxTraces,
-        1000,
-        100_000,
-      ),
+      maxTraces: boundedInteger('maxTraces', config.maxTraces, 1000, 100_000),
       enableMCP: config.enableMCP ?? false,
       maxControlPayloadBytes: boundedInteger(
         'maxControlPayloadBytes',
@@ -385,18 +348,8 @@ export class DevtoolsServer {
         DEFAULT_MAX_PENDING_WEBSOCKETS,
         1024,
       ),
-      maxUiClients: boundedInteger(
-        'maxUiClients',
-        config.maxUiClients,
-        8,
-        64,
-      ),
-      maxRuntimes: boundedInteger(
-        'maxRuntimes',
-        config.maxRuntimes,
-        DEFAULT_MAX_RUNTIMES,
-        256,
-      ),
+      maxUiClients: boundedInteger('maxUiClients', config.maxUiClients, 8, 64),
+      maxRuntimes: boundedInteger('maxRuntimes', config.maxRuntimes, DEFAULT_MAX_RUNTIMES, 256),
     };
     this.capabilities = uniqueCapabilities(config.capabilities);
     this.tokens = createSessionTokens(config.tokens);
@@ -439,10 +392,7 @@ export class DevtoolsServer {
 
     this.app = express();
     this.app.disable('x-powered-by');
-    this.server = createServer(
-      { maxHeaderSize: 16 * 1024 },
-      this.app,
-    );
+    this.server = createServer({ maxHeaderSize: 16 * 1024 }, this.app);
     this.server.requestTimeout = 15_000;
     this.server.headersTimeout = 10_000;
     this.server.keepAliveTimeout = 5_000;
@@ -453,18 +403,14 @@ export class DevtoolsServer {
       maxPayload: this.config.maxRuntimePayloadBytes,
       perMessageDeflate: false,
       handleProtocols: (protocols) =>
-        protocols.has(REFLEX_DEVTOOLS_WS_PROTOCOL)
-          ? REFLEX_DEVTOOLS_WS_PROTOCOL
-          : false,
+        protocols.has(REFLEX_DEVTOOLS_WS_PROTOCOL) ? REFLEX_DEVTOOLS_WS_PROTOCOL : false,
     });
     this.uiWss = new WebSocketServer({
       noServer: true,
       maxPayload: this.config.maxControlPayloadBytes,
       perMessageDeflate: false,
       handleProtocols: (protocols) =>
-        protocols.has(REFLEX_DEVTOOLS_WS_PROTOCOL)
-          ? REFLEX_DEVTOOLS_WS_PROTOCOL
-          : false,
+        protocols.has(REFLEX_DEVTOOLS_WS_PROTOCOL) ? REFLEX_DEVTOOLS_WS_PROTOCOL : false,
     });
 
     this.setupMiddleware();
@@ -474,24 +420,14 @@ export class DevtoolsServer {
 
   private setupMiddleware(): void {
     this.app.use((req, res, next) => {
-      res.setHeader(
-        'Reflex-DevTools-Protocol-Version',
-        String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
-      );
+      res.setHeader('Reflex-DevTools-Protocol-Version', String(REFLEX_DEVTOOLS_PROTOCOL_VERSION));
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Referrer-Policy', 'no-referrer');
       res.setHeader('X-Frame-Options', 'DENY');
       res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
       res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-      res.setHeader(
-        'Permissions-Policy',
-        'camera=(), microphone=(), geolocation=(), payment=()',
-      );
-      if (
-        req.path.startsWith('/api/')
-        || req.path.startsWith('/auth/')
-        || req.path === '/event'
-      ) {
+      res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+      if (req.path.startsWith('/api/') || req.path.startsWith('/auth/') || req.path === '/event') {
         res.setHeader('Cache-Control', 'no-store');
       }
       next();
@@ -533,11 +469,13 @@ export class DevtoolsServer {
       }
 
       const origin = req.headers.origin;
-      if (!isAllowedOrigin(
-        origin,
-        this.allowedOrigins,
-        isLoopbackHost(this.config.host) ? req.headers.host : undefined,
-      )) {
+      if (
+        !isAllowedOrigin(
+          origin,
+          this.allowedOrigins,
+          isLoopbackHost(this.config.host) ? req.headers.host : undefined,
+        )
+      ) {
         res.status(403).json({
           success: false,
           code: 'ORIGIN_NOT_ALLOWED',
@@ -550,20 +488,17 @@ export class DevtoolsServer {
       res.setHeader(
         'Content-Security-Policy',
         "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; " +
-        "object-src 'none'; form-action 'none'; worker-src 'none'; " +
-        "script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-        `img-src 'self' data:; connect-src 'self' ` +
-        `ws://${requestHost} wss://${requestHost}`,
+          "object-src 'none'; form-action 'none'; worker-src 'none'; " +
+          "script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+          `img-src 'self' data:; connect-src 'self' ` +
+          `ws://${requestHost} wss://${requestHost}`,
       );
 
       if (origin) {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Vary', 'Origin');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader(
-          'Access-Control-Expose-Headers',
-          'Reflex-DevTools-Protocol-Version',
-        );
+        res.setHeader('Access-Control-Expose-Headers', 'Reflex-DevTools-Protocol-Version');
         res.setHeader(
           'Access-Control-Allow-Headers',
           [
@@ -602,10 +537,7 @@ export class DevtoolsServer {
       this.requireJsonContentType,
       jsonBodyParser(8 * 1024),
       (req: Request, res: Response) => {
-        if (
-          !isLoopbackHost(this.config.host)
-          || !isLoopbackAddress(req.socket.remoteAddress)
-        ) {
+        if (!isLoopbackHost(this.config.host) || !isLoopbackAddress(req.socket.remoteAddress)) {
           res.status(403).json({
             success: false,
             code: 'LOCAL_BOOTSTRAP_ONLY',
@@ -633,8 +565,7 @@ export class DevtoolsServer {
           return;
         }
         if (origin && role === 'ui') {
-          const sameOrigin = new URL(origin).host.toLowerCase()
-            === req.headers.host?.toLowerCase();
+          const sameOrigin = new URL(origin).host.toLowerCase() === req.headers.host?.toLowerCase();
           if (!sameOrigin && !this.allowedOrigins.has(origin)) {
             res.status(403).json({
               success: false,
@@ -649,120 +580,100 @@ export class DevtoolsServer {
           success: true,
           role,
           token: this.tokens[role],
-          capabilities: role === 'runtime'
-            ? []
-            : [...this.capabilities],
+          capabilities: role === 'runtime' ? [] : [...this.capabilities],
           protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
         });
       },
     );
 
-    this.app.get(
-      '/api/status',
-      this.authenticateHttp('mcp'),
-      (req: Request, res: Response) => {
-        const runtime = this.selectRuntimeForHttp(req, res, 'query');
-        if (!runtime) return;
-        const connected = this.isRuntimeConnected(runtime);
-        const runtimeInfo = runtime.storage?.getRuntimeInfo() ?? null;
-        const handlerKeys = runtime.storage?.getHandlerKeys() ?? null;
-        const auth = res.locals.auth as AuthContext;
+    this.app.get('/api/status', this.authenticateHttp('mcp'), (req: Request, res: Response) => {
+      const runtime = this.selectRuntimeForHttp(req, res, 'query');
+      if (!runtime) return;
+      const connected = this.isRuntimeConnected(runtime);
+      const runtimeInfo = runtime.storage?.getRuntimeInfo() ?? null;
+      const handlerKeys = runtime.storage?.getHandlerKeys() ?? null;
+      const auth = res.locals.auth as AuthContext;
 
-        res.json({
-          success: true,
-          mcpEnabled: this.config.enableMCP,
-          appConnected: connected,
-          connectedApps: this.connectedRuntimes().length,
-          connectedUIs: this.uiClients.size,
-          runtimeId: runtime.runtimeId,
-          runtimeName: runtime.runtimeName,
-          selectedRuntimeId: runtime.runtimeId,
-          runtimes: this.runtimeSummaries(),
-          sessionEpoch: runtime.sessionEpoch,
-          runtime: runtimeInfo?.runtime ?? null,
-          effectMode: runtimeInfo?.effectMode ?? null,
-          effects: runtimeInfo?.effects ?? null,
-          tracing: runtimeInfo?.tracing ?? null,
-          handlers: handlerKeys
-            ? {
-                event: handlerKeys.event.length,
-                fx: handlerKeys.fx.length,
-                cofx: handlerKeys.cofx.length,
-                sub: handlerKeys.sub.length,
-              }
-            : null,
-          stateAvailable:
-            runtime.storage ? runtime.storage.getState() !== null : false,
-          traceCount: runtime.storage?.getStats().totalTraces ?? 0,
-          capabilities: [...auth.capabilities],
-          readOnly:
-            !auth.capabilities.has('dispatch')
-            && !auth.capabilities.has('restore'),
-          protocol: {
-            version: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
-            runtimeVersion:
-              runtime.metadata?.protocolVersion ?? null,
-            inspectorApiVersion:
-              runtime.metadata?.inspectorApiVersion ?? null,
-            operationApiVersion:
-              runtime.metadata?.operationApiVersion ?? null,
-          },
-          operations: runtime.metadata?.operationApiVersion === 1
+      res.json({
+        success: true,
+        mcpEnabled: this.config.enableMCP,
+        appConnected: connected,
+        connectedApps: this.connectedRuntimes().length,
+        connectedUIs: this.uiClients.size,
+        runtimeId: runtime.runtimeId,
+        runtimeName: runtime.runtimeName,
+        selectedRuntimeId: runtime.runtimeId,
+        runtimes: this.runtimeSummaries(),
+        sessionEpoch: runtime.sessionEpoch,
+        runtime: runtimeInfo?.runtime ?? null,
+        effectMode: runtimeInfo?.effectMode ?? null,
+        effects: runtimeInfo?.effects ?? null,
+        tracing: runtimeInfo?.tracing ?? null,
+        handlers: handlerKeys
+          ? {
+              event: handlerKeys.event.length,
+              fx: handlerKeys.fx.length,
+              cofx: handlerKeys.cofx.length,
+              sub: handlerKeys.sub.length,
+            }
+          : null,
+        stateAvailable: runtime.storage ? runtime.storage.getState() !== null : false,
+        traceCount: runtime.storage?.getStats().totalTraces ?? 0,
+        capabilities: [...auth.capabilities],
+        readOnly: !auth.capabilities.has('dispatch') && !auth.capabilities.has('restore'),
+        protocol: {
+          version: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+          runtimeVersion: runtime.metadata?.protocolVersion ?? null,
+          inspectorApiVersion: runtime.metadata?.inspectorApiVersion ?? null,
+          operationApiVersion: runtime.metadata?.operationApiVersion ?? null,
+        },
+        operations:
+          runtime.metadata?.operationApiVersion === 1
             ? {
                 available: true,
                 runtimeInstanceId: runtime.metadata.runtimeInstanceId,
               }
             : { available: false },
-          security: {
-            authenticated: true,
-            loopbackOnly: isLoopbackHost(this.config.host),
-            browserOrigins: 'same-origin-or-explicit',
-            redactionEnabled: this.redaction !== undefined,
-            auditEnabled: true,
-          },
-        });
-      },
-    );
+        security: {
+          authenticated: true,
+          loopbackOnly: isLoopbackHost(this.config.host),
+          browserOrigins: 'same-origin-or-explicit',
+          redactionEnabled: this.redaction !== undefined,
+          auditEnabled: true,
+        },
+      });
+    });
 
-    this.app.get(
-      '/api/traces',
-      this.authenticateHttp('mcp', 'inspect'),
-      (req, res) => {
-        const runtime = this.selectRuntimeForHttp(req, res, 'query');
-        if (!runtime || !this.requireStorage(runtime, res)) return;
-        try {
-          const rawLimit = req.query.limit;
-          const limit = rawLimit === undefined
+    this.app.get('/api/traces', this.authenticateHttp('mcp', 'inspect'), (req, res) => {
+      const runtime = this.selectRuntimeForHttp(req, res, 'query');
+      if (!runtime || !this.requireStorage(runtime, res)) return;
+      try {
+        const rawLimit = req.query.limit;
+        const limit =
+          rawLimit === undefined
             ? 50
             : /^\d+$/.test(String(rawLimit))
               ? Number(rawLimit)
               : Number.NaN;
-          if (
-            !Number.isInteger(limit)
-            || limit < 1
-            || limit > MAX_TRACE_QUERY_LIMIT
-          ) {
-            res.status(400).json({
-              success: false,
-              error: `limit must be an integer from 1 to ${MAX_TRACE_QUERY_LIMIT}`,
-            });
-            return;
-          }
-          const minDuration = req.query.minDuration === undefined
-            ? undefined
-            : Number(req.query.minDuration);
-          if (
-            minDuration !== undefined
-            && (!Number.isFinite(minDuration) || minDuration < 0)
-          ) {
-            res.status(400).json({
-              success: false,
-              error: 'minDuration must be a non-negative number',
-            });
-            return;
-          }
+        if (!Number.isInteger(limit) || limit < 1 || limit > MAX_TRACE_QUERY_LIMIT) {
+          res.status(400).json({
+            success: false,
+            error: `limit must be an integer from 1 to ${MAX_TRACE_QUERY_LIMIT}`,
+          });
+          return;
+        }
+        const minDuration =
+          req.query.minDuration === undefined ? undefined : Number(req.query.minDuration);
+        if (minDuration !== undefined && (!Number.isFinite(minDuration) || minDuration < 0)) {
+          res.status(400).json({
+            success: false,
+            error: 'minDuration must be a non-negative number',
+          });
+          return;
+        }
 
-          const traces = runtime.storage!.getTraces({
+        const traces = runtime
+          .storage!.getTraces({
             limit,
             eventFilter:
               typeof req.query.eventFilter === 'string'
@@ -770,10 +681,9 @@ export class DevtoolsServer {
                 : undefined,
             minDuration,
             opType:
-              typeof req.query.opType === 'string'
-                ? req.query.opType.slice(0, 64)
-                : undefined,
-          }).map((trace) => ({
+              typeof req.query.opType === 'string' ? req.query.opType.slice(0, 64) : undefined,
+          })
+          .map((trace) => ({
             id: trace.id,
             start: trace.start,
             duration: trace.duration,
@@ -800,218 +710,184 @@ export class DevtoolsServer {
                 }
               : undefined,
           }));
-          this.sendSerialized(res, {
-            success: true,
-            ...this.runtimeResponseIdentity(runtime),
-            stats: runtime.storage!.getStats(),
-            traces,
-          });
-        } catch (error) {
-          this.sendInternalError(res, error);
-        }
-      },
-    );
-
-    this.app.get(
-      '/api/traces/:id',
-      this.authenticateHttp('mcp', 'inspect'),
-      (req, res) => {
-        const runtime = this.selectRuntimeForHttp(req, res, 'query');
-        if (!runtime || !this.requireStorage(runtime, res)) return;
-        const rawSessionEpoch = req.query.sessionEpoch;
-        const expectedSessionEpoch = rawSessionEpoch === undefined
-          ? undefined
-          : typeof rawSessionEpoch === 'string'
-            && /^\d+$/.test(rawSessionEpoch)
-            ? Number(rawSessionEpoch)
-            : Number.NaN;
-        if (
-          expectedSessionEpoch !== undefined
-          && (
-            !Number.isSafeInteger(expectedSessionEpoch)
-            || expectedSessionEpoch < 1
-          )
-        ) {
-          res.status(400).json({
-            success: false,
-            code: 'INVALID_SESSION_EPOCH',
-            error: 'sessionEpoch must be a positive safe integer.',
-          });
-          return;
-        }
-        if (
-          expectedSessionEpoch !== undefined
-          && expectedSessionEpoch !== runtime.sessionEpoch
-        ) {
-          res.status(409).json({
-            success: false,
-            code: 'SESSION_EPOCH_MISMATCH',
-            error:
-              `Runtime "${runtime.runtimeId}" is now in session epoch ` +
-              `${runtime.sessionEpoch}; trace ${req.params.id} belonged to ` +
-              `epoch ${expectedSessionEpoch}.`,
-            expectedSessionEpoch,
-            ...this.runtimeResponseIdentity(runtime),
-          });
-          return;
-        }
-        const id = Number(req.params.id);
-        if (!Number.isInteger(id)) {
-          res.status(400).json({
-            success: false,
-            error: 'Trace id must be a number',
-          });
-          return;
-        }
-        const trace = runtime.storage!.getTrace(id);
-        if (!trace) {
-          res.status(404).json({
-            success: false,
-            error: `No trace with id ${id}`,
-          });
-          return;
-        }
-        const tags = trace.tags
-          ? { ...trace.tags }
-          : undefined;
-        if (tags) delete tags.reversePatches;
         this.sendSerialized(res, {
-          success: true,
-          ...this.runtimeResponseIdentity(runtime),
-          trace: { ...trace, tags },
-        });
-      },
-    );
-
-    this.app.get(
-      '/api/state',
-      this.authenticateHttp('mcp', 'inspect'),
-      (req, res) => {
-        const runtime = this.selectRuntimeForHttp(req, res, 'query');
-        if (!runtime || !this.requireStorage(runtime, res)) return;
-        const pathValue =
-          typeof req.query.path === 'string' ? req.query.path : undefined;
-        let state = runtime.storage!.getState();
-        if (pathValue) {
-          if (pathValue.length > 512) {
-            res.status(400).json({
-              success: false,
-              error: 'State path must be at most 512 characters.',
-            });
-            return;
-          }
-          const selected = this.selectStatePath(state, pathValue);
-          if (!selected.found) {
-            res.status(404).json({
-              success: false,
-              error: `Path "${pathValue}" was not found in state.`,
-            });
-            return;
-          }
-          state = selected.value;
-        }
-        this.sendSerialized(res, {
-          success: true,
-          ...this.runtimeResponseIdentity(runtime),
-          path: pathValue ?? null,
-          state,
-        });
-      },
-    );
-
-    this.app.get(
-      '/api/subscriptions',
-      this.authenticateHttp('mcp', 'inspect'),
-      (req, res) => {
-        const runtime = this.selectRuntimeForHttp(req, res, 'query');
-        if (!runtime || !this.requireStorage(runtime, res)) return;
-        const filter = typeof req.query.filter === 'string'
-          ? req.query.filter.slice(0, MAX_EVENT_ID_LENGTH).toLowerCase()
-          : null;
-        const subscriptions = filter
-          ? Object.fromEntries(
-              Object.entries(runtime.storage!.getActiveSubs())
-                .filter(([key]) => key.toLowerCase().includes(filter)),
-            )
-          : runtime.storage!.getActiveSubs();
-        this.sendSerialized(res, {
-          success: true,
-          ...this.runtimeResponseIdentity(runtime),
-          subscriptions,
-          total: Object.keys(runtime.storage!.getActiveSubs()).length,
-        });
-      },
-    );
-
-    this.app.get(
-      '/api/handlers',
-      this.authenticateHttp('mcp', 'inspect'),
-      (req, res) => {
-        const runtime = this.selectRuntimeForHttp(req, res, 'query');
-        if (!runtime || !this.requireStorage(runtime, res)) return;
-        const type = req.query.type;
-        if (
-          type !== undefined
-          && type !== 'event'
-          && type !== 'fx'
-          && type !== 'cofx'
-          && type !== 'sub'
-        ) {
-          res.status(400).json({
-            success: false,
-            error: 'type must be event, fx, cofx, or sub',
-          });
-          return;
-        }
-        const handlerKeys = runtime.storage!.getHandlerKeys();
-        res.json({
-          success: true,
-          ...this.runtimeResponseIdentity(runtime),
-          handlerKeys:
-            type && handlerKeys
-              ? { [type]: handlerKeys[type] }
-              : handlerKeys,
-        });
-      },
-    );
-
-    this.app.get(
-      '/api/stats',
-      this.authenticateHttp('mcp', 'inspect'),
-      (req, res) => {
-        const runtime = this.selectRuntimeForHttp(req, res, 'query');
-        if (!runtime || !this.requireStorage(runtime, res)) return;
-        res.json({
           success: true,
           ...this.runtimeResponseIdentity(runtime),
           stats: runtime.storage!.getStats(),
+          traces,
         });
-      },
-    );
+      } catch (error) {
+        this.sendInternalError(res, error);
+      }
+    });
 
-    this.app.get(
-      '/api/audit',
-      this.authenticateHttp('mcp', 'inspect'),
-      (req, res) => {
-        const rawLimit = req.query.limit;
-        const requested = rawLimit === undefined
+    this.app.get('/api/traces/:id', this.authenticateHttp('mcp', 'inspect'), (req, res) => {
+      const runtime = this.selectRuntimeForHttp(req, res, 'query');
+      if (!runtime || !this.requireStorage(runtime, res)) return;
+      const rawSessionEpoch = req.query.sessionEpoch;
+      const expectedSessionEpoch =
+        rawSessionEpoch === undefined
+          ? undefined
+          : typeof rawSessionEpoch === 'string' && /^\d+$/.test(rawSessionEpoch)
+            ? Number(rawSessionEpoch)
+            : Number.NaN;
+      if (
+        expectedSessionEpoch !== undefined &&
+        (!Number.isSafeInteger(expectedSessionEpoch) || expectedSessionEpoch < 1)
+      ) {
+        res.status(400).json({
+          success: false,
+          code: 'INVALID_SESSION_EPOCH',
+          error: 'sessionEpoch must be a positive safe integer.',
+        });
+        return;
+      }
+      if (expectedSessionEpoch !== undefined && expectedSessionEpoch !== runtime.sessionEpoch) {
+        res.status(409).json({
+          success: false,
+          code: 'SESSION_EPOCH_MISMATCH',
+          error:
+            `Runtime "${runtime.runtimeId}" is now in session epoch ` +
+            `${runtime.sessionEpoch}; trace ${req.params.id} belonged to ` +
+            `epoch ${expectedSessionEpoch}.`,
+          expectedSessionEpoch,
+          ...this.runtimeResponseIdentity(runtime),
+        });
+        return;
+      }
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        res.status(400).json({
+          success: false,
+          error: 'Trace id must be a number',
+        });
+        return;
+      }
+      const trace = runtime.storage!.getTrace(id);
+      if (!trace) {
+        res.status(404).json({
+          success: false,
+          error: `No trace with id ${id}`,
+        });
+        return;
+      }
+      const tags = trace.tags ? { ...trace.tags } : undefined;
+      if (tags) delete tags.reversePatches;
+      this.sendSerialized(res, {
+        success: true,
+        ...this.runtimeResponseIdentity(runtime),
+        trace: { ...trace, tags },
+      });
+    });
+
+    this.app.get('/api/state', this.authenticateHttp('mcp', 'inspect'), (req, res) => {
+      const runtime = this.selectRuntimeForHttp(req, res, 'query');
+      if (!runtime || !this.requireStorage(runtime, res)) return;
+      const pathValue = typeof req.query.path === 'string' ? req.query.path : undefined;
+      let state = runtime.storage!.getState();
+      if (pathValue) {
+        if (pathValue.length > 512) {
+          res.status(400).json({
+            success: false,
+            error: 'State path must be at most 512 characters.',
+          });
+          return;
+        }
+        const selected = this.selectStatePath(state, pathValue);
+        if (!selected.found) {
+          res.status(404).json({
+            success: false,
+            error: `Path "${pathValue}" was not found in state.`,
+          });
+          return;
+        }
+        state = selected.value;
+      }
+      this.sendSerialized(res, {
+        success: true,
+        ...this.runtimeResponseIdentity(runtime),
+        path: pathValue ?? null,
+        state,
+      });
+    });
+
+    this.app.get('/api/subscriptions', this.authenticateHttp('mcp', 'inspect'), (req, res) => {
+      const runtime = this.selectRuntimeForHttp(req, res, 'query');
+      if (!runtime || !this.requireStorage(runtime, res)) return;
+      const filter =
+        typeof req.query.filter === 'string'
+          ? req.query.filter.slice(0, MAX_EVENT_ID_LENGTH).toLowerCase()
+          : null;
+      const subscriptions = filter
+        ? Object.fromEntries(
+            Object.entries(runtime.storage!.getActiveSubs()).filter(([key]) =>
+              key.toLowerCase().includes(filter),
+            ),
+          )
+        : runtime.storage!.getActiveSubs();
+      this.sendSerialized(res, {
+        success: true,
+        ...this.runtimeResponseIdentity(runtime),
+        subscriptions,
+        total: Object.keys(runtime.storage!.getActiveSubs()).length,
+      });
+    });
+
+    this.app.get('/api/handlers', this.authenticateHttp('mcp', 'inspect'), (req, res) => {
+      const runtime = this.selectRuntimeForHttp(req, res, 'query');
+      if (!runtime || !this.requireStorage(runtime, res)) return;
+      const type = req.query.type;
+      if (
+        type !== undefined &&
+        type !== 'event' &&
+        type !== 'fx' &&
+        type !== 'cofx' &&
+        type !== 'sub'
+      ) {
+        res.status(400).json({
+          success: false,
+          error: 'type must be event, fx, cofx, or sub',
+        });
+        return;
+      }
+      const handlerKeys = runtime.storage!.getHandlerKeys();
+      res.json({
+        success: true,
+        ...this.runtimeResponseIdentity(runtime),
+        handlerKeys: type && handlerKeys ? { [type]: handlerKeys[type] } : handlerKeys,
+      });
+    });
+
+    this.app.get('/api/stats', this.authenticateHttp('mcp', 'inspect'), (req, res) => {
+      const runtime = this.selectRuntimeForHttp(req, res, 'query');
+      if (!runtime || !this.requireStorage(runtime, res)) return;
+      res.json({
+        success: true,
+        ...this.runtimeResponseIdentity(runtime),
+        stats: runtime.storage!.getStats(),
+      });
+    });
+
+    this.app.get('/api/audit', this.authenticateHttp('mcp', 'inspect'), (req, res) => {
+      const rawLimit = req.query.limit;
+      const requested =
+        rawLimit === undefined
           ? 100
           : /^\d+$/.test(String(rawLimit))
             ? Number(rawLimit)
             : Number.NaN;
-        if (!Number.isInteger(requested) || requested < 1 || requested > 500) {
-          res.status(400).json({
-            success: false,
-            error: 'limit must be an integer from 1 to 500',
-          });
-          return;
-        }
-        res.json({
-          success: true,
-          records: this.auditRecords.slice(-requested),
+      if (!Number.isInteger(requested) || requested < 1 || requested > 500) {
+        res.status(400).json({
+          success: false,
+          error: 'limit must be an integer from 1 to 500',
         });
-      },
-    );
+        return;
+      }
+      res.json({
+        success: true,
+        records: this.auditRecords.slice(-requested),
+      });
+    });
 
     this.app.post(
       '/api/dispatch',
@@ -1059,10 +935,7 @@ export class DevtoolsServer {
           return;
         }
         if (result.status === 'internal-error') {
-          this.sendInternalError(
-            res,
-            new Error('Runtime telemetry processing failed.'),
-          );
+          this.sendInternalError(res, new Error('Runtime telemetry processing failed.'));
           return;
         }
         if (result.status === 'dropped') {
@@ -1084,22 +957,19 @@ export class DevtoolsServer {
       },
     );
 
-    this.app.use(express.static(this.uiPath, {
-      etag: true,
-      fallthrough: true,
-      index: false,
-      maxAge: 0,
-    }));
+    this.app.use(
+      express.static(this.uiPath, {
+        etag: true,
+        fallthrough: true,
+        index: false,
+        maxAge: 0,
+      }),
+    );
     this.app.get('/{*splat}', (_req, res) => {
       res.sendFile(path.join(this.uiPath, 'index.html'));
     });
 
-    this.app.use((
-      error: any,
-      _req: Request,
-      res: Response,
-      _next: NextFunction,
-    ) => {
+    this.app.use((error: any, _req: Request, res: Response, _next: NextFunction) => {
       if (error?.type === 'entity.too.large') {
         res.status(413).json({
           success: false,
@@ -1108,10 +978,7 @@ export class DevtoolsServer {
         });
         return;
       }
-      if (
-        error instanceof SyntaxError
-        || error?.type === 'entity.parse.failed'
-      ) {
+      if (error instanceof SyntaxError || error?.type === 'entity.parse.failed') {
         res.status(400).json({
           success: false,
           code: 'INVALID_JSON',
@@ -1138,8 +1005,8 @@ export class DevtoolsServer {
   ): void => {
     const supplied = req.headers[REFLEX_DEVTOOLS_PROTOCOL_HEADER];
     if (
-      this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_PROTOCOL_HEADER) !== 1
-      || supplied !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
+      this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_PROTOCOL_HEADER) !== 1 ||
+      supplied !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
     ) {
       res.status(426).json({
         success: false,
@@ -1173,15 +1040,11 @@ export class DevtoolsServer {
     capability?: DevtoolsCapability,
     auditedAction?: AuditRecord['action'],
   ) {
-    return (
-      req: Request,
-      res: Response,
-      next: NextFunction,
-    ): void => {
+    return (req: Request, res: Response, next: NextFunction): void => {
       const suppliedVersion = req.headers[REFLEX_DEVTOOLS_PROTOCOL_HEADER];
       if (
-        this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_PROTOCOL_HEADER) !== 1
-        || suppliedVersion !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
+        this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_PROTOCOL_HEADER) !== 1 ||
+        suppliedVersion !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
       ) {
         res.status(426).json({
           success: false,
@@ -1194,9 +1057,9 @@ export class DevtoolsServer {
 
       const token = readBearerToken(req);
       if (
-        this.headerCount(req.rawHeaders, 'authorization') !== 1
-        || !token
-        || !tokensEqual(token, this.tokens[role])
+        this.headerCount(req.rawHeaders, 'authorization') !== 1 ||
+        !token ||
+        !tokensEqual(token, this.tokens[role])
       ) {
         res.setHeader('WWW-Authenticate', 'Bearer realm="reflex-devtools"');
         res.status(401).json({
@@ -1209,13 +1072,8 @@ export class DevtoolsServer {
 
       const auth: AuthContext = {
         role,
-        capabilities: role === 'runtime'
-          ? new Set()
-          : this.capabilities,
-        client: this.sanitizeClientHeader(
-          req.headers[REFLEX_DEVTOOLS_CLIENT_HEADER],
-          role,
-        ),
+        capabilities: role === 'runtime' ? new Set() : this.capabilities,
+        client: this.sanitizeClientHeader(req.headers[REFLEX_DEVTOOLS_CLIENT_HEADER], role),
       };
       res.locals.auth = auth;
 
@@ -1253,20 +1111,15 @@ export class DevtoolsServer {
   ): void => {
     const runtimeId = req.headers[REFLEX_DEVTOOLS_RUNTIME_ID_HEADER];
     const sessionId = req.headers[REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER];
-    const runtime = typeof runtimeId === 'string'
-      ? this.runtimes.get(runtimeId)
-      : undefined;
+    const runtime = typeof runtimeId === 'string' ? this.runtimes.get(runtimeId) : undefined;
     if (
-      this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_RUNTIME_ID_HEADER) !== 1
-      || this.headerCount(
-        req.rawHeaders,
-        REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER,
-      ) !== 1
-      || typeof runtimeId !== 'string'
-      || typeof sessionId !== 'string'
-      || !runtime
-      || !this.isRuntimeConnected(runtime)
-      || sessionId !== runtime.metadata?.sessionId
+      this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_RUNTIME_ID_HEADER) !== 1 ||
+      this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER) !== 1 ||
+      typeof runtimeId !== 'string' ||
+      typeof sessionId !== 'string' ||
+      !runtime ||
+      !this.isRuntimeConnected(runtime) ||
+      sessionId !== runtime.metadata?.sessionId
     ) {
       res.status(409).json({
         success: false,
@@ -1284,15 +1137,15 @@ export class DevtoolsServer {
       const reject = (status: number, message: string): void => {
         socket.write(
           `HTTP/1.1 ${status} ${message}\r\n` +
-          'Connection: close\r\n' +
-          'Content-Length: 0\r\n\r\n',
+            'Connection: close\r\n' +
+            'Content-Length: 0\r\n\r\n',
         );
         socket.destroy();
       };
 
       if (
-        this.headerCount(req.rawHeaders, 'host') !== 1
-        || this.headerCount(req.rawHeaders, 'origin') > 1
+        this.headerCount(req.rawHeaders, 'host') !== 1 ||
+        this.headerCount(req.rawHeaders, 'origin') > 1
       ) {
         reject(400, 'Bad Request');
         return;
@@ -1306,11 +1159,13 @@ export class DevtoolsServer {
         reject(403, 'Forbidden');
         return;
       }
-      if (!isAllowedOrigin(
-        req.headers.origin,
-        this.allowedOrigins,
-        isLoopbackHost(this.config.host) ? req.headers.host : undefined,
-      )) {
+      if (
+        !isAllowedOrigin(
+          req.headers.origin,
+          this.allowedOrigins,
+          isLoopbackHost(this.config.host) ? req.headers.host : undefined,
+        )
+      ) {
         reject(403, 'Forbidden');
         return;
       }
@@ -1324,11 +1179,8 @@ export class DevtoolsServer {
       }
 
       const url = new URL(req.url ?? '/', 'http://reflex.invalid');
-      const target = url.pathname === '/sdk'
-        ? this.sdkWss
-        : url.pathname === '/ui'
-          ? this.uiWss
-          : null;
+      const target =
+        url.pathname === '/sdk' ? this.sdkWss : url.pathname === '/ui' ? this.uiWss : null;
       if (!target) {
         reject(404, 'Not Found');
         return;
@@ -1353,14 +1205,11 @@ export class DevtoolsServer {
         const operationApiVersion = authMessage.payload?.operationApiVersion;
         const runtimeInstanceId = authMessage.payload?.runtimeInstanceId;
         if (
-          !this.validRuntimeId(runtimeId)
-          || !this.validRuntimeIdentityText(
-            runtimeName,
-            MAX_RUNTIME_NAME_LENGTH,
-          )
-          || (operationApiVersion !== undefined && operationApiVersion !== 1)
-          || (operationApiVersion === 1 && !this.validRuntimeId(runtimeInstanceId))
-          || (operationApiVersion !== 1 && runtimeInstanceId !== undefined)
+          !this.validRuntimeId(runtimeId) ||
+          !this.validRuntimeIdentityText(runtimeName, MAX_RUNTIME_NAME_LENGTH) ||
+          (operationApiVersion !== undefined && operationApiVersion !== 1) ||
+          (operationApiVersion === 1 && !this.validRuntimeId(runtimeInstanceId)) ||
+          (operationApiVersion !== 1 && runtimeInstanceId !== undefined)
         ) {
           ws.close(1008, 'Invalid runtime identity');
           return;
@@ -1422,12 +1271,11 @@ export class DevtoolsServer {
       }
 
       const valid =
-        message?.type === 'reflex-auth'
-        && message.payload?.role === role
-        && message.payload?.protocolVersion
-          === REFLEX_DEVTOOLS_PROTOCOL_VERSION
-        && typeof message.payload?.token === 'string'
-        && tokensEqual(message.payload.token, this.tokens[role]);
+        message?.type === 'reflex-auth' &&
+        message.payload?.role === role &&
+        message.payload?.protocolVersion === REFLEX_DEVTOOLS_PROTOCOL_VERSION &&
+        typeof message.payload?.token === 'string' &&
+        tokensEqual(message.payload.token, this.tokens[role]);
       if (!valid) {
         cleanup();
         ws.close(1008, 'Authentication failed');
@@ -1513,9 +1361,7 @@ export class DevtoolsServer {
     this.notifyUiRuntimeStatus();
     this.refreshUiSelectionsAfterRuntimeConnect(runtime);
 
-    const withinRateLimit = this.createMessageRateLimiter(
-      MAX_RUNTIME_MESSAGES_PER_MINUTE,
-    );
+    const withinRateLimit = this.createMessageRateLimiter(MAX_RUNTIME_MESSAGES_PER_MINUTE);
     ws.on('message', (data, isBinary) => {
       if (!withinRateLimit()) {
         ws.close(1008, 'Runtime message rate limit exceeded');
@@ -1532,11 +1378,7 @@ export class DevtoolsServer {
         ws.close(1007, 'Invalid JSON');
         return;
       }
-      const result = this.processInboundRuntimeEvent(
-        event,
-        runtime.runtimeId,
-        metadata.sessionId,
-      );
+      const result = this.processInboundRuntimeEvent(event, runtime.runtimeId, metadata.sessionId);
       if (result.status === 'invalid') {
         ws.close(1008, 'Invalid runtime event');
         return;
@@ -1567,11 +1409,7 @@ export class DevtoolsServer {
     ws.on('error', remove);
   }
 
-  private activateUiSocket(
-    ws: WebSocket,
-    req: IncomingMessage,
-    auth: AuthContext,
-  ): void {
+  private activateUiSocket(ws: WebSocket, req: IncomingMessage, auth: AuthContext): void {
     if (this.uiClients.size >= this.config.maxUiClients) {
       ws.close(1013, 'Too many dashboard connections');
       return;
@@ -1579,9 +1417,8 @@ export class DevtoolsServer {
     const metadata: UiSocketMetadata = {
       auth,
       origin: req.headers.origin,
-      selectedRuntimeId: this.connectedRuntimes().length === 1
-        ? this.connectedRuntimes()[0]!.runtimeId
-        : null,
+      selectedRuntimeId:
+        this.connectedRuntimes().length === 1 ? this.connectedRuntimes()[0]!.runtimeId : null,
     };
     this.uiClients.set(ws, metadata);
     this.notifySDKClientsUIStatus();
@@ -1594,9 +1431,7 @@ export class DevtoolsServer {
         runtimes: this.runtimeSummaries(),
         selectedRuntimeId: metadata.selectedRuntimeId,
         capabilities: [...auth.capabilities],
-        readOnly:
-          !auth.capabilities.has('dispatch')
-          && !auth.capabilities.has('restore'),
+        readOnly: !auth.capabilities.has('dispatch') && !auth.capabilities.has('restore'),
       },
       timestamp: Date.now(),
     });
@@ -1606,9 +1441,7 @@ export class DevtoolsServer {
       if (selected) this.sendSelectedRuntimeSnapshot(ws, selected);
     }
 
-    const withinRateLimit = this.createMessageRateLimiter(
-      MAX_UI_MESSAGES_PER_MINUTE,
-    );
+    const withinRateLimit = this.createMessageRateLimiter(MAX_UI_MESSAGES_PER_MINUTE);
     ws.on('message', (data, isBinary) => {
       if (!withinRateLimit()) {
         ws.close(1008, 'UI message rate limit exceeded');
@@ -1628,9 +1461,7 @@ export class DevtoolsServer {
       }
 
       if (message?.type === 'select-runtime') {
-        const selection = this.resolveRuntimeSelection(
-          message.payload?.runtimeId,
-        );
+        const selection = this.resolveRuntimeSelection(message.payload?.runtimeId);
         if (!selection.ok) {
           this.sendToSocket(ws, {
             type: 'devtools-error',
@@ -1711,8 +1542,8 @@ export class DevtoolsServer {
 
       const requestId = randomUUID();
       if (
-        metadata.selectedRuntimeId === null
-        || message.payload.runtimeId !== metadata.selectedRuntimeId
+        metadata.selectedRuntimeId === null ||
+        message.payload.runtimeId !== metadata.selectedRuntimeId
       ) {
         this.appendAudit({
           requestId,
@@ -1737,18 +1568,14 @@ export class DevtoolsServer {
               'The dispatch runtime does not match the dashboard selection. ' +
               'Wait for runtime selection to be acknowledged and retry.',
             requestedRuntimeId:
-              typeof message.payload.runtimeId === 'string'
-                ? message.payload.runtimeId
-                : null,
+              typeof message.payload.runtimeId === 'string' ? message.payload.runtimeId : null,
             selectedRuntimeId: metadata.selectedRuntimeId,
             runtimes: this.runtimeSummaries(),
           },
         });
         return;
       }
-      const selection = this.resolveRuntimeSelection(
-        metadata.selectedRuntimeId,
-      );
+      const selection = this.resolveRuntimeSelection(metadata.selectedRuntimeId);
       if (!selection.ok) {
         this.appendAudit({
           requestId,
@@ -1815,16 +1642,10 @@ export class DevtoolsServer {
     ws.on('error', remove);
   }
 
-  private handleHttpDispatch(
-    req: Request,
-    res: Response,
-    expectsOperationReceipt = false,
-  ): void {
+  private handleHttpDispatch(req: Request, res: Response, expectsOperationSnapshot = false): void {
     const auth = res.locals.auth as AuthContext;
     const requestId = randomUUID();
-    const target = this.validEventId(req.body?.eventName)
-      ? req.body.eventName
-      : undefined;
+    const target = this.validEventId(req.body?.eventName) ? req.body.eventName : undefined;
     if (!this.config.enableMCP) {
       this.appendAudit({
         requestId,
@@ -1845,12 +1666,11 @@ export class DevtoolsServer {
       return;
     }
     if (!this.validDispatchPayload(req.body)) {
-      const error =
-        !this.validEventId(req.body?.eventName)
-          ? `eventName is required and must be at most ${MAX_EVENT_ID_LENGTH} characters`
-          : !Array.isArray(req.body?.params)
-            ? 'params must be an array'
-            : `params must contain at most ${MAX_EVENT_PARAMS} items`;
+      const error = !this.validEventId(req.body?.eventName)
+        ? `eventName is required and must be at most ${MAX_EVENT_ID_LENGTH} characters`
+        : !Array.isArray(req.body?.params)
+          ? 'params must be an array'
+          : `params must contain at most ${MAX_EVENT_PARAMS} items`;
       this.appendAudit({
         requestId,
         principal: 'mcp',
@@ -1882,10 +1702,7 @@ export class DevtoolsServer {
       return;
     }
     const runtime = selection.runtime;
-    if (
-      this.pendingDispatches.size + this.pendingSubEvals.size
-      >= this.config.maxPendingActions
-    ) {
+    if (this.pendingDispatches.size + this.pendingSubEvals.size >= this.config.maxPendingActions) {
       this.appendAudit({
         requestId,
         principal: 'mcp',
@@ -1906,10 +1723,7 @@ export class DevtoolsServer {
       });
       return;
     }
-    if (
-      !this.isRuntimeConnected(runtime)
-      || !runtime.metadata
-    ) {
+    if (!this.isRuntimeConnected(runtime) || !runtime.metadata) {
       this.appendAudit({
         requestId,
         principal: 'mcp',
@@ -1929,7 +1743,7 @@ export class DevtoolsServer {
       });
       return;
     }
-    if (expectsOperationReceipt && runtime.metadata.operationApiVersion !== 1) {
+    if (expectsOperationSnapshot && runtime.metadata.operationApiVersion !== 1) {
       this.appendAudit({
         requestId,
         principal: 'mcp',
@@ -1947,8 +1761,8 @@ export class DevtoolsServer {
         requestId,
         code: 'OPERATION_CAPABILITY_UNAVAILABLE',
         error:
-          'This runtime does not expose the operation receipt capability. ' +
-          'Enable DevTools with enableDevtools(runtime, { operations: {} }).',
+          'This runtime does not expose the operation snapshot capability. ' +
+          'Enable DevTools with enableDevtools(runtime, { operations: true }).',
         ...this.runtimeResponseIdentity(runtime),
       });
       return;
@@ -1964,7 +1778,7 @@ export class DevtoolsServer {
         dispatchId,
         eventName: req.body.eventName,
         params: req.body.params ?? [],
-        ...(expectsOperationReceipt ? { operation: true } : {}),
+        ...(expectsOperationSnapshot ? { operation: true } : {}),
       },
       timestamp: startedAt,
     });
@@ -2003,8 +1817,8 @@ export class DevtoolsServer {
 
     const timeout = setTimeout(() => {
       this.pendingDispatches.delete(dispatchId);
-      const message = expectsOperationReceipt
-        ? `Event dispatched, but the app did not return an operation receipt within ${DISPATCH_OUTCOME_TIMEOUT_MS}ms`
+      const message = expectsOperationSnapshot
+        ? `Event dispatched, but the app did not return an operation snapshot within ${DISPATCH_OUTCOME_TIMEOUT_MS}ms`
         : `Event dispatched, but the app reported no trace for it within ${DISPATCH_OUTCOME_TIMEOUT_MS}ms`;
       this.appendAudit({
         requestId,
@@ -2037,7 +1851,7 @@ export class DevtoolsServer {
       startedAt,
       target: req.body.eventName,
       client: auth.client,
-      expectsOperationReceipt,
+      expectsOperationSnapshot,
     });
   }
 
@@ -2070,10 +1884,7 @@ export class DevtoolsServer {
     }
     const runtime = this.selectRuntimeForHttp(req, res, 'body');
     if (!runtime) return;
-    if (
-      this.pendingDispatches.size + this.pendingSubEvals.size
-      >= this.config.maxPendingActions
-    ) {
+    if (this.pendingDispatches.size + this.pendingSubEvals.size >= this.config.maxPendingActions) {
       res.status(429).json({
         success: false,
         code: 'TOO_MANY_PENDING_ACTIONS',
@@ -2127,20 +1938,20 @@ export class DevtoolsServer {
     runtimeSessionId: string,
   ): RuntimeEventProcessingResult {
     if (
-      !candidate
-      || typeof candidate !== 'object'
-      || typeof candidate.type !== 'string'
-      || candidate.type.length === 0
-      || candidate.type.length > 128
-      || /[\u0000-\u001F\u007F]/.test(candidate.type)
+      !candidate ||
+      typeof candidate !== 'object' ||
+      typeof candidate.type !== 'string' ||
+      candidate.type.length === 0 ||
+      candidate.type.length > 128 ||
+      /[\u0000-\u001F\u007F]/.test(candidate.type)
     ) {
       return { status: 'invalid' };
     }
     const runtime = this.runtimes.get(runtimeId);
     if (
-      !runtime
-      || runtime.metadata?.sessionId !== runtimeSessionId
-      || !this.isRuntimeConnected(runtime)
+      !runtime ||
+      runtime.metadata?.sessionId !== runtimeSessionId ||
+      !this.isRuntimeConnected(runtime)
     ) {
       return { status: 'invalid' };
     }
@@ -2238,19 +2049,16 @@ export class DevtoolsServer {
     return false;
   }
 
-  private resolveDispatch(
-    payload: any,
-    runtimeId: string,
-    runtimeSessionId: string,
-  ): void {
+  private resolveDispatch(payload: any, runtimeId: string, runtimeSessionId: string): void {
     const dispatchId = payload?.dispatchId;
     if (typeof dispatchId !== 'string') return;
     const pending = this.pendingDispatches.get(dispatchId);
     if (
-      !pending
-      || pending.runtimeId !== runtimeId
-      || pending.runtimeSessionId !== runtimeSessionId
-    ) return;
+      !pending ||
+      pending.runtimeId !== runtimeId ||
+      pending.runtimeSessionId !== runtimeSessionId
+    )
+      return;
 
     clearTimeout(pending.timeout);
     this.pendingDispatches.delete(dispatchId);
@@ -2308,19 +2116,15 @@ export class DevtoolsServer {
     this.sendSerialized(pending.res, body);
   }
 
-  private resolveOperation(
-    payload: any,
-    runtimeId: string,
-    runtimeSessionId: string,
-  ): void {
+  private resolveOperation(payload: any, runtimeId: string, runtimeSessionId: string): void {
     const dispatchId = payload?.dispatchId;
     if (typeof dispatchId !== 'string') return;
     const pending = this.pendingDispatches.get(dispatchId);
     if (
-      !pending
-      || !pending.expectsOperationReceipt
-      || pending.runtimeId !== runtimeId
-      || pending.runtimeSessionId !== runtimeSessionId
+      !pending ||
+      !pending.expectsOperationSnapshot ||
+      pending.runtimeId !== runtimeId ||
+      pending.runtimeSessionId !== runtimeSessionId
     ) {
       return;
     }
@@ -2328,11 +2132,15 @@ export class DevtoolsServer {
     clearTimeout(pending.timeout);
     this.pendingDispatches.delete(dispatchId);
     const operation = payload?.result?.operation;
-    const outcome = typeof operation?.outcome === 'string' ? operation.outcome : 'unknown';
+    const operationStatus = typeof operation?.status === 'string' ? operation.status : 'unknown';
     const status: AuditRecord['status'] =
-      outcome === 'succeeded' || outcome === 'failed' || outcome === 'effects-failed'
-        ? outcome
-        : 'unknown';
+      operationStatus === 'completed'
+        ? 'succeeded'
+        : operationStatus === 'completed-with-errors'
+          ? 'effects-failed'
+          : operationStatus === 'failed' || operationStatus === 'rejected'
+            ? 'failed'
+            : 'unknown';
     this.appendAudit({
       requestId: pending.requestId,
       principal: 'mcp',
@@ -2362,34 +2170,33 @@ export class DevtoolsServer {
       success: true,
       requestId: pending.requestId,
       ...this.runtimeResponseIdentityById(pending.runtimeId),
-      receipt: payload.result,
+      operation,
+      // Kept only for pre-operation-API MCP bridges. Both fields point to
+      // the same DevTools-owned canonical snapshot; no legacy receipt is
+      // reconstructed or retained by the runtime.
+      receipt: operation,
     });
   }
 
-  private resolveSubEval(
-    payload: any,
-    runtimeId: string,
-    runtimeSessionId: string,
-  ): void {
+  private resolveSubEval(payload: any, runtimeId: string, runtimeSessionId: string): void {
     const evalId = payload?.evalId;
     if (typeof evalId !== 'string') return;
     const pending = this.pendingSubEvals.get(evalId);
     if (
-      !pending
-      || pending.runtimeId !== runtimeId
-      || pending.runtimeSessionId !== runtimeSessionId
-    ) return;
+      !pending ||
+      pending.runtimeId !== runtimeId ||
+      pending.runtimeSessionId !== runtimeSessionId
+    )
+      return;
 
     clearTimeout(pending.timeout);
     this.pendingSubEvals.delete(evalId);
     if (payload.error) {
-      pending.res
-        .status(payload.error.phase === 'missing-handler' ? 404 : 422)
-        .json({
-          success: false,
-          ...this.runtimeResponseIdentityById(pending.runtimeId),
-          error: payload.error,
-        });
+      pending.res.status(payload.error.phase === 'missing-handler' ? 404 : 422).json({
+        success: false,
+        ...this.runtimeResponseIdentityById(pending.runtimeId),
+        error: payload.error,
+      });
       return;
     }
     this.sendSerialized(pending.res, {
@@ -2442,10 +2249,11 @@ export class DevtoolsServer {
 
   private getTracingDemandCount(): number {
     const mcpNeedsTracing =
-      this.config.enableMCP
-      && (this.capabilities.has('inspect') || this.capabilities.has('dispatch'));
-    const uiNeedsTracing = [...this.uiClients.values()].some(({ auth }) =>
-      auth.capabilities.has('inspect') || auth.capabilities.has('dispatch'));
+      this.config.enableMCP &&
+      (this.capabilities.has('inspect') || this.capabilities.has('dispatch'));
+    const uiNeedsTracing = [...this.uiClients.values()].some(
+      ({ auth }) => auth.capabilities.has('inspect') || auth.capabilities.has('dispatch'),
+    );
     return mcpNeedsTracing || uiNeedsTracing ? 1 : 0;
   }
 
@@ -2485,8 +2293,8 @@ export class DevtoolsServer {
     const isOnlyConnectedRuntime = this.connectedRuntimes().length === 1;
     for (const [client, metadata] of this.uiClients) {
       if (
-        metadata.selectedRuntimeId !== runtime.runtimeId
-        && !(metadata.selectedRuntimeId === null && isOnlyConnectedRuntime)
+        metadata.selectedRuntimeId !== runtime.runtimeId &&
+        !(metadata.selectedRuntimeId === null && isOnlyConnectedRuntime)
       ) {
         continue;
       }
@@ -2496,10 +2304,7 @@ export class DevtoolsServer {
     }
   }
 
-  private sendSelectedRuntimeSnapshot(
-    client: WebSocket,
-    runtime: RuntimeEntry,
-  ): void {
+  private sendSelectedRuntimeSnapshot(client: WebSocket, runtime: RuntimeEntry): void {
     this.sendRuntimeSelectionAcknowledgement(client, runtime);
 
     const metadata = this.uiClients.get(client);
@@ -2544,10 +2349,7 @@ export class DevtoolsServer {
     });
   }
 
-  private sendRuntimeSelectionAcknowledgement(
-    client: WebSocket,
-    runtime: RuntimeEntry,
-  ): void {
+  private sendRuntimeSelectionAcknowledgement(client: WebSocket, runtime: RuntimeEntry): void {
     this.sendToSocket(client, {
       type: 'devtools-runtime-selected',
       payload: this.runtimeResponseIdentity(runtime),
@@ -2555,17 +2357,16 @@ export class DevtoolsServer {
     });
   }
 
-  private sendTaggedRuntimeEventToUi(
-    client: WebSocket,
-    runtime: RuntimeEntry,
-    event: any,
-  ): void {
+  private sendTaggedRuntimeEventToUi(client: WebSocket, runtime: RuntimeEntry, event: any): void {
     let serialized: string;
     try {
-      serialized = JSON.stringify({
-        ...event,
-        ...this.runtimeResponseIdentity(runtime),
-      }, reflexReplacer);
+      serialized = JSON.stringify(
+        {
+          ...event,
+          ...this.runtimeResponseIdentity(runtime),
+        },
+        reflexReplacer,
+      );
     } catch {
       return;
     }
@@ -2575,9 +2376,10 @@ export class DevtoolsServer {
   private broadcastEventToUI(runtime: RuntimeEntry, event: any): void {
     for (const [client, metadata] of this.uiClients) {
       if (
-        !metadata.auth.capabilities.has('inspect')
-        || metadata.selectedRuntimeId !== runtime.runtimeId
-      ) continue;
+        !metadata.auth.capabilities.has('inspect') ||
+        metadata.selectedRuntimeId !== runtime.runtimeId
+      )
+        continue;
       this.sendTaggedRuntimeEventToUi(client, runtime, event);
     }
   }
@@ -2600,10 +2402,7 @@ export class DevtoolsServer {
 
   private sendRawToSocket(client: WebSocket, serialized: string): boolean {
     if (client.readyState !== WebSocket.OPEN) return false;
-    if (
-      client.bufferedAmount
-      > this.config.maxRuntimePayloadBytes * 2
-    ) {
+    if (client.bufferedAmount > this.config.maxRuntimePayloadBytes * 2) {
       client.close(1008, 'Backpressure limit exceeded');
       return false;
     }
@@ -2615,9 +2414,7 @@ export class DevtoolsServer {
     }
   }
 
-  private runtimeTelemetryDropPayload(
-    drop: RuntimeTelemetryDrop,
-  ): RuntimeTelemetryDroppedPayload {
+  private runtimeTelemetryDropPayload(drop: RuntimeTelemetryDrop): RuntimeTelemetryDroppedPayload {
     return {
       code: REFLEX_DEVTOOLS_TELEMETRY_DROPPED_CODE,
       reason: drop.reason,
@@ -2625,10 +2422,7 @@ export class DevtoolsServer {
     };
   }
 
-  private sendRuntimeTelemetryNotice(
-    client: WebSocket,
-    drop: RuntimeTelemetryDrop,
-  ): void {
+  private sendRuntimeTelemetryNotice(client: WebSocket, drop: RuntimeTelemetryDrop): void {
     this.sendToSocket(client, {
       type: REFLEX_DEVTOOLS_RUNTIME_ERROR_TYPE,
       payload: this.runtimeTelemetryDropPayload(drop),
@@ -2637,14 +2431,9 @@ export class DevtoolsServer {
   }
 
   private appendAudit(
-    record: Omit<
-      AuditRecord,
-      'id' | 'timestamp' | 'sessionEpoch' | 'protocolVersion'
-    >,
+    record: Omit<AuditRecord, 'id' | 'timestamp' | 'sessionEpoch' | 'protocolVersion'>,
   ): void {
-    const runtime = record.runtimeId
-      ? this.runtimes.get(record.runtimeId)
-      : undefined;
+    const runtime = record.runtimeId ? this.runtimes.get(record.runtimeId) : undefined;
     const fullRecord: AuditRecord = Object.freeze({
       ...record,
       runtimeName: record.runtimeName ?? runtime?.runtimeName,
@@ -2655,15 +2444,12 @@ export class DevtoolsServer {
     });
     this.auditRecords.push(fullRecord);
     if (this.auditRecords.length > this.config.maxAuditRecords) {
-      this.auditRecords.splice(
-        0,
-        this.auditRecords.length - this.config.maxAuditRecords,
-      );
+      this.auditRecords.splice(0, this.auditRecords.length - this.config.maxAuditRecords);
     }
     if (this.config.onAuditRecord) {
       try {
-        void Promise.resolve(this.config.onAuditRecord(fullRecord)).catch(
-          () => console.error('[Reflex Devtools] Audit sink failed.'),
+        void Promise.resolve(this.config.onAuditRecord(fullRecord)).catch(() =>
+          console.error('[Reflex Devtools] Audit sink failed.'),
         );
       } catch {
         console.error('[Reflex Devtools] Audit sink failed.');
@@ -2681,31 +2467,33 @@ export class DevtoolsServer {
   }
 
   private validEventId(value: unknown): value is string {
-    return typeof value === 'string'
-      && value.trim().length > 0
-      && value.length <= MAX_EVENT_ID_LENGTH
-      && !/[\u0000-\u001F\u007F]/.test(value);
+    return (
+      typeof value === 'string' &&
+      value.trim().length > 0 &&
+      value.length <= MAX_EVENT_ID_LENGTH &&
+      !/[\u0000-\u001F\u007F]/.test(value)
+    );
   }
 
   private validRuntimeId(value: unknown): value is string {
-    return typeof value === 'string'
-      && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
+    return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
   }
 
-  private validRuntimeIdentityText(
-    value: unknown,
-    maxLength: number,
-  ): value is string {
-    return typeof value === 'string'
-      && value.trim().length > 0
-      && value.length <= maxLength
-      && !/[\u0000-\u001F\u007F]/.test(value);
+  private validRuntimeIdentityText(value: unknown, maxLength: number): value is string {
+    return (
+      typeof value === 'string' &&
+      value.trim().length > 0 &&
+      value.length <= maxLength &&
+      !/[\u0000-\u001F\u007F]/.test(value)
+    );
   }
 
   private validDispatchPayload(payload: any): boolean {
-    return this.validEventId(payload?.eventName)
-      && (payload.params === undefined || Array.isArray(payload.params))
-      && (payload.params?.length ?? 0) <= MAX_EVENT_PARAMS;
+    return (
+      this.validEventId(payload?.eventName) &&
+      (payload.params === undefined || Array.isArray(payload.params)) &&
+      (payload.params?.length ?? 0) <= MAX_EVENT_PARAMS
+    );
   }
 
   private validRuntimeEvent(event: any): boolean {
@@ -2732,10 +2520,7 @@ export class DevtoolsServer {
   }
 
   private validTraceBatch(payload: unknown): boolean {
-    if (
-      !Array.isArray(payload)
-      || payload.length > MAX_RUNTIME_TRACES_PER_MESSAGE
-    ) {
+    if (!Array.isArray(payload) || payload.length > MAX_RUNTIME_TRACES_PER_MESSAGE) {
       return false;
     }
 
@@ -2754,11 +2539,7 @@ export class DevtoolsServer {
 
   private validTrace(trace: unknown): trace is Record<string, any> {
     if (!isRecord(trace)) return false;
-    if (
-      !Number.isSafeInteger(trace.id)
-      || trace.id < 0
-      || !Number.isFinite(trace.start)
-    ) {
+    if (!Number.isSafeInteger(trace.id) || trace.id < 0 || !Number.isFinite(trace.start)) {
       return false;
     }
     for (const key of ['end', 'duration'] as const) {
@@ -2771,8 +2552,8 @@ export class DevtoolsServer {
       ['opType', 64],
     ] as const) {
       if (
-        trace[key] !== undefined
-        && (typeof trace[key] !== 'string' || trace[key].length > limit)
+        trace[key] !== undefined &&
+        (typeof trace[key] !== 'string' || trace[key].length > limit)
       ) {
         return false;
       }
@@ -2784,58 +2565,55 @@ export class DevtoolsServer {
   private validActiveSubscriptions(payload: unknown): boolean {
     if (!isRecord(payload)) return false;
     const entries = Object.entries(payload);
-    return entries.length <= MAX_ACTIVE_SUB_CHANGES_PER_MESSAGE
-      && entries.every(([key]) =>
-        key.length > 0
-        && key.length <= MAX_DIAGNOSTIC_KEY_LENGTH
-        && !/[\u0000-\u001F\u007F]/.test(key));
+    return (
+      entries.length <= MAX_ACTIVE_SUB_CHANGES_PER_MESSAGE &&
+      entries.every(
+        ([key]) =>
+          key.length > 0 &&
+          key.length <= MAX_DIAGNOSTIC_KEY_LENGTH &&
+          !/[\u0000-\u001F\u007F]/.test(key),
+      )
+    );
   }
 
   private validHandlerKeys(payload: unknown): boolean {
     if (!isRecord(payload)) return false;
     return (['event', 'fx', 'cofx', 'sub'] as const).every((key) => {
       const values = payload[key];
-      return Array.isArray(values)
-        && values.length <= MAX_HANDLER_KEYS_PER_TYPE
-        && values.every((value) => this.validEventId(value));
+      return (
+        Array.isArray(values) &&
+        values.length <= MAX_HANDLER_KEYS_PER_TYPE &&
+        values.every((value) => this.validEventId(value))
+      );
     });
   }
 
   private validRuntimeInfo(payload: unknown): boolean {
     if (!isRecord(payload)) return false;
     if (
-      payload.runtime !== undefined
-      && payload.runtime !== 'browser'
-      && payload.runtime !== 'headless'
-      && payload.runtime !== 'react-native'
+      payload.runtime !== undefined &&
+      payload.runtime !== 'browser' &&
+      payload.runtime !== 'headless' &&
+      payload.runtime !== 'react-native'
     ) {
       return false;
     }
     if (
-      payload.effectMode !== undefined
-      && (
-        typeof payload.effectMode !== 'string'
-        || payload.effectMode.length > 256
-      )
+      payload.effectMode !== undefined &&
+      (typeof payload.effectMode !== 'string' || payload.effectMode.length > 256)
     ) {
       return false;
     }
-    if (
-      payload.tracing !== undefined
-      && typeof payload.tracing !== 'boolean'
-    ) {
+    if (payload.tracing !== undefined && typeof payload.tracing !== 'boolean') {
       return false;
     }
     if (
-      payload.protocolVersion !== undefined
-      && payload.protocolVersion !== REFLEX_DEVTOOLS_PROTOCOL_VERSION
+      payload.protocolVersion !== undefined &&
+      payload.protocolVersion !== REFLEX_DEVTOOLS_PROTOCOL_VERSION
     ) {
       return false;
     }
-    if (
-      payload.inspectorApiVersion !== undefined
-      && payload.inspectorApiVersion !== 2
-    ) {
+    if (payload.inspectorApiVersion !== undefined && payload.inspectorApiVersion !== 2) {
       return false;
     }
     if (payload.operationApiVersion !== undefined && payload.operationApiVersion !== 1) {
@@ -2845,10 +2623,12 @@ export class DevtoolsServer {
       if (!isRecord(payload.effects)) return false;
       const effects = Object.entries(payload.effects);
       if (effects.length > MAX_RUNTIME_EFFECT_ADAPTERS) return false;
-      if (!effects.every(([key, value]) =>
-        this.validEventId(key)
-        && typeof value === 'string'
-        && value.length <= 256)) {
+      if (
+        !effects.every(
+          ([key, value]) =>
+            this.validEventId(key) && typeof value === 'string' && value.length <= 256,
+        )
+      ) {
         return false;
       }
     }
@@ -2857,75 +2637,58 @@ export class DevtoolsServer {
 
   private validDispatchResult(payload: unknown): boolean {
     if (
-      !isRecord(payload)
-      || typeof payload.dispatchId !== 'string'
-      || payload.dispatchId.length > 128
+      !isRecord(payload) ||
+      typeof payload.dispatchId !== 'string' ||
+      payload.dispatchId.length > 128
     ) {
       return false;
     }
-    if (
-      payload.trace !== undefined
-      && !this.validTraceBatch([payload.trace])
-    ) {
+    if (payload.trace !== undefined && !this.validTraceBatch([payload.trace])) {
       return false;
     }
-    return payload.reason === undefined
-      || (typeof payload.reason === 'string' && payload.reason.length <= 1024);
+    return (
+      payload.reason === undefined ||
+      (typeof payload.reason === 'string' && payload.reason.length <= 1024)
+    );
   }
 
   private validOperationResult(payload: unknown): boolean {
     if (
-      !isRecord(payload)
-      || typeof payload.dispatchId !== 'string'
-      || payload.dispatchId.length > 128
+      !isRecord(payload) ||
+      typeof payload.dispatchId !== 'string' ||
+      payload.dispatchId.length > 128
     ) {
       return false;
     }
     return (
-      (payload.result !== undefined && isRecord(payload.result))
-      || (typeof payload.error === 'string' && payload.error.length <= 4096)
+      (payload.result !== undefined && isRecord(payload.result)) ||
+      (typeof payload.error === 'string' && payload.error.length <= 4096)
     );
   }
 
   private validSubEvaluationResult(payload: unknown): boolean {
-    if (
-      !isRecord(payload)
-      || typeof payload.evalId !== 'string'
-      || payload.evalId.length > 128
-    ) {
+    if (!isRecord(payload) || typeof payload.evalId !== 'string' || payload.evalId.length > 128) {
       return false;
     }
     if (payload.error === undefined) return 'value' in payload;
     if (!isRecord(payload.error)) return false;
-    return typeof payload.error.phase === 'string'
-      && payload.error.phase.length <= 128
-      && typeof payload.error.message === 'string'
-      && payload.error.message.length <= 4096
-      && (
-        payload.error.stack === undefined
-        || (
-          typeof payload.error.stack === 'string'
-          && payload.error.stack.length <= 16 * 1024
-        )
-      );
+    return (
+      typeof payload.error.phase === 'string' &&
+      payload.error.phase.length <= 128 &&
+      typeof payload.error.message === 'string' &&
+      payload.error.message.length <= 4096 &&
+      (payload.error.stack === undefined ||
+        (typeof payload.error.stack === 'string' && payload.error.stack.length <= 16 * 1024))
+    );
   }
 
-  private selectStatePath(
-    state: unknown,
-    pathValue: string,
-  ): { found: boolean; value?: unknown } {
-    const parts = pathValue
-      .split(/\.|\[|\]/)
-      .filter((part) => part.length > 0);
+  private selectStatePath(state: unknown, pathValue: string): { found: boolean; value?: unknown } {
+    const parts = pathValue.split(/\.|\[|\]/).filter((part) => part.length > 0);
     if (parts.length === 0 || parts.length > 64) return { found: false };
 
     let current: any = state;
     for (const part of parts) {
-      if (
-        part === '__proto__'
-        || part === 'prototype'
-        || part === 'constructor'
-      ) {
+      if (part === '__proto__' || part === 'prototype' || part === 'constructor') {
         return { found: false };
       }
       if (current instanceof Map) {
@@ -2934,9 +2697,9 @@ export class DevtoolsServer {
         continue;
       }
       if (
-        current === null
-        || (typeof current !== 'object' && !Array.isArray(current))
-        || !Object.prototype.hasOwnProperty.call(current, part)
+        current === null ||
+        (typeof current !== 'object' && !Array.isArray(current)) ||
+        !Object.prototype.hasOwnProperty.call(current, part)
       ) {
         return { found: false };
       }
@@ -2946,13 +2709,11 @@ export class DevtoolsServer {
   }
 
   private isRuntimeConnected(runtime: RuntimeEntry): boolean {
-    return runtime.socket?.readyState === WebSocket.OPEN
-      && runtime.metadata !== null;
+    return runtime.socket?.readyState === WebSocket.OPEN && runtime.metadata !== null;
   }
 
   private connectedRuntimes(): RuntimeEntry[] {
-    return [...this.runtimes.values()]
-      .filter((runtime) => this.isRuntimeConnected(runtime));
+    return [...this.runtimes.values()].filter((runtime) => this.isRuntimeConnected(runtime));
   }
 
   private runtimeSummaries(): DevtoolsRuntimeSummary[] {
@@ -3014,11 +2775,8 @@ export class DevtoolsServer {
         oldest = runtime;
       }
       if (
-        !selectedRuntimeIds.has(runtime.runtimeId)
-        && (
-          !oldestUnselected
-          || runtime.lastConnectedAt < oldestUnselected.lastConnectedAt
-        )
+        !selectedRuntimeIds.has(runtime.runtimeId) &&
+        (!oldestUnselected || runtime.lastConnectedAt < oldestUnselected.lastConnectedAt)
       ) {
         oldestUnselected = runtime;
       }
@@ -3063,9 +2821,10 @@ export class DevtoolsServer {
       ok: false,
       status: 409,
       code: 'RUNTIME_SELECTION_REQUIRED',
-      error: connected.length === 0
-        ? 'runtimeId is required because no runtime is connected.'
-        : 'runtimeId is required because multiple runtimes are connected.',
+      error:
+        connected.length === 0
+          ? 'runtimeId is required because no runtime is connected.'
+          : 'runtimeId is required because multiple runtimes are connected.',
     };
   }
 
@@ -3090,9 +2849,7 @@ export class DevtoolsServer {
     source: 'query' | 'body',
     requestId?: string,
   ): RuntimeEntry | null {
-    const runtimeId = source === 'query'
-      ? req.query.runtimeId
-      : req.body?.runtimeId;
+    const runtimeId = source === 'query' ? req.query.runtimeId : req.body?.runtimeId;
     const selection = this.resolveRuntimeSelection(runtimeId);
     if (!selection.ok) {
       this.sendRuntimeSelectionError(res, selection, requestId);
@@ -3112,9 +2869,7 @@ export class DevtoolsServer {
   }
 
   private sendSerialized(res: Response, value: unknown): void {
-    res
-      .type('application/json')
-      .send(JSON.stringify(value, mapSetReflexReplacer));
+    res.type('application/json').send(JSON.stringify(value, mapSetReflexReplacer));
   }
 
   private sendInternalError(res: Response, error: unknown): void {
@@ -3131,9 +2886,7 @@ export class DevtoolsServer {
         // accessor replace the generic error response with another failure.
       }
     }
-    console.error(
-      `[Reflex Devtools] Internal server error (request ${requestId}; ${errorName}).`,
-    );
+    console.error(`[Reflex Devtools] Internal server error (request ${requestId}; ${errorName}).`);
     res.status(500).json({
       success: false,
       code: 'INTERNAL_ERROR',
@@ -3178,13 +2931,8 @@ export class DevtoolsServer {
       this.server.listen(this.config.port, this.config.host, () => {
         this.server.removeListener('error', reject);
         const address = this.server.address();
-        const port =
-          address && typeof address === 'object'
-            ? address.port
-            : this.config.port;
-        console.log(
-          `[Reflex Devtools] Dashboard: http://${this.config.host}:${port}`,
-        );
+        const port = address && typeof address === 'object' ? address.port : this.config.port;
+        console.log(`[Reflex Devtools] Dashboard: http://${this.config.host}:${port}`);
         console.log(
           `[Reflex Devtools] Capabilities: ${[...this.capabilities].join(', ') || 'none'}`,
         );
@@ -3230,10 +2978,7 @@ export class DevtoolsServer {
   private startHeartbeat(): void {
     if (this.heartbeatTimer) return;
     this.heartbeatTimer = setInterval(() => {
-      const sockets = new Set<WebSocket>([
-        ...this.pendingWebSockets,
-        ...this.uiClients.keys(),
-      ]);
+      const sockets = new Set<WebSocket>([...this.pendingWebSockets, ...this.uiClients.keys()]);
       for (const runtime of this.connectedRuntimes()) {
         sockets.add(runtime.socket!);
       }

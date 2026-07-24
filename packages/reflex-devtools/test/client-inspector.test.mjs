@@ -195,19 +195,36 @@ function createFakeInspector(
 }
 
 function createOperationRuntime(runtimeId = 'runtime-test') {
+  let lifecycleObserveCount = 0;
+  let executionDisposeCount = 0;
   return {
     runtimeId,
     runtimeInstanceId: `${runtimeId}:instance:1`,
     getStateRevisions() {
       return { committedRevision: 0, publishedRevision: 0 };
     },
-    dispatch() {},
+    dispatch() { return 'operation-test'; },
     async flush() {},
-    getSubscriptionValue() {
+    getOperationSnapshot() {
       return undefined;
     },
+    observeExecution() {
+      let disposed = false;
+      return () => {
+        if (disposed) return;
+        disposed = true;
+        executionDisposeCount++;
+      };
+    },
     observeLifecycle() {
+      lifecycleObserveCount++;
       return () => {};
+    },
+    get lifecycleObserveCount() {
+      return lifecycleObserveCount;
+    },
+    get executionDisposeCount() {
+      return executionDisposeCount;
     },
   };
 }
@@ -422,7 +439,7 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
   }
 });
 
-test('enables retained operation receipts through the DevTools configuration', async () => {
+test('enables canonical operation snapshots through the DevTools configuration', async () => {
   const originalFetch = globalThis.fetch;
   const originalWebSocket = globalThis.WebSocket;
   FakeWebSocket.instances = [];
@@ -437,7 +454,7 @@ test('enables retained operation receipts through the DevTools configuration', a
   let cleanup;
   try {
     cleanup = enableDevtools(fake.runtime, {
-      operations: {},
+      operations: true,
     });
     await waitForTurn();
     await waitForTurn();
@@ -447,9 +464,36 @@ test('enables retained operation receipts through the DevTools configuration', a
 
     const unsupported = createFakeInspector();
     assert.throws(
-      () => enableDevtools(unsupported.runtime, { operations: {} }),
+      () => enableDevtools(unsupported.runtime, { operations: true }),
       /requires runtime\.createInspector\(\) to expose operation support/,
     );
+  } finally {
+    cleanup?.();
+    globalThis.fetch = originalFetch;
+    globalThis.WebSocket = originalWebSocket;
+  }
+});
+
+test('attaches and disposes a lifecycle observer for coordinator-backed operations', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWebSocket = globalThis.WebSocket;
+  FakeWebSocket.instances = [];
+  FakeWebSocket.autoOpen = true;
+  FakeWebSocket.throwOnSend = false;
+  globalThis.WebSocket = FakeWebSocket;
+  globalThis.fetch = successfulFetch;
+
+  const fake = createFakeInspector();
+  const operationRuntime = createOperationRuntime();
+  fake.inspector.getOperationRuntime = () => operationRuntime;
+  let cleanup;
+  try {
+    cleanup = enableDevtools(fake.runtime, { operations: true });
+    await waitForTurn();
+    await waitForTurn();
+    cleanup();
+    assert.equal(operationRuntime.lifecycleObserveCount, 1);
+    assert.equal(operationRuntime.executionDisposeCount, 1);
   } finally {
     cleanup?.();
     globalThis.fetch = originalFetch;
@@ -475,14 +519,7 @@ test('executes a retained operation through a runtime inspector configured in De
   });
   let cleanup;
   try {
-    cleanup = enableDevtools(runtime, {
-      operations: {
-        executionContext: {
-          profile: 'test',
-          defaultEffectMode: 'fixture-backed',
-        },
-      },
-    });
+    cleanup = enableDevtools(runtime, { operations: true });
     await waitForTurn();
     await waitForTurn();
     const socket = FakeWebSocket.instances[0];
@@ -502,17 +539,9 @@ test('executes a retained operation through a runtime inspector configured in De
     const result = socket.sent.find((event) => event.type === 'reflex-operation-result')?.payload;
     assert.equal(result?.dispatchId, 'configured-operation-1');
     assert.equal(result?.result.operation.status, 'completed');
-    assert.equal(result?.result.operation.outcome, 'succeeded');
-    assert.deepEqual(result?.result.operation.executionContext, {
-      profile: 'test',
-      source: 'caller-declared',
-      enforced: false,
-      defaultEffectMode: 'fixture-backed',
-    });
-    assert.deepEqual(result?.result.operation.state.patches, [
-      { op: 'replace', path: ['count'], value: 2 },
-    ]);
-    assert.deepEqual(result?.result.delivery, { status: 'settled', timeoutMs: null });
+    assert.equal(result?.result.operation.eventInstanceIds.length, 1);
+    assert.deepEqual(result?.result.operation.committedRevisions, [1]);
+    assert.deepEqual(result?.result.operation.errors, []);
   } finally {
     cleanup?.();
     runtime.dispose();

@@ -1,85 +1,45 @@
-/**
- * Structural runtime port used by the optional operation ledger.
- *
- * Keeping this contract local lets the DevTools browser client remain free of
- * a runtime import. DevTools consumes the port only when operations are
- * enabled through `enableDevtools(..., { operations: { ... } })`.
- */
+/** Structural operation port supplied by `runtime.createInspector()`. */
 export type OperationEventVector = [string, ...any[]];
-export type OperationSubVector = [string, ...any[]];
 
-export type RuntimeLifecycleErrorKind =
-  | 'handler'
-  | 'missing-handler'
-  | 'coeffect'
-  | 'missing-coeffect'
-  | 'effect'
-  | 'invalid-effect'
-  | 'unhandled-effect'
-  | 'queue-dropped'
-  | 'disposed'
-  | 'publication';
+export interface DevtoolsExecutionObserver {
+  accept(
+    event: OperationEventVector,
+    parent?: {
+      readonly operation: { readonly operationId: string; readonly value: unknown };
+      readonly sourceEffectId?: string;
+      readonly sourceEffectIndex?: number;
+    },
+  ): { readonly operationId: string; readonly value: unknown };
+  queued(operation: { readonly operationId: string; readonly value: unknown }, revision: number): void;
+  started(operation: { readonly operationId: string; readonly value: unknown }, revision: number): void;
+  transition(operation: { readonly operationId: string; readonly value: unknown }, status: string, error?: unknown): void;
+  committed(operation: { readonly operationId: string; readonly value: unknown }, status: string, revision: number): void;
+  finished(operation: { readonly operationId: string; readonly value: unknown }, status: string, error?: unknown): void;
+  dropped(operations: readonly { readonly operationId: string; readonly value: unknown }[], error: unknown): void;
+  published(revision: number): void;
+  disposed(error: unknown): void;
+}
 
-export interface RuntimeLifecycleEffect {
+/** Runtime-neutral effect fact supplied through the optional lifecycle port. */
+export interface DevtoolsLifecycleEffect {
   readonly type: string;
   readonly value: unknown;
+  readonly index: number;
   readonly status: 'succeeded' | 'returned' | 'failed' | 'unhandled' | 'invalid' | 'detached';
   readonly startedAtMs: number;
+  readonly durationMs: number;
   readonly error?: unknown;
 }
 
-export interface RuntimeLifecyclePatch {
-  readonly op: 'add' | 'remove' | 'replace';
-  readonly path: readonly (string | number)[];
-  readonly value?: unknown;
-}
-
-export interface RuntimeLifecycleStatePlan {
-  readonly previousState: unknown;
-  readonly plannedState: unknown;
-  readonly patches: readonly RuntimeLifecyclePatch[];
-}
-
-export interface RuntimeLifecycleSubscription {
-  readonly key: string;
-  readonly query: Readonly<OperationSubVector>;
-  readonly kind: 'root' | 'computed';
-  readonly active: boolean;
-  readonly version: number;
-  readonly status: 'value' | 'error';
-  readonly value?: unknown;
-  readonly error?: string;
-}
-
-export interface RuntimeLifecycleObserver {
-  onEventQueued?(event: OperationEventVector): void;
-  onEventStarted?(event: OperationEventVector, committedRevision: number): boolean | void;
-  onEventFinished?(event: OperationEventVector, error?: unknown): void;
-  onEventDropped?(
-    events: readonly OperationEventVector[],
-    reason: 'queue-dropped' | 'disposed',
-    error: unknown,
-  ): void;
-  onEventError?(kind: RuntimeLifecycleErrorKind, error: unknown): boolean | void;
-  onStatePlanned?(plan: RuntimeLifecycleStatePlan): void;
-  onEffects?(effects: readonly unknown[]): void;
-  onEffect?(effect: RuntimeLifecycleEffect): void;
-  onStateCommitted?(previousState: unknown, nextState: unknown, committedRevision: number): void;
-  onStatePublished?(
-    state: unknown,
-    publishedRevision: number,
-    recalculated: readonly RuntimeLifecycleSubscription[],
-  ): void;
-  getTraceTags?(): Readonly<Record<string, unknown>>;
-  onRuntimeDisposed?(): void;
+export interface DevtoolsLifecycleObserver {
+  onEffect?(effect: DevtoolsLifecycleEffect): void;
 }
 
 export interface DevtoolsOperationRuntime {
   readonly runtimeId: string;
   readonly runtimeInstanceId: string;
-  getStateRevisions(): { readonly committedRevision: number; readonly publishedRevision: number };
-  dispatch(event: never): void;
+  dispatch(event: never): string;
   flush(): Promise<void>;
-  getSubscriptionValue(query: never): unknown;
-  observeLifecycle(observer: RuntimeLifecycleObserver): () => void;
+  observeExecution(observer: DevtoolsExecutionObserver): () => void;
+  observeLifecycle(observer: DevtoolsLifecycleObserver): () => void;
 }

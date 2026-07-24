@@ -41,7 +41,7 @@ What agents can do through it:
 - 🔍 **Query application state** — scoped by path, no full dumps
 - 🧮 **Evaluate subscriptions on demand** — verify derived values before any component mounts them
 - 🚀 **Dispatch events and observe the outcome** — when explicitly granted, trigger a handler and get back the state diff it committed, the effects it emitted, or the error if it failed
-- ✅ **Dispatch and wait for a complete receipt** — operation-enabled runtimes return the joined cascade, final subscription publication, and every recalculated subscription
+- ✅ **Dispatch and wait for a canonical snapshot** — operation-enabled runtimes return the joined cascade's identity, status, lineage, revisions, pending work, and errors
 - 📚 **List handlers** — all registered events, effects, coeffects, and subscriptions
 - ⚡ **Monitor subscriptions** — current values of active reactive queries
 
@@ -120,7 +120,7 @@ The bridge needs a DevTools server with a connected app to talk to. In the proje
 
    if (import.meta.env.DEV) {
      enableDevtools(runtime, {
-       operations: {},
+       operations: true,
      });
    }
   ```
@@ -163,7 +163,7 @@ appear.
 The server advertises usage instructions to every MCP client at initialize time
 (the recommended retrieval order: check `app_status` first, discover handlers,
 read state by path, evaluate derived values with `eval_sub`, then, only when
-explicitly enabled, act with `dispatch_and_wait` when the runtime supports operations and verify from its receipt), so
+explicitly enabled, act with `dispatch_and_wait` when the runtime supports operations and verify from its snapshot), so
 agents get this workflow automatically — no extra prompt setup needed.
 
 Every tool accepts an optional `runtimeId`. When exactly one runtime is
@@ -262,11 +262,11 @@ Retrieve the current application state state — scoped by path whenever possibl
 ### 5. `dispatch_and_wait`
 
 The preferred development action for a runtime enabled with
-`enableDevtools(runtime, { operations: {} })`. It waits for the root event and all joined
-synchronous descendants, effect dispositions, and the final subscription
-publication. Its structured receipt includes state patches, revisions, effects,
-requested observations, and the subscriptions recalculated in the settled
-publication wave. It is authoritative even when tracing is off.
+`enableDevtools(runtime, { operations: true })`. It waits for the root event and all joined
+synchronous descendants and returns the DevTools-owned operation snapshot. The
+snapshot includes operation identity/status, event lineage, committed and
+published revisions, pending work, and errors. It is authoritative even when
+tracing is off.
 
 **Parameters:**
 
@@ -377,12 +377,7 @@ const runtime = createReflexRuntime({
 runtime.registerModule(headlessModule); // events, subs, and Node-safe adapters
 
 enableDevtools(runtime, {
-  operations: {
-    executionContext: {
-      profile: 'headless',
-      defaultEffectMode: 'suppressed',
-    },
-  },
+  operations: true,
   // runtime: 'headless' is auto-detected (no window)
   effectMode: 'safe',
   effects: { 'local-storage-set': 'memory', 'analytics-track': 'noop' }
@@ -391,7 +386,7 @@ enableDevtools(runtime, {
 setInterval(() => {}, 60_000); // keep the process alive if the server is down
 ```
 
-Split runtime-specific side effects into adapter pairs so the headless world is safe by default: `effects.browser.ts` / `effects.headless.ts` and `coeffects.browser.ts` / `coeffects.headless.ts` register the **same effect ids** with different implementations (real `localStorage` vs an in-memory map, real analytics vs no-op). Handlers emit the same effect contract either way. With DevTools operations enabled, `dispatch_and_wait` also reports the full settled state transition and subscriptions recalculated by the dispatch; the `effects` map passed to `enableDevtools` tells agents which effects really execute.
+Split runtime-specific side effects into adapter pairs so the headless world is safe by default: `effects.browser.ts` / `effects.headless.ts` and `coeffects.browser.ts` / `coeffects.headless.ts` register the **same effect ids** with different implementations (real `localStorage` vs an in-memory map, real analytics vs no-op). Handlers emit the same effect contract either way. With DevTools operations enabled, `dispatch_and_wait` reports the coordinator's settled operation snapshot; the `effects` map passed to `enableDevtools` tells agents which effects really execute.
 
 Run it with a watcher for the edit → reload → re-verify loop (`tsx watch src/headless.ts`); each reload reconnects that runtime id and bumps its `sessionEpoch` — visible in the next `app_status` call. Distinct runtime ids coexist, so a browser preview and headless process can be inspected together. A new connection with the same id supersedes only its older session; dispatches still in flight across that session replacement come back `outcome: "unknown"` ("session restarted") instead of hanging.
 

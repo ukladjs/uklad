@@ -17,8 +17,7 @@ dispatch(['todos/add', 'milk'])
   │     cofx inject → global interceptors → custom → event handler
   ├─ events/committer.ts      commits the candidate state once
   ├─ events/effect-executor.ts executes declared effects only after the commit
-  ├─ events/outcomes.ts       immutable queue, transition, commit, effect records
-  ├─ events/operation-coordinator.ts exact root/child operation projection
+  ├─ events/execution-observer.ts optional DevTools-only execution hook
   ├─ runtime/state.ts         state advances; flush scheduled (coalesced, rAF)
   │        ~~~~~~~~~~ window: state ahead, renderState behind; ALL subs still read renderState
   ├─ runtime/state.ts        flushSubscriptions(): renderState advances, diff top-level keys
@@ -34,33 +33,33 @@ dispatch(['todos/add', 'milk'])
 
 Paths in this document are relative to `src/`.
 
-| Path                                                                 | Responsibility                                                                         |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `index.ts`                                                           | Combined explicit-runtime entrypoint                                                   |
-| `vanilla.ts` / `react.ts`                                            | React-free runtime and React-only public entrypoints                                   |
-| `contracts.ts`                                                       | Store-local runtime contract extraction and vector/result types                        |
-| `types.ts`                                                           | Public contracts and module-augmentation anchors                                       |
-| `runtime/runtime.ts`                                                 | `createReflexRuntime`, modules, watches, restore/flush                                 |
-| `runtime/kernel.ts`                                                  | Instance-owned runtime kernel, identity, and terminal lifecycle                        |
-| `core/*`                                                             | Environment, equality, Immer, logging, scheduling, tracing, and validation             |
-| `runtime/state.ts`                                                   | `state`/`renderState`, coalesced flush, changed-root publication, publication outcomes |
-| `runtime/handlers.ts`                                                | Typed handler definitions and framework-owned handler baselines                        |
-| `runtime/event-metadata.ts`                                          | Per-event interceptor metadata                                                         |
-| `runtime/reset.ts`                                                   | Cross-store clear coordination                                                         |
-| `runtime/subscriptions/engine.ts`                                    | Reactive graph semantics: push waves, pull reads, and live lifecycle                   |
-| `runtime/subscriptions/cache.ts`                                     | Root metadata, canonical instances, reverse edges, leases, and sub config              |
-| `runtime/subscriptions/keys.ts`                                      | Canonical query-key serialization and development validation                           |
-| `events/router.ts`                                                   | FIFO queue of execution envelopes and legacy dispatch entrypoints                      |
-| `events/execution.ts`                                                | Composes runner, committer, effect executor, and execution records                     |
-| `events/runner.ts`                                                   | Interceptors and pure event-handler evaluation                                         |
-| `events/committer.ts`                                                | One state commit decision for a transition outcome                                     |
-| `events/effect-executor.ts`                                          | Post-commit effect execution and effect outcomes                                       |
-| `events/outcomes.ts`                                                 | Runtime-owned identities and passive immutable outcome projection                      |
-| `events/operation-coordinator.ts`                                    | Mandatory exact projection of outcomes into operation state                            |
-| `events/registration.ts`, `events/coeffects.ts`, `events/effects.ts` | Legacy registration and built-in effect support                                        |
-| `subscriptions/registration.ts`                                      | Root and computed subscription definitions                                             |
-| `subscriptions/queries.ts`                                           | Graph construction, cache lookup, and imperative reads                                 |
-| `react/*`                                                            | `useSubscription` and hot-reload bindings; the only React-dependent modules            |
+| Path                                                                 | Responsibility                                                              |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `index.ts`                                                           | Combined explicit-runtime entrypoint                                        |
+| `vanilla.ts` / `react.ts`                                            | React-free runtime and React-only public entrypoints                        |
+| `contracts.ts`                                                       | Store-local runtime contract extraction and vector/result types             |
+| `types.ts`                                                           | Public contracts and module-augmentation anchors                            |
+| `runtime/runtime.ts`                                                 | `createReflexRuntime`, modules, watches, restore/flush                      |
+| `runtime/kernel.ts`                                                  | Instance-owned runtime kernel, identity, and terminal lifecycle             |
+| `core/*`                                                             | Environment, equality, Immer, logging, scheduling, tracing, and validation  |
+| `runtime/state.ts`                                                   | `state`/`renderState`, coalesced flush, and changed-root publication        |
+| `runtime/handlers.ts`                                                | Typed handler definitions and framework-owned handler baselines             |
+| `runtime/event-metadata.ts`                                          | Per-event interceptor metadata                                              |
+| `runtime/reset.ts`                                                   | Cross-store clear coordination                                              |
+| `runtime/subscriptions/engine.ts`                                    | Reactive graph semantics: push waves, pull reads, and live lifecycle        |
+| `runtime/subscriptions/cache.ts`                                     | Root metadata, canonical instances, reverse edges, leases, and sub config   |
+| `runtime/subscriptions/keys.ts`                                      | Canonical query-key serialization and development validation                |
+| `events/router.ts`                                                   | FIFO queue of execution envelopes and legacy dispatch entrypoints           |
+| `events/execution.ts`                                                | Composes runner, committer, effect executor, and optional dev hooks         |
+| `events/runner.ts`                                                   | Interceptors and pure event-handler evaluation                              |
+| `events/committer.ts`                                                | One state commit decision for a transition                                  |
+| `events/effect-executor.ts`                                          | Post-commit effect execution                                                |
+| `events/envelope.ts`                                                 | Minimal queue work item, with optional DevTools metadata                    |
+| `events/execution-observer.ts`                                       | Narrow optional seam for a DevTools execution observer                      |
+| `events/registration.ts`, `events/coeffects.ts`, `events/effects.ts` | Legacy registration and built-in effect support                             |
+| `subscriptions/registration.ts`                                      | Root and computed subscription definitions                                  |
+| `subscriptions/queries.ts`                                           | Graph construction, cache lookup, and imperative reads                      |
+| `react/*`                                                            | `useSubscription` and hot-reload bindings; the only React-dependent modules |
 
 See [`code-conventions.md`](./code-conventions.md) for ownership and dependency
 rules for this tree.
@@ -80,7 +79,7 @@ rules for this tree.
 | Item                                              | What / why                                                                                                                                          |
 | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `regEvent(id, handler, options?)`                 | Register a pure handler. Prefer `{ coeffects, interceptors }`; coeffect specs become inject-interceptors. Legacy positional arrays remain supported |
-| `executeEventEnvelope(envelope)`                  | Compose runner, commit, effects, lifecycle compatibility, traces, and immutable outcomes                                                            |
+| `executeEventEnvelope(envelope)`                  | Compose runner, commit, effects, lifecycle compatibility, traces, and optional DevTools hooks                                                       |
 | `runEvent(eventV)`                                | Assemble and run `globals → custom → handler`; return state candidate and final effect intents without committing or executing effects              |
 | `createEventHandlerInterceptor`                   | Builds the interceptor that runs the handler inside `produce`, captures a state candidate + effects, and emits patches only while tracing           |
 | `commitTransition(envelope, candidateState)`      | Make one commit decision before any external effect executes                                                                                        |
@@ -111,6 +110,21 @@ is dispatched.
 post-commit lookup, invocation, failure isolation, and outcome projection. The
 router injects its dispatch function when installing built-ins, so the write
 path has no `effect executor → router → effect executor` module cycle.
+
+### DevTools operation boundary
+
+Operations are a DevTools/MCP capability, not runtime state. When
+`enableDevtools(runtime, { operations: true })` is active, DevTools installs
+one execution observer through `events/execution-observer.ts`. That observer
+assigns operation and event identity and retains snapshots in the DevTools
+package. Without it, queue envelopes contain only the event vector: no
+operation IDs, maps, snapshots, or outcome records are allocated in core.
+
+The observer receives only execution facts needed by the snapshot: acceptance,
+start, transition failure, commit, effect failure, finish, publication, drop,
+and disposal. Patches, effect payload/result detail, subscription waves,
+observations, idempotency, and delivery timing remain deferred DevTools product
+requirements.
 
 **`events/coeffects.ts`** — `regCoeffect(id, handler)`. `getInjectCofxInterceptor(id, value?)` injects into `context.coeffects` before the handler runs. Coeffects are application-owned and must be registered explicitly.
 

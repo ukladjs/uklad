@@ -304,37 +304,29 @@ interface DevtoolsConfig {
   effectMode?: string;
   // Adapter mode per effect/coeffect id, e.g. { 'local-storage-set': 'memory' }
   effects?: Record<string, string>;
-  // Enables MCP dispatch_and_wait receipts for this runtime.
-  operations?: {
-    completion?: 'cascade-published';
-    executionContext?: {
-      profile: string;
-      defaultEffectMode?: 'runtime-defined' | 'real' | 'stubbed' | 'fixture-backed' | 'suppressed';
-    };
-  };
+  // Enables MCP dispatch_and_wait operation snapshots for this runtime.
+  operations?: true;
 }
 ```
 
-### Retained operation receipts
+### Canonical operation snapshots
 
-Enable authoritative `dispatch_and_wait` receipts on the same DevTools call;
+Enable authoritative `dispatch_and_wait` snapshots on the same DevTools call;
 no additional package or inspector wrapper is required:
 
 ```ts
 enableDevtools(runtime, {
-  operations: {
-    executionContext: {
-      profile: 'browser',
-      defaultEffectMode: 'real',
-    },
-  },
+  operations: true,
 });
 ```
 
 DevTools creates the inspector from the supplied runtime automatically. When
-enabled, it advertises the capability to the server and MCP bridge.
-`executionContext` and `completion` are defaults applied to agent-initiated
-operations.
+enabled, it advertises the capability to the server and MCP bridge. The result
+is DevTools' immutable operation snapshot, assembled from runtime execution
+facts: identity, status, event lineage,
+committed/published revisions, pending work, and errors. It intentionally does
+not include DevTools-specific patches, effect payloads, observations,
+idempotency, or delivery-timeout data.
 
 Add application-specific PII keys by composing the exported default masker:
 

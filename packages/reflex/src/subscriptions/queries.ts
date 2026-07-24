@@ -1,6 +1,6 @@
 import { getGlobalEqualityCheckForKernel } from '../core/equality';
 import { consoleLog } from '../core/logging';
-import { mergeTraceForKernel, withTraceForKernel } from '../core/tracing';
+import { mergeOptionalTraceForKernel, withOptionalTraceForKernel } from '../core/tracing';
 import {
   getHandlerForKernel,
   hasHandlerForKernel,
@@ -71,7 +71,10 @@ export function getOrCreateSubscriptionForKernel(
     const existing = getCachedSubscriptionForKernel(runtime, key);
     if (existing) {
       renewProvisionalSubscriptionTreeForKernel(runtime, key);
-      mergeTraceForKernel(runtime, { tags: { 'cached?': true, subscriptionKey: key } });
+      mergeOptionalTraceForKernel(runtime, () => ({
+        'cached?': true,
+        subscriptionKey: key,
+      }));
       return existing;
     }
     if (buildingKeys.has(key)) {
@@ -93,9 +96,9 @@ export function getOrCreateSubscriptionForKernel(
       }
     }
 
-    withTraceForKernel(
+    withOptionalTraceForKernel(
       runtime,
-      { operation: subId, opType: 'sub/create', tags: { queryV: query } },
+      () => ({ operation: subId, opType: 'sub/create', tags: { queryV: query } }),
       () => {},
     );
     buildingKeys.add(key);

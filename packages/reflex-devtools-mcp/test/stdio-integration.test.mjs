@@ -229,27 +229,22 @@ async function startFakeDevtoolsServer({
           runtimeId: RUNTIME_ID,
           runtimeName: RUNTIME_NAME,
           sessionEpoch: 1,
-          receipt: {
-            operation: {
-              schemaVersion: 0,
-              operationId: 'integration-runtime:instance:1:op:1',
-              outcome: 'succeeded',
-              subscriptions: {
-                status: 'settled',
-                publishedRevision: 1,
-                recalculated: [{
-                  query: ['counter'],
-                  key: '["counter"]',
-                  kind: 'root',
-                  active: true,
-                  version: 1,
-                  status: 'value',
-                  value: 2,
-                }],
-              },
-            },
-            delivery: { status: 'settled', timeoutMs: null },
-            replayed: false,
+          operation: {
+            operationId: 'integration-runtime:instance:1:op:1',
+            rootEventInstanceId: 'integration-runtime:instance:1:event:1',
+            acceptedSequence: 1,
+            publishedRevision: 1,
+            status: 'completed',
+            eventInstanceIds: ['integration-runtime:instance:1:event:1'],
+            events: [{
+              eventInstanceId: 'integration-runtime:instance:1:event:1',
+              acceptedSequence: 1,
+              committedRevision: 1,
+              status: 'completed',
+            }],
+            pendingEventInstanceIds: [],
+            committedRevisions: [1],
+            errors: [],
           },
         });
       } else if (req.method === 'POST' && url.pathname === '/api/eval-sub') {
@@ -513,16 +508,8 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
         runtimeId: RUNTIME_ID,
       },
     }));
-    assert.equal(operation.receipt.operation.operationId, 'integration-runtime:instance:1:op:1');
-    assert.deepEqual(operation.receipt.operation.subscriptions.recalculated, [{
-      query: ['counter'],
-      key: '["counter"]',
-      kind: 'root',
-      active: true,
-      version: 1,
-      status: 'value',
-      value: 2,
-    }]);
+    assert.equal(operation.operation.operationId, 'integration-runtime:instance:1:op:1');
+    assert.deepEqual(operation.operation.committedRevisions, [1]);
 
     const subValue = parseToolResult(await client.callTool({
       name: 'eval_sub',

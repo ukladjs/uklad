@@ -13,7 +13,7 @@ import {
   isTraceEnabledForKernel,
   registerTraceCallbackForKernel,
   removeTraceCallbackForKernel,
-  withTraceForKernel,
+  withOptionalTraceForKernel,
 } from '../core/tracing';
 import { getInjectCofxInterceptorForKernel } from '../events/coeffects';
 import {
@@ -243,7 +243,7 @@ export const registerTraceCallback = registerTraceCallbackForKernel.bind(null, k
 ) => void;
 export const removeTraceCallback = removeTraceCallbackForKernel.bind(null, kernel);
 export function withTrace<T>(options: TraceOptions, fn: () => T): T {
-  return withTraceForKernel(kernel, options, fn);
+  return withOptionalTraceForKernel(kernel, () => options, fn);
 }
 
 export const clear = clearForKernel.bind(null, kernel);

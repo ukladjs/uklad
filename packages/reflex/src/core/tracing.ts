@@ -46,6 +46,10 @@ function getTraceState(runtime: RuntimeKernel): TraceState {
   });
 }
 
+function peekTraceState(runtime: RuntimeKernel): TraceState | undefined {
+  return runtime.tracing;
+}
+
 /** @internal Enable the manual trace owner for one runtime. */
 export function enableTracingForKernel(runtime: RuntimeKernel): void {
   const state = getTraceState(runtime);
@@ -89,7 +93,7 @@ function discardPendingTraces(state: TraceState): void {
 
 /** @internal Return whether one runtime is collecting traces. */
 export function isTraceEnabledForKernel(runtime: RuntimeKernel): boolean {
-  return getTraceState(runtime).traceEnabled;
+  return peekTraceState(runtime)?.traceEnabled ?? false;
 }
 
 function updateTraceEnabled(state: TraceState): void {
@@ -117,7 +121,7 @@ export function registerTraceCallbackForKernel(
 
 /** @internal Remove a trace callback from one runtime. */
 export function removeTraceCallbackForKernel(runtime: RuntimeKernel, key: string): void {
-  getTraceState(runtime).callbacks.delete(key);
+  peekTraceState(runtime)?.callbacks.delete(key);
 }
 
 function scheduleFlush(state: TraceState): void {
@@ -156,16 +160,19 @@ function finishTrace(state: TraceState, trace: Trace): void {
   scheduleFlush(state);
 }
 
-/** @internal Run `fn` inside a trace owned by one runtime. */
-export function withTraceForKernel<T>(
+/**
+ * Run work without constructing trace options while tracing is disabled.
+ * Hot-path callers use this form when tag construction needs derived values.
+ */
+export function withOptionalTraceForKernel<T>(
   runtime: RuntimeKernel,
-  options: TraceOptions,
+  createOptions: () => TraceOptions,
   fn: () => T,
 ): T {
-  const state = getTraceState(runtime);
-  if (!state.traceEnabled) return fn();
+  const state = peekTraceState(runtime);
+  if (!state?.traceEnabled) return fn();
   const parent = state.currentTrace;
-  state.currentTrace = startTrace(state, options);
+  state.currentTrace = startTrace(state, createOptions());
   try {
     return fn();
   } finally {
@@ -174,11 +181,14 @@ export function withTraceForKernel<T>(
   }
 }
 
-/** @internal Shallow-merge tags into one runtime's active trace. */
-export function mergeTraceForKernel(runtime: RuntimeKernel, update: { tags: TraceTags }): void {
-  const state = getTraceState(runtime);
-  if (!state.traceEnabled || !state.currentTrace) return;
-  state.currentTrace.tags = { ...state.currentTrace.tags, ...update.tags };
+/** @internal Build trace tags only when an active trace can receive them. */
+export function mergeOptionalTraceForKernel(
+  runtime: RuntimeKernel,
+  createTags: () => TraceTags,
+): void {
+  const state = peekTraceState(runtime);
+  if (!state?.traceEnabled || !state.currentTrace) return;
+  state.currentTrace.tags = { ...state.currentTrace.tags, ...createTags() };
 }
 
 /** @internal Register the built-in console trace printer on one runtime. */
@@ -190,7 +200,8 @@ export function enableTracePrintForKernel(runtime: RuntimeKernel): void {
 
 /** @internal Release timers, callbacks, and leases owned by a disposed runtime. */
 export function disposeTracingForKernel(runtime: RuntimeKernel): void {
-  const state = getTraceState(runtime);
+  const state = peekTraceState(runtime);
+  if (!state) return;
   discardPendingTraces(state);
   state.callbacks.clear();
   state.manualTraceEnabled = false;

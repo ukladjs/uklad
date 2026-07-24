@@ -25,12 +25,7 @@ browserRuntime.registerModule(installBrowserEffects);
 browserRuntime.registerModule(installBrowserCoeffects);
 
 enableDevtools(browserRuntime, {
-  operations: {
-    executionContext: {
-      profile: 'browser',
-      defaultEffectMode: 'real',
-    },
-  },
+  operations: true,
   runtime: 'browser',
   effectMode: 'real',
   effects: {

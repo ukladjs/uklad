@@ -49,10 +49,7 @@ async function bootstrapSession(baseUrl, role) {
   return body;
 }
 
-async function startServer(
-  config = {},
-  { grantTestCapabilities = true } = {},
-) {
+async function startServer(config = {}, { grantTestCapabilities = true } = {}) {
   const effectiveConfig = { ...config };
   if (grantTestCapabilities && effectiveConfig.capabilities === undefined) {
     // Existing protocol tests exercise mutation flows. Security-specific tests
@@ -76,10 +73,7 @@ async function startServer(
   const wsUrl = `ws://127.0.0.1:${address.port}`;
   const sessions = Object.fromEntries(
     await Promise.all(
-      ['runtime', 'ui', 'mcp'].map(async (role) => [
-        role,
-        await bootstrapSession(baseUrl, role),
-      ]),
+      ['runtime', 'ui', 'mcp'].map(async (role) => [role, await bootstrapSession(baseUrl, role)]),
     ),
   );
   sessionsByBaseUrl.set(baseUrl, sessions);
@@ -114,9 +108,7 @@ async function connectSdk(
   });
   const rejectBeforeHello = (code, reason) => {
     rejectHello(
-      new Error(
-        `runtime socket closed before server hello (${code}: ${reason.toString()})`,
-      ),
+      new Error(`runtime socket closed before server hello (${code}: ${reason.toString()})`),
     );
   };
   socket.once('close', rejectBeforeHello);
@@ -187,11 +179,7 @@ async function connectUi(wsUrl) {
     };
     const onClose = (code, reason) => {
       socket.removeListener('message', onMessage);
-      reject(
-        new Error(
-          `UI socket closed before authentication (${code}: ${reason.toString()})`,
-        ),
-      );
+      reject(new Error(`UI socket closed before authentication (${code}: ${reason.toString()})`));
     };
     socket.on('message', onMessage);
     socket.once('close', onClose);
@@ -249,11 +237,7 @@ function waitForSocketMessage(socket, predicate, timeoutMs = 2000) {
     };
     const onClose = (code, reason) => {
       cleanup();
-      reject(
-        new Error(
-          `socket closed before expected message (${code}: ${reason.toString()})`,
-        ),
-      );
+      reject(new Error(`socket closed before expected message (${code}: ${reason.toString()})`));
     };
     const onError = (error) => {
       cleanup();
@@ -363,9 +347,7 @@ function postEvalSub(baseUrl, id, args = [], runtimeId) {
 }
 
 async function getStatus(baseUrl, runtimeId) {
-  const suffix = runtimeId === undefined
-    ? ''
-    : `?runtimeId=${encodeURIComponent(runtimeId)}`;
+  const suffix = runtimeId === undefined ? '' : `?runtimeId=${encodeURIComponent(runtimeId)}`;
   let response = await authenticatedFetch(baseUrl, `/api/status${suffix}`);
   if (response.status === 409) {
     const selection = await response.json();
@@ -382,12 +364,7 @@ async function getStatus(baseUrl, runtimeId) {
 
 // Poll /api/status until `predicate` holds — WebSocket processing is async
 // relative to HTTP, so tests can't assert immediately after socket.send.
-async function waitForStatus(
-  baseUrl,
-  predicate,
-  timeoutMs = 2000,
-  runtimeId,
-) {
+async function waitForStatus(baseUrl, predicate, timeoutMs = 2000, runtimeId) {
   const deadline = Date.now() + timeoutMs;
   let status = await getStatus(baseUrl, runtimeId);
   while (!predicate(status)) {
@@ -406,12 +383,7 @@ async function waitForCondition(predicate, timeoutMs = 2000) {
   }
 }
 
-async function waitForRuntimeState(
-  baseUrl,
-  runtimeId,
-  predicate,
-  timeoutMs = 2000,
-) {
+async function waitForRuntimeState(baseUrl, runtimeId, predicate, timeoutMs = 2000) {
   const deadline = Date.now() + timeoutMs;
   while (true) {
     const response = await authenticatedFetch(
@@ -426,21 +398,16 @@ async function waitForRuntimeState(
 }
 
 test('the default read-only capability denies HTTP and UI dispatches and audits both', async () => {
-  const { baseUrl, wsUrl } = await startServer(
-    {},
-    { grantTestCapabilities: false },
-  );
+  const { baseUrl, wsUrl } = await startServer({}, { grantTestCapabilities: false });
   await connectSdk(wsUrl, () => {});
 
   const status = await getStatus(baseUrl);
   assert.deepEqual(status.capabilities, ['inspect']);
   assert.equal(status.readOnly, true);
 
-  const httpResponse = await postDispatch(
-    baseUrl,
-    'rotate-credentials',
-    [{ password: 'must-not-be-audited' }],
-  );
+  const httpResponse = await postDispatch(baseUrl, 'rotate-credentials', [
+    { password: 'must-not-be-audited' },
+  ]);
   const httpBody = await httpResponse.json();
   assert.equal(httpResponse.status, 403);
   assert.equal(httpBody.code, 'CAPABILITY_DENIED');
@@ -470,9 +437,10 @@ test('the default read-only capability denies HTTP and UI dispatches and audits 
   const audit = JSON.parse(auditText);
   assert.deepEqual(
     audit.records
-      .filter((record) =>
-        record.requestId === httpBody.requestId
-        || record.requestId === uiError.payload.requestId)
+      .filter(
+        (record) =>
+          record.requestId === httpBody.requestId || record.requestId === uiError.payload.requestId,
+      )
       .map((record) => ({
         principal: record.principal,
         transport: record.transport,
@@ -675,17 +643,11 @@ test('oversized runtime trace batches close only the offending socket without cr
     code: 1008,
     reason: 'Invalid runtime event',
   });
-  const disconnected = await waitForStatus(
-    baseUrl,
-    (status) => status.appConnected === false,
-  );
+  const disconnected = await waitForStatus(baseUrl, (status) => status.appConnected === false);
   assert.equal(disconnected.sessionEpoch, 1);
 
   await connectSdk(wsUrl, () => {});
-  const recovered = await waitForStatus(
-    baseUrl,
-    (status) => status.appConnected === true,
-  );
+  const recovered = await waitForStatus(baseUrl, (status) => status.appConnected === true);
   assert.equal(recovered.sessionEpoch, 2);
 });
 
@@ -700,8 +662,7 @@ test('retention-limit rejection sends a bounded notice and keeps the runtime soc
   const noticePromise = waitForSocketMessage(
     socket,
     (message) =>
-      message.type === 'devtools-error'
-      && message.payload?.code === 'RUNTIME_TELEMETRY_DROPPED',
+      message.type === 'devtools-error' && message.payload?.code === 'RUNTIME_TELEMETRY_DROPPED',
   );
   sendSdkEvent(socket, {
     type: 'reflex-state',
@@ -721,10 +682,7 @@ test('retention-limit rejection sends a bounded notice and keeps the runtime soc
     type: 'reflex-state',
     payload: { retained: true },
   });
-  const status = await waitForStatus(
-    baseUrl,
-    (candidate) => candidate.stateAvailable === true,
-  );
+  const status = await waitForStatus(baseUrl, (candidate) => candidate.stateAvailable === true);
   assert.equal(status.appConnected, true);
   assert.equal(status.sessionEpoch, 1);
 });
@@ -742,8 +700,7 @@ test('server redaction failure drops telemetry nonfatally with no exception deta
   const noticePromise = waitForSocketMessage(
     socket,
     (message) =>
-      message.type === 'devtools-error'
-      && message.payload?.reason === 'redaction-failed',
+      message.type === 'devtools-error' && message.payload?.reason === 'redaction-failed',
   );
 
   sendSdkEvent(socket, {
@@ -794,10 +751,7 @@ test('hard WebSocket frame limits may close oversized senders with 1009', async 
     code: 1009,
     reason: '',
   });
-  const status = await waitForStatus(
-    baseUrl,
-    (candidate) => candidate.appConnected === false,
-  );
+  const status = await waitForStatus(baseUrl, (candidate) => candidate.appConnected === false);
   assert.equal(status.sessionEpoch, 1);
 });
 
@@ -893,11 +847,7 @@ test('server-side redaction prevents state, trace, dispatch, and audit secret le
   });
   await waitForStatus(baseUrl, (status) => status.stateAvailable);
 
-  const dispatchResponse = await postDispatch(
-    baseUrl,
-    'save-account',
-    [{ password: secret }],
-  );
+  const dispatchResponse = await postDispatch(baseUrl, 'save-account', [{ password: secret }]);
   const dispatchText = await dispatchResponse.text();
   assert.equal(dispatchResponse.status, 200);
   assert.equal(dispatchText.includes(secret), false);
@@ -1154,7 +1104,9 @@ test('a session replacement fails in-flight dispatches instead of leaving them t
 
   // First session receives the dispatch but never reports an outcome
   let dispatchDelivered;
-  const delivered = new Promise((resolve) => { dispatchDelivered = resolve; });
+  const delivered = new Promise((resolve) => {
+    dispatchDelivered = resolve;
+  });
   await connectSdk(wsUrl, () => dispatchDelivered());
 
   const responsePromise = postDispatch(baseUrl, 'increment-counter');
@@ -1221,13 +1173,9 @@ test('/api/dispatch resolves with the observed successful trace', async () => {
     duration: 2.5,
     tags: {
       event: ['increment-counter', 3],
-      patches: [
-        { op: 'replace', path: ['counter'], value: new Map([['value', 3]]) },
-      ],
+      patches: [{ op: 'replace', path: ['counter'], value: new Map([['value', 3]]) }],
       effects: [['log-counter', new Set(['counter'])]],
-      reversePatches: [
-        { op: 'replace', path: ['counter'], value: 2 },
-      ],
+      reversePatches: [{ op: 'replace', path: ['counter'], value: 2 }],
     },
   };
 
@@ -1271,29 +1219,26 @@ test('/api/dispatch resolves with the observed successful trace', async () => {
   assert.equal('reversePatches' in traceBody.trace.tags, false);
 });
 
-test('/api/dispatch-and-wait returns an operation receipt from an operation-enabled runtime', async () => {
+test('/api/dispatch-and-wait returns a canonical operation snapshot from an operation-enabled runtime', async () => {
   const { baseUrl, wsUrl } = await startServer();
-  const receipt = {
+  const result = {
     operation: {
-      schemaVersion: 0,
       operationId: 'runtime-test:instance:1:op:1',
-      outcome: 'succeeded',
-      subscriptions: {
-        status: 'settled',
-        publishedRevision: 1,
-        recalculated: [{
-          key: '["counter"]',
-          query: ['counter'],
-          kind: 'root',
-          active: true,
-          version: 1,
-          status: 'value',
-          value: 1,
-        }],
-      },
+      rootEventInstanceId: 'runtime-test:instance:1:event:1',
+      acceptedSequence: 1,
+      publishedRevision: 1,
+      status: 'completed',
+      eventInstanceIds: ['runtime-test:instance:1:event:1'],
+      events: [{
+        eventInstanceId: 'runtime-test:instance:1:event:1',
+        acceptedSequence: 1,
+        committedRevision: 1,
+        status: 'completed',
+      }],
+      pendingEventInstanceIds: [],
+      committedRevisions: [1],
+      errors: [],
     },
-    delivery: { status: 'settled', timeoutMs: null },
-    replayed: false,
   };
   const socket = await connectSdk(
     wsUrl,
@@ -1301,7 +1246,7 @@ test('/api/dispatch-and-wait returns an operation receipt from an operation-enab
       assert.equal(message.payload.operation, true);
       sendSdkEvent(client, {
         type: 'reflex-operation-result',
-        payload: { dispatchId: message.payload.dispatchId, result: receipt },
+        payload: { dispatchId: message.payload.dispatchId, result },
       });
     },
     undefined,
@@ -1319,8 +1264,9 @@ test('/api/dispatch-and-wait returns an operation receipt from an operation-enab
 
   assert.equal(response.status, 200);
   assert.equal(body.success, true);
-  assert.equal(body.receipt.operation.operationId, receipt.operation.operationId);
-  assert.deepEqual(body.receipt.operation.subscriptions.recalculated, receipt.operation.subscriptions.recalculated);
+  assert.equal(body.operation.operationId, result.operation.operationId);
+  assert.deepEqual(body.operation.committedRevisions, result.operation.committedRevisions);
+  assert.deepEqual(body.receipt, body.operation);
   const status = await getStatus(baseUrl, socket.runtimeId);
   assert.equal(status.operations.available, true);
   assert.equal(status.operations.runtimeInstanceId, 'runtime-test:instance:1');
@@ -1380,12 +1326,8 @@ test('/api/dispatch derives failed and effects-failed outcomes from trace tags',
   assert.equal(effectsResponse.status, 200);
   assert.equal(effectsBody.outcome, 'effects-failed');
   assert.equal(effectsBody.traceId, 202);
-  assert.deepEqual(effectsBody.patches, [
-    { op: 'replace', path: ['saved'], value: true },
-  ]);
-  assert.deepEqual(effectsBody.effectErrors, [
-    { effect: 'persist', message: 'disk full' },
-  ]);
+  assert.deepEqual(effectsBody.patches, [{ op: 'replace', path: ['saved'], value: true }]);
+  assert.deepEqual(effectsBody.effectErrors, [{ effect: 'persist', message: 'disk full' }]);
 });
 
 test('/api/dispatch reports unknown when the SDK disconnects before the outcome', async () => {
@@ -1497,7 +1439,11 @@ test('/api/eval-sub surfaces missing handlers and evaluation errors', async () =
 
 test('/api/eval-sub fails promptly if the app disconnects', async () => {
   const { baseUrl, wsUrl } = await startServer();
-  await connectSdk(wsUrl, () => {}, (_message, socket) => socket.close());
+  await connectSdk(
+    wsUrl,
+    () => {},
+    (_message, socket) => socket.close(),
+  );
 
   const response = await postEvalSub(baseUrl, 'slow-sub');
   const body = await response.json();
@@ -1527,8 +1473,12 @@ test('two runtimes coexist with isolated status, state, handlers, traces, dispat
 
   const alpha = await connectSdk(
     wsUrl,
-    () => { alphaDispatches += 1; },
-    () => { alphaEvals += 1; },
+    () => {
+      alphaDispatches += 1;
+    },
+    () => {
+      alphaEvals += 1;
+    },
     () => {},
     { runtimeId: 'runtime-alpha', runtimeName: 'Runtime Alpha' },
   );
@@ -1652,10 +1602,7 @@ test('two runtimes coexist with isolated status, state, handlers, traces, dispat
     '/api/state?runtimeId=runtime-alpha',
   );
   const alphaState = await alphaStateResponse.json();
-  const betaStateResponse = await authenticatedFetch(
-    baseUrl,
-    '/api/state?runtimeId=runtime-beta',
-  );
+  const betaStateResponse = await authenticatedFetch(baseUrl, '/api/state?runtimeId=runtime-beta');
   const betaState = await betaStateResponse.json();
   assert.deepEqual(alphaState.state, { owner: 'alpha', value: 1 });
   assert.deepEqual(betaState.state, { owner: 'beta', value: 2 });
@@ -1712,12 +1659,7 @@ test('two runtimes coexist with isolated status, state, handlers, traces, dispat
   assert.equal(alphaDispatches, 0);
   assert.equal(betaDispatches, 1);
 
-  const evalResponse = await postEvalSub(
-    baseUrl,
-    'beta-sub',
-    [42],
-    'runtime-beta',
-  );
+  const evalResponse = await postEvalSub(baseUrl, 'beta-sub', [42], 'runtime-beta');
   const evalBody = await evalResponse.json();
   assert.equal(evalResponse.status, 200);
   assert.deepEqual(evalBody.value, { owner: 'beta', args: [42] });
@@ -1760,19 +1702,9 @@ test('same-id reconnect supersedes and clears only that runtime and only its pen
     type: 'reflex-state',
     payload: { owner: 'beta-retained' },
   });
-  await waitForStatus(
-    baseUrl,
-    (status) => status.stateAvailable,
-    2000,
-    'runtime-beta',
-  );
+  await waitForStatus(baseUrl, (status) => status.stateAvailable, 2000, 'runtime-beta');
 
-  const pendingDispatch = postDispatch(
-    baseUrl,
-    'alpha-slow',
-    [],
-    'runtime-alpha',
-  );
+  const pendingDispatch = postDispatch(baseUrl, 'alpha-slow', [], 'runtime-alpha');
   await alphaDispatchReceived;
   const firstAlphaClosed = waitForSocketClose(firstAlpha);
   const secondAlpha = await connectSdk(
@@ -1805,12 +1737,7 @@ test('same-id reconnect supersedes and clears only that runtime and only its pen
   ).json();
   assert.deepEqual(betaState.state, { owner: 'beta-retained' });
 
-  const betaDispatchResponse = await postDispatch(
-    baseUrl,
-    'beta-event',
-    [],
-    'runtime-beta',
-  );
+  const betaDispatchResponse = await postDispatch(baseUrl, 'beta-event', [], 'runtime-beta');
   const betaDispatchBody = await betaDispatchResponse.json();
   assert.equal(betaDispatchBody.outcome, 'unknown');
   assert.equal(betaDispatchBody.runtimeId, 'runtime-beta');
@@ -1823,14 +1750,18 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
   let betaUiDispatches = 0;
   const alpha = await connectSdk(
     wsUrl,
-    () => { alphaUiDispatches += 1; },
+    () => {
+      alphaUiDispatches += 1;
+    },
     () => {},
     () => {},
     { runtimeId: 'runtime-alpha', runtimeName: 'Runtime Alpha' },
   );
   const beta = await connectSdk(
     wsUrl,
-    () => { betaUiDispatches += 1; },
+    () => {
+      betaUiDispatches += 1;
+    },
     () => {},
     () => {},
     { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
@@ -2094,20 +2025,23 @@ test('UI snapshot replay requires inspect capability', async () => {
     type: 'reflex-state',
     payload: { secretProfile: 'must-not-replay' },
   });
-  await waitForCondition(() =>
-    server.runtimes.get('runtime-private')?.storage?.getState() !== null);
+  await waitForCondition(
+    () => server.runtimes.get('runtime-private')?.storage?.getState() !== null,
+  );
 
   const ui = await connectUi(wsUrl);
-  await waitForCondition(() => ui.receivedMessages.some(
-    (message) => message.type === 'devtools-runtime-selected',
-  ));
+  await waitForCondition(() =>
+    ui.receivedMessages.some((message) => message.type === 'devtools-runtime-selected'),
+  );
   await new Promise((resolve) => setTimeout(resolve, 25));
   assert.equal(
-    ui.receivedMessages.some((message) =>
-      message.type === 'reflex-state'
-      || message.type === 'reflex-traces'
-      || message.type === 'reflex-active-subs'
-      || message.type === 'reflex-handler-keys'),
+    ui.receivedMessages.some(
+      (message) =>
+        message.type === 'reflex-state' ||
+        message.type === 'reflex-traces' ||
+        message.type === 'reflex-active-subs' ||
+        message.type === 'reflex-handler-keys',
+    ),
     false,
   );
 });
@@ -2118,14 +2052,18 @@ test('UI dispatch rejects a runtime that differs from the acknowledged selection
   let betaDispatches = 0;
   await connectSdk(
     wsUrl,
-    () => { alphaDispatches += 1; },
+    () => {
+      alphaDispatches += 1;
+    },
     () => {},
     () => {},
     { runtimeId: 'runtime-alpha', runtimeName: 'Runtime Alpha' },
   );
   await connectSdk(
     wsUrl,
-    () => { betaDispatches += 1; },
+    () => {
+      betaDispatches += 1;
+    },
     () => {},
     () => {},
     { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
@@ -2188,12 +2126,7 @@ test('trace lookup rejects a stale session epoch after same-id reconnect', async
     type: 'reflex-traces',
     payload: [{ id: 7, start: 1, operation: 'before', opType: 'event' }],
   });
-  await waitForStatus(
-    baseUrl,
-    (status) => status.traceCount === 1,
-    2000,
-    'runtime-epoch',
-  );
+  await waitForStatus(baseUrl, (status) => status.traceCount === 1, 2000, 'runtime-epoch');
 
   const beforeResponse = await authenticatedFetch(
     baseUrl,
@@ -2271,12 +2204,7 @@ test('the bounded runtime registry rejects excess live identities and reuses dis
   const alphaClosed = new Promise((resolve) => alpha.once('close', resolve));
   alpha.close();
   await alphaClosed;
-  await waitForStatus(
-    baseUrl,
-    (status) => status.appConnected === false,
-    2000,
-    'runtime-alpha',
-  );
+  await waitForStatus(baseUrl, (status) => status.appConnected === false, 2000, 'runtime-alpha');
   await connectSdk(
     wsUrl,
     () => {},
@@ -2285,7 +2213,8 @@ test('the bounded runtime registry rejects excess live identities and reuses dis
     { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
   );
   const betaStatus = await getStatus(baseUrl, 'runtime-beta');
-  assert.deepEqual(betaStatus.runtimes.map(({ runtimeId }) => runtimeId), [
-    'runtime-beta',
-  ]);
+  assert.deepEqual(
+    betaStatus.runtimes.map(({ runtimeId }) => runtimeId),
+    ['runtime-beta'],
+  );
 });

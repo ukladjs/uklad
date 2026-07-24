@@ -1,6 +1,6 @@
 /**
  * MCP Tool: dispatch_and_wait
- * Dispatch through the optional DevTools operation ledger and return its authoritative receipt.
+ * Dispatch through the optional coordinator capability and return its snapshot.
  */
 
 import { DevToolsAPIClient } from '../httpClient.js';
@@ -22,7 +22,7 @@ export interface DispatchAndWaitParams extends RuntimeSelectionParams {
 export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'dispatch_and_wait',
-    description: 'Dispatch an event through the DevTools operation ledger and wait until its full synchronous cascade has completed, the subscription graph has settled, and the authoritative post-dispatch receipt is available. The receipt includes every joined event, committed state patches, effect dispositions, state revisions, requested observations, and each subscription recalculated in the final publication wave. Requires enableDevtools(runtime, { operations: {} }).',
+    description: 'Dispatch an event through the runtime-owned operation coordinator and wait for its canonical snapshot. The snapshot includes operation identity and status, joined-event lineage, committed/published revisions, pending work, and execution errors. Requires enableDevtools(runtime, { operations: true }).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -50,9 +50,9 @@ export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
         runtimeName: { type: 'string' },
         sessionEpoch: { type: 'integer' },
         requestId: { type: 'string' },
-        receipt: { type: 'object', additionalProperties: true },
+        operation: { type: 'object', additionalProperties: true },
       },
-      required: ['receipt'],
+      required: ['operation'],
       additionalProperties: true,
     },
     handler: async (params: DispatchAndWaitParams) => {
@@ -65,7 +65,7 @@ export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
         const result = {
           ...runtimeMetadata(response),
           ...(response.requestId ? { requestId: response.requestId } : {}),
-          receipt: response.receipt,
+          operation: response.operation,
         };
         return {
           content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -83,13 +83,13 @@ export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
             type: 'text',
             text: JSON.stringify({
               error: unavailableCapability
-                ? 'Operation receipt capability unavailable'
+                ? 'Operation snapshot capability unavailable'
                 : 'Failed to dispatch and await operation',
               code: (error as any)?.code,
               message: details.error ?? (error instanceof Error ? error.message : 'Unknown error'),
               event: params.eventName,
               hint: unavailableCapability
-                ? 'Enable DevTools with enableDevtools(runtime, { operations: {} }), then reconnect the runtime and retry.'
+                ? 'Enable DevTools with enableDevtools(runtime, { operations: true }), then reconnect the runtime and retry.'
                 : 'Make sure the DevTools server and operation-enabled app are running.',
             }, null, 2),
           }],

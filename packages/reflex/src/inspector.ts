@@ -5,7 +5,15 @@ import {
 } from './core/tracing';
 import { DISPATCH, DISPATCH_LATER } from './events/effects';
 import { dispatchForKernel, flushRuntime } from './events/router';
-import { getStateForKernel, getStateRevisionsForKernel } from './runtime/state';
+import {
+  observeDevelopmentExecutionForKernel,
+  type DevelopmentExecutionObserver,
+} from './events/execution-observer';
+import {
+  observeRuntimeLifecycleForKernel,
+  type RuntimeLifecycleObserver,
+} from './runtime/lifecycle';
+import { getStateForKernel } from './runtime/state';
 import { getHandlersForKernel } from './runtime/handlers';
 import {
   createRuntimeStateKey,
@@ -13,10 +21,6 @@ import {
   isRuntimeDisposed,
   type RuntimeKernel,
 } from './runtime/kernel';
-import {
-  observeRuntimeLifecycleForKernel,
-  type RuntimeLifecycleObserver,
-} from './runtime/lifecycle';
 import { getSubscriptionDiagnosticsForKernel } from './runtime/subscriptions/cache';
 import { getSubscriptionValueForKernel } from './subscriptions/queries';
 
@@ -40,14 +44,13 @@ export interface ReflexInspectorSnapshot {
   readonly subscriptions: readonly SubscriptionDiagnostic[];
 }
 
-/** @internal Structural runtime port consumed by the optional DevTools operation ledger. */
+/** @internal Structural runtime port consumed by optional DevTools operation snapshots. */
 export interface ReflexDevtoolsOperationRuntime {
   readonly runtimeId: string;
   readonly runtimeInstanceId: string;
-  getStateRevisions(): { readonly committedRevision: number; readonly publishedRevision: number };
-  dispatch(event: never): void;
+  dispatch(event: never): string;
   flush(): Promise<void>;
-  getSubscriptionValue(query: never): unknown;
+  observeExecution(observer: DevelopmentExecutionObserver): () => void;
   observeLifecycle(observer: RuntimeLifecycleObserver): () => void;
 }
 
@@ -67,7 +70,7 @@ export interface ReflexInspector {
   subscribeTraces(callback: TraceCallback): () => void;
   dispatch(event: EventVector): void;
   evaluateSubscription(query: SubVector): unknown;
-  /** @internal Runtime port for optional DevTools operation receipts. */
+  /** @internal Runtime port for optional DevTools operation snapshots. */
   getOperationRuntime(): ReflexDevtoolsOperationRuntime;
 }
 
@@ -91,21 +94,20 @@ export function createReflexInspectorForKernel(runtime: RuntimeKernel): ReflexIn
   const operationRuntime: ReflexDevtoolsOperationRuntime = {
     runtimeId: runtime.runtimeId,
     runtimeInstanceId: runtime.runtimeInstanceId,
-    getStateRevisions() {
-      assertRuntimeActive();
-      return getStateRevisionsForKernel(runtime);
-    },
     dispatch(event: never) {
       assertRuntimeActive();
-      dispatchForKernel(runtime, event);
+      const envelope = dispatchForKernel(runtime, event);
+      if (!envelope?.operation)
+        throw new Error('[reflex] operation dispatch requires an installed development observer.');
+      return envelope.operation.operationId;
     },
     flush() {
       assertRuntimeActive();
       return flushRuntime(runtime);
     },
-    getSubscriptionValue(query: never) {
+    observeExecution(observer: DevelopmentExecutionObserver) {
       assertRuntimeActive();
-      return getSubscriptionValueForKernel(runtime, query);
+      return observeDevelopmentExecutionForKernel(runtime, observer);
     },
     observeLifecycle(observer: RuntimeLifecycleObserver) {
       assertRuntimeActive();

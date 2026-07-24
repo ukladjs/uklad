@@ -1,6 +1,6 @@
 import type { EqualityCheckFn } from '../types';
 import type { EventQueue } from '../events/router';
-import type { ExecutionEnvelope } from '../events/outcomes';
+import type { ExecutionEnvelope } from '../events/envelope';
 import type { RateLimitState } from '../events/rate-limit';
 import type { TraceState } from '../core/tracing';
 import type { StateStore } from './state';
@@ -74,6 +74,11 @@ export function getOrCreateRuntimeState<T>(
   const state = create();
   runtime.extensions.set(key.symbol, state);
   return state;
+}
+
+/** @internal Read optional runtime-owned state without allocating it. */
+export function getRuntimeState<T>(runtime: RuntimeKernel, key: RuntimeStateKey<T>): T | undefined {
+  return runtime.extensions.get(key.symbol) as T | undefined;
 }
 
 /** @internal Create a process-local, instance-owned runtime kernel. */

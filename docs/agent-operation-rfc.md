@@ -1,12 +1,22 @@
 # RFC: Authoritative operations for agent-driven Reflex runtimes
 
-- **Status:** Proposed; experimental Phase 0/1 implementation complete; Phase 2 not started
-- **Last updated:** 2026-07-20
+- **Status:** Proposed design; the current implementation is the smaller
+  coordinator snapshot described below
+- **Last updated:** 2026-07-23
 - **Scope:** Reflex core, Inspector, DevTools server/SDK, MCP, headless adapters,
   and the future production command plane
 - **Decision owner:** Reflex maintainers
 - **Compatibility:** additive API first; intentional queue-correctness changes must
   land before 1.0 with migration notes
+
+> **Implementation note (2026-07-23):** The implemented operation surface is
+> a DevTools-owned snapshot populated through a narrow optional runtime
+> execution observer: identity, status, event lineage, committed/published
+> revisions, pending work, and errors. Core has no operation retention when
+> DevTools operations are disabled. Rich
+> receipt features discussed in this RFC—patches, effect detail,
+> observations, idempotency, command policy, and delivery semantics—remain
+> proposals to design into a future canonical model, not current API claims.
 
 ## Summary
 

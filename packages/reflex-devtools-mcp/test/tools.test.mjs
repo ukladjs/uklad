@@ -487,7 +487,7 @@ test('dispatch_event formats failed outcomes with actionable hints', async () =>
   assert.equal('params' in body, false);
 });
 
-test('dispatch_and_wait returns the complete operation receipt as structured content', async () => {
+test('dispatch_and_wait returns the canonical operation snapshot as structured content', async () => {
   const apiClient = {
     async dispatchAndWait(eventName, params, runtimeId) {
       assert.equal(eventName, 'increment-counter');
@@ -498,18 +498,22 @@ test('dispatch_and_wait returns the complete operation receipt as structured con
         runtimeId,
         runtimeName: 'Headless runtime',
         sessionEpoch: 4,
-        receipt: {
-          operation: {
-            operationId: 'headless-runtime:instance:1:op:1',
-            outcome: 'succeeded',
-            subscriptions: {
-              status: 'settled',
-              publishedRevision: 2,
-              recalculated: [{ query: ['counter'], value: 2 }],
-            },
-          },
-          delivery: { status: 'settled', timeoutMs: null },
-          replayed: false,
+        operation: {
+          operationId: 'headless-runtime:instance:1:op:1',
+          rootEventInstanceId: 'headless-runtime:instance:1:event:1',
+          acceptedSequence: 1,
+          publishedRevision: 2,
+          status: 'completed',
+          eventInstanceIds: ['headless-runtime:instance:1:event:1'],
+          events: [{
+            eventInstanceId: 'headless-runtime:instance:1:event:1',
+            acceptedSequence: 1,
+            committedRevision: 2,
+            status: 'completed',
+          }],
+          pendingEventInstanceIds: [],
+          committedRevisions: [2],
+          errors: [],
         },
       };
     },
@@ -523,9 +527,8 @@ test('dispatch_and_wait returns the complete operation receipt as structured con
   const body = parseToolResult(result);
 
   assert.equal(body.requestId, 'request-1');
-  assert.deepEqual(body.receipt.operation.subscriptions.recalculated, [
-    { query: ['counter'], value: 2 },
-  ]);
+  assert.equal(body.operation.status, 'completed');
+  assert.deepEqual(body.operation.committedRevisions, [2]);
   assert.deepEqual(result.structuredContent, body);
 });
 

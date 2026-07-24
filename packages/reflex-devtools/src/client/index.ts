@@ -19,17 +19,13 @@ import {
   type RuntimeTelemetryDroppedPayload,
 } from '../protocol.js';
 import { diffSubscriptionDiagnostics } from './subscriptionDiagnostics.js';
-import { createOperationInspector } from './operations/inspector.js';
+import { acquireOperationInspector } from './operations/inspector.js';
 import type {
   ReflexInspector,
   ReflexInspectorSnapshot,
   ReflexDevtoolsRuntime,
   ReflexTrace,
 } from './types.js';
-import type {
-  OperationCompletionBoundary,
-  OperationExecutionContextInput,
-} from './operations/types.js';
 
 export type {
   ReflexHandlerKeys,
@@ -104,20 +100,10 @@ export interface DevtoolsConfig {
    */
   effects?: Record<string, string>;
   /**
-   * Enable retained operation receipts for the target runtime. Normal
-   * DevTools clients still never import or bundle Reflex.
+   * Enable runtime-owned operation snapshots for server-initiated dispatches.
+   * Normal DevTools clients still never import or bundle Reflex.
    */
-  operations?: DevtoolsOperationsConfig;
-}
-
-export interface DevtoolsOperationsConfig {
-  /**
-   * Informational defaults declared by the application for agent-executed
-   * operations. They are attached to every server-initiated operation.
-   */
-  executionContext?: OperationExecutionContextInput;
-  /** Completion boundary used for server-initiated operations. */
-  completion?: OperationCompletionBoundary;
+  operations?: true;
 }
 
 export interface EventPayload {
@@ -629,19 +615,7 @@ class DevtoolsClient {
     }
     return {
       runtimeInstanceId: this.inspector.runtimeInstanceId,
-      executeEvent: (event) => this.inspector.executeEvent!(event, this.operationOptions()),
-    };
-  }
-
-  private operationOptions(): {
-    completion?: OperationCompletionBoundary;
-    executionContext?: OperationExecutionContextInput;
-  } | undefined {
-    const operations = this.config.operations;
-    if (!operations) return undefined;
-    return {
-      ...(operations.completion ? { completion: operations.completion } : {}),
-      ...(operations.executionContext ? { executionContext: operations.executionContext } : {}),
+      executeEvent: (event) => this.inspector.executeEvent!(event),
     };
   }
 
@@ -655,7 +629,7 @@ class DevtoolsClient {
         type: 'reflex-operation-result',
         payload: {
           dispatchId,
-          error: 'The runtime does not expose the negotiated operation receipt capability.',
+          error: 'The runtime does not expose the negotiated operation snapshot capability.',
         },
       });
       return;
@@ -1246,14 +1220,16 @@ export function enableDevtools(
   const inspector = runtime.createInspector();
   assertInspector(inspector);
 
-  const operationInspector = config.operations && config.enabled !== false
-    ? createOperationInspector(inspector)
-    : inspector;
+  const operationAttachment = config.operations && config.enabled !== false
+    ? acquireOperationInspector(inspector)
+    : undefined;
+  const operationInspector = operationAttachment?.inspector ?? inspector;
   const nextClient = new DevtoolsClient(operationInspector, config);
   registerClient(inspector.runtimeId, nextClient);
   void nextClient.init().catch((error: unknown) => {
     console.error('[Reflex Devtools] Failed to initialize:', error);
     nextClient.dispose();
+    operationAttachment?.dispose();
     unregisterClient(inspector.runtimeId, nextClient);
   });
 
@@ -1262,6 +1238,7 @@ export function enableDevtools(
     if (!enabled) return;
     enabled = false;
     nextClient.dispose();
+    operationAttachment?.dispose();
     unregisterClient(inspector.runtimeId, nextClient);
   };
 }

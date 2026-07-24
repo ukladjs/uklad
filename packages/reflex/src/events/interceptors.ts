@@ -1,4 +1,4 @@
-import { mergeTraceForKernel } from '../core/tracing';
+import { mergeOptionalTraceForKernel } from '../core/tracing';
 import { getStateForKernel } from '../runtime/state';
 import { getHandlerForKernel } from '../runtime/handlers';
 import type { RuntimeKernel } from '../runtime/kernel';
@@ -77,7 +77,7 @@ function executeAndTraceFinalEffects(runtime: RuntimeKernel, context: Context): 
   // but `after` interceptors may append or replace effects later in the same
   // pipeline. Record the final list so traces describe what the post-commit
   // effect executor receives.
-  mergeTraceForKernel(runtime, { tags: { effects: result.effects } });
+  mergeOptionalTraceForKernel(runtime, () => ({ effects: result.effects }));
   return result;
 }
 
@@ -109,7 +109,7 @@ function traceError(runtime: RuntimeKernel, value: unknown, event: EventVector):
     ...(reflexError ? { direction: reflexError.data.direction } : {}),
     eventV: event,
   };
-  mergeTraceForKernel(runtime, { tags: { error: traceErrorTag } });
+  mergeOptionalTraceForKernel(runtime, () => ({ error: traceErrorTag }));
   reportRuntimeLifecycleErrorForKernel(runtime, 'handler', originalError);
 }
 

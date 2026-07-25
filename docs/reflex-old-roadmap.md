@@ -25,7 +25,7 @@ A full worked scenario — one task walked through the agent's loop (orient → 
 ### P1 — Dev-mode strictness & navigation
 
 - [ ] **Capture registration source location in dev mode.** _(pairs with devtools P2: handler locations)_
-      At `regEvent`/`regSub`/`regEffect` time, capture file:line (synthetic `Error().stack`, dev-only, zero prod cost) and store it in the handler-registry layer (`src/runtime/handlers.ts`). This is the last hop from runtime observation back to source code.
+      At `regEvent`/`regSub`/`regEffect` time, capture file:line (synthetic `Error().stack`, dev-only, zero prod cost) and store it in the handler-registry layer (`src/runtime/registry.ts`). This is the last hop from runtime observation back to source code.
 
 - [ ] **Fail loud on unregistered IDs in dev.**
       Dispatching a typo'd event or subscribing to a missing sub currently `console.error`s and continues. In dev mode, throw — and include a nearest-match suggestion ("did you mean `todos/add`?"). String IDs are only safe if mistakes surface immediately; this matters double for AI-generated code.

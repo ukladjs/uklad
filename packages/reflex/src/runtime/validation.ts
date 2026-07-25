@@ -31,7 +31,7 @@ export function assertDispatchableEvent(
       `[reflex] ${api} expects a non-empty event vector starting with an event id string.`,
     );
   }
-  if (!runtime.registry.has('event', event[0])) {
+  if (!runtime.registry.event.has(event[0])) {
     throw new Error(
       `[reflex] No event handler registered for '${event[0]}' in runtime '${runtime.identity.runtimeId}'. Register it with regEvent() before dispatching.`,
     );
@@ -45,7 +45,7 @@ export function assertRegisteredSubscription(runtime: RuntimeCore, query: unknow
       '[reflex] Subscription queries must be non-empty vectors starting with a subscription id string.',
     );
   }
-  if (!runtime.registry.has('sub', query[0])) {
+  if (!runtime.registry.sub.has(query[0])) {
     throw new Error(
       `[reflex] No subscription registered for '${query[0]}' in runtime '${runtime.identity.runtimeId}'. Register it with regSub() before use.`,
     );

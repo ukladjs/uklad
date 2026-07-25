@@ -1,7 +1,6 @@
 import { scheduleAfterRender } from '../../core/scheduling';
 import { consoleLog } from '../../core/logging';
 import { mergeRuntimeProbeSpan, withRuntimeProbeSpan } from '../probe';
-import { SUB_DEPS_HANDLER_KIND, SUB_HANDLER_KIND, SUBSCRIPTION_HANDLER_KINDS } from '../handlers';
 import { isRuntimeDisposed, type RuntimeCore } from '../core';
 import { SubscriptionEngine } from './engine';
 import { getRootSubKey, getSubVectorKey } from './keys';
@@ -91,7 +90,7 @@ export class SubscriptionRuntime {
       consoleLog('error', message);
       throw new Error(message);
     }
-    if (runtime.registry.has(SUB_HANDLER_KIND, id)) {
+    if (runtime.registry.sub.has(id)) {
       consoleLog('warn', `[reflex] Overriding. Subscription '${id}' already registered.`);
     }
 
@@ -110,8 +109,8 @@ export class SubscriptionRuntime {
       }
       this.clearRootSource(id);
       handlers = [
-        runtime.registry.register(SUB_HANDLER_KIND, id, computeFn),
-        runtime.registry.register(SUB_DEPS_HANDLER_KIND, id, depsFn),
+        runtime.registry.sub.register(id, computeFn),
+        runtime.registry.subDeps.register(id, depsFn),
       ];
     }
     if (!handlers) return undefined;
@@ -147,7 +146,7 @@ export class SubscriptionRuntime {
 
     const resolve = (query: SubVector): SubscriptionNode<any> | undefined => {
       const subId = query[0];
-      if (!runtime.registry.has(SUB_HANDLER_KIND, subId)) {
+      if (!runtime.registry.sub.has(subId)) {
         consoleLog('error', `[reflex] no sub handler registered for: ${subId}`);
         return undefined;
       }
@@ -172,7 +171,7 @@ export class SubscriptionRuntime {
       }
 
       const params = query.length > 1 ? query.slice(1) : [];
-      const depsFn = runtime.registry.get(SUB_DEPS_HANDLER_KIND, subId) as SubDepsHandler;
+      const depsFn = runtime.registry.subDeps.get(subId) as SubDepsHandler;
       if (typeof depsFn !== 'function') {
         throw new Error(`[reflex] Subscription '${subId}' has no dependency handler.`);
       }
@@ -200,7 +199,7 @@ export class SubscriptionRuntime {
         subVector: query,
         key,
         subId,
-        computeFn: runtime.registry.get(SUB_HANDLER_KIND, subId) as SubHandler,
+        computeFn: runtime.registry.sub.get(subId) as SubHandler,
         params,
         kind: rootSource === undefined ? 'computed' : 'root',
         equalityCheck:
@@ -347,7 +346,8 @@ export class SubscriptionRuntime {
   clearDefinitions(subId?: Id): void {
     const runtime = this.getRuntime();
     if (subId === undefined) {
-      for (const kind of SUBSCRIPTION_HANDLER_KINDS) runtime.registry.clear(kind);
+      runtime.registry.sub.clear();
+      runtime.registry.subDeps.clear();
       this.rootSubIdBySource.clear();
       this.rootSubSourceById.clear();
       this.rootSubscriptionKeys.clear();
@@ -355,7 +355,8 @@ export class SubscriptionRuntime {
       this.subConfigById.clear();
       return;
     }
-    for (const kind of SUBSCRIPTION_HANDLER_KINDS) runtime.registry.clear(kind, subId);
+    runtime.registry.sub.clear(subId);
+    runtime.registry.subDeps.clear(subId);
     this.clearRootSource(subId);
     const keys: string[] = [];
     for (const [key, entry] of this.subscriptionCache) {
@@ -405,12 +406,11 @@ export class SubscriptionRuntime {
 
     this.setRootSource(id, sourceKey);
     return [
-      runtime.registry.register(
-        SUB_HANDLER_KIND,
+      runtime.registry.sub.register(
         id,
         () => runtime.state.getRender<Record<string, any>>()[sourceKey],
       ),
-      runtime.registry.register(SUB_DEPS_HANDLER_KIND, id, () => []),
+      runtime.registry.subDeps.register(id, () => []),
     ];
   }
 

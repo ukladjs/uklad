@@ -212,7 +212,7 @@ Paths are relative to `src/`.
 | `runtime/validation.ts`               | Strict public runtime boundary assertions                                         |
 | `runtime/state.ts`                    | `StateStore` and the single state-publication boundary                            |
 | `runtime/handler-types.ts`            | Registry, event-definition, and ownership-token contracts                         |
-| `runtime/handlers.ts`                 | `RuntimeRegistry`, system baselines, and registration generations                 |
+| `runtime/registry.ts`                 | Typed `HandlerRecord`s, system baselines, and registration generations            |
 | `runtime/probe-types.ts`              | Passive instrumentation contracts and fact DTOs                                   |
 | `runtime/probe.ts`                    | Sole optional passive instrumentation capability                                  |
 | `runtime/lifecycle-types.ts`          | Compatibility lifecycle observer contract                                         |

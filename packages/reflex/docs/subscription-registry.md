@@ -3,7 +3,7 @@
 Paths in this document are relative to `src/`.
 
 Framework bookkeeping is split by ownership. `RuntimeRegistry` in
-`runtime/handlers.ts` stores handler definitions, while `SubscriptionRuntime`
+`runtime/registry.ts` stores handler definitions, while `SubscriptionRuntime`
 in `runtime/subscriptions/cache.ts` owns subscription definitions, graph
 construction, the canonical cache, and its lifecycle metadata.
 `runtime/subscriptions/keys.ts` owns canonical query-key serialization and its
@@ -46,9 +46,9 @@ Two architectural facts explain why the instance-side metadata exists at all:
 
 | Store                                        | Owner                 | Purpose                                           |
 | -------------------------------------------- | --------------------- | ------------------------------------------------- |
-| `handlers`                                   | `RuntimeRegistry`     | Typed handler projections                         |
+| `handlers`                                   | `RuntimeRegistry`     | Public typed handler projections                  |
 | `eventDefinitions`                           | `RuntimeRegistry`     | Atomic event handler + immutable interceptor list |
-| `systemHandlers`                             | `RuntimeRegistry`     | Framework handlers restored after clears          |
+| `systemHandlers`                             | `HandlerRecord`       | Framework handlers restored after clears          |
 | `rootSubIdBySource`                          | `SubscriptionRuntime` | Changed STATE key → owning root                   |
 | `rootSubSourceById`                          | `SubscriptionRuntime` | Is this id a root; what key it reads              |
 | `rootSubscriptionKeys`                       | `SubscriptionRuntime` | Persistence guard for root cells                  |
@@ -57,15 +57,16 @@ Two architectural facts explain why the instance-side metadata exists at all:
 | `provisionalCurrent` / `provisionalPrevious` | `SubscriptionRuntime` | Two-generation aborted-render sweep               |
 | `subConfigById`                              | `SubscriptionRuntime` | Per-subscription equality options                 |
 
-## Handler definitions — `handlers`
+## Handler definitions — `HandlerRecord`
 
-One typed nested record keyed by `HandlerKind` (`event`, `fx`, `cofx`, `sub`,
-`subDeps`, `error`) then by id. Each inner record has a null prototype, so
-valid string ids such as `constructor` and `__proto__` cannot collide with
-`Object.prototype`. `regSub` writes two entries for a computed subscription:
-the compute function under `sub` and the dependency function under `subDeps`.
-A root subscription registers a `sub` handler that reads one top-level state key
-and a `subDeps` handler returning `[]`.
+`RuntimeRegistry` exposes one typed `HandlerRecord` property per handler kind:
+`event`, `fx`, `cofx`, `sub`, `subDeps`, and `error`. Internal callers operate
+on these properties directly instead of passing handler-kind strings. Each
+record stores ids in a null-prototype object, so valid string ids such as
+`constructor` and `__proto__` cannot collide with `Object.prototype`. `regSub`
+writes to both `registry.sub` and `registry.subDeps`. A root subscription
+registers a `sub` handler that reads one top-level state key and a `subDeps`
+handler returning `[]`.
 
 This is the only registry devtools reads directly (`getHandlers`) to enumerate
 what the app declares. Overwriting an existing id warns; it is allowed for

@@ -62,7 +62,7 @@ These items do not win an evaluation by themselves, but each removes a common re
 
 ## Phase 2 — Instance-scoped runtime (the quarter's architecture project, gates 1.0 RC)
 
-Before this phase, the state and registries were module-level globals ([state.ts](packages/reflex/src/runtime/state.ts), [handlers.ts](packages/reflex/src/runtime/handlers.ts)). That blocked or complicated SSR/per-request stores, microfrontends, embedded widgets, parallel tests, Storybook isolation — and, most on-thesis, multiple agent sandboxes running side by side. This phase moves those owners behind explicit runtime scopes while preserving the default-runtime facade.
+Before this phase, the state and registries were module-level globals ([state.ts](packages/reflex/src/runtime/state.ts), [registry.ts](packages/reflex/src/runtime/registry.ts)). That blocked or complicated SSR/per-request stores, microfrontends, embedded widgets, parallel tests, Storybook isolation — and, most on-thesis, multiple agent sandboxes running side by side. This phase moves those owners behind explicit runtime scopes while preserving the default-runtime facade.
 
 Target shape:
 

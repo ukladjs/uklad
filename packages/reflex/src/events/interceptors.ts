@@ -37,7 +37,7 @@ export function execute(
   interceptors: Interceptor[],
 ): Context {
   const context = createContext(event, interceptors, runtime.state.get<State>());
-  const errorHandler: ErrorHandler | undefined = runtime.registry.get('error', 'event-handler');
+  const errorHandler: ErrorHandler | undefined = runtime.registry.error.get('event-handler');
 
   if (!errorHandler) {
     try {

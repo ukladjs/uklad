@@ -1,6 +1,6 @@
 import { EventRuntime } from './events';
 import { StateStore } from './state';
-import { RuntimeRegistry } from './handlers';
+import { RuntimeRegistry } from './registry';
 import { SubscriptionRuntime } from './subscriptions/cache';
 import type { RuntimeProbe } from './probe-types';
 

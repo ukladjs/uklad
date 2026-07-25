@@ -12,11 +12,11 @@ export function registerBuiltInEffects(
   runtime: RuntimeCore,
   dispatchEvent: (event: DispatchVector) => void,
 ): void {
-  runtime.registry.registerSystem('fx', DISPATCH_LATER, (value: DispatchLaterEffect) => {
+  runtime.registry.fx.registerSystem(DISPATCH_LATER, (value: DispatchLaterEffect) => {
     dispatchLater(runtime, value, dispatchEvent);
   });
 
-  runtime.registry.registerSystem('fx', DISPATCH, (value: EventVector) => {
+  runtime.registry.fx.registerSystem(DISPATCH, (value: EventVector) => {
     if (!isEventVector(value)) {
       consoleLog(
         'error',

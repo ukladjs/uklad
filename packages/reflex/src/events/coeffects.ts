@@ -13,7 +13,7 @@ export function getInjectCofxInterceptor(
   return {
     id: `inject-${id}`,
     before(context: Context): Context {
-      const handler = runtime.registry.get('cofx', id);
+      const handler = runtime.registry.cofx.get(id);
       if (!handler) {
         const error = new Error(`[reflex] No cofx handler registered for ${id}`);
         consoleLog('error', '[reflex] No cofx handler registered for', id);

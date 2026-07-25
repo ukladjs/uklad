@@ -28,7 +28,7 @@ src/
     validation.ts                  strict runtime boundary assertions
     state.ts                       StateStore
     handler-types.ts               registry contracts
-    handlers.ts                    RuntimeRegistry
+    registry.ts                    RuntimeRegistry and typed HandlerRecords
     events.ts                      EventRuntime, event definitions, and registration metadata
     probe-types.ts                 instrumentation contracts and DTOs
     probe.ts                       sole optional instrumentation channel

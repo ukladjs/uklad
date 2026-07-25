@@ -40,7 +40,7 @@ import type {
   SubResult,
   SubVector,
 } from '../types';
-import type { HandlerByKind, HandlerKind, HandlerRegistry } from '../runtime/handlers';
+import type { HandlerByKind, HandlerKind, HandlerRegistry } from '../runtime/handler-types';
 import type {
   SubscriptionListenerKind,
   SubscriptionNode,
@@ -100,7 +100,7 @@ export const regCoeffect = testRuntime.regCoeffect.bind(testRuntime);
 export const dispatch = core.events.dispatch.bind(core.events);
 export const dispatchSync = core.events.dispatchSync.bind(core.events);
 export function regEventErrorHandler(handler: ErrorHandler): void {
-  core.registry.register('error', 'event-handler', handler);
+  core.registry.error.register('event-handler', handler);
 }
 
 export function regSub<R = any, K extends Id = Id>(
@@ -160,7 +160,7 @@ export function publishSubscriptions(roots: SubscriptionNode<any>[]): void {
 }
 
 export function getHandler<K extends HandlerKind>(kind: K, id: Id): HandlerByKind[K] | undefined {
-  return core.registry.get(kind, id);
+  return core.registry[kind].get(id) as HandlerByKind[K] | undefined;
 }
 
 export function getHandlers(): HandlerRegistry {
@@ -175,12 +175,13 @@ export function registerHandler<K extends HandlerKind, T extends HandlerByKind[K
   if (kind === 'event') {
     core.events.registerEvent(id, handler as HandlerByKind['event']);
   } else {
-    core.registry.register(kind, id, handler);
+    core.registry[kind].register(id, handler as never);
   }
   return handler;
 }
 
-export const hasHandler = core.registry.has.bind(core.registry);
+export const hasHandler = <K extends HandlerKind>(kind: K, id: Id): boolean =>
+  core.registry[kind].has(id);
 export const clearHandlers = clearHandlersInternal.bind(null, core);
 export const getEventInterceptors = core.events.getEventInterceptors.bind(core.events);
 export const setEventInterceptors = core.events.setEventInterceptors.bind(core.events);

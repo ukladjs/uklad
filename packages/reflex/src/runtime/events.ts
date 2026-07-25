@@ -85,7 +85,7 @@ export class EventRuntime {
     options?: EventRegistrationOptions<T>,
   ): RegistrationOwnership {
     const interceptors = this.buildEventInterceptors(id, options);
-    const ownership = this.getRuntime().registry.register('event', id, handler);
+    const ownership = this.getRuntime().registry.event.register(id, handler);
     this.eventDefinitions.set(id, createEventDefinition(handler, interceptors));
     return Object.freeze({
       get current(): boolean {
@@ -93,7 +93,7 @@ export class EventRuntime {
       },
       release: (): boolean => {
         if (!ownership.current || !ownership.release()) return false;
-        const currentHandler = this.getRuntime().registry.get('event', id);
+        const currentHandler = this.getRuntime().registry.event.get(id);
         if (currentHandler === undefined) this.eventDefinitions.delete(id);
         else
           this.eventDefinitions.set(id, createEventDefinition(currentHandler, EMPTY_INTERCEPTORS));
@@ -111,7 +111,7 @@ export class EventRuntime {
   }
 
   setEventInterceptors(id: string, interceptors: readonly Interceptor[]): void {
-    const handler = this.getRuntime().registry.get('event', id);
+    const handler = this.getRuntime().registry.event.get(id);
     if (handler !== undefined)
       this.eventDefinitions.set(id, createEventDefinition(handler, interceptors));
   }

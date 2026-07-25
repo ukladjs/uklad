@@ -60,7 +60,7 @@ export function executeEffects(
     }
 
     const [effectId, value] = effect;
-    const handler = runtime.registry.get('fx', effectId);
+    const handler = runtime.registry.fx.get(effectId);
     if (!handler) {
       consoleLog(
         'warn',

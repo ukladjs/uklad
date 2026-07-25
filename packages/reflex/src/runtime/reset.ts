@@ -1,5 +1,5 @@
 import { consoleLog } from '../core/logging';
-import { isHandlerKind, isSubscriptionHandlerKind } from './handlers';
+import { isHandlerKind } from './registry';
 import type { HandlerKind } from './handler-types';
 
 import type { RuntimeCore } from './core';
@@ -7,7 +7,7 @@ import type { Id } from '../types';
 
 /** @internal Cross-service reset coordination for one runtime core. */
 export function clearHandlers(runtime: RuntimeCore, kind?: HandlerKind, id?: Id): void {
-  if (kind === undefined || isSubscriptionHandlerKind(kind)) {
+  if (kind === undefined || kind === 'sub' || kind === 'subDeps') {
     runtime.subscriptions.assertClearAllowed();
   }
 
@@ -23,13 +23,14 @@ export function clearHandlers(runtime: RuntimeCore, kind?: HandlerKind, id?: Id)
     return;
   }
 
-  if (isSubscriptionHandlerKind(kind)) {
+  if (kind === 'sub' || kind === 'subDeps') {
     runtime.subscriptions.clearDefinitions(id);
     return;
   }
 
-  const handlerExisted = id === undefined || runtime.registry.has(kind, id);
-  runtime.registry.clear(kind, id);
+  const record = runtime.registry[kind];
+  const handlerExisted = id === undefined || record.has(id);
+  record.clear(id);
   if (kind === 'event') runtime.events.clearEventDefinitions(id);
   if (!handlerExisted) {
     consoleLog('warn', `[reflex] cannot clear ${kind} handler for ${id}: handler not found.`);

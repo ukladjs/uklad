@@ -88,7 +88,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   constructor(core: RuntimeCore, initialState: ContractState<TContracts>) {
     assertStateRecord(initialState, 'initialState');
     this.#core = core;
-    core.registry.registerSystem('error', 'event-handler', defaultErrorHandler);
+    core.registry.error.registerSystem('event-handler', defaultErrorHandler);
     core.events.initialize();
     core.state.initialize<ContractState<TContracts>>(initialState);
   }
@@ -159,19 +159,19 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   regEffect(id: Id, handler: (value: any) => void): void {
     this.assertUsable();
-    this.recordOwnership(this.#core.registry.register('fx', id, handler));
+    this.recordOwnership(this.#core.registry.fx.register(id, handler));
   }
 
   regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void {
     this.assertUsable();
     this.recordOwnership(
-      this.#core.registry.register('cofx', id, handler as unknown as CoEffectHandler),
+      this.#core.registry.cofx.register(id, handler as unknown as CoEffectHandler),
     );
   }
 
   regEventErrorHandler(handler: ErrorHandler): void {
     this.assertUsable();
-    this.recordOwnership(this.#core.registry.register('error', 'event-handler', handler));
+    this.recordOwnership(this.#core.registry.error.register('event-handler', handler));
   }
 
   regSub(

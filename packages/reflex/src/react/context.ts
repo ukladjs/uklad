@@ -1,6 +1,6 @@
 import { createContext, createElement, useContext } from 'react';
 
-import type { ReflexRuntime } from '../runtime/runtime';
+import type { ReflexRuntime } from '../runtime/api';
 
 import type { ReactElement, ReactNode } from 'react';
 import type { PermissiveReflexContracts, ReflexContracts } from '../contracts';

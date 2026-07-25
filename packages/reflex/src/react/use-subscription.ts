@@ -9,7 +9,8 @@ import type {
   ContractSubscriptionVector,
   ReflexContracts,
 } from '../contracts';
-import { subscribeForRender, type ReflexRuntime } from '../runtime/runtime';
+import { subscribeForRender } from '../runtime/runtime';
+import type { ReflexRuntime } from '../runtime/api';
 import type { Id, SubParams, SubPayloads, SubResult, SubscribeVector, SubVector } from '../types';
 
 /**

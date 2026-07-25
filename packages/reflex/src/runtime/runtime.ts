@@ -1,16 +1,8 @@
 import type {
   ContractState,
   ContractDispatchVector,
-  ContractEffectParams,
-  ContractEffects,
-  ContractEventParams,
   ContractSubscribeVector,
-  ContractSubscriptionId,
-  ContractSubscriptionParams,
-  ContractSubscriptionResult,
-  ContractSubscriptionVector,
   CreateReflexRuntimeOptions,
-  PermissiveReflexContracts,
   ReflexContracts,
   ReflexDisposer,
   ReflexModule,
@@ -28,7 +20,7 @@ import {
 import { getGlobalEqualityCheck, setGlobalEqualityCheck } from '../core/equality';
 import { defaultErrorHandler } from '../events/runner';
 import { createReflexInspector } from '../inspector';
-import { isEventVector } from '../core/validation';
+import { assertStateRecord, isEventVector } from '../core/validation';
 import { type RegistrationOwnership } from './handlers';
 import { clearHandlers } from './reset';
 import {
@@ -45,8 +37,13 @@ import type { ReflexInspector } from '../inspector';
 import type { HandlerKind, HandlerRegistry } from './handlers';
 import type { SubscriptionDiagnostic } from './subscriptions/engine';
 import type {
+  ReflexRuntime,
+  RuntimeEventHandler,
+  RuntimeStateRevisions,
+  RuntimeSubscriptionHandler,
+} from './api';
+import type {
   CoEffectHandler,
-  CoEffects,
   EqualityCheckFn,
   ErrorHandler,
   EventRegistrationOptions,
@@ -56,107 +53,17 @@ import type {
   SubVector,
 } from '../types';
 
-export type RuntimeEventHandler<TContracts extends ReflexContracts, TId extends string> = (
-  coeffects: CoEffects<ContractState<TContracts>>,
-  ...params: ContractEventParams<TContracts, TId>
-) => ContractEffects<TContracts> | void;
-
-export type RuntimeSubscriptionHandler<TContracts extends ReflexContracts, TId extends string> = (
-  ...values: any[]
-) => ContractSubscriptionResult<TContracts, TId>;
-
-/** Monotonic committed and render-published state generations. */
-export interface RuntimeStateRevisions {
-  readonly committedRevision: number;
-  readonly publishedRevision: number;
-}
-
-export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveReflexContracts> {
-  readonly runtimeId: string;
-  readonly runtimeInstanceId: string;
-  readonly runtimeName: string;
-
-  getState(): ContractState<TContracts>;
-  getStateRevisions(): RuntimeStateRevisions;
-  restoreState(nextState: ContractState<TContracts>): void;
-  dispatch(event: ContractDispatchVector<TContracts>): void;
-  dispatchSync(event: ContractDispatchVector<TContracts>): void;
-  flush(): Promise<void>;
-
-  regEvent<TId extends string>(
-    id: TId,
-    handler: RuntimeEventHandler<TContracts, TId>,
-    options?:
-      | EventRegistrationOptions<ContractState<TContracts>>
-      | Interceptor<ContractState<TContracts>>[],
-  ): void;
-  regEffect<TId extends string>(
-    id: TId,
-    handler: (value: ContractEffectParams<TContracts, TId>) => void,
-  ): void;
-  regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void;
-  regEventErrorHandler(handler: ErrorHandler): void;
-  regSub<TId extends string>(id: TId): void;
-  regSub<TId extends string>(id: TId, sourceKey: string): void;
-  regSub<TId extends string>(
-    id: TId,
-    compute: RuntimeSubscriptionHandler<TContracts, TId>,
-    dependencies: (
-      ...params: ContractSubscriptionParams<TContracts, TId>
-    ) => ContractSubscribeVector<TContracts>[],
-    config?: SubConfig,
-  ): void;
-
-  getSubscriptionValue<TId extends ContractSubscriptionId<TContracts>>(
-    query: ContractSubscriptionVector<TContracts, TId>,
-  ): ContractSubscriptionResult<TContracts, TId>;
-  watchSubscription<TId extends ContractSubscriptionId<TContracts>>(
-    query: ContractSubscriptionVector<TContracts, TId>,
-    listener: WatchSubscriptionListener<ContractSubscriptionResult<TContracts, TId>>,
-    options?: WatchSubscriptionOptions,
-  ): ReflexDisposer;
-
-  regGlobalInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void;
-  getGlobalInterceptors(): Interceptor<ContractState<TContracts>>[];
-  clearGlobalInterceptors(id?: string): void;
-  setGlobalEqualityCheck(equalityCheck: EqualityCheckFn): void;
-  getGlobalEqualityCheck(): EqualityCheckFn;
-
-  enableTracing(): void;
-  disableTracing(): void;
-  enableTracePrint(): void;
-  registerTraceCallback(key: string, callback: TraceCallback): void;
-  removeTraceCallback(key: string): void;
-
-  debounceAndDispatch(event: ContractDispatchVector<TContracts>, durationMs: number): void;
-  throttleAndDispatch(event: ContractDispatchVector<TContracts>, durationMs: number): void;
-
-  getHandlers(): HandlerRegistry;
-  clearHandlers(kind?: HandlerKind, id?: Id): void;
-  clearSubs(): void;
-  clearSubscriptionCache(key?: string): void;
-  getSubscriptionDiagnostics(): readonly SubscriptionDiagnostic[];
-
-  observeLifecycle(observer: RuntimeLifecycleObserver): ReflexDisposer;
-
-  registerModule(module: ReflexModule<ReflexRuntime<TContracts>>): ReflexDisposer;
-  createInspector(): ReflexInspector;
-  dispose(): void;
-}
+export type {
+  ReflexRuntime,
+  RuntimeEventHandler,
+  RuntimeStateRevisions,
+  RuntimeSubscriptionHandler,
+} from './api';
 
 interface ModuleInstallation {
   readonly registrations: RegistrationOwnership[];
   cleanup: ReflexDisposer | undefined;
   disposed: boolean;
-}
-
-function assertRuntimeState(
-  value: unknown,
-  field: 'initialState' | 'restoreState nextState',
-): asserts value is Record<string, any> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error(`[reflex] ${field} must be a non-null, non-array object.`);
-  }
 }
 
 class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
@@ -168,7 +75,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   private readonly renderSubscriptions = new Set<ReflexDisposer>();
 
   constructor(core: RuntimeCore, initialState: ContractState<TContracts>) {
-    assertRuntimeState(initialState, 'initialState');
+    assertStateRecord(initialState, 'initialState');
     this.#core = core;
     core.registry.registerSystem('error', 'event-handler', defaultErrorHandler);
     core.events.initialize();
@@ -203,7 +110,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   restoreState(nextState: ContractState<TContracts>): void {
     this.assertUsable();
-    assertRuntimeState(nextState, 'restoreState nextState');
+    assertStateRecord(nextState, 'restoreState nextState');
     if (!this.#core.events.isIdle || this.#core.events.handlingEventId !== null) {
       throw new Error(
         `[reflex] Cannot restore runtime '${this.runtimeId}' while an event is pending or being handled. Await runtime.flush() first.`,

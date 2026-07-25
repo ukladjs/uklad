@@ -2,7 +2,8 @@ import { createElement, Fragment, useCallback, useSyncExternalStore } from 'reac
 import type { ReactElement, ReactNode } from 'react';
 
 import { consoleLog } from '../core/logging';
-import { clearRuntimeSubsForHotReload, type ReflexRuntime } from '../runtime/runtime';
+import { clearRuntimeSubsForHotReload } from '../runtime/runtime';
+import type { ReflexRuntime } from '../runtime/api';
 import { useReflexRuntime } from './context';
 
 import type { Id } from '../types';

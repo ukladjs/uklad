@@ -30,9 +30,10 @@ hot-path capability and is `undefined` in an uninstrumented runtime.
 | `SubscriptionRuntime` | Definitions, root indexes, canonical cache, reverse edges, provisional leases, equality options, and graph engine |
 | `RuntimeProbe`        | Optional passive execution facts requested by tracing or DevTools; it owns no application semantics               |
 
-`runtime/runtime.ts` is the public façade. It validates public input, delegates
-to the owning service, tracks module registration tokens, owns watches, and
-coordinates terminal disposal. It is not a second store for engine state.
+`runtime/api.ts` owns the public runtime contract. `runtime/runtime.ts`
+implements that façade: it validates public input, delegates to the owning
+service, tracks module registration tokens, owns watches, and coordinates
+terminal disposal. It is not a second store for engine state.
 
 ## Event flow
 
@@ -206,6 +207,7 @@ Paths are relative to `src/`.
 | Path                              | Responsibility                                                                    |
 | --------------------------------- | --------------------------------------------------------------------------------- |
 | `runtime/core.ts`                 | Stable service shape, identity, composition, and terminal marker                  |
+| `runtime/api.ts`                  | Public runtime contract, handler types, and state revision DTO                    |
 | `runtime/runtime.ts`              | Public runtime façade, modules, watches, restore, flush, and disposal             |
 | `runtime/state.ts`                | `StateStore` and the single state-publication boundary                            |
 | `runtime/handlers.ts`             | `RuntimeRegistry`, event definitions, system baselines, and ownership tokens      |
@@ -213,7 +215,8 @@ Paths are relative to `src/`.
 | `runtime/lifecycle.ts`            | Compatibility lifecycle observer projected onto `RuntimeProbe`                    |
 | `runtime/reset.ts`                | Cross-service clear coordination                                                  |
 | `runtime/subscriptions/cache.ts`  | `SubscriptionRuntime`: definitions, construction, cache, leases, and engine owner |
-| `runtime/subscriptions/engine.ts` | Opaque cells and reactive graph semantics                                         |
+| `runtime/subscriptions/cell.ts`   | Cached node values, errors, stamps, and listener delivery                         |
+| `runtime/subscriptions/engine.ts` | Reactive graph activation, traversal, publication, and release                    |
 | `runtime/subscriptions/keys.ts`   | Canonical query-key serialization                                                 |
 | `runtime/events.ts`               | `EventRuntime`, dispatch orchestration, timers, rate limits, and event lineage    |
 | `events/router.ts`                | `EventQueue` and event scheduling primitive                                       |

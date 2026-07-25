@@ -45,7 +45,7 @@ export type {
   RuntimeEventHandler,
   RuntimeStateRevisions,
   RuntimeSubscriptionHandler,
-} from './runtime/runtime';
+} from './runtime/api';
 export type {
   RuntimeLifecycleEffect,
   RuntimeLifecycleEffectStatus,

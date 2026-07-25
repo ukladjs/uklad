@@ -22,7 +22,8 @@ src/
     validation.ts                  untyped-boundary guards
   runtime/
     core.ts                        runtime composition root and stable shape
-    runtime.ts                     public façade and module lifecycle
+    api.ts                         public runtime contract
+    runtime.ts                     public façade implementation and module lifecycle
     state.ts                       StateStore
     handlers.ts                    RuntimeRegistry
     probe.ts                       sole optional instrumentation channel
@@ -30,7 +31,8 @@ src/
     reset.ts                       cross-service reset coordination
     subscriptions/
       cache.ts                     SubscriptionRuntime
-      engine.ts                    reactive graph semantics
+      cell.ts                      cached node value and listener lifecycle
+      engine.ts                    reactive graph orchestration
       keys.ts                      canonical query-key serialization
   events/
     router.ts                      EventQueue and event scheduling primitive
@@ -89,7 +91,8 @@ of the runtime. Only `core.probe` may be absent.
 | Service implementations     | Public types, technical core, narrow peer service types, external packages |
 | Event coordinators          | Public types, technical core, runtime services, other event modules        |
 | `runtime/core.ts`           | Every mandatory service needed to compose the stable runtime               |
-| `runtime/runtime.ts`        | Runtime services and narrow public adapters                                |
+| `runtime/api.ts`            | Public types and contracts                                                 |
+| `runtime/runtime.ts`        | Runtime services, public contract types, and narrow public adapters        |
 | `react/*`                   | Public types, runtime/subscription APIs, React                             |
 | Public entrypoints          | Modules required to assemble the supported public API                      |
 

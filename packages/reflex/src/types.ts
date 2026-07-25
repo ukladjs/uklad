@@ -70,11 +70,7 @@ export type EventHandler<T = DefaultAppState, P extends readonly any[] = any[]> 
   ...params: P
 ) => Effects | void;
 
-/**
- * Explicit event-registration metadata. Prefer this form when an event needs
- * coeffects or interceptors. Positional arrays remain available for backward
- * compatibility, but an empty positional array cannot communicate its intent.
- */
+/** Optional coeffects and interceptors applied when registering an event. */
 export interface EventRegistrationOptions<T = DefaultAppState> {
   coeffects?: ReadonlyArray<readonly [id: Id] | readonly [id: Id, value: unknown]>;
   interceptors?: ReadonlyArray<Interceptor<T>>;

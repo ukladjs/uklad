@@ -66,14 +66,16 @@ describe('Error tracing', () => {
   it('attaches interceptor exceptions with the failing interceptor id', async () => {
     regEventErrorHandler(() => {});
 
-    regEvent('trace-interceptor-boom', () => {}, [
-      {
-        id: 'exploding-interceptor',
-        after: () => {
-          throw new Error('interceptor failed');
+    regEvent('trace-interceptor-boom', () => {}, {
+      interceptors: [
+        {
+          id: 'exploding-interceptor',
+          after: () => {
+            throw new Error('interceptor failed');
+          },
         },
-      },
-    ]);
+      ],
+    });
 
     dispatch(['trace-interceptor-boom']);
     await waitForScheduled();

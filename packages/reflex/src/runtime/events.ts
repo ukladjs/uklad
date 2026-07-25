@@ -8,14 +8,27 @@ import { acceptRuntimeEvent, notifyDroppedRuntimeEvents, notifyTrackedRuntimeEve
 import { EventQueue, getEventScheduler } from '../events/router';
 import { registerBuiltInEffects } from '../events/effects';
 import { executeEventEnvelope } from '../events/execution';
-import { regEvent } from '../events/registration';
+import { getInjectCofxInterceptor } from '../events/coeffects';
+import { isInterceptor } from '../events/interceptors';
 
 import type { ExecutionEnvelope } from '../events/envelope';
 import type { RegistrationOwnership } from './handler-types';
 import type { RuntimeProbeParent } from './probe-types';
-import type { DispatchVector, EventHandler, EventVector, Interceptor } from '../types';
+import type {
+  DispatchVector,
+  EventHandler,
+  EventRegistrationOptions,
+  EventVector,
+  Interceptor,
+} from '../types';
 
 type ScheduledEventVector = EventVector & { meta?: Partial<Record<'flush' | 'yield', boolean>> };
+const EMPTY_INTERCEPTORS: readonly Interceptor[] = Object.freeze([]);
+
+interface RuntimeEventDefinition {
+  readonly handler: EventHandler<any, any>;
+  readonly interceptors: readonly Interceptor[];
+}
 
 /** Runtime-owned event orchestration: queueing, dispatch, execution and rate limits. */
 export class EventRuntime {
@@ -39,6 +52,7 @@ export class EventRuntime {
   private globalInterceptors: Interceptor[] = [];
   private readonly globalInterceptorVersions = new Map<string, number>();
   private nextGlobalInterceptorVersion = 0;
+  private readonly eventDefinitions = new Map<string, RuntimeEventDefinition>();
 
   constructor(getRuntime: () => RuntimeCore) {
     this.getRuntime = getRuntime;
@@ -68,10 +82,43 @@ export class EventRuntime {
   registerEvent<T = Record<string, any>>(
     id: string,
     handler: EventHandler<T>,
-    registration?: unknown,
-    legacyInterceptors?: Interceptor<T>[],
+    options?: EventRegistrationOptions<T>,
   ): RegistrationOwnership {
-    return regEvent(this.getRuntime(), id, handler, registration, legacyInterceptors);
+    const interceptors = this.buildEventInterceptors(id, options);
+    const ownership = this.getRuntime().registry.register('event', id, handler);
+    this.eventDefinitions.set(id, createEventDefinition(handler, interceptors));
+    return Object.freeze({
+      get current(): boolean {
+        return ownership.current;
+      },
+      release: (): boolean => {
+        if (!ownership.current || !ownership.release()) return false;
+        const currentHandler = this.getRuntime().registry.get('event', id);
+        if (currentHandler === undefined) this.eventDefinitions.delete(id);
+        else
+          this.eventDefinitions.set(id, createEventDefinition(currentHandler, EMPTY_INTERCEPTORS));
+        return true;
+      },
+    });
+  }
+
+  getEvent(id: string): RuntimeEventDefinition | undefined {
+    return this.eventDefinitions.get(id);
+  }
+
+  getEventInterceptors(id: string): readonly Interceptor[] {
+    return this.eventDefinitions.get(id)?.interceptors ?? EMPTY_INTERCEPTORS;
+  }
+
+  setEventInterceptors(id: string, interceptors: readonly Interceptor[]): void {
+    const handler = this.getRuntime().registry.get('event', id);
+    if (handler !== undefined)
+      this.eventDefinitions.set(id, createEventDefinition(handler, interceptors));
+  }
+
+  clearEventDefinitions(id?: string): void {
+    if (id === undefined) this.eventDefinitions.clear();
+    else this.eventDefinitions.delete(id);
   }
 
   registerInterceptor(interceptor: Interceptor): RegistrationOwnership {
@@ -241,6 +288,60 @@ export class EventRuntime {
   private bumpGlobalInterceptorVersion(): number {
     return ++this.nextGlobalInterceptorVersion;
   }
+
+  private buildEventInterceptors<T>(
+    id: string,
+    options?: EventRegistrationOptions<T>,
+  ): readonly Interceptor[] {
+    const runtime = this.getRuntime();
+    const coeffectInterceptors: Interceptor[] = [];
+    const coeffects = Array.isArray(options?.coeffects) ? options.coeffects : [];
+
+    for (const specification of coeffects) {
+      if (!Array.isArray(specification) || typeof specification[0] !== 'string') {
+        consoleLog('warn', '[reflex] invalid cofx specification:', specification);
+        continue;
+      }
+
+      if (specification.length === 1) {
+        coeffectInterceptors.push(getInjectCofxInterceptor(runtime, specification[0]));
+      } else if (specification.length === 2) {
+        coeffectInterceptors.push(
+          getInjectCofxInterceptor(runtime, specification[0], specification[1]),
+        );
+      } else {
+        consoleLog('warn', '[reflex] invalid cofx specification:', specification);
+      }
+    }
+
+    const eventInterceptors: Interceptor[] = [];
+    const interceptors = Array.isArray(options?.interceptors) ? options.interceptors : [];
+    for (const candidate of interceptors) {
+      if (isInterceptor(candidate)) {
+        eventInterceptors.push(candidate);
+      } else {
+        consoleLog(
+          'error',
+          '[reflex] invalid interceptor provided for event:',
+          id,
+          'interceptor:',
+          candidate,
+        );
+      }
+    }
+
+    return [...coeffectInterceptors, ...eventInterceptors];
+  }
+}
+
+function createEventDefinition(
+  handler: EventHandler<any, any>,
+  interceptors: readonly Interceptor[],
+): RuntimeEventDefinition {
+  return Object.freeze({
+    handler,
+    interceptors: interceptors.length === 0 ? EMPTY_INTERCEPTORS : Object.freeze([...interceptors]),
+  });
 }
 
 function cloneAcceptedEvent(event: DispatchVector): DispatchVector {

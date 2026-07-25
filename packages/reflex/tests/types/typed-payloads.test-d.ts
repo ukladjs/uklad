@@ -99,6 +99,13 @@ const registrationOptions: EventRegistrationOptions = {
 };
 runtime.regEvent('app/init', () => undefined, registrationOptions);
 
+// @ts-expect-error registration metadata must use the options object
+runtime.regEvent('app/init', () => undefined, [
+  { id: 'positional-interceptor', before: (context: any) => context },
+]);
+// @ts-expect-error the legacy fourth interceptor argument is not supported
+runtime.regEvent('app/init', () => undefined, { coeffects: [] }, []);
+
 runtime.regEvent('app/init', ({ draftState }) => {
   // @ts-expect-error unknown state key is rejected once AppState is augmented
   draftState.nope = 1;

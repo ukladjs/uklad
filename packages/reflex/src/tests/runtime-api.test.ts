@@ -52,8 +52,8 @@ describe('instance-scoped runtime', () => {
     expect(core.subscriptions).toBeDefined();
     expect(core.probe).toBeUndefined();
 
-    const eventDefinition = core.registry.getEvent('increment');
-    expect(eventDefinition).toBe(core.registry.getEvent('increment'));
+    const eventDefinition = core.events.getEvent('increment');
+    expect(eventDefinition).toBe(core.events.getEvent('increment'));
     expect(Object.isFrozen(eventDefinition)).toBe(true);
     expect(Object.isFrozen(eventDefinition?.interceptors)).toBe(true);
 
@@ -74,6 +74,7 @@ describe('instance-scoped runtime', () => {
     expect(core.events.getInterceptors()).toEqual([interceptor]);
     expect(Object.hasOwn(core.registry, 'globalInterceptors')).toBe(false);
     expect('registerGlobalInterceptor' in core.registry).toBe(false);
+    expect(Object.hasOwn(core.registry, 'eventDefinitions')).toBe(false);
 
     runtime.dispatchSync(['increment', 1]);
     expect(interceptor.before).toHaveBeenCalledTimes(1);

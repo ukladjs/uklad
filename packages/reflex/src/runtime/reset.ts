@@ -13,6 +13,7 @@ export function clearHandlers(runtime: RuntimeCore, kind?: HandlerKind, id?: Id)
 
   if (kind === undefined) {
     runtime.registry.clear();
+    runtime.events.clearEventDefinitions();
     runtime.subscriptions.clearDefinitions();
     return;
   }
@@ -29,6 +30,7 @@ export function clearHandlers(runtime: RuntimeCore, kind?: HandlerKind, id?: Id)
 
   const handlerExisted = id === undefined || runtime.registry.has(kind, id);
   runtime.registry.clear(kind, id);
+  if (kind === 'event') runtime.events.clearEventDefinitions(id);
   if (!handlerExisted) {
     consoleLog('warn', `[reflex] cannot clear ${kind} handler for ${id}: handler not found.`);
   }

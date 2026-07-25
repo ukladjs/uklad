@@ -377,7 +377,7 @@ describe('regEvent with cofx', () => {
 
           (draftState as any).timestamp = now;
         },
-        [['now']],
+        { coeffects: [['now']] },
       );
 
       dispatch(['test-now-cofx']);
@@ -398,7 +398,7 @@ describe('regEvent with cofx', () => {
 
           (draftState as any).randomValue = random;
         },
-        [['random']],
+        { coeffects: [['random']] },
       );
 
       dispatch(['test-random-cofx']);
@@ -440,7 +440,7 @@ describe('regEvent with cofx', () => {
           (draftState as any).randomValue = random;
           (draftState as any).counter = draftState.counter + 1;
         },
-        [['now'], ['random']],
+        { coeffects: [['now'], ['random']] },
       );
 
       dispatch(['test-multiple-cofx']);
@@ -518,8 +518,10 @@ describe('regEvent with cofx', () => {
           (draftState as any).timestamp = now;
           (draftState as any).counter = draftState.counter + 10;
         },
-        [['now']],
-        [beforeInterceptor, afterInterceptor],
+        {
+          coeffects: [['now']],
+          interceptors: [beforeInterceptor, afterInterceptor],
+        },
       );
 
       dispatch(['test-cofx-with-interceptors']);
@@ -533,7 +535,7 @@ describe('regEvent with cofx', () => {
     });
   });
 
-  describe('Backward compatibility', () => {
+  describe('Registration metadata', () => {
     it('should commit STATE changes when an untyped interceptor omits effects', () => {
       initState({ counter: 0 });
       const legacyInterceptor: Interceptor = {
@@ -557,7 +559,7 @@ describe('regEvent with cofx', () => {
       expect(getState().counter).toBe(1);
     });
 
-    it('should honor fourth-argument interceptors after an empty cofx array', () => {
+    it('should register interceptors without coeffects', () => {
       const interceptorCall = jest.fn();
       const testInterceptor: Interceptor = {
         id: 'empty-cofx-interceptor',
@@ -572,8 +574,7 @@ describe('regEvent with cofx', () => {
         ({ draftState }) => {
           draftState.counter += 1;
         },
-        [],
-        [testInterceptor],
+        { interceptors: [testInterceptor] },
       );
 
       dispatchSync(['test-empty-cofx-with-interceptors']);
@@ -625,7 +626,7 @@ describe('regEvent with cofx', () => {
       expect(getState().counter).toBe(2);
     });
 
-    it('should maintain backward compatibility with interceptor-only registration', async () => {
+    it('should support interceptor-only options', async () => {
       let interceptorCalled = false;
 
       const testInterceptor = {
@@ -641,7 +642,7 @@ describe('regEvent with cofx', () => {
         ({ draftState }) => {
           (draftState as any).counter += 1;
         },
-        [testInterceptor],
+        { interceptors: [testInterceptor] },
       );
 
       dispatch(['test-backward-compat']);
@@ -652,7 +653,7 @@ describe('regEvent with cofx', () => {
       expect(interceptorCalled).toBe(true);
     });
 
-    it('should maintain backward compatibility with handler-only registration', async () => {
+    it('should support handler-only registration', async () => {
       regEvent('test-handler-only', ({ draftState }) => {
         (draftState as any).counter += 2;
       });
@@ -672,7 +673,7 @@ describe('regEvent with cofx', () => {
         ({ draftState }) => {
           (draftState as any).counter += 1;
         },
-        [['now', 'extra', 'invalid']],
+        { coeffects: [['now', 'extra', 'invalid'] as any] },
       );
 
       dispatch(['test-invalid-cofx']);
@@ -696,7 +697,7 @@ describe('regEvent with cofx', () => {
 
           (draftState as any).messages.push(customValue);
         },
-        [['custom-test']],
+        { coeffects: [['custom-test']] },
       );
 
       dispatch(['test-custom-cofx']);
@@ -719,7 +720,7 @@ describe('regEvent with cofx', () => {
 
           (draftState as any).messages.push(customValue);
         },
-        [['custom-with-value', 'test-input']],
+        { coeffects: [['custom-with-value', 'test-input']] },
       );
 
       dispatch(['test-custom-cofx-with-value']);
@@ -852,7 +853,7 @@ describe('regEvent with cofx', () => {
           executionOrder.push('handler');
           (draftState as any).counter += 1;
         },
-        [customInterceptor],
+        { interceptors: [customInterceptor] },
       );
 
       dispatch(['test-execution-order']);
@@ -952,7 +953,7 @@ describe('regEvent with cofx', () => {
           (draftState as any).globalValue = globalValue;
           (draftState as any).counter += 1;
         },
-        [['now']],
+        { coeffects: [['now']] },
       );
 
       dispatch(['test-global-with-cofx']);

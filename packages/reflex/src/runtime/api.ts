@@ -62,9 +62,7 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
   regEvent<TId extends string>(
     id: TId,
     handler: RuntimeEventHandler<TContracts, TId>,
-    options?:
-      | EventRegistrationOptions<ContractState<TContracts>>
-      | Interceptor<ContractState<TContracts>>[],
+    options?: EventRegistrationOptions<ContractState<TContracts>>,
   ): void;
   regEffect<TId extends string>(
     id: TId,

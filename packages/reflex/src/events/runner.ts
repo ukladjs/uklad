@@ -45,7 +45,7 @@ export function defaultErrorHandler(originalError: Error, reflexError: ReflexErr
 export function runEvent(runtime: RuntimeCore, event: EventVector): EventRunResult {
   const previousState = runtime.state.get<State>();
   const eventId = event[0];
-  const definition = runtime.registry.getEvent(eventId);
+  const definition = runtime.events.getEvent(eventId);
   if (!definition) {
     return Object.freeze({
       status: 'missing-handler' as const,

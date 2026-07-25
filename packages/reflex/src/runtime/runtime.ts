@@ -151,9 +151,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   regEvent(
     id: Id,
     handler: RuntimeEventHandler<TContracts, any>,
-    options?:
-      | EventRegistrationOptions<ContractState<TContracts>>
-      | Interceptor<ContractState<TContracts>>[],
+    options?: EventRegistrationOptions<ContractState<TContracts>>,
   ): void {
     this.assertUsable();
     this.recordOwnership(this.#core.events.registerEvent(id, handler as any, options));

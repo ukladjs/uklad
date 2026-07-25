@@ -3,7 +3,6 @@ import type {
   EffectHandler,
   ErrorHandler,
   EventHandler,
-  Interceptor,
   SubDepsHandler,
   SubHandler,
 } from '../types';
@@ -30,9 +29,4 @@ export interface RegistrationOwnership {
   assertReleasable?(): void;
   /** Remove this registration without touching a newer replacement. */
   release(): boolean;
-}
-
-export interface RuntimeEventDefinition {
-  readonly handler: EventHandler<any, any>;
-  readonly interceptors: readonly Interceptor[];
 }

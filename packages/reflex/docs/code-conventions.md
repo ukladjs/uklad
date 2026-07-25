@@ -29,6 +29,7 @@ src/
     state.ts                       StateStore
     handler-types.ts               registry contracts
     handlers.ts                    RuntimeRegistry
+    events.ts                      EventRuntime, event definitions, and registration metadata
     probe-types.ts                 instrumentation contracts and DTOs
     probe.ts                       sole optional instrumentation channel
     lifecycle-types.ts             compatibility observer contract
@@ -52,7 +53,6 @@ src/
     coeffects.ts
     effects.ts
     interceptors.ts
-    registration.ts
   react/
     types.ts                       public React binding contracts
     context.ts

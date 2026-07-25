@@ -16,7 +16,6 @@ import {
 } from '../core/tracing';
 import { getInjectCofxInterceptor as getInjectCofxInterceptorInternal } from '../events/coeffects';
 import { execute as executeInterceptors } from '../events/interceptors';
-import { regEvent as registerEventInternal } from '../events/registration';
 import { createReflexInspector as createInspectorInternal } from '../inspector';
 import { clearHandlers as clearHandlersInternal } from '../runtime/reset';
 import { createReflexRuntime, getRuntimeCoreForTests } from '../runtime/runtime';
@@ -88,10 +87,9 @@ export function hasPendingStateFlush(): boolean {
 export function regEvent<T = DefaultAppState>(
   id: Id,
   handler: EventHandler<T>,
-  registration?: EventRegistrationOptions<T> | Interceptor<T>[] | readonly unknown[],
-  legacyInterceptors?: Interceptor<T>[],
+  options?: EventRegistrationOptions<T>,
 ): void {
-  registerEventInternal(core, id, handler, registration, legacyInterceptors);
+  core.events.registerEvent(id, handler, options);
 }
 
 export function regEffect<K extends Id = Id>(id: K, handler: EffectHandler<EffectParams<K>>): void {
@@ -174,14 +172,18 @@ export function registerHandler<K extends HandlerKind, T extends HandlerByKind[K
   id: Id,
   handler: T,
 ): T {
-  core.registry.register(kind, id, handler);
+  if (kind === 'event') {
+    core.events.registerEvent(id, handler as HandlerByKind['event']);
+  } else {
+    core.registry.register(kind, id, handler);
+  }
   return handler;
 }
 
 export const hasHandler = core.registry.has.bind(core.registry);
 export const clearHandlers = clearHandlersInternal.bind(null, core);
-export const getEventInterceptors = core.registry.getEventInterceptors.bind(core.registry);
-export const setEventInterceptors = core.registry.setEventInterceptors.bind(core.registry);
+export const getEventInterceptors = core.events.getEventInterceptors.bind(core.events);
+export const setEventInterceptors = core.events.setEventInterceptors.bind(core.events);
 
 export const registerInterceptor = core.events.registerInterceptor.bind(core.events);
 export const getInterceptors = core.events.getInterceptors.bind(core.events);

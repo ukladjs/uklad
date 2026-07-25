@@ -2,7 +2,6 @@ import {
   clearInterceptors,
   dispatch,
   getState,
-  getInjectCofxInterceptor,
   initState,
   regCoeffect,
   regEvent,
@@ -50,7 +49,7 @@ describe('regCofx - Co-Effects', () => {
         (coeffects) => {
           capturedCoeffects = coeffects;
         },
-        [['now']],
+        { coeffects: [['now']] },
       );
 
       dispatch(['test-now-cofx']);
@@ -73,7 +72,7 @@ describe('regCofx - Co-Effects', () => {
         (coeffects) => {
           capturedCoeffects = coeffects;
         },
-        [['random']],
+        { coeffects: [['random']] },
       );
 
       dispatch(['test-random-cofx']);
@@ -94,7 +93,7 @@ describe('regCofx - Co-Effects', () => {
         (coeffects) => {
           capturedCoeffects = coeffects;
         },
-        [getInjectCofxInterceptor('now'), getInjectCofxInterceptor('random')],
+        { coeffects: [['now'], ['random']] },
       );
 
       dispatch(['test-multiple-cofx']);
@@ -126,7 +125,7 @@ describe('regCofx - Co-Effects', () => {
         (coeffects) => {
           capturedCoeffects = coeffects;
         },
-        [getInjectCofxInterceptor('user-info')],
+        { coeffects: [['user-info']] },
       );
 
       dispatch(['test-custom-cofx']);
@@ -154,7 +153,7 @@ describe('regCofx - Co-Effects', () => {
         (coeffects) => {
           capturedCoeffects = coeffects;
         },
-        [getInjectCofxInterceptor('api-token', 'users')],
+        { coeffects: [['api-token', 'users']] },
       );
 
       dispatch(['test-param-cofx']);
@@ -189,7 +188,9 @@ describe('regCofx - Co-Effects', () => {
         (coeffects) => {
           capturedCoeffects = coeffects;
         },
-        [['enhanced-data', { includeTimestamp: true, prefix: 'test' }]],
+        {
+          coeffects: [['enhanced-data', { includeTimestamp: true, prefix: 'test' }]],
+        },
       );
 
       dispatch(['test-complex-cofx']);
@@ -223,7 +224,7 @@ describe('regCofx - Co-Effects', () => {
           draftState.counter = newCounter;
           draftState.messages.push(config.defaultMessage);
         },
-        [['app-config']],
+        { coeffects: [['app-config']] },
       );
 
       dispatch(['test-cofx-logic']);
@@ -261,11 +262,9 @@ describe('regCofx - Co-Effects', () => {
         (coeffects) => {
           capturedCoeffects = coeffects;
         },
-        [
-          getInjectCofxInterceptor('session-info'),
-          getInjectCofxInterceptor('permissions'),
-          getInjectCofxInterceptor('feature-flags'),
-        ],
+        {
+          coeffects: [['session-info'], ['permissions'], ['feature-flags']],
+        },
       );
 
       dispatch(['test-chained-cofx']);
@@ -298,7 +297,7 @@ describe('regCofx - Co-Effects', () => {
         (coeffects) => {
           capturedCoeffects = coeffects;
         },
-        [getInjectCofxInterceptor('working-cofx'), getInjectCofxInterceptor('failing-cofx')],
+        { coeffects: [['working-cofx'], ['failing-cofx']] },
       );
 
       dispatch(['test-error-handling']);
@@ -319,7 +318,7 @@ describe('regCofx - Co-Effects', () => {
         (coeffects) => {
           capturedCoeffects = coeffects;
         },
-        [getInjectCofxInterceptor('non-existent-cofx')],
+        { coeffects: [['non-existent-cofx']] },
       );
 
       dispatch(['test-unregistered-cofx']);
@@ -355,7 +354,7 @@ describe('regCofx - Co-Effects', () => {
             timestamp: coeffects.timestamp,
           };
         },
-        [getInjectCofxInterceptor('request-meta')],
+        { coeffects: [['request-meta']] },
       );
 
       dispatch(['test-params-with-cofx', 'param1', { key: 'value' }, 123]);
@@ -402,7 +401,7 @@ describe('regCofx - Co-Effects', () => {
         (coeffects) => {
           capturedCoeffects = coeffects;
         },
-        [getInjectCofxInterceptor('expensive-cofx')],
+        { coeffects: [['expensive-cofx']] },
       );
 
       dispatch(['test-with-cofx']);

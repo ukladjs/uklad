@@ -1,13 +1,12 @@
 import { consoleLog } from '../core/logging';
 
-import type { EventHandler, Id, Interceptor } from '../types';
+import type { Id } from '../types';
 import type {
   HandlerByKind,
   HandlerKind,
   HandlerRegistry,
   RegistrationOwnership,
   RegistryHandler,
-  RuntimeEventDefinition,
 } from './handler-types';
 
 export type {
@@ -16,7 +15,6 @@ export type {
   HandlerRegistry,
   RegistrationOwnership,
   RegistryHandler,
-  RuntimeEventDefinition,
 } from './handler-types';
 
 interface RegistrationKey {
@@ -40,7 +38,6 @@ const HANDLER_KINDS: readonly HandlerKind[] = [
   ...SUBSCRIPTION_HANDLER_KINDS,
   'error',
 ];
-const EMPTY_INTERCEPTORS: readonly Interceptor[] = Object.freeze([]);
 
 /**
  * Cohesive handler registry owned eagerly by one runtime core.
@@ -54,7 +51,6 @@ export class RuntimeRegistry {
   private readonly versions: Record<HandlerKind, Partial<Record<string, number>>> =
     createVersionRegistry();
   private nextVersion = 0;
-  private readonly eventDefinitions = new Map<Id, RuntimeEventDefinition>();
 
   get<K extends HandlerKind>(kind: K, id: Id): HandlerByKind[K] | undefined {
     return this.handlers[kind][id];
@@ -62,40 +58,6 @@ export class RuntimeRegistry {
 
   has(kind: HandlerKind, id: Id): boolean {
     return this.handlers[kind][id] !== undefined;
-  }
-
-  getEvent(id: Id): RuntimeEventDefinition | undefined {
-    return this.eventDefinitions.get(id);
-  }
-
-  registerEvent(
-    id: Id,
-    handler: EventHandler<any, any>,
-    interceptors: readonly Interceptor[],
-  ): RegistrationOwnership {
-    const definition = createEventDefinition(handler, interceptors);
-    const handlerOwnership = this.register('event', id, definition.handler);
-    this.eventDefinitions.set(id, definition);
-    return Object.freeze({
-      get current(): boolean {
-        return handlerOwnership.current;
-      },
-      release: (): boolean => {
-        if (!handlerOwnership.current) return false;
-        return handlerOwnership.release();
-      },
-    });
-  }
-
-  getEventInterceptors(id: Id): readonly Interceptor[] {
-    return this.eventDefinitions.get(id)?.interceptors ?? EMPTY_INTERCEPTORS;
-  }
-
-  setEventInterceptors(id: Id, interceptors: readonly Interceptor[]): void {
-    const handler = this.handlers.event[id];
-    if (handler !== undefined) {
-      this.eventDefinitions.set(id, createEventDefinition(handler, interceptors));
-    }
   }
 
   register<K extends HandlerKind, T extends HandlerByKind[K]>(
@@ -107,11 +69,6 @@ export class RuntimeRegistry {
       consoleLog('warn', `[reflex] overwriting ${kind} handler for:`, id);
     }
     writeHandler(this, kind, id, handler);
-    if (kind === 'event') {
-      const eventHandler = handler as HandlerByKind['event'];
-      const interceptors = this.eventDefinitions.get(id)?.interceptors ?? EMPTY_INTERCEPTORS;
-      this.eventDefinitions.set(id, createEventDefinition(eventHandler, interceptors));
-    }
     const version = this.bumpHandlerVersion(kind, id);
     return this.createOwnership({ kind, id, version });
   }
@@ -123,12 +80,6 @@ export class RuntimeRegistry {
   ): void {
     (this.systemHandlers[kind] as Partial<Record<string, RegistryHandler>>)[id] = handler;
     writeHandler(this, kind, id, handler);
-    if (kind === 'event') {
-      this.eventDefinitions.set(
-        id,
-        createEventDefinition(handler as HandlerByKind['event'], EMPTY_INTERCEPTORS),
-      );
-    }
     this.bumpHandlerVersion(kind, id);
   }
 
@@ -145,7 +96,6 @@ export class RuntimeRegistry {
     const systemHandler = this.systemHandlers[kind][id];
     if (systemHandler === undefined) delete this.handlers[kind][id];
     else writeHandler(this, kind, id, systemHandler);
-    if (kind === 'event') this.restoreSystemEventDefinition(id, systemHandler);
     this.bumpHandlerVersion(kind, id);
   }
 
@@ -154,7 +104,6 @@ export class RuntimeRegistry {
     const systemHandler = this.systemHandlers[key.kind][key.id];
     if (systemHandler === undefined) delete this.handlers[key.kind][key.id];
     else writeHandler(this, key.kind, key.id, systemHandler);
-    if (key.kind === 'event') this.restoreSystemEventDefinition(key.id, systemHandler);
     this.bumpHandlerVersion(key.kind, key.id);
     return true;
   }
@@ -185,31 +134,9 @@ export class RuntimeRegistry {
     const next = createHandlerRecord<RegistryHandler>();
     Object.assign(next, this.systemHandlers[kind]);
     (this.handlers as Record<HandlerKind, Partial<Record<string, RegistryHandler>>>)[kind] = next;
-    if (kind === 'event') {
-      this.eventDefinitions.clear();
-      for (const [eventId, handler] of Object.entries(next)) {
-        if (handler !== undefined) {
-          this.eventDefinitions.set(
-            eventId,
-            createEventDefinition(handler as HandlerByKind['event'], EMPTY_INTERCEPTORS),
-          );
-        }
-      }
-    }
     for (const id of new Set([...previousIds, ...Object.keys(next)])) {
       this.bumpHandlerVersion(kind, id);
     }
-  }
-
-  private restoreSystemEventDefinition(id: Id, systemHandler: RegistryHandler | undefined): void {
-    if (systemHandler === undefined) {
-      this.eventDefinitions.delete(id);
-      return;
-    }
-    this.eventDefinitions.set(
-      id,
-      createEventDefinition(systemHandler as HandlerByKind['event'], EMPTY_INTERCEPTORS),
-    );
   }
 }
 
@@ -234,16 +161,6 @@ function createHandlerRegistry(): HandlerRegistry {
     subDeps: createHandlerRecord(),
     error: createHandlerRecord(),
   };
-}
-
-function createEventDefinition(
-  handler: EventHandler<any, any>,
-  interceptors: readonly Interceptor[],
-): RuntimeEventDefinition {
-  return Object.freeze({
-    handler,
-    interceptors: interceptors.length === 0 ? EMPTY_INTERCEPTORS : Object.freeze([...interceptors]),
-  });
 }
 
 function createVersionRegistry(): Record<HandlerKind, Partial<Record<string, number>>> {

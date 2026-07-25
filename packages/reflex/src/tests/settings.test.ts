@@ -1,9 +1,9 @@
 import {
   clearGlobalInterceptors,
-  getGlobalEqualityCheck,
+  getEqualityCheck,
   getGlobalInterceptors,
   regGlobalInterceptor,
-  setGlobalEqualityCheck,
+  setEqualityCheck,
 } from './runtime-test-api';
 import type { Interceptor, Context, EqualityCheckFn } from '../types';
 
@@ -120,16 +120,16 @@ describe('Global Interceptors', () => {
 
   describe('Global Equality Check', () => {
     it('should have default equality check that is isEqual', () => {
-      const defaultCheck = getGlobalEqualityCheck();
+      const defaultCheck = getEqualityCheck();
       expect(defaultCheck({ a: 1 }, { a: 1 })).toBe(true);
       expect(defaultCheck({ a: 1 }, { a: 2 })).toBe(false);
     });
 
     it('should allow setting custom equality check', () => {
       const customEquality: EqualityCheckFn = (a, b) => a === b;
-      setGlobalEqualityCheck(customEquality);
+      setEqualityCheck(customEquality);
 
-      const currentCheck = getGlobalEqualityCheck();
+      const currentCheck = getEqualityCheck();
       expect(currentCheck).toBe(customEquality);
       expect(currentCheck(1, 1)).toBe(true);
       expect(currentCheck(1, 2)).toBe(false);
@@ -138,18 +138,18 @@ describe('Global Interceptors', () => {
 
     it('should allow setting always-equal check', () => {
       const alwaysEqual: EqualityCheckFn = () => true;
-      setGlobalEqualityCheck(alwaysEqual);
+      setEqualityCheck(alwaysEqual);
 
-      const currentCheck = getGlobalEqualityCheck();
+      const currentCheck = getEqualityCheck();
       expect(currentCheck({ a: 1 }, { a: 2 })).toBe(true);
       expect(currentCheck('hello', 'world')).toBe(true);
     });
 
     it('should allow setting never-equal check', () => {
       const neverEqual: EqualityCheckFn = () => false;
-      setGlobalEqualityCheck(neverEqual);
+      setEqualityCheck(neverEqual);
 
-      const currentCheck = getGlobalEqualityCheck();
+      const currentCheck = getEqualityCheck();
       expect(currentCheck({ a: 1 }, { a: 1 })).toBe(false);
       expect(currentCheck('hello', 'hello')).toBe(false);
     });

@@ -9,7 +9,7 @@ import {
   type Draft,
 } from 'immer';
 
-import { replaceDefaultEqualityCheck } from './equality';
+import { replaceDefaultEqualityCheck } from '../runtime/subscriptions/equality';
 
 let patchesPluginEnabled = false;
 

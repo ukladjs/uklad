@@ -7,10 +7,6 @@
  * into the library API.
  */
 import {
-  getGlobalEqualityCheck as getGlobalEqualityCheckInternal,
-  setGlobalEqualityCheck as setGlobalEqualityCheckInternal,
-} from '../core/equality';
-import {
   disableTracing as disableTracingInternal,
   enableTracing as enableTracingInternal,
   isTraceEnabled as isTraceEnabledInternal,
@@ -35,6 +31,7 @@ import type {
   DefaultAppState,
   EffectHandler,
   EffectParams,
+  EqualityCheckFn,
   ErrorHandler,
   EventHandler,
   EventRegistrationOptions,
@@ -195,8 +192,10 @@ export const execute = executeInterceptors.bind(null, core) as (
   interceptors: Interceptor[],
 ) => Context;
 
-export const setGlobalEqualityCheck = setGlobalEqualityCheckInternal.bind(null, core);
-export const getGlobalEqualityCheck = getGlobalEqualityCheckInternal.bind(null, core);
+export const setEqualityCheck = (equalityCheck: EqualityCheckFn): void => {
+  core.subscriptions.equalityCheck = equalityCheck;
+};
+export const getEqualityCheck = (): EqualityCheckFn => core.subscriptions.equalityCheck;
 
 export const enableTracing = enableTracingInternal.bind(null, core);
 export const disableTracing = disableTracingInternal.bind(null, core);

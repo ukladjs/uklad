@@ -17,7 +17,6 @@ import {
   registerTraceCallback,
   removeTraceCallback,
 } from '../core/tracing';
-import { getGlobalEqualityCheck, setGlobalEqualityCheck } from '../core/equality';
 import { defaultErrorHandler } from '../events/runner';
 import { createReflexInspector } from '../inspector';
 import { clearHandlers } from './reset';
@@ -297,14 +296,14 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     this.#core.registry.clearGlobalInterceptors(id);
   }
 
-  setGlobalEqualityCheck(equalityCheck: EqualityCheckFn): void {
+  setEqualityCheck(equalityCheck: EqualityCheckFn): void {
     this.assertUsable();
-    setGlobalEqualityCheck(this.#core, equalityCheck);
+    this.#core.subscriptions.equalityCheck = equalityCheck;
   }
 
-  getGlobalEqualityCheck(): EqualityCheckFn {
+  getEqualityCheck(): EqualityCheckFn {
     this.assertUsable();
-    return getGlobalEqualityCheck(this.#core);
+    return this.#core.subscriptions.equalityCheck;
   }
 
   enableTracing(): void {

@@ -1,6 +1,9 @@
 import { enableMapSet, original, current } from '../core/immer';
-import { createReflexRuntime } from '../runtime/runtime';
+import { createReflexRuntime, getRuntimeCoreForTests } from '../runtime/runtime';
 import isEqualEs6 from 'fast-deep-equal/es6/index.js';
+
+const getEqualityCheck = (runtime: Parameters<typeof getRuntimeCoreForTests>[0]) =>
+  getRuntimeCoreForTests(runtime).subscriptions.equalityCheck;
 
 describe('immer-utils', () => {
   describe('enableMapSet', () => {
@@ -10,11 +13,11 @@ describe('immer-utils', () => {
         runtimeId: 'map-set-explicit-runtime',
       });
       const customRuntimeEquality = () => true;
-      runtime.setGlobalEqualityCheck(customRuntimeEquality);
+      runtime.setEqualityCheck(customRuntimeEquality);
 
       enableMapSet();
 
-      expect(runtime.getGlobalEqualityCheck()).toBe(customRuntimeEquality);
+      expect(getEqualityCheck(runtime)).toBe(customRuntimeEquality);
       runtime.dispose();
     });
 
@@ -24,7 +27,7 @@ describe('immer-utils', () => {
         initialState: {},
         runtimeId: 'map-set-default-runtime',
       });
-      expect(runtime.getGlobalEqualityCheck()).toBe(isEqualEs6);
+      expect(getEqualityCheck(runtime)).toBe(isEqualEs6);
       runtime.dispose();
     });
 
@@ -34,12 +37,12 @@ describe('immer-utils', () => {
         runtimeId: 'map-set-custom-runtime',
       });
       const customEquality = () => true;
-      runtime.setGlobalEqualityCheck(customEquality);
+      runtime.setEqualityCheck(customEquality);
 
       enableMapSet();
 
-      expect(runtime.getGlobalEqualityCheck()).toBe(customEquality);
-      expect(runtime.getGlobalEqualityCheck()).not.toBe(isEqualEs6);
+      expect(getEqualityCheck(runtime)).toBe(customEquality);
+      expect(getEqualityCheck(runtime)).not.toBe(isEqualEs6);
       runtime.dispose();
     });
 
@@ -65,7 +68,7 @@ describe('immer-utils', () => {
         initialState: {},
         runtimeId: 'map-set-values-runtime',
       });
-      const equalityCheck = runtime.getGlobalEqualityCheck();
+      const equalityCheck = getEqualityCheck(runtime);
 
       expect(equalityCheck(map1, map2)).toBe(true);
       expect(equalityCheck(set1, set2)).toBe(true);

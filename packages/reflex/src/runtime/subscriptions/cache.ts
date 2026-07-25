@@ -1,5 +1,4 @@
 import { scheduleAfterRender } from '../../core/scheduling';
-import { getGlobalEqualityCheck } from '../../core/equality';
 import { consoleLog } from '../../core/logging';
 import { mergeRuntimeProbeSpan, withRuntimeProbeSpan } from '../probe';
 import { SUB_DEPS_HANDLER_KIND, SUB_HANDLER_KIND, SUBSCRIPTION_HANDLER_KINDS } from '../handlers';
@@ -7,6 +6,7 @@ import { isRuntimeDisposed, type RuntimeCore } from '../core';
 import { SubscriptionEngine } from './engine';
 import { getRootSubKey, getSubVectorKey } from './keys';
 import { normalizeSubscriptionConfig } from './validation';
+import { getDefaultEqualityCheck } from './equality';
 
 import type { RuntimeProbeSubscription } from '../probe-types';
 import type { RegistrationOwnership } from '../handler-types';
@@ -51,7 +51,15 @@ export class SubscriptionRuntime {
   provisionalCurrent: Map<string, SubscriptionNode<any>>;
   provisionalPrevious: Map<string, SubscriptionNode<any>>;
   provisionalSweepScheduled: boolean;
-  equalityCheck: EqualityCheckFn | undefined;
+  private equalityCheckOverride: EqualityCheckFn | undefined;
+
+  get equalityCheck(): EqualityCheckFn {
+    return this.equalityCheckOverride ?? getDefaultEqualityCheck();
+  }
+
+  set equalityCheck(equalityCheck: EqualityCheckFn | undefined) {
+    this.equalityCheckOverride = equalityCheck;
+  }
 
   readonly engine: SubscriptionEngine;
   private readonly getRuntime: () => RuntimeCore;
@@ -67,7 +75,7 @@ export class SubscriptionRuntime {
     this.provisionalCurrent = new Map();
     this.provisionalPrevious = new Map();
     this.provisionalSweepScheduled = false;
-    this.equalityCheck = undefined;
+    this.equalityCheckOverride = undefined;
     this.engine = new SubscriptionEngine(getRuntime);
   }
 
@@ -196,7 +204,7 @@ export class SubscriptionRuntime {
         params,
         kind: rootSource === undefined ? 'computed' : 'root',
         equalityCheck:
-          this.subConfigById.get(subId)?.equalityCheck ?? getGlobalEqualityCheck(runtime),
+          this.subConfigById.get(subId)?.equalityCheck ?? runtime.subscriptions.equalityCheck,
         dependencyVectors,
         dependencies: [],
         dependencyKeys: [],

@@ -3,81 +3,38 @@ import { DISPATCH, DISPATCH_LATER } from './events/effects';
 import {
   getDevelopmentOperationReference,
   observeDevelopmentExecution,
-  type DevelopmentExecutionObserver,
 } from './events/execution-observer';
-import { isRuntimeDisposed, type RuntimeCore } from './runtime/core';
+import { type RuntimeCore } from './runtime/core';
+import { assertRuntimeUsable } from './runtime/validation';
 
-import type { TraceCallback } from './core/tracing';
-import type { SubscriptionDiagnostic } from './runtime/subscriptions/engine';
+import type { TraceCallback } from './core/tracing-types';
+import type { DevelopmentExecutionObserver } from './events/execution-observer-types';
+import type {
+  ReflexDevtoolsOperationRuntime,
+  ReflexHandlerKeys,
+  ReflexInspector,
+  ReflexInspectorSnapshot,
+} from './inspector-types';
 import type { EventVector, SubVector } from './types';
 
-export interface ReflexHandlerKeys {
-  readonly event: readonly string[];
-  readonly fx: readonly string[];
-  readonly cofx: readonly string[];
-  readonly sub: readonly string[];
-}
-
-export interface ReflexInspectorSnapshot {
-  /** The live state write head. The value is not cloned or deep-frozen. */
-  readonly state: unknown;
-  /** User-facing handler ids; framework-owned effect ids are omitted. */
-  readonly handlerKeys: ReflexHandlerKeys;
-  /** Cache-only diagnostics. Reading a snapshot never evaluates subscriptions. */
-  readonly subscriptions: readonly SubscriptionDiagnostic[];
-}
-
-/** @internal Structural runtime port consumed by optional DevTools operation snapshots. */
-export interface ReflexDevtoolsOperationRuntime {
-  readonly runtimeId: string;
-  readonly runtimeInstanceId: string;
-  dispatch(event: never): string;
-  flush(): Promise<void>;
-  observeExecution(observer: DevelopmentExecutionObserver): () => void;
-}
-
-/**
- * The Reflex-owned side of a development-tools integration.
- *
- * The adapter closes over the module instance that created it, so injected
- * consumers inspect and control that exact state, registry, subscription
- * cache, and trace callback registry.
- */
-export interface ReflexInspector {
-  readonly apiVersion: 2;
-  readonly runtimeId: string;
-  readonly runtimeName: string;
-  getSnapshot(): ReflexInspectorSnapshot;
-  /** Subscribe to trace batches and keep trace collection active until cleanup. */
-  subscribeTraces(callback: TraceCallback): () => void;
-  dispatch(event: EventVector): void;
-  evaluateSubscription(query: SubVector): unknown;
-  /** @internal Runtime port for optional DevTools operation snapshots. */
-  getOperationRuntime(): ReflexDevtoolsOperationRuntime;
-}
+export type {
+  ReflexDevtoolsOperationRuntime,
+  ReflexHandlerKeys,
+  ReflexInspector,
+  ReflexInspectorSnapshot,
+} from './inspector-types';
 
 const NEXT_TRACE_SUBSCRIPTION_ID = new WeakMap<RuntimeCore, number>();
-
-function nextTraceSubscriptionId(runtime: RuntimeCore): number {
-  const next = (NEXT_TRACE_SUBSCRIPTION_ID.get(runtime) ?? 0) + 1;
-  NEXT_TRACE_SUBSCRIPTION_ID.set(runtime, next);
-  return next;
-}
 
 // Devtools is an intentionally dynamic boundary. App-level payload-map
 // augmentation must not narrow vectors arriving from an external inspector.
 /** @internal Create an inspection adapter bound to one explicit runtime. */
 export function createReflexInspector(runtime: RuntimeCore): ReflexInspector {
-  const assertRuntimeActive = () => {
-    if (isRuntimeDisposed(runtime)) {
-      throw new Error(`[reflex] Runtime '${runtime.identity.runtimeId}' has been disposed.`);
-    }
-  };
   const operationRuntime: ReflexDevtoolsOperationRuntime = {
     runtimeId: runtime.identity.runtimeId,
     runtimeInstanceId: runtime.identity.runtimeInstanceId,
     dispatch(event: never) {
-      assertRuntimeActive();
+      assertRuntimeUsable(runtime);
       const envelope = runtime.events.dispatch(event, true);
       const operation = getDevelopmentOperationReference(runtime, envelope?.tracking);
       if (!operation)
@@ -85,11 +42,11 @@ export function createReflexInspector(runtime: RuntimeCore): ReflexInspector {
       return operation.operationId;
     },
     flush() {
-      assertRuntimeActive();
+      assertRuntimeUsable(runtime);
       return runtime.events.flush();
     },
     observeExecution(observer: DevelopmentExecutionObserver) {
-      assertRuntimeActive();
+      assertRuntimeUsable(runtime);
       return observeDevelopmentExecution(runtime, observer);
     },
   };
@@ -98,7 +55,7 @@ export function createReflexInspector(runtime: RuntimeCore): ReflexInspector {
     runtimeId: runtime.identity.runtimeId,
     runtimeName: runtime.identity.runtimeName,
     getSnapshot(): ReflexInspectorSnapshot {
-      assertRuntimeActive();
+      assertRuntimeUsable(runtime);
       return {
         state: runtime.state.get(),
         handlerKeys: getHandlerKeys(runtime),
@@ -106,7 +63,7 @@ export function createReflexInspector(runtime: RuntimeCore): ReflexInspector {
       };
     },
     subscribeTraces(callback: TraceCallback): () => void {
-      assertRuntimeActive();
+      assertRuntimeUsable(runtime);
       const key = `reflex-inspector-${nextTraceSubscriptionId(runtime)}`;
       const releaseTracing = acquireTracing(runtime);
       try {
@@ -125,20 +82,26 @@ export function createReflexInspector(runtime: RuntimeCore): ReflexInspector {
       };
     },
     dispatch(event: EventVector): void {
-      assertRuntimeActive();
+      assertRuntimeUsable(runtime);
       runtime.events.dispatch(event as never);
     },
     evaluateSubscription(query: SubVector): unknown {
-      assertRuntimeActive();
+      assertRuntimeUsable(runtime);
       return runtime.subscriptions.read(query);
     },
     getOperationRuntime(): ReflexDevtoolsOperationRuntime {
-      assertRuntimeActive();
+      assertRuntimeUsable(runtime);
       return operationRuntime;
     },
   };
 
   return Object.freeze(inspector);
+}
+
+function nextTraceSubscriptionId(runtime: RuntimeCore): number {
+  const next = (NEXT_TRACE_SUBSCRIPTION_ID.get(runtime) ?? 0) + 1;
+  NEXT_TRACE_SUBSCRIPTION_ID.set(runtime, next);
+  return next;
 }
 
 function getHandlerKeys(runtime: RuntimeCore): ReflexHandlerKeys {

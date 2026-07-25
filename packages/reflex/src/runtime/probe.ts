@@ -1,130 +1,31 @@
 import { consoleLog } from '../core/logging';
 
 import type { RuntimeCore } from './core';
-import type { EventVector, SubVector } from '../types';
+import type { EventVector } from '../types';
+import type {
+  RuntimeProbe,
+  RuntimeProbeAttachment,
+  RuntimeProbeParent,
+  RuntimeProbeSpan,
+  RuntimeProbeSubscription,
+  RuntimeSpanContext,
+  RuntimeTrackingContext,
+  RuntimeTrackingEntry,
+} from './probe-types';
 
-export interface RuntimeProbeParent {
-  readonly tracking: RuntimeTrackingContext;
-  readonly sourceEffectId?: string;
-  readonly sourceEffectIndex?: number;
-}
+export type {
+  RuntimeProbe,
+  RuntimeProbeCommit,
+  RuntimeProbeEffect,
+  RuntimeProbeParent,
+  RuntimeProbePatch,
+  RuntimeProbeSpan,
+  RuntimeProbeSubscription,
+  RuntimeProbeTransition,
+  RuntimeTrackingContext,
+} from './probe-types';
 
-export interface RuntimeProbeTransition {
-  readonly status: 'completed' | 'missing-handler' | 'aborted' | 'failed';
-  readonly previousState?: unknown;
-  readonly candidateState?: unknown;
-  readonly effects?: readonly unknown[];
-  readonly invalidEffects?: readonly unknown[];
-  readonly patches?: readonly RuntimeProbePatch[];
-  readonly reversePatches?: readonly RuntimeProbePatch[];
-  readonly error?: unknown;
-}
-
-export interface RuntimeProbeCommit {
-  readonly status: 'committed' | 'unchanged' | 'skipped';
-  readonly committedRevision: number;
-}
-
-export interface RuntimeProbePatch {
-  readonly op: 'add' | 'remove' | 'replace';
-  readonly path: readonly (string | number)[];
-  readonly value?: unknown;
-}
-
-export interface RuntimeProbeEffect {
-  readonly type: string;
-  readonly value: unknown;
-  readonly index: number;
-  readonly status: 'succeeded' | 'returned' | 'failed' | 'unhandled' | 'invalid' | 'detached';
-  readonly startedAtMs: number;
-  readonly durationMs: number;
-  readonly error?: unknown;
-}
-
-export interface RuntimeProbeSubscription {
-  readonly key: string;
-  readonly query: Readonly<SubVector>;
-  readonly kind: 'root' | 'computed';
-  readonly active: boolean;
-  readonly version: number;
-  readonly status: 'value' | 'error';
-  readonly value?: unknown;
-  readonly error?: string;
-}
-
-export interface RuntimeProbeSpan {
-  readonly operation?: string;
-  readonly opType?: string;
-  readonly tags?: Readonly<Record<string, unknown>>;
-}
-
-/**
- * The sole optional instrumentation capability installed on a runtime core.
- *
- * Every callback is observational. Return values are opaque correlation tokens
- * only; they can never accept, reject, abort, or otherwise steer execution.
- */
-export interface RuntimeProbe {
-  readonly needsPatches: boolean;
-  readonly needsSubscriptionEvidence: boolean;
-  readonly needsSpans: boolean;
-  /** Marks a probe that can back explicit tracked-operation dispatch. */
-  readonly tracksOperations?: boolean;
-
-  eventAccepted?(event: EventVector, parent?: RuntimeProbeParent): unknown;
-  eventQueued?(token: unknown, committedRevision: number): void;
-  eventStarted?(token: unknown, committedRevision: number): void;
-  transition?(token: unknown, result: RuntimeProbeTransition): void;
-  committed?(token: unknown, result: RuntimeProbeCommit): void;
-  effect?(token: unknown, result: RuntimeProbeEffect): void;
-  eventFinished?(
-    token: unknown,
-    status: 'completed' | 'rejected' | 'failed',
-    error?: unknown,
-  ): void;
-  eventsDropped?(
-    tokens: readonly unknown[],
-    reason: 'queue-dropped' | 'disposed',
-    error: unknown,
-  ): void;
-  error?(kind: string, error: unknown): void;
-
-  stateCommitted?(previousState: unknown, nextState: unknown, committedRevision: number): void;
-  published?(
-    state: unknown,
-    publishedRevision: number,
-    subscriptions?: readonly RuntimeProbeSubscription[],
-  ): void;
-  runtimeDisposed?(error: unknown): void;
-
-  spanStarted?(span: RuntimeProbeSpan): unknown;
-  spanFinished?(token: unknown, span?: RuntimeProbeSpan): void;
-}
-
-interface ProbeAttachment {
-  readonly probe: RuntimeProbe;
-  active: boolean;
-}
-
-interface TrackingEntry {
-  readonly attachment: ProbeAttachment;
-  readonly token: unknown;
-}
-
-/**
- * Minimal optional context carried by accepted queue work. The entries and
- * tokens remain private to the probe host.
- */
-export interface RuntimeTrackingContext {
-  readonly operationTracked: boolean;
-  readonly entries: readonly TrackingEntry[];
-}
-
-interface RuntimeSpanContext {
-  readonly entries: readonly TrackingEntry[];
-}
-
-const ATTACHMENTS = new WeakMap<RuntimeCore, Set<ProbeAttachment>>();
+const ATTACHMENTS = new WeakMap<RuntimeCore, Set<RuntimeProbeAttachment>>();
 
 /** Read the opaque token contributed by one probe to a tracking context. */
 export function getRuntimeTrackingToken(
@@ -136,8 +37,8 @@ export function getRuntimeTrackingToken(
 
 /** Attach one capability and restore the uninstrumented path on final disposal. */
 export function attachRuntimeProbe(runtime: RuntimeCore, probe: RuntimeProbe): () => void {
-  const attachment: ProbeAttachment = { probe, active: true };
-  const attachments = ATTACHMENTS.get(runtime) ?? new Set<ProbeAttachment>();
+  const attachment: RuntimeProbeAttachment = { probe, active: true };
+  const attachments = ATTACHMENTS.get(runtime) ?? new Set<RuntimeProbeAttachment>();
   attachments.add(attachment);
   ATTACHMENTS.set(runtime, attachments);
   refreshProbeSlot(runtime, attachments);
@@ -203,7 +104,7 @@ export function notifyDroppedRuntimeEvents(
   reason: 'queue-dropped' | 'disposed',
   error: unknown,
 ): void {
-  const tokensByAttachment = new Map<ProbeAttachment, unknown[]>();
+  const tokensByAttachment = new Map<RuntimeProbeAttachment, unknown[]>();
   for (const context of contexts) {
     for (const entry of context.entries) {
       if (!entry.attachment.active) continue;
@@ -255,12 +156,15 @@ export function detachRuntimeProbes(runtime: RuntimeCore): void {
   runtime.probe = undefined;
 }
 
-function refreshProbeSlot(runtime: RuntimeCore, attachments: ReadonlySet<ProbeAttachment>): void {
+function refreshProbeSlot(
+  runtime: RuntimeCore,
+  attachments: ReadonlySet<RuntimeProbeAttachment>,
+): void {
   const active = [...attachments].filter((attachment) => attachment.active);
   runtime.probe = active.length === 0 ? undefined : createCompositeProbe(active);
 }
 
-function createCompositeProbe(attachments: readonly ProbeAttachment[]): RuntimeProbe {
+function createCompositeProbe(attachments: readonly RuntimeProbeAttachment[]): RuntimeProbe {
   const probes = attachments.map((attachment) => attachment.probe);
   return Object.freeze({
     needsPatches: probes.some((probe) => probe.needsPatches),
@@ -272,7 +176,7 @@ function createCompositeProbe(attachments: readonly ProbeAttachment[]): RuntimeP
       event: EventVector,
       parent?: RuntimeProbeParent,
     ): RuntimeTrackingContext | undefined {
-      const entries: TrackingEntry[] = [];
+      const entries: RuntimeTrackingEntry[] = [];
       let operationTracked = false;
       for (const attachment of attachments) {
         const callback = attachment.probe.eventAccepted;
@@ -328,7 +232,7 @@ function createCompositeProbe(attachments: readonly ProbeAttachment[]): RuntimeP
       fanOut(attachments, 'error', kind, error);
     },
     spanStarted(span: RuntimeProbeSpan): RuntimeSpanContext | undefined {
-      const entries: TrackingEntry[] = [];
+      const entries: RuntimeTrackingEntry[] = [];
       for (const attachment of attachments) {
         if (!attachment.active || !attachment.probe.needsSpans) continue;
         const callback = attachment.probe.spanStarted;
@@ -364,7 +268,7 @@ function createCompositeProbe(attachments: readonly ProbeAttachment[]): RuntimeP
 }
 
 function fanOut(
-  attachments: readonly ProbeAttachment[],
+  attachments: readonly RuntimeProbeAttachment[],
   method: keyof RuntimeProbe,
   ...args: readonly unknown[]
 ): void {

@@ -2,53 +2,25 @@ import { consoleLog } from '../../core/logging';
 import { SubscriptionCell } from './cell';
 import { type RuntimeCore } from '../core';
 
-import type { EqualityCheckFn, SubVector } from '../../types';
-import type { RuntimeProbeSubscription } from '../probe';
-import type { SubscriptionListenerKind, SubscriptionListenerRegistration } from './cell';
+import type { SubVector } from '../../types';
+import type { RuntimeProbeSubscription } from '../probe-types';
+import type {
+  SubscriptionDiagnostic,
+  SubscriptionListenerKind,
+  SubscriptionListenerRegistration,
+  SubscriptionNode,
+  SubscriptionSpec,
+} from './types';
 
-export type { SubscriptionListenerKind } from './cell';
-
-declare const subscriptionNodeType: unique symbol;
+export type {
+  SubscriptionDiagnostic,
+  SubscriptionKind,
+  SubscriptionListenerKind,
+  SubscriptionNode,
+  SubscriptionSpec,
+} from './types';
 
 const NO_RECALCULATED_SUBSCRIPTIONS: readonly RuntimeProbeSubscription[] = Object.freeze([]);
-
-/** Opaque runtime-owned handle. Runtime operations are the entire contract. */
-export interface SubscriptionNode<T> {
-  readonly [subscriptionNodeType]: T;
-}
-
-export type SubscriptionKind = 'root' | 'computed';
-
-export interface SubscriptionSpec<T> {
-  key: string;
-  query: SubVector;
-  kind: SubscriptionKind;
-  compute: (...dependencyValues: any[]) => T;
-  dependencies: SubscriptionNode<any>[];
-  equalityCheck: EqualityCheckFn;
-  onActive: () => void;
-  onUnused: () => void;
-}
-
-/** Read-only cached state for devtools; never exposes the runtime node. */
-export interface SubscriptionDiagnostic {
-  readonly key: string;
-  readonly query: Readonly<SubVector>;
-  readonly kind: SubscriptionKind;
-  readonly active: boolean;
-  readonly version: number;
-  readonly status: 'empty' | 'value' | 'error';
-  readonly value?: unknown;
-  readonly error?: string;
-}
-
-function formatDiagnosticError(error: unknown): string {
-  try {
-    return error instanceof Error ? String(error.message) : String(error);
-  } catch {
-    return '[Unprintable subscription error]';
-  }
-}
 
 /**
  * Owns the lifecycle of opaque subscription cells.
@@ -438,5 +410,13 @@ export class SubscriptionEngine {
     } catch (error) {
       consoleLog('error', '[reflex] Error releasing subscription:', error);
     }
+  }
+}
+
+function formatDiagnosticError(error: unknown): string {
+  try {
+    return error instanceof Error ? String(error.message) : String(error);
+  } catch {
+    return '[Unprintable subscription error]';
   }
 }

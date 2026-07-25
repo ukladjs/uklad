@@ -1,34 +1,17 @@
 import { consoleLog } from '../core/logging';
 import { isEventVector } from '../core/validation';
-import {
-  hasTrackedRuntimeEventCallback,
-  notifyTrackedRuntimeEvent,
-  type RuntimeProbeEffect,
-} from '../runtime/probe';
+import { hasTrackedRuntimeEventCallback, notifyTrackedRuntimeEvent } from '../runtime/probe';
 import { type RuntimeCore } from '../runtime/core';
 import { DISPATCH, DISPATCH_LATER } from './effects';
 import type { ExecutionEnvelope } from './envelope';
 
 import type { DispatchLaterEffect } from '../types';
+import type { RuntimeProbeEffect } from '../runtime/probe-types';
 
 interface ActiveEffectExecution {
   readonly envelope: ExecutionEnvelope;
   readonly effectId: string;
   readonly effectIndex: number;
-}
-
-function withActiveEffectExecution<T>(
-  runtime: RuntimeCore,
-  execution: ActiveEffectExecution,
-  fn: () => T,
-): T {
-  const previous = runtime.events.activeEffect;
-  runtime.events.activeEffect = execution;
-  try {
-    return fn();
-  } finally {
-    runtime.events.activeEffect = previous;
-  }
 }
 
 /**
@@ -127,6 +110,20 @@ export function executeEffects(
       consoleLog('error', `[reflex] error in effects for ${effectId}:`, error);
       reportEffect(envelope, effectId, value, effectIndex, 'failed', startedAtMs, error);
     }
+  }
+}
+
+function withActiveEffectExecution<T>(
+  runtime: RuntimeCore,
+  execution: ActiveEffectExecution,
+  fn: () => T,
+): T {
+  const previous = runtime.events.activeEffect;
+  runtime.events.activeEffect = execution;
+  try {
+    return fn();
+  } finally {
+    runtime.events.activeEffect = previous;
   }
 }
 

@@ -8,29 +8,18 @@ import type {
   RuntimeProbeParent,
   RuntimeProbeSpan,
   RuntimeProbeTransition,
-} from '../runtime/probe';
-import type { EventVector, TraceErrorTag } from '../types';
+} from '../runtime/probe-types';
+import type { EventVector } from '../types';
+import type { Trace, TraceCallback, TraceErrorTag, TraceOptions, TraceTags } from './tracing-types';
 
-export type TraceId = number;
-export type TraceTags = Record<string, unknown>;
-
-export interface TraceOptions {
-  operation?: string;
-  opType?: string;
-  tags?: TraceTags;
-  childOf?: TraceId;
-}
-
-export interface Trace extends TraceOptions {
-  id: TraceId;
-  start: number;
-  end?: number;
-  duration?: number;
-}
-
-export type TraceCallback = (traces: Trace[]) => void;
-
-const TRACE_BATCH_DELAY_MS = 50;
+export type {
+  Trace,
+  TraceCallback,
+  TraceErrorTag,
+  TraceId,
+  TraceOptions,
+  TraceTags,
+} from './tracing-types';
 
 interface TraceEventToken {
   readonly event: EventVector;
@@ -44,7 +33,7 @@ interface TraceSpanToken {
   readonly previousTrace: Trace | null;
 }
 
-export interface TraceState {
+interface TraceState {
   readonly callbacks: Map<string, TraceCallback>;
   readonly probe: RuntimeProbe;
   nextId: number;
@@ -57,7 +46,111 @@ export interface TraceState {
   detachProbe: (() => void) | undefined;
 }
 
+const TRACE_BATCH_DELAY_MS = 50;
 const TRACE_STATES = new WeakMap<RuntimeCore, TraceState>();
+
+/** @internal Enable the manual trace owner for one runtime. */
+export function enableTracing(runtime: RuntimeCore): void {
+  const state = getTraceState(runtime);
+  state.manualTraceEnabled = true;
+  updateTraceEnabled(runtime, state);
+}
+
+/** @internal Release the manual trace owner for one runtime. */
+export function disableTracing(runtime: RuntimeCore): void {
+  const state = getTraceState(runtime);
+  state.manualTraceEnabled = false;
+  updateTraceEnabled(runtime, state);
+}
+
+/** @internal Keep one runtime's tracing active for an integration subscriber. */
+export function acquireTracing(runtime: RuntimeCore): () => void {
+  const state = getTraceState(runtime);
+  state.traceLeaseCount++;
+  updateTraceEnabled(runtime, state);
+
+  let acquired = true;
+  return () => {
+    if (!acquired) return;
+    acquired = false;
+    state.traceLeaseCount = Math.max(0, state.traceLeaseCount - 1);
+    updateTraceEnabled(runtime, state);
+  };
+}
+
+/** @internal Return whether one runtime is collecting traces. */
+export function isTraceEnabled(runtime: RuntimeCore): boolean {
+  return peekTraceState(runtime)?.traceEnabled ?? false;
+}
+
+/** @internal Register a keyed trace batch callback on one runtime. */
+export function registerTraceCallback(
+  runtime: RuntimeCore,
+  key: string,
+  callback: TraceCallback,
+): void {
+  const state = getTraceState(runtime);
+  if (!state.traceEnabled) {
+    consoleLog(
+      'warn',
+      '[reflex] [trace] Tracing is not enabled; call enableTracing() before registering callbacks',
+    );
+    return;
+  }
+  state.callbacks.set(key, callback);
+}
+
+/** @internal Remove a trace callback from one runtime. */
+export function removeTraceCallback(runtime: RuntimeCore, key: string): void {
+  peekTraceState(runtime)?.callbacks.delete(key);
+}
+
+/**
+ * Legacy internal helper implemented through the same optional probe channel.
+ * Hot-path callers should prefer `withRuntimeProbeSpan`.
+ */
+export function withOptionalTrace<T>(
+  runtime: RuntimeCore,
+  createOptions: () => TraceOptions,
+  fn: () => T,
+): T {
+  const state = peekTraceState(runtime);
+  if (!state?.traceEnabled) return fn();
+  const token = state.probe.spanStarted!(createOptions()) as TraceSpanToken;
+  try {
+    return fn();
+  } finally {
+    state.probe.spanFinished!(token);
+  }
+}
+
+/** @internal Build trace tags only when an active trace can receive them. */
+export function mergeOptionalTrace(runtime: RuntimeCore, createTags: () => TraceTags): void {
+  const state = peekTraceState(runtime);
+  if (!state?.traceEnabled || !state.currentTrace) return;
+  state.currentTrace.tags = { ...state.currentTrace.tags, ...createTags() };
+}
+
+/** @internal Register the built-in console trace printer on one runtime. */
+export function enableTracePrint(runtime: RuntimeCore): void {
+  registerTraceCallback(runtime, 'reflex-default-tracer', (batch) => {
+    consoleLog('log', '%c[reflex] [trace] ', 'font-weight: bold; color: blue;', batch);
+  });
+}
+
+/** @internal Release timers, callbacks, and the optional probe attachment. */
+export function disposeTracing(runtime: RuntimeCore): void {
+  const state = peekTraceState(runtime);
+  if (!state) return;
+  state.detachProbe?.();
+  state.detachProbe = undefined;
+  discardPendingTraces(state);
+  state.callbacks.clear();
+  state.manualTraceEnabled = false;
+  state.traceLeaseCount = 0;
+  state.traceEnabled = false;
+  TRACE_STATES.delete(runtime);
+}
 
 function getTraceState(runtime: RuntimeCore): TraceState {
   const existing = TRACE_STATES.get(runtime);
@@ -171,49 +264,6 @@ function peekTraceState(runtime: RuntimeCore): TraceState | undefined {
   return TRACE_STATES.get(runtime);
 }
 
-/** @internal Enable the manual trace owner for one runtime. */
-export function enableTracing(runtime: RuntimeCore): void {
-  const state = getTraceState(runtime);
-  state.manualTraceEnabled = true;
-  updateTraceEnabled(runtime, state);
-}
-
-/** @internal Release the manual trace owner for one runtime. */
-export function disableTracing(runtime: RuntimeCore): void {
-  const state = getTraceState(runtime);
-  state.manualTraceEnabled = false;
-  updateTraceEnabled(runtime, state);
-}
-
-/** @internal Keep one runtime's tracing active for an integration subscriber. */
-export function acquireTracing(runtime: RuntimeCore): () => void {
-  const state = getTraceState(runtime);
-  state.traceLeaseCount++;
-  updateTraceEnabled(runtime, state);
-
-  let acquired = true;
-  return () => {
-    if (!acquired) return;
-    acquired = false;
-    state.traceLeaseCount = Math.max(0, state.traceLeaseCount - 1);
-    updateTraceEnabled(runtime, state);
-  };
-}
-
-function discardPendingTraces(state: TraceState): void {
-  state.traces = [];
-  state.currentTrace = null;
-  if (state.flushTimer) {
-    clearTimeout(state.flushTimer);
-    state.flushTimer = null;
-  }
-}
-
-/** @internal Return whether one runtime is collecting traces. */
-export function isTraceEnabled(runtime: RuntimeCore): boolean {
-  return peekTraceState(runtime)?.traceEnabled ?? false;
-}
-
 function updateTraceEnabled(runtime: RuntimeCore, state: TraceState): void {
   const wasEnabled = state.traceEnabled;
   state.traceEnabled = state.manualTraceEnabled || state.traceLeaseCount > 0;
@@ -226,42 +276,13 @@ function updateTraceEnabled(runtime: RuntimeCore, state: TraceState): void {
   }
 }
 
-/** @internal Register a keyed trace batch callback on one runtime. */
-export function registerTraceCallback(
-  runtime: RuntimeCore,
-  key: string,
-  callback: TraceCallback,
-): void {
-  const state = getTraceState(runtime);
-  if (!state.traceEnabled) {
-    consoleLog(
-      'warn',
-      '[reflex] [trace] Tracing is not enabled; call enableTracing() before registering callbacks',
-    );
-    return;
-  }
-  state.callbacks.set(key, callback);
-}
-
-/** @internal Remove a trace callback from one runtime. */
-export function removeTraceCallback(runtime: RuntimeCore, key: string): void {
-  peekTraceState(runtime)?.callbacks.delete(key);
-}
-
-function scheduleFlush(state: TraceState): void {
-  if (state.flushTimer) return;
-  state.flushTimer = setTimeout(() => {
-    const batch = state.traces.slice();
-    state.traces = [];
+function discardPendingTraces(state: TraceState): void {
+  state.traces = [];
+  state.currentTrace = null;
+  if (state.flushTimer) {
+    clearTimeout(state.flushTimer);
     state.flushTimer = null;
-    for (const callback of state.callbacks.values()) {
-      try {
-        callback(batch);
-      } catch (error) {
-        consoleLog('warn', 'Error in trace callback', error);
-      }
-    }
-  }, TRACE_BATCH_DELAY_MS);
+  }
 }
 
 function startTrace(state: TraceState, options: TraceOptions): Trace {
@@ -284,51 +305,20 @@ function finishTrace(state: TraceState, trace: Trace): void {
   scheduleFlush(state);
 }
 
-/**
- * Legacy internal helper implemented through the same optional probe channel.
- * Hot-path callers should prefer `withRuntimeProbeSpan`.
- */
-export function withOptionalTrace<T>(
-  runtime: RuntimeCore,
-  createOptions: () => TraceOptions,
-  fn: () => T,
-): T {
-  const state = peekTraceState(runtime);
-  if (!state?.traceEnabled) return fn();
-  const token = state.probe.spanStarted!(createOptions()) as TraceSpanToken;
-  try {
-    return fn();
-  } finally {
-    state.probe.spanFinished!(token);
-  }
-}
-
-/** @internal Build trace tags only when an active trace can receive them. */
-export function mergeOptionalTrace(runtime: RuntimeCore, createTags: () => TraceTags): void {
-  const state = peekTraceState(runtime);
-  if (!state?.traceEnabled || !state.currentTrace) return;
-  state.currentTrace.tags = { ...state.currentTrace.tags, ...createTags() };
-}
-
-/** @internal Register the built-in console trace printer on one runtime. */
-export function enableTracePrint(runtime: RuntimeCore): void {
-  registerTraceCallback(runtime, 'reflex-default-tracer', (batch) => {
-    consoleLog('log', '%c[reflex] [trace] ', 'font-weight: bold; color: blue;', batch);
-  });
-}
-
-/** @internal Release timers, callbacks, and the optional probe attachment. */
-export function disposeTracing(runtime: RuntimeCore): void {
-  const state = peekTraceState(runtime);
-  if (!state) return;
-  state.detachProbe?.();
-  state.detachProbe = undefined;
-  discardPendingTraces(state);
-  state.callbacks.clear();
-  state.manualTraceEnabled = false;
-  state.traceLeaseCount = 0;
-  state.traceEnabled = false;
-  TRACE_STATES.delete(runtime);
+function scheduleFlush(state: TraceState): void {
+  if (state.flushTimer) return;
+  state.flushTimer = setTimeout(() => {
+    const batch = state.traces.slice();
+    state.traces = [];
+    state.flushTimer = null;
+    for (const callback of state.callbacks.values()) {
+      try {
+        callback(batch);
+      } catch (error) {
+        consoleLog('warn', 'Error in trace callback', error);
+      }
+    }
+  }, TRACE_BATCH_DELAY_MS);
 }
 
 function toTraceError(

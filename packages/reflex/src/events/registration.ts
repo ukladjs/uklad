@@ -1,5 +1,5 @@
 import { consoleLog } from '../core/logging';
-import type { RegistrationOwnership } from '../runtime/handlers';
+import type { RegistrationOwnership } from '../runtime/handler-types';
 import type { RuntimeCore } from '../runtime/core';
 import { getInjectCofxInterceptor } from './coeffects';
 import { isInterceptor } from './interceptors';

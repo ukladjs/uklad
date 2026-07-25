@@ -10,5 +10,4 @@ export {
   useHotReloadKey,
 } from './react/hot-reload';
 
-export type { ReflexProviderProps } from './react/context';
-export type { ReflexHooks } from './react/use-subscription';
+export type { ReflexHooks, ReflexProviderProps } from './react/types';

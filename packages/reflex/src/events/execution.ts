@@ -6,7 +6,7 @@ import type { ExecutionEnvelope } from './envelope';
 import { runEvent } from './runner';
 
 import type { RuntimeCore } from '../runtime/core';
-import type { RuntimeProbeTransition } from '../runtime/probe';
+import type { RuntimeProbeTransition } from '../runtime/probe-types';
 
 /**
  * Coordinate one envelope through runner → commit → effects. Instrumentation is

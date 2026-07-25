@@ -1,5 +1,6 @@
 import { consoleLog } from '../core/logging';
-import { isHandlerKind, isSubscriptionHandlerKind, type HandlerKind } from './handlers';
+import { isHandlerKind, isSubscriptionHandlerKind } from './handlers';
+import type { HandlerKind } from './handler-types';
 
 import type { RuntimeCore } from './core';
 import type { Id } from '../types';

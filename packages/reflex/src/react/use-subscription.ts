@@ -12,6 +12,9 @@ import type {
 import { subscribeForRender } from '../runtime/runtime';
 import type { ReflexRuntime } from '../runtime/api';
 import type { Id, SubParams, SubPayloads, SubResult, SubscribeVector, SubVector } from '../types';
+import type { ReflexHooks } from './types';
+
+export type { ReflexHooks } from './types';
 
 /**
  * Subscribe a React component to the nearest Reflex runtime.
@@ -30,6 +33,23 @@ export function useSubscription<T>(
 ): T {
   const runtime = useReflexRuntime();
   return useRuntimeSubscription(runtime, subVector, componentName);
+}
+
+/** Create locally typed hooks for runtimes using `TContracts`. */
+export function createReflexHooks<TContracts extends ReflexContracts>(): ReflexHooks<TContracts> {
+  function useTypedSubscription<TId extends ContractSubscriptionId<TContracts>>(
+    query: ContractSubscriptionVector<TContracts, TId>,
+    componentName: string = 'react component',
+  ): ContractSubscriptionResult<TContracts, TId> {
+    const runtime = useReflexRuntime<TContracts>();
+    return useRuntimeSubscription<ContractSubscriptionResult<TContracts, TId>>(
+      runtime,
+      query as SubVector,
+      componentName,
+    );
+  }
+
+  return Object.freeze({ useSubscription: useTypedSubscription });
 }
 
 function useRuntimeSubscription<T>(
@@ -51,28 +71,4 @@ function useRuntimeSubscription<T>(
   );
 
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-}
-
-export interface ReflexHooks<TContracts extends ReflexContracts> {
-  useSubscription<TId extends ContractSubscriptionId<TContracts>>(
-    query: ContractSubscriptionVector<TContracts, TId>,
-    componentName?: string,
-  ): ContractSubscriptionResult<TContracts, TId>;
-}
-
-/** Create locally typed hooks for runtimes using `TContracts`. */
-export function createReflexHooks<TContracts extends ReflexContracts>(): ReflexHooks<TContracts> {
-  function useTypedSubscription<TId extends ContractSubscriptionId<TContracts>>(
-    query: ContractSubscriptionVector<TContracts, TId>,
-    componentName: string = 'react component',
-  ): ContractSubscriptionResult<TContracts, TId> {
-    const runtime = useReflexRuntime<TContracts>();
-    return useRuntimeSubscription<ContractSubscriptionResult<TContracts, TId>>(
-      runtime,
-      query as SubVector,
-      componentName,
-    );
-  }
-
-  return Object.freeze({ useSubscription: useTypedSubscription });
 }

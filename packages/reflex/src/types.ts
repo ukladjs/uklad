@@ -234,19 +234,3 @@ export type SubDepsHandler = (...params: any[]) => SubVector[];
 export interface SubConfig {
   equalityCheck?: EqualityCheckFn;
 }
-
-// Tracing
-
-/**
- * JSON-serializable event-trace error metadata. `phase` identifies whether
- * failure happened during lookup, the interceptor chain, or effect execution.
- */
-export interface TraceErrorTag {
-  phase: 'missing-handler' | 'handler' | 'effect';
-  message: string;
-  stack?: string;
-  interceptor?: string;
-  direction?: InterceptorDirection;
-  effect?: string;
-  eventV?: EventVector;
-}

@@ -17,15 +17,6 @@ interface HotReloadState {
 
 const hotReloadStates = new WeakMap<object, HotReloadState>();
 
-function getHotReloadState(runtime: ReflexRuntime<any>): HotReloadState {
-  let state = hotReloadStates.get(runtime);
-  if (!state) {
-    state = { callbacks: new Set(), version: 0 };
-    hotReloadStates.set(runtime, state);
-  }
-  return state;
-}
-
 /** Register a callback for one explicit runtime and return an unregister function. */
 export function registerHotReloadCallback(
   runtime: ReflexRuntime<any>,
@@ -66,17 +57,6 @@ export function useHotReloadKey(): string {
   return `${runtime.runtimeId}:hot-reload-${version}`;
 }
 
-function useHotReloadVersion(): readonly [ReflexRuntime<any>, number] {
-  const runtime = useReflexRuntime();
-  const subscribe = useCallback(
-    (callback: HotReloadCallback) => registerHotReloadCallback(runtime, callback),
-    [runtime],
-  );
-  const getSnapshot = useCallback(() => getHotReloadState(runtime).version, [runtime]);
-  const version = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  return [runtime, version] as const;
-}
-
 /**
  * Create bundler-agnostic HMR hooks scoped to one runtime. Pass the owning
  * module's subscription IDs to preserve unrelated definitions.
@@ -104,4 +84,24 @@ export function setupSubsHotReload(
 export function HotReloadWrapper({ children }: { children: ReactNode }): ReactElement {
   const key = useHotReloadKey();
   return createElement(Fragment, { key }, children);
+}
+
+function getHotReloadState(runtime: ReflexRuntime<any>): HotReloadState {
+  let state = hotReloadStates.get(runtime);
+  if (!state) {
+    state = { callbacks: new Set(), version: 0 };
+    hotReloadStates.set(runtime, state);
+  }
+  return state;
+}
+
+function useHotReloadVersion(): readonly [ReflexRuntime<any>, number] {
+  const runtime = useReflexRuntime();
+  const subscribe = useCallback(
+    (callback: HotReloadCallback) => registerHotReloadCallback(runtime, callback),
+    [runtime],
+  );
+  const getSnapshot = useCallback(() => getHotReloadState(runtime).version, [runtime]);
+  const version = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return [runtime, version] as const;
 }

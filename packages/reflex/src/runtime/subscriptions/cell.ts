@@ -1,18 +1,8 @@
 import { consoleLog } from '../../core/logging';
 import { mergeRuntimeProbeSpan, withRuntimeProbeSpan } from '../probe';
 
-import type { SubscriptionEngine, SubscriptionSpec } from './engine';
-
-type Listener = () => void;
-
-/** @internal Trace classification for a subscription listener. */
-export type SubscriptionListenerKind = 'render' | 'watch';
-
-export type SubscriptionListenerRegistration = readonly [
-  listener: Listener,
-  label: string,
-  kind: SubscriptionListenerKind,
-];
+import type { SubscriptionEngine } from './engine';
+import type { SubscriptionListenerRegistration, SubscriptionSpec } from './types';
 
 /** Cached value and lifecycle state for one node in a subscription graph. */
 export class SubscriptionCell<T> {

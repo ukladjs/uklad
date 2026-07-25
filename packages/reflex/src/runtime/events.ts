@@ -3,19 +3,16 @@ import { consoleLog } from '../core/logging';
 import { isEventVector } from '../core/validation';
 import { isRuntimeDisposed, type RuntimeCore } from './core';
 import { cloneStructuredValue } from './ownership';
-import {
-  acceptRuntimeEvent,
-  notifyDroppedRuntimeEvents,
-  notifyTrackedRuntimeEvent,
-  type RuntimeProbeParent,
-} from './probe';
+import { assertRuntimeUsable } from './validation';
+import { acceptRuntimeEvent, notifyDroppedRuntimeEvents, notifyTrackedRuntimeEvent } from './probe';
 import { EventQueue, getEventScheduler } from '../events/router';
 import { registerBuiltInEffects } from '../events/effects';
 import { executeEventEnvelope } from '../events/execution';
 import { regEvent } from '../events/registration';
 
 import type { ExecutionEnvelope } from '../events/envelope';
-import type { RegistrationOwnership } from './handlers';
+import type { RegistrationOwnership } from './handler-types';
+import type { RuntimeProbeParent } from './probe-types';
 import type { DispatchVector, EventHandler, EventVector, Interceptor } from '../types';
 
 type ScheduledEventVector = EventVector & { meta?: Partial<Record<'flush' | 'yield', boolean>> };
@@ -114,9 +111,7 @@ export class EventRuntime {
 
   dispatchSync(event: DispatchVector): void {
     const runtime = this.getRuntime();
-    if (isRuntimeDisposed(runtime)) {
-      throw new Error(`[reflex] Runtime '${runtime.identity.runtimeId}' has been disposed.`);
-    }
+    assertRuntimeUsable(runtime);
     if (!isEventVector(event)) {
       consoleLog('error', '[reflex] invalid dispatchSync event vector.');
       return;
@@ -138,9 +133,7 @@ export class EventRuntime {
 
   async flush(): Promise<void> {
     const runtime = this.getRuntime();
-    if (isRuntimeDisposed(runtime)) {
-      throw new Error(`[reflex] Runtime '${runtime.identity.runtimeId}' has been disposed.`);
-    }
+    assertRuntimeUsable(runtime);
     await this.queue.whenIdle();
     runtime.state.publish();
   }

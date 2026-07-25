@@ -11,8 +11,8 @@ import type {
   InterceptorDirection,
   InterceptorErrorData,
   ReflexError,
-  TraceErrorTag,
 } from '../types';
+import type { TraceErrorTag } from '../core/tracing-types';
 
 /** @internal Check whether a value is a valid interceptor. */
 export function isInterceptor(value: unknown): value is Interceptor {

@@ -5,26 +5,6 @@ import type { Id, SubVector } from '../../types';
 
 const warnedNonSerializableSubIds = new Set<Id>();
 
-/**
- * Subscription cache keys use JSON serialization, so values that do not
- * survive JSON.stringify can collide, go stale, or throw during generation.
- */
-function isNonSerializableValue(value: unknown, visiting: WeakSet<object>): boolean {
-  if (value === undefined) return true;
-  const type = typeof value;
-  if (type === 'function' || type === 'symbol' || type === 'bigint') return true;
-  if (type === 'number' && !Number.isFinite(value)) return true;
-  if (value === null || type !== 'object') return false;
-  if (value instanceof Map || value instanceof Set || value instanceof RegExp) return true;
-  if (visiting.has(value)) return true;
-
-  visiting.add(value);
-  const values = Array.isArray(value) ? value : Object.values(value as Record<string, unknown>);
-  const result = values.some((entry) => isNonSerializableValue(entry, visiting));
-  visiting.delete(value);
-  return result;
-}
-
 /** @internal Exposed for focused tests of the cache-key serialization contract. */
 export function hasNonSerializableSubParam(params: readonly unknown[]): boolean {
   const visiting = new WeakSet<object>();
@@ -54,4 +34,24 @@ export function getSubVectorKey(subVector: SubVector): string {
 /** @internal Produce the canonical cache key for a root subscription. */
 export function getRootSubKey(subId: Id): string {
   return getSubVectorKey([subId]);
+}
+
+/**
+ * Subscription cache keys use JSON serialization, so values that do not
+ * survive JSON.stringify can collide, go stale, or throw during generation.
+ */
+function isNonSerializableValue(value: unknown, visiting: WeakSet<object>): boolean {
+  if (value === undefined) return true;
+  const type = typeof value;
+  if (type === 'function' || type === 'symbol' || type === 'bigint') return true;
+  if (type === 'number' && !Number.isFinite(value)) return true;
+  if (value === null || type !== 'object') return false;
+  if (value instanceof Map || value instanceof Set || value instanceof RegExp) return true;
+  if (visiting.has(value)) return true;
+
+  visiting.add(value);
+  const values = Array.isArray(value) ? value : Object.values(value as Record<string, unknown>);
+  const result = values.some((entry) => isNonSerializableValue(entry, visiting));
+  visiting.delete(value);
+  return result;
 }

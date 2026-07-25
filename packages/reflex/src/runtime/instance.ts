@@ -12,6 +12,11 @@ declare const process:
     }
   | undefined;
 
+interface RuntimeMarker {
+  readonly markerVersion: number;
+  readonly instance: object;
+}
+
 const RUNTIME_MARKER_KEY = Symbol.for('@flexsurfer/reflex/runtime');
 const RUNTIME_MARKER_VERSION = 1;
 const SHOULD_DETECT_DUPLICATE_RUNTIME =
@@ -19,11 +24,6 @@ const SHOULD_DETECT_DUPLICATE_RUNTIME =
   (typeof process !== 'undefined' &&
     typeof process.versions?.node === 'string' &&
     process.env?.NODE_ENV === undefined);
-
-interface RuntimeMarker {
-  readonly markerVersion: number;
-  readonly instance: object;
-}
 
 const runtimeInstance = Object.freeze({});
 

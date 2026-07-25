@@ -2,15 +2,13 @@ import { createContext, createElement, useContext } from 'react';
 
 import type { ReflexRuntime } from '../runtime/api';
 
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import type { PermissiveReflexContracts, ReflexContracts } from '../contracts';
+import type { ReflexProviderProps } from './types';
+
+export type { ReflexProviderProps } from './types';
 
 const ReflexRuntimeContext = createContext<ReflexRuntime<ReflexContracts> | null>(null);
-
-export interface ReflexProviderProps {
-  readonly runtime: ReflexRuntime<any>;
-  readonly children?: ReactNode;
-}
 
 /** Select a Reflex runtime for every descendant Reflex hook. */
 export function ReflexProvider({ runtime, children }: ReflexProviderProps): ReactElement {

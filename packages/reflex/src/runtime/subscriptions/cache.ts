@@ -1,26 +1,16 @@
 import { scheduleAfterRender } from '../../core/scheduling';
 import { getGlobalEqualityCheck } from '../../core/equality';
 import { consoleLog } from '../../core/logging';
-import {
-  mergeRuntimeProbeSpan,
-  withRuntimeProbeSpan,
-  type RuntimeProbeSubscription,
-} from '../probe';
-import {
-  SUB_DEPS_HANDLER_KIND,
-  SUB_HANDLER_KIND,
-  SUBSCRIPTION_HANDLER_KINDS,
-  type RegistrationOwnership,
-} from '../handlers';
+import { mergeRuntimeProbeSpan, withRuntimeProbeSpan } from '../probe';
+import { SUB_DEPS_HANDLER_KIND, SUB_HANDLER_KIND, SUBSCRIPTION_HANDLER_KINDS } from '../handlers';
 import { isRuntimeDisposed, type RuntimeCore } from '../core';
-import {
-  type SubscriptionDiagnostic,
-  type SubscriptionListenerKind,
-  type SubscriptionNode,
-  SubscriptionEngine,
-} from './engine';
+import { SubscriptionEngine } from './engine';
 import { getRootSubKey, getSubVectorKey } from './keys';
+import { normalizeSubscriptionConfig } from './validation';
 
+import type { RuntimeProbeSubscription } from '../probe-types';
+import type { RegistrationOwnership } from '../handler-types';
+import type { SubscriptionDiagnostic, SubscriptionListenerKind, SubscriptionNode } from './types';
 import type {
   EqualityCheckFn,
   Id,
@@ -118,7 +108,7 @@ export class SubscriptionRuntime {
     }
     if (!handlers) return undefined;
 
-    const normalizedConfig = normalizeSubConfig(id, config);
+    const normalizedConfig = normalizeSubscriptionConfig(id, config);
     if (normalizedConfig) this.subConfigById.set(id, normalizedConfig);
     else this.subConfigById.delete(id);
 
@@ -330,7 +320,7 @@ export class SubscriptionRuntime {
 
   clearCache(key?: string): void {
     this.engine.assertClearAllowed();
-    clearSubscriptionCacheEntries(this, key);
+    this.clearCacheEntries(key);
   }
 
   clearAll(): void {
@@ -353,7 +343,7 @@ export class SubscriptionRuntime {
       this.rootSubIdBySource.clear();
       this.rootSubSourceById.clear();
       this.rootSubscriptionKeys.clear();
-      clearSubscriptionCacheEntries(this);
+      this.clearCacheEntries();
       this.subConfigById.clear();
       return;
     }
@@ -363,7 +353,7 @@ export class SubscriptionRuntime {
     for (const [key, entry] of this.subscriptionCache) {
       if (entry.subId === subId) keys.push(key);
     }
-    removeSubscriptionCacheClosure(this, keys);
+    this.removeCacheClosure(keys);
     this.subConfigById.delete(subId);
   }
 
@@ -372,7 +362,7 @@ export class SubscriptionRuntime {
     for (const [key, entry] of this.subscriptionCache) {
       if (entry.subId === subId) definitionKeys.push(key);
     }
-    const affectedKeys = collectSubscriptionCacheClosureKeys(this, definitionKeys);
+    const affectedKeys = this.collectCacheClosureKeys(definitionKeys);
     for (const key of affectedKeys) {
       const node = this.subscriptionCache.get(key)?.node;
       if (node && this.engine.inspect(node).active) {
@@ -472,7 +462,7 @@ export class SubscriptionRuntime {
     if (this.rootSubscriptionKeys.has(key) || this.subscriptionCache.get(key)?.node !== node) {
       return;
     }
-    removeSubscriptionCacheClosure(this, [key]);
+    this.removeCacheClosure([key]);
   }
 
   private markProvisional(key: string, node: SubscriptionNode<any>): void {
@@ -514,7 +504,7 @@ export class SubscriptionRuntime {
     for (const [key, subscription] of this.provisionalPrevious) {
       if (this.subscriptionCache.get(key)?.node === subscription) expiredKeys.push(key);
     }
-    removeSubscriptionCacheClosure(this, expiredKeys);
+    this.removeCacheClosure(expiredKeys);
     this.provisionalPrevious = this.provisionalCurrent;
     this.provisionalCurrent = new Map();
     if (this.provisionalPrevious.size > 0) this.scheduleProvisionalSweep();
@@ -529,69 +519,47 @@ export class SubscriptionRuntime {
       this.sweepProvisional();
     });
   }
-}
 
-function normalizeSubConfig(id: Id, config: SubConfig | undefined): SubConfig | undefined {
-  if (config == null) return undefined;
-  if (typeof config !== 'object') {
-    consoleLog('warn', `[reflex] Subscription '${id}' config must be an object. Using defaults.`);
-    return undefined;
+  private clearCacheEntries(key?: string): void {
+    if (key === undefined) {
+      this.subscriptionCache.clear();
+      this.dependentSubscriptionKeys.clear();
+      this.provisionalCurrent.clear();
+      this.provisionalPrevious.clear();
+      return;
+    }
+    this.removeCacheClosure([key]);
   }
-  if (config.equalityCheck === undefined || typeof config.equalityCheck === 'function') {
-    return config;
-  }
-  consoleLog(
-    'warn',
-    `[reflex] Subscription '${id}' equalityCheck must be a function. Using the global equality check.`,
-  );
-  return undefined;
-}
 
-function clearSubscriptionCacheEntries(state: SubscriptionRuntime, key?: string): void {
-  if (key === undefined) {
-    state.subscriptionCache.clear();
-    state.dependentSubscriptionKeys.clear();
-    state.provisionalCurrent.clear();
-    state.provisionalPrevious.clear();
-    return;
+  private removeCacheClosure(initialKeys: Iterable<string>): void {
+    const keysToRemove = this.collectCacheClosureKeys(initialKeys);
+    for (const key of keysToRemove) {
+      const entry = this.subscriptionCache.get(key);
+      if (entry) {
+        this.subscriptionCache.delete(key);
+        for (const dependencyKey of new Set(entry.dependencyKeys)) {
+          const dependents = this.dependentSubscriptionKeys.get(dependencyKey);
+          dependents?.delete(key);
+          if (dependents?.size === 0) this.dependentSubscriptionKeys.delete(dependencyKey);
+        }
+      }
+      this.dependentSubscriptionKeys.delete(key);
+      this.provisionalCurrent.delete(key);
+      this.provisionalPrevious.delete(key);
+    }
   }
-  removeSubscriptionCacheClosure(state, [key]);
-}
 
-function removeSubscriptionCacheClosure(
-  state: SubscriptionRuntime,
-  initialKeys: Iterable<string>,
-): void {
-  const keysToRemove = collectSubscriptionCacheClosureKeys(state, initialKeys);
-  for (const key of keysToRemove) {
-    const entry = state.subscriptionCache.get(key);
-    if (entry) {
-      state.subscriptionCache.delete(key);
-      for (const dependencyKey of new Set(entry.dependencyKeys)) {
-        const dependents = state.dependentSubscriptionKeys.get(dependencyKey);
-        dependents?.delete(key);
-        if (dependents?.size === 0) state.dependentSubscriptionKeys.delete(dependencyKey);
+  private collectCacheClosureKeys(initialKeys: Iterable<string>): Set<string> {
+    const keys = new Set<string>();
+    const pendingKeys = Array.from(initialKeys);
+    while (pendingKeys.length > 0) {
+      const key = pendingKeys.pop()!;
+      if (keys.has(key)) continue;
+      keys.add(key);
+      for (const dependentKey of this.dependentSubscriptionKeys.get(key) ?? []) {
+        pendingKeys.push(dependentKey);
       }
     }
-    state.dependentSubscriptionKeys.delete(key);
-    state.provisionalCurrent.delete(key);
-    state.provisionalPrevious.delete(key);
+    return keys;
   }
-}
-
-function collectSubscriptionCacheClosureKeys(
-  state: SubscriptionRuntime,
-  initialKeys: Iterable<string>,
-): Set<string> {
-  const keys = new Set<string>();
-  const pendingKeys = Array.from(initialKeys);
-  while (pendingKeys.length > 0) {
-    const key = pendingKeys.pop()!;
-    if (keys.has(key)) continue;
-    keys.add(key);
-    for (const dependentKey of state.dependentSubscriptionKeys.get(key) ?? []) {
-      pendingKeys.push(dependentKey);
-    }
-  }
-  return keys;
 }

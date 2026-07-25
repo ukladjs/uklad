@@ -1,30 +1,29 @@
 import { consoleLog } from '../core/logging';
 
+import type { EventHandler, Id, Interceptor } from '../types';
 import type {
-  CoEffectHandler,
-  EffectHandler,
-  ErrorHandler,
-  EventHandler,
-  Id,
-  Interceptor,
-  SubDepsHandler,
-  SubHandler,
-} from '../types';
+  HandlerByKind,
+  HandlerKind,
+  HandlerRegistry,
+  RegistrationOwnership,
+  RegistryHandler,
+  RuntimeEventDefinition,
+} from './handler-types';
 
-export type HandlerByKind = {
-  event: EventHandler<any, any>;
-  fx: EffectHandler;
-  cofx: CoEffectHandler<any>;
-  sub: SubHandler;
-  subDeps: SubDepsHandler;
-  error: ErrorHandler;
-};
+export type {
+  HandlerByKind,
+  HandlerKind,
+  HandlerRegistry,
+  RegistrationOwnership,
+  RegistryHandler,
+  RuntimeEventDefinition,
+} from './handler-types';
 
-export type HandlerKind = keyof HandlerByKind;
-export type RegistryHandler = HandlerByKind[HandlerKind];
-export type HandlerRegistry = {
-  [K in HandlerKind]: Partial<Record<string, HandlerByKind[K]>>;
-};
+interface RegistrationKey {
+  readonly kind: HandlerKind;
+  readonly id: Id;
+  readonly version: number;
+}
 
 export const SUB_HANDLER_KIND = 'sub' as const;
 export const SUB_DEPS_HANDLER_KIND = 'subDeps' as const;
@@ -41,41 +40,7 @@ const HANDLER_KINDS: readonly HandlerKind[] = [
   ...SUBSCRIPTION_HANDLER_KINDS,
   'error',
 ];
-
-function createHandlerRecord<T>(): Partial<Record<string, T>> {
-  return Object.create(null) as Partial<Record<string, T>>;
-}
-
-function createHandlerRegistry(): HandlerRegistry {
-  return {
-    event: createHandlerRecord(),
-    fx: createHandlerRecord(),
-    cofx: createHandlerRecord(),
-    sub: createHandlerRecord(),
-    subDeps: createHandlerRecord(),
-    error: createHandlerRecord(),
-  };
-}
-
-export interface RegistrationOwnership {
-  /** True only while this token still owns the current registration. */
-  readonly current: boolean;
-  /** Validate destructive release before user cleanup runs. */
-  assertReleasable?(): void;
-  /** Remove this registration without touching a newer replacement. */
-  release(): boolean;
-}
-
-export interface RuntimeEventDefinition {
-  readonly handler: EventHandler<any, any>;
-  readonly interceptors: readonly Interceptor[];
-}
-
-interface RegistrationKey {
-  readonly kind: HandlerKind;
-  readonly id: Id;
-  readonly version: number;
-}
+const EMPTY_INTERCEPTORS: readonly Interceptor[] = Object.freeze([]);
 
 /**
  * Cohesive handler registry owned eagerly by one runtime core.
@@ -293,7 +258,28 @@ export class RuntimeRegistry {
   }
 }
 
-const EMPTY_INTERCEPTORS: readonly Interceptor[] = Object.freeze([]);
+export function isHandlerKind(value: string): value is HandlerKind {
+  return HANDLER_KINDS.includes(value as HandlerKind);
+}
+
+export function isSubscriptionHandlerKind(value: string): value is SubscriptionHandlerKind {
+  return SUBSCRIPTION_HANDLER_KINDS.includes(value as SubscriptionHandlerKind);
+}
+
+function createHandlerRecord<T>(): Partial<Record<string, T>> {
+  return Object.create(null) as Partial<Record<string, T>>;
+}
+
+function createHandlerRegistry(): HandlerRegistry {
+  return {
+    event: createHandlerRecord(),
+    fx: createHandlerRecord(),
+    cofx: createHandlerRecord(),
+    sub: createHandlerRecord(),
+    subDeps: createHandlerRecord(),
+    error: createHandlerRecord(),
+  };
+}
 
 function createEventDefinition(
   handler: EventHandler<any, any>,
@@ -323,12 +309,4 @@ function writeHandler(
   handler: RegistryHandler,
 ): void {
   (state.handlers[kind] as Partial<Record<string, RegistryHandler>>)[id] = handler;
-}
-
-export function isHandlerKind(value: string): value is HandlerKind {
-  return HANDLER_KINDS.includes(value as HandlerKind);
-}
-
-export function isSubscriptionHandlerKind(value: string): value is SubscriptionHandlerKind {
-  return SUBSCRIPTION_HANDLER_KINDS.includes(value as SubscriptionHandlerKind);
 }

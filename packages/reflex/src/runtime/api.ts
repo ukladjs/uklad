@@ -16,11 +16,11 @@ import type {
   WatchSubscriptionListener,
   WatchSubscriptionOptions,
 } from '../contracts';
-import type { TraceCallback } from '../core/tracing';
-import type { ReflexInspector } from '../inspector';
-import type { HandlerKind, HandlerRegistry } from './handlers';
-import type { RuntimeLifecycleObserver } from './lifecycle';
-import type { SubscriptionDiagnostic } from './subscriptions/engine';
+import type { TraceCallback } from '../core/tracing-types';
+import type { ReflexInspector } from '../inspector-types';
+import type { HandlerKind, HandlerRegistry } from './handler-types';
+import type { RuntimeLifecycleObserver } from './lifecycle-types';
+import type { SubscriptionDiagnostic } from './subscriptions/types';
 import type {
   CoEffectHandler,
   CoEffects,

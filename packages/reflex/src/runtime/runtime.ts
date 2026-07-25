@@ -20,8 +20,6 @@ import {
 import { getGlobalEqualityCheck, setGlobalEqualityCheck } from '../core/equality';
 import { defaultErrorHandler } from '../events/runner';
 import { createReflexInspector } from '../inspector';
-import { assertStateRecord, isEventVector } from '../core/validation';
-import { type RegistrationOwnership } from './handlers';
 import { clearHandlers } from './reset';
 import {
   createRuntimeCore,
@@ -29,13 +27,20 @@ import {
   markRuntimeDisposed,
   type RuntimeCore,
 } from './core';
-import { observeRuntimeLifecycle, type RuntimeLifecycleObserver } from './lifecycle';
+import { observeRuntimeLifecycle } from './lifecycle';
 import { detachRuntimeProbes, notifyRuntimeProbe } from './probe';
+import {
+  assertDispatchableEvent,
+  assertRegisteredSubscription,
+  assertRuntimeUsable,
+  assertStateRecord,
+} from './validation';
 
-import type { TraceCallback } from '../core/tracing';
-import type { ReflexInspector } from '../inspector';
-import type { HandlerKind, HandlerRegistry } from './handlers';
-import type { SubscriptionDiagnostic } from './subscriptions/engine';
+import type { TraceCallback } from '../core/tracing-types';
+import type { ReflexInspector } from '../inspector-types';
+import type { HandlerKind, HandlerRegistry, RegistrationOwnership } from './handler-types';
+import type { RuntimeLifecycleObserver } from './lifecycle-types';
+import type { SubscriptionDiagnostic } from './subscriptions/types';
 import type {
   ReflexRuntime,
   RuntimeEventHandler,
@@ -65,6 +70,13 @@ interface ModuleInstallation {
   cleanup: ReflexDisposer | undefined;
   disposed: boolean;
 }
+
+type StateInferredContracts<TState extends Record<string, any>> = ReflexContracts & {
+  readonly state: TState;
+};
+
+type NonArrayRuntimeOptions<TState extends Record<string, any>> =
+  CreateReflexRuntimeOptions<TState> & (TState extends readonly any[] ? never : unknown);
 
 class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   /** The only owner of this runtime's mutable engine services. */
@@ -122,13 +134,13 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   dispatch(event: ContractDispatchVector<TContracts>): void {
     this.assertUsable();
-    this.assertDispatchableEvent(event, 'dispatch');
+    assertDispatchableEvent(this.#core, event, 'dispatch');
     this.#core.events.dispatchOwned(event as any);
   }
 
   dispatchSync(event: ContractDispatchVector<TContracts>): void {
     this.assertUsable();
-    this.assertDispatchableEvent(event, 'dispatchSync');
+    assertDispatchableEvent(this.#core, event, 'dispatchSync');
     this.#core.events.dispatchSync(event as any);
   }
 
@@ -183,7 +195,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   getSubscriptionValue(query: ContractSubscribeVector<TContracts>): unknown {
     this.assertUsable();
-    this.assertRegisteredSubscription(query);
+    assertRegisteredSubscription(this.#core, query);
     return this.#core.subscriptions.read(query as SubVector);
   }
 
@@ -193,7 +205,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     options: WatchSubscriptionOptions = {},
   ): ReflexDisposer {
     this.assertUsable();
-    this.assertRegisteredSubscription(query);
+    assertRegisteredSubscription(this.#core, query);
     const subscription = this.#core.subscriptions.getOrCreate(query as SubVector);
     if (!subscription) {
       throw new Error(
@@ -240,7 +252,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     componentName: string = 'react component',
   ): ReflexDisposer {
     this.assertUsable();
-    this.assertRegisteredSubscription(query);
+    assertRegisteredSubscription(this.#core, query);
     const subscription = this.#core.subscriptions.getOrCreate(query as SubVector);
     if (!subscription) {
       throw new Error(
@@ -428,37 +440,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   }
 
   private assertUsable(): void {
-    if (isRuntimeDisposed(this.#core)) {
-      throw new Error(`[reflex] Runtime '${this.runtimeId}' has been disposed.`);
-    }
-  }
-
-  // The instance API fails loudly on unknown ids. The compatibility facade's
-  // root functions keep the lenient 0.x console-error behavior.
-  private assertDispatchableEvent(event: unknown, api: 'dispatch' | 'dispatchSync'): void {
-    if (!isEventVector(event)) {
-      throw new Error(
-        `[reflex] ${api} expects a non-empty event vector starting with an event id string.`,
-      );
-    }
-    if (!this.#core.registry.has('event', event[0])) {
-      throw new Error(
-        `[reflex] No event handler registered for '${event[0]}' in runtime '${this.runtimeId}'. Register it with regEvent() before dispatching.`,
-      );
-    }
-  }
-
-  private assertRegisteredSubscription(query: unknown): void {
-    if (!Array.isArray(query) || query.length === 0 || typeof query[0] !== 'string') {
-      throw new Error(
-        '[reflex] Subscription queries must be non-empty vectors starting with a subscription id string.',
-      );
-    }
-    if (!this.#core.registry.has('sub', query[0])) {
-      throw new Error(
-        `[reflex] No subscription registered for '${query[0]}' in runtime '${this.runtimeId}'. Register it with regSub() before use.`,
-      );
-    }
+    assertRuntimeUsable(this.#core);
   }
 
   private recordOwnership(ownership: RegistrationOwnership): void {
@@ -486,13 +468,6 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   }
 }
 
-type StateInferredContracts<TState extends Record<string, any>> = ReflexContracts & {
-  readonly state: TState;
-};
-
-type NonArrayRuntimeOptions<TState extends Record<string, any>> =
-  CreateReflexRuntimeOptions<TState> & (TState extends readonly any[] ? never : unknown);
-
 export function createReflexRuntime<
   TContracts extends ReflexContracts,
   TState extends ContractState<TContracts> = ContractState<TContracts>,
@@ -510,10 +485,12 @@ export function createReflexRuntime(options: CreateReflexRuntimeOptions<any>): R
 
 /** @internal Test-only access for focused engine subsystem tests. */
 export function getRuntimeCoreForTests(runtime: ReflexRuntime<any>): RuntimeCore {
-  if (!(runtime instanceof ReflexRuntimeImplementation)) {
-    throw new Error('[reflex] Expected a runtime created by createReflexRuntime().');
-  }
-  return ReflexRuntimeImplementation.getCoreForTests(runtime);
+  return ReflexRuntimeImplementation.getCoreForTests(
+    getRuntimeImplementation(
+      runtime,
+      '[reflex] Expected a runtime created by createReflexRuntime().',
+    ),
+  );
 }
 
 /** @internal Register the React binding as a render listener. */
@@ -523,12 +500,10 @@ export function subscribeForRender(
   listener: () => void,
   componentName?: string,
 ): ReflexDisposer {
-  if (!(runtime instanceof ReflexRuntimeImplementation)) {
-    throw new Error(
-      '[reflex] React subscriptions require a runtime created by createReflexRuntime().',
-    );
-  }
-  return runtime.subscribeForRender(query, listener, componentName);
+  return getRuntimeImplementation(
+    runtime,
+    '[reflex] React subscriptions require a runtime created by createReflexRuntime().',
+  ).subscribeForRender(query, listener, componentName);
 }
 
 /** @internal Clear one explicit runtime's subscriptions for an imminent HMR remount. */
@@ -536,10 +511,18 @@ export function clearRuntimeSubsForHotReload(
   runtime: ReflexRuntime<any>,
   subscriptionIds?: readonly Id[],
 ): void {
+  getRuntimeImplementation(
+    runtime,
+    '[reflex] setupSubsHotReload requires a runtime created by createReflexRuntime().',
+  ).clearSubsForHotReload(subscriptionIds);
+}
+
+function getRuntimeImplementation(
+  runtime: ReflexRuntime<any>,
+  errorMessage: string,
+): ReflexRuntimeImplementation<any> {
   if (!(runtime instanceof ReflexRuntimeImplementation)) {
-    throw new Error(
-      '[reflex] setupSubsHotReload requires a runtime created by createReflexRuntime().',
-    );
+    throw new Error(errorMessage);
   }
-  runtime.clearSubsForHotReload(subscriptionIds);
+  return runtime;
 }

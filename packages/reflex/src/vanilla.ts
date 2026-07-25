@@ -54,7 +54,7 @@ export type {
   RuntimeLifecyclePatch,
   RuntimeLifecycleStatePlan,
   RuntimeLifecycleSubscription,
-} from './runtime/lifecycle';
+} from './runtime/lifecycle-types';
 export type {
   AppState,
   CoEffectHandler,
@@ -87,14 +87,24 @@ export type {
   SubResult,
   SubscribeVector,
   SubVector,
-  TraceErrorTag,
 } from './types';
 export type {
   HandlerByKind,
   HandlerKind,
   HandlerRegistry,
   RegistryHandler,
-} from './runtime/handlers';
-export type { SubscriptionDiagnostic } from './runtime/subscriptions/engine';
-export type { Trace, TraceCallback, TraceId, TraceOptions, TraceTags } from './core/tracing';
-export type { ReflexHandlerKeys, ReflexInspector, ReflexInspectorSnapshot } from './inspector';
+} from './runtime/handler-types';
+export type { SubscriptionDiagnostic } from './runtime/subscriptions/types';
+export type {
+  Trace,
+  TraceCallback,
+  TraceErrorTag,
+  TraceId,
+  TraceOptions,
+  TraceTags,
+} from './core/tracing-types';
+export type {
+  ReflexHandlerKeys,
+  ReflexInspector,
+  ReflexInspectorSnapshot,
+} from './inspector-types';

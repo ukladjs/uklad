@@ -18,18 +18,25 @@ src/
     immer.ts                       Immer integration
     logging.ts                     logging adapter
     scheduling.ts                  host scheduling primitives
+    tracing-types.ts               public trace DTOs
     tracing.ts                     optional probe-backed trace compatibility
     validation.ts                  untyped-boundary guards
   runtime/
     core.ts                        runtime composition root and stable shape
     api.ts                         public runtime contract
     runtime.ts                     public façade implementation and module lifecycle
+    validation.ts                  strict runtime boundary assertions
     state.ts                       StateStore
+    handler-types.ts               registry contracts
     handlers.ts                    RuntimeRegistry
+    probe-types.ts                 instrumentation contracts and DTOs
     probe.ts                       sole optional instrumentation channel
+    lifecycle-types.ts             compatibility observer contract
     lifecycle.ts                   passive compatibility adapter
     reset.ts                       cross-service reset coordination
     subscriptions/
+      types.ts                     graph contracts and diagnostics
+      validation.ts                subscription registration validation
       cache.ts                     SubscriptionRuntime
       cell.ts                      cached node value and listener lifecycle
       engine.ts                    reactive graph orchestration
@@ -40,12 +47,14 @@ src/
     runner.ts                      pure event evaluation
     committer.ts                   state commit primitive
     effect-executor.ts             post-commit effects
+    execution-observer-types.ts    DevTools observer contract
     execution-observer.ts          DevTools probe adapter
     coeffects.ts
     effects.ts
     interceptors.ts
     registration.ts
   react/
+    types.ts                       public React binding contracts
     context.ts
     hot-reload.ts
     use-subscription.ts
@@ -105,6 +114,20 @@ not create another runtime.
 No non-React module imports React. Internal modules import concrete files,
 never `index.ts` and never an internal barrel.
 
+## Type and validation ownership
+
+- A type used only by one implementation stays at the top of that file.
+- A public or cross-module contract lives in a focused `*-types.ts` module.
+  Implementation modules may re-export those types to preserve established
+  internal import paths, but production code imports the owning type module.
+- `types.ts` and `contracts.ts` remain the package-wide domain contracts; do
+  not turn them into implementation-detail dumping grounds.
+- Untyped boundary checks live in a focused validation module. Keep a private
+  class assertion only when it requires private instance state; delegate its
+  actual validation policy to that module.
+- Helpers that operate on one service's fields are private service methods.
+  Free helpers are reserved for stateless algorithms and narrow coordinators.
+
 ## Mutable state
 
 - Put hot mutable state on its owning typed service.
@@ -154,14 +177,18 @@ Use this order unless keeping one service class contiguous is clearer:
 1. External runtime imports.
 2. Internal runtime imports from lower-level primitives to coordinators.
 3. Type-only imports.
-4. Module types and constants.
+4. Re-exported contracts, local module types, then constants.
 5. The owning service or public operations.
 6. Private algorithms and helpers.
 7. Intentional module-load initialization, if any.
 
+Within a service, group public methods by responsibility and keep private
+methods after the public surface. Do not place a private helper between public
+operations merely because it is called by the preceding operation.
+
 Prefer one cohesive owner per file. Split out a file when it represents a real
-algorithm, adapter, or dependency boundary—not merely to create a wrapper
-around an owner's field.
+contract, validation boundary, algorithm, adapter, or dependency boundary—not
+merely to create a wrapper around an owner's field.
 
 ## Comments and API documentation
 

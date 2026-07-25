@@ -1,10 +1,18 @@
 import { scheduleAfterRender } from '../core/scheduling';
 import { isRuntimeDisposed, type RuntimeCore } from './core';
 import { notifyRuntimeProbe } from './probe';
-import type { SubscriptionNode } from './subscriptions/engine';
+import type { SubscriptionNode } from './subscriptions/types';
 import { getRootSubKey } from './subscriptions/keys';
 
 import type { State, DefaultAppState } from '../types';
+
+/** Monotonic state-generation counters owned by one runtime. */
+export interface StateRevisions {
+  readonly committedRevision: number;
+  readonly publishedRevision: number;
+}
+
+type NoInfer<T> = [T][T extends any ? 0 : never];
 
 export class StateStore {
   state: any = {};
@@ -51,14 +59,6 @@ export class StateStore {
     return this.publishedRevision !== this.committedRevision;
   }
 }
-
-/** Monotonic state-generation counters owned by one runtime. */
-export interface StateRevisions {
-  readonly committedRevision: number;
-  readonly publishedRevision: number;
-}
-
-type NoInfer<T> = [T][T extends any ? 0 : never];
 
 function initializeState<T = DefaultAppState>(
   runtime: RuntimeCore,

@@ -2,13 +2,7 @@ import { EventRuntime } from './events';
 import { StateStore } from './state';
 import { RuntimeRegistry } from './handlers';
 import { SubscriptionRuntime } from './subscriptions/cache';
-import type { RuntimeProbe } from './probe';
-
-const RUNTIME_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-
-let nextRuntimeId = 0;
-let nextRuntimeInstanceId = 0;
-const DISPOSED_RUNTIMES = new WeakSet<RuntimeCore>();
+import type { RuntimeProbe } from './probe-types';
 
 /**
  * The instance-owned core state of one Reflex application.
@@ -39,6 +33,12 @@ export interface RuntimeIdentityOptions {
   readonly runtimeId?: string;
   readonly name?: string;
 }
+
+const RUNTIME_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+let nextRuntimeId = 0;
+let nextRuntimeInstanceId = 0;
+const DISPOSED_RUNTIMES = new WeakSet<RuntimeCore>();
 
 /** @internal Create a process-local, instance-owned runtime core. */
 export function createRuntimeCore(options: RuntimeIdentityOptions = {}): RuntimeCore {
@@ -78,15 +78,6 @@ export function createRuntimeCore(options: RuntimeIdentityOptions = {}): Runtime
   return runtime;
 }
 
-function createGeneratedRuntimeId(): string {
-  const randomUUID = globalThis.crypto?.randomUUID;
-  if (typeof randomUUID === 'function') return `runtime-${randomUUID.call(globalThis.crypto)}`;
-  nextRuntimeId++;
-  return `runtime-${Date.now().toString(36)}-${nextRuntimeId.toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2, 10)}`;
-}
-
 /** @internal Mark a runtime terminally disposed. */
 export function markRuntimeDisposed(runtime: RuntimeCore): void {
   DISPOSED_RUNTIMES.add(runtime);
@@ -95,4 +86,13 @@ export function markRuntimeDisposed(runtime: RuntimeCore): void {
 /** @internal Return whether a runtime has entered its terminal state. */
 export function isRuntimeDisposed(runtime: RuntimeCore): boolean {
   return DISPOSED_RUNTIMES.has(runtime);
+}
+
+function createGeneratedRuntimeId(): string {
+  const randomUUID = globalThis.crypto?.randomUUID;
+  if (typeof randomUUID === 'function') return `runtime-${randomUUID.call(globalThis.crypto)}`;
+  nextRuntimeId++;
+  return `runtime-${Date.now().toString(36)}-${nextRuntimeId.toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
 }

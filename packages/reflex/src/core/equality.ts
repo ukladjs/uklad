@@ -4,9 +4,6 @@ import type { EqualityCheckFn } from '../types';
 import { type RuntimeCore } from '../runtime/core';
 
 let defaultEqualityCheck: EqualityCheckFn = isEqual;
-function getRuntimeEqualityCheck(runtime: RuntimeCore): EqualityCheckFn {
-  return runtime.subscriptions.equalityCheck ?? defaultEqualityCheck;
-}
 
 /**
  * Compare primitives by identity and arrays or objects one level deep.
@@ -58,4 +55,8 @@ export function replaceDefaultEqualityCheck(
   next: EqualityCheckFn,
 ): void {
   if (defaultEqualityCheck === previous) defaultEqualityCheck = next;
+}
+
+function getRuntimeEqualityCheck(runtime: RuntimeCore): EqualityCheckFn {
+  return runtime.subscriptions.equalityCheck ?? defaultEqualityCheck;
 }

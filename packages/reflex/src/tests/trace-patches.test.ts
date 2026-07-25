@@ -4,7 +4,7 @@
  * plain produce and no patch tags exist anywhere.
  */
 import { waitForScheduled } from './test-utils';
-import { createReflexRuntime, getRuntimeKernelForTests } from '../runtime/runtime';
+import { createReflexRuntime, getRuntimeCoreForTests } from '../runtime/runtime';
 import {
   clearGlobalInterceptors,
   disableTracing,
@@ -79,7 +79,7 @@ describe('Conditional patch generation', () => {
     await runtime.flush();
 
     expect(runtime.getState().value).toBe(3);
-    expect(getRuntimeKernelForTests(runtime).tracing).toBeUndefined();
+    expect(getRuntimeCoreForTests(runtime).probe).toBeUndefined();
     runtime.dispose();
   });
 

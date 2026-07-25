@@ -1,8 +1,5 @@
-import { mergeOptionalTraceForKernel } from '../core/tracing';
-import { getStateForKernel } from '../runtime/state';
-import { getHandlerForKernel } from '../runtime/handlers';
-import type { RuntimeKernel } from '../runtime/kernel';
-import { reportRuntimeLifecycleErrorForKernel } from '../runtime/lifecycle';
+import { mergeRuntimeProbeSpan, notifyRuntimeProbe } from '../runtime/probe';
+import type { RuntimeCore } from '../runtime/core';
 
 import type {
   CoEffects,
@@ -16,9 +13,6 @@ import type {
   ReflexError,
   TraceErrorTag,
 } from '../types';
-
-const ERROR_HANDLER_KIND = 'error';
-const EVENT_ERROR_HANDLER_ID = 'event-handler';
 
 /** @internal Check whether a value is a valid interceptor. */
 export function isInterceptor(value: unknown): value is Interceptor {
@@ -37,17 +31,13 @@ export function isInterceptor(value: unknown): value is Interceptor {
 }
 
 /** @internal Execute an event interceptor chain in one runtime. */
-export function executeForKernel(
-  runtime: RuntimeKernel,
+export function execute(
+  runtime: RuntimeCore,
   event: EventVector,
   interceptors: Interceptor[],
 ): Context {
-  const context = createContext(event, interceptors, getStateForKernel<State>(runtime));
-  const errorHandler: ErrorHandler | undefined = getHandlerForKernel(
-    runtime,
-    ERROR_HANDLER_KIND,
-    EVENT_ERROR_HANDLER_ID,
-  );
+  const context = createContext(event, interceptors, runtime.state.get<State>());
+  const errorHandler: ErrorHandler | undefined = runtime.registry.get('error', 'event-handler');
 
   if (!errorHandler) {
     try {
@@ -71,13 +61,13 @@ export function executeForKernel(
   }
 }
 
-function executeAndTraceFinalEffects(runtime: RuntimeKernel, context: Context): Context {
+function executeAndTraceFinalEffects(runtime: RuntimeCore, context: Context): Context {
   const result = executeInterceptors(context);
   // Event handlers publish their initial effects while patches are produced,
   // but `after` interceptors may append or replace effects later in the same
   // pipeline. Record the final list so traces describe what the post-commit
   // effect executor receives.
-  mergeOptionalTraceForKernel(runtime, () => ({ effects: result.effects }));
+  mergeRuntimeProbeSpan(runtime, () => ({ effects: result.effects }));
   return result;
 }
 
@@ -98,7 +88,7 @@ function isReflexError(value: unknown): value is ReflexError {
   return candidate.cause instanceof Error && typeof candidate.data === 'object';
 }
 
-function traceError(runtime: RuntimeKernel, value: unknown, event: EventVector): void {
+function traceError(runtime: RuntimeCore, value: unknown, event: EventVector): void {
   const reflexError = isReflexError(value) ? value : undefined;
   const originalError = reflexError?.cause ?? normalizeError(value);
   const traceErrorTag: TraceErrorTag = {
@@ -109,8 +99,8 @@ function traceError(runtime: RuntimeKernel, value: unknown, event: EventVector):
     ...(reflexError ? { direction: reflexError.data.direction } : {}),
     eventV: event,
   };
-  mergeOptionalTraceForKernel(runtime, () => ({ error: traceErrorTag }));
-  reportRuntimeLifecycleErrorForKernel(runtime, 'handler', originalError);
+  mergeRuntimeProbeSpan(runtime, () => ({ error: traceErrorTag }));
+  notifyRuntimeProbe(runtime, 'error', 'handler', originalError);
 }
 
 function toReflexError(

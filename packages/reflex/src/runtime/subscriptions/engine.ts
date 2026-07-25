@@ -1,13 +1,13 @@
 import { consoleLog } from '../../core/logging';
-import { mergeOptionalTraceForKernel, withOptionalTraceForKernel } from '../../core/tracing';
-import { type RuntimeKernel } from '../kernel';
+import { mergeRuntimeProbeSpan, withRuntimeProbeSpan } from '../probe';
+import { type RuntimeCore } from '../core';
 
 import type { EqualityCheckFn, SubVector } from '../../types';
-import type { RuntimeLifecycleSubscription } from '../lifecycle';
+import type { RuntimeProbeSubscription } from '../probe';
 
 declare const subscriptionNodeType: unique symbol;
 
-const NO_RECALCULATED_SUBSCRIPTIONS: readonly RuntimeLifecycleSubscription[] = Object.freeze([]);
+const NO_RECALCULATED_SUBSCRIPTIONS: readonly RuntimeProbeSubscription[] = Object.freeze([]);
 
 /** Opaque runtime-owned handle. Runtime operations are the entire contract. */
 export interface SubscriptionNode<T> {
@@ -134,7 +134,7 @@ class SubscriptionCell<T> {
   private runComputation(compute: () => T): boolean {
     let observableChanged = false;
     try {
-      withOptionalTraceForKernel(
+      withRuntimeProbeSpan(
         this.engine.runtime,
         () => ({
           operation: this.spec.query[0],
@@ -162,7 +162,7 @@ class SubscriptionCell<T> {
           observableChanged = valueChanged || recovered;
           if (observableChanged) this.outputStamp = this.engine.nextOutputStamp();
 
-          mergeOptionalTraceForKernel(this.engine.runtime, () => ({
+          mergeRuntimeProbeSpan(this.engine.runtime, () => ({
             'cached?': !observableChanged,
             version: this.outputStamp,
           }));
@@ -189,7 +189,7 @@ class SubscriptionCell<T> {
   publishTo(listeners: readonly ListenerRegistration[]): void {
     for (const [listener, label, kind] of listeners) {
       try {
-        withOptionalTraceForKernel(
+        withRuntimeProbeSpan(
           this.engine.runtime,
           () => ({
             opType: kind,
@@ -205,7 +205,7 @@ class SubscriptionCell<T> {
   }
 
   traceDispose(): void {
-    withOptionalTraceForKernel(
+    withRuntimeProbeSpan(
       this.engine.runtime,
       () => ({
         operation: this.spec.query[0],
@@ -225,10 +225,14 @@ class SubscriptionCell<T> {
  * scheduler, so this engine deliberately owns no node tasks or notification debt.
  */
 export class SubscriptionEngine {
-  readonly runtime: RuntimeKernel;
+  private readonly getRuntime: () => RuntimeCore;
 
-  constructor(runtime: RuntimeKernel) {
-    this.runtime = runtime;
+  constructor(getRuntime: () => RuntimeCore) {
+    this.getRuntime = getRuntime;
+  }
+
+  get runtime(): RuntimeCore {
+    return this.getRuntime();
   }
   /** Deduplicates cells visited during one dormant graph traversal. */
   private pullEpoch = 0;
@@ -320,7 +324,7 @@ export class SubscriptionEngine {
   publish(
     roots: SubscriptionNode<any>[],
     includeDiagnostics: boolean = false,
-  ): readonly RuntimeLifecycleSubscription[] {
+  ): readonly RuntimeProbeSubscription[] {
     this.assertPublicationAllowed();
     const subscriptions = roots.map((root) => this.unwrap(root));
     const nonRoot = subscriptions.find((subscription) => subscription.spec.kind !== 'root');
@@ -413,7 +417,7 @@ export class SubscriptionEngine {
   private publishWave(
     roots: SubscriptionCell<any>[],
     includeDiagnostics: boolean,
-  ): readonly RuntimeLifecycleSubscription[] {
+  ): readonly RuntimeProbeSubscription[] {
     const wave = ++this.wave;
     this.publicationEpoch++;
     const buckets = new Map<number, SubscriptionCell<any>[]>();
@@ -493,7 +497,7 @@ export class SubscriptionEngine {
       : NO_RECALCULATED_SUBSCRIPTIONS;
   }
 
-  private snapshotRecalculated(subscription: SubscriptionCell<any>): RuntimeLifecycleSubscription {
+  private snapshotRecalculated(subscription: SubscriptionCell<any>): RuntimeProbeSubscription {
     return {
       key: subscription.spec.key,
       query: [...subscription.spec.query] as SubVector,
@@ -602,67 +606,4 @@ export class SubscriptionEngine {
       consoleLog('error', '[reflex] Error releasing subscription:', error);
     }
   }
-}
-
-function getEngine(runtime: RuntimeKernel): SubscriptionEngine {
-  return (runtime.subscriptionEngine ??= new SubscriptionEngine(runtime));
-}
-
-/** @internal Create a subscription owned by one runtime. */
-export function createSubscriptionForKernel<T>(
-  runtime: RuntimeKernel,
-  spec: SubscriptionSpec<T>,
-): SubscriptionNode<T> {
-  return getEngine(runtime).create(spec);
-}
-
-/** @internal Read a subscription through its owning runtime. */
-export function readSubscriptionForKernel<T>(runtime: RuntimeKernel, node: SubscriptionNode<T>): T {
-  return getEngine(runtime).read(node);
-}
-
-/** @internal Read a snapshot from one runtime's subscription. */
-export function getSubscriptionSnapshotForKernel<T>(
-  runtime: RuntimeKernel,
-  node: SubscriptionNode<T>,
-): T {
-  return getEngine(runtime).getSnapshot(node);
-}
-
-/** @internal Subscribe to a node owned by one runtime. */
-export function subscribeToSubscriptionForKernel<T>(
-  runtime: RuntimeKernel,
-  node: SubscriptionNode<T>,
-  listener: () => void,
-  componentName?: string,
-  listenerKind?: SubscriptionListenerKind,
-): () => void {
-  return getEngine(runtime).subscribe(node, listener, componentName, listenerKind);
-}
-
-/** @internal Publish roots through one runtime's engine. */
-export function publishSubscriptionsForKernel(
-  runtime: RuntimeKernel,
-  roots: SubscriptionNode<any>[],
-  includeDiagnostics: boolean = false,
-): readonly RuntimeLifecycleSubscription[] {
-  return getEngine(runtime).publish(roots, includeDiagnostics);
-}
-
-/** @internal Inspect a node owned by one runtime. */
-export function inspectSubscriptionForKernel(
-  runtime: RuntimeKernel,
-  node: SubscriptionNode<any>,
-): SubscriptionDiagnostic {
-  return getEngine(runtime).inspect(node);
-}
-
-/** @internal Assert publication is safe in one runtime. */
-export function assertPublicationAllowedForKernel(runtime: RuntimeKernel): void {
-  getEngine(runtime).assertPublicationAllowed();
-}
-
-/** @internal Assert destructive subscription clears are safe in one runtime. */
-export function assertSubscriptionsCanBeClearedForKernel(runtime: RuntimeKernel): void {
-  getEngine(runtime).assertClearAllowed();
 }

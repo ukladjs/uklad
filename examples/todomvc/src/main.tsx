@@ -2,7 +2,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { enableMapSet, HotReloadWrapper, ReflexProvider } from '@flexsurfer/reflex';
-import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
 import TodoApp from './views';
 
@@ -16,7 +15,11 @@ import { todoRuntime } from './runtime';
 
 // Immer requires an explicit plugin before it can draft the Map-backed todo collection.
 enableMapSet();
-enableDevtools(todoRuntime);
+if (import.meta.env.DEV) {
+  void import('@flexsurfer/reflex-devtools').then(({ enableDevtools }) => {
+    enableDevtools(todoRuntime);
+  });
+}
 
 // Synchronous for localStorage: todos are in state before the first render.
 persistence.hydrate();

@@ -85,6 +85,7 @@ describe('handler registry', () => {
     };
     const registered = [interceptor];
 
+    registerHandler('event', 'immutable-event', () => undefined);
     setInterceptors('immutable-event', registered);
     registered.length = 0;
 

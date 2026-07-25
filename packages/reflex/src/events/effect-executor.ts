@@ -1,19 +1,15 @@
 import { consoleLog } from '../core/logging';
-import { mergeOptionalTraceForKernel } from '../core/tracing';
 import { isEventVector } from '../core/validation';
 import {
-  hasRuntimeLifecycleObservers,
-  notifyRuntimeLifecycleForKernel,
-  type RuntimeLifecycleEffect,
-} from '../runtime/lifecycle';
-import { getHandlerForKernel } from '../runtime/handlers';
-import { createRuntimeStateKey, getRuntimeState, type RuntimeKernel } from '../runtime/kernel';
+  hasTrackedRuntimeEventCallback,
+  notifyTrackedRuntimeEvent,
+  type RuntimeProbeEffect,
+} from '../runtime/probe';
+import { type RuntimeCore } from '../runtime/core';
 import { DISPATCH, DISPATCH_LATER } from './effects';
 import type { ExecutionEnvelope } from './envelope';
 
-import type { DispatchLaterEffect, TraceErrorTag } from '../types';
-
-const HANDLER_KIND = 'fx';
+import type { DispatchLaterEffect } from '../types';
 
 interface ActiveEffectExecution {
   readonly envelope: ExecutionEnvelope;
@@ -21,33 +17,17 @@ interface ActiveEffectExecution {
   readonly effectIndex: number;
 }
 
-const ACTIVE_EFFECT_EXECUTION = createRuntimeStateKey<ActiveEffectExecution | undefined>(
-  'reflex.active-effect-execution',
-);
-
-/**
- * Return the synchronous effect currently invoking a built-in child dispatch.
- * Timer and promise callbacks intentionally see no active parent: they are
- * detached work under the legacy execution model.
- */
-export function getActiveEffectExecutionForKernel(
-  runtime: RuntimeKernel,
-): ActiveEffectExecution | undefined {
-  return getRuntimeState(runtime, ACTIVE_EFFECT_EXECUTION);
-}
-
-function withActiveEffectExecutionForKernel<T>(
-  runtime: RuntimeKernel,
+function withActiveEffectExecution<T>(
+  runtime: RuntimeCore,
   execution: ActiveEffectExecution,
   fn: () => T,
 ): T {
-  const previous = getActiveEffectExecutionForKernel(runtime);
-  runtime.extensions.set(ACTIVE_EFFECT_EXECUTION.symbol, execution);
+  const previous = runtime.events.activeEffect;
+  runtime.events.activeEffect = execution;
   try {
     return fn();
   } finally {
-    if (previous === undefined) runtime.extensions.delete(ACTIVE_EFFECT_EXECUTION.symbol);
-    else runtime.extensions.set(ACTIVE_EFFECT_EXECUTION.symbol, previous);
+    runtime.events.activeEffect = previous;
   }
 }
 
@@ -55,27 +35,26 @@ function withActiveEffectExecutionForKernel<T>(
  * Execute effects after a state transition has committed. The result is a
  * bounded, immutable record per intent; effect failures remain isolated.
  */
-export function executeEffectsForKernel(
-  runtime: RuntimeKernel,
+export function executeEffects(
+  runtime: RuntimeCore,
   envelope: ExecutionEnvelope,
   effects: unknown,
 ): void {
   if (!Array.isArray(effects)) {
     consoleLog('warn', `[reflex] effects expects a vector, but was given ${typeof effects}`);
     reportEffect(
-      runtime,
+      envelope,
       '<invalid>',
       effects,
       -1,
       'invalid',
-      Date.now(),
+      hasTrackedRuntimeEventCallback(envelope.tracking, 'effect') ? Date.now() : 0,
       new Error('[reflex] effects expects a vector.'),
     );
     return;
   }
 
-  notifyRuntimeLifecycleForKernel(runtime, 'onEffects', effects);
-  const effectErrors: TraceErrorTag[] = [];
+  const reporting = hasTrackedRuntimeEventCallback(envelope.tracking, 'effect');
 
   for (const [effectIndex, effect] of effects.entries()) {
     if (
@@ -86,47 +65,43 @@ export function executeEffectsForKernel(
     ) {
       consoleLog('warn', '[reflex] invalid effect in effects:', effect);
       reportEffect(
-        runtime,
+        envelope,
         '<invalid>',
         effect,
         effectIndex,
         'invalid',
-        Date.now(),
+        reporting ? Date.now() : 0,
         new Error('[reflex] Invalid effect vector.'),
       );
       continue;
     }
 
     const [effectId, value] = effect;
-    const handler = getHandlerForKernel(runtime, HANDLER_KIND, effectId);
+    const handler = runtime.registry.get('fx', effectId);
     if (!handler) {
       consoleLog(
         'warn',
         `[reflex] in 'effects' found ${effectId} which has no associated handler. Ignoring.`,
       );
       reportEffect(
-        runtime,
+        envelope,
         effectId,
         value,
         effectIndex,
         'unhandled',
-        Date.now(),
+        reporting ? Date.now() : 0,
         new Error(`[reflex] No effect handler is registered for '${effectId}'.`),
       );
       continue;
     }
 
-    const startedAtMs = Date.now();
+    const startedAtMs = reporting ? Date.now() : 0;
     try {
       const invoke = () => (handler as (effectValue: unknown) => unknown)(value);
       const result =
-        envelope.operation === undefined
+        envelope.tracking === undefined
           ? invoke()
-          : withActiveEffectExecutionForKernel(
-              runtime,
-              { envelope, effectId, effectIndex },
-              invoke,
-            );
+          : withActiveEffectExecution(runtime, { envelope, effectId, effectIndex }, invoke);
       const invalidDispatch =
         (effectId === DISPATCH && !isEventVector(value)) ||
         (effectId === DISPATCH_LATER && !isValidDispatchLaterEffect(value));
@@ -134,7 +109,7 @@ export function executeEffectsForKernel(
         ? new Error(`[reflex] Invalid ${effectId} effect payload.`)
         : undefined;
       reportEffect(
-        runtime,
+        envelope,
         effectId,
         value,
         effectIndex,
@@ -150,33 +125,23 @@ export function executeEffectsForKernel(
       );
     } catch (error: unknown) {
       consoleLog('error', `[reflex] error in effects for ${effectId}:`, error);
-      effectErrors.push({
-        phase: 'effect',
-        effect: effectId,
-        message: error instanceof Error ? error.message : String(error),
-        ...(error instanceof Error && typeof error.stack === 'string'
-          ? { stack: error.stack }
-          : {}),
-      });
-      reportEffect(runtime, effectId, value, effectIndex, 'failed', startedAtMs, error);
+      reportEffect(envelope, effectId, value, effectIndex, 'failed', startedAtMs, error);
     }
   }
-
-  if (effectErrors.length > 0) mergeOptionalTraceForKernel(runtime, () => ({ effectErrors }));
 }
 
-/** Report optional lifecycle facts without coupling effect execution to DevTools operations. */
+/** Construct effect evidence only when an accepting probe requested it. */
 function reportEffect(
-  runtime: RuntimeKernel,
+  envelope: ExecutionEnvelope,
   type: string,
   value: unknown,
   index: number,
-  status: RuntimeLifecycleEffect['status'],
+  status: RuntimeProbeEffect['status'],
   startedAtMs: number,
   error?: unknown,
 ): void {
-  if (!hasRuntimeLifecycleObservers(runtime)) return;
-  notifyRuntimeLifecycleForKernel(runtime, 'onEffect', {
+  if (!hasTrackedRuntimeEventCallback(envelope.tracking, 'effect')) return;
+  notifyTrackedRuntimeEvent(envelope.tracking, 'effect', {
     type,
     value,
     index,
@@ -184,7 +149,7 @@ function reportEffect(
     startedAtMs,
     durationMs: Math.max(0, Date.now() - startedAtMs),
     ...(error === undefined ? {} : { error }),
-  });
+  } satisfies RuntimeProbeEffect);
 }
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {

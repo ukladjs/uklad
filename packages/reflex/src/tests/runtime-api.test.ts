@@ -1,7 +1,7 @@
 import type { ReflexContracts } from '../contracts';
 import {
   createReflexRuntime,
-  getRuntimeKernelForTests,
+  getRuntimeCoreForTests,
   type RuntimeEventHandler,
 } from '../runtime/runtime';
 import { waitForScheduled } from './test-utils';
@@ -32,6 +32,32 @@ function createCounterRuntime(runtimeId: string, count: number) {
 }
 
 describe('instance-scoped runtime', () => {
+  it('eagerly owns one stable set of typed core services', () => {
+    const runtime = createCounterRuntime('stable-core', 0);
+    const core = getRuntimeCoreForTests(runtime);
+
+    expect(Object.keys(core).sort()).toEqual([
+      'events',
+      'identity',
+      'probe',
+      'registry',
+      'state',
+      'subscriptions',
+    ]);
+    expect(core.state).toBeDefined();
+    expect(core.registry).toBeDefined();
+    expect(core.events).toBeDefined();
+    expect(core.subscriptions).toBeDefined();
+    expect(core.probe).toBeUndefined();
+
+    const eventDefinition = core.registry.getEvent('increment');
+    expect(eventDefinition).toBe(core.registry.getEvent('increment'));
+    expect(Object.isFrozen(eventDefinition)).toBe(true);
+    expect(Object.isFrozen(eventDefinition?.interceptors)).toBe(true);
+
+    runtime.dispose();
+  });
+
   it('does not allocate development effect lineage state without an observer', async () => {
     const runtime = createReflexRuntime({
       initialState: { count: 0 },
@@ -47,13 +73,13 @@ describe('instance-scoped runtime', () => {
     try {
       runtime.dispatch(['warm-up']);
       await runtime.flush();
-      const extensionCount = getRuntimeKernelForTests(runtime).extensions.size;
+      expect(getRuntimeCoreForTests(runtime).probe).toBeUndefined();
 
       runtime.dispatch(['save']);
       await runtime.flush();
 
       expect(runtime.getState().count).toBe(1);
-      expect(getRuntimeKernelForTests(runtime).extensions.size).toBe(extensionCount);
+      expect(getRuntimeCoreForTests(runtime).probe).toBeUndefined();
     } finally {
       runtime.dispose();
     }
@@ -137,16 +163,51 @@ describe('instance-scoped runtime', () => {
     }
   });
 
-  it('does not expose its kernel or direct kernel state on the runtime object', () => {
-    const runtime = createCounterRuntime('private-kernel', 0);
+  it('does not expose its core or direct core state on the runtime object', () => {
+    const runtime = createCounterRuntime('private-core', 0);
 
     const publicRuntime = runtime as unknown as Record<string, unknown>;
+    expect(Object.hasOwn(publicRuntime, 'core')).toBe(false);
+    expect(publicRuntime.core).toBeUndefined();
     expect(Object.hasOwn(publicRuntime, 'kernel')).toBe(false);
     expect(publicRuntime.kernel).toBeUndefined();
     expect(publicRuntime.state).toBeUndefined();
     expect(publicRuntime.handlers).toBeUndefined();
     expect(publicRuntime.extensions).toBeUndefined();
 
+    runtime.dispose();
+  });
+
+  it('keeps lifecycle compatibility observers passive', () => {
+    const runtime = createReflexRuntime({
+      initialState: { count: 0 },
+      runtimeId: 'passive-observer',
+    });
+    runtime.regCoeffect('broken', () => {
+      throw new Error('expected coeffect failure');
+    });
+    runtime.regEvent(
+      'increment',
+      ({ draftState }) => {
+        draftState.count += 1;
+      },
+      { coeffects: [['broken']] },
+    );
+    const onEventStarted = jest.fn(() => true);
+    const onEventError = jest.fn(() => true);
+    const detach = runtime.observeLifecycle({ onEventStarted, onEventError });
+
+    runtime.dispatchSync(['increment']);
+
+    expect(runtime.getState().count).toBe(1);
+    expect(onEventStarted).toHaveBeenCalledTimes(1);
+    expect(onEventError).toHaveBeenCalledWith(
+      'coeffect',
+      expect.objectContaining({ message: 'expected coeffect failure' }),
+    );
+
+    detach();
+    expect(getRuntimeCoreForTests(runtime).probe).toBeUndefined();
     runtime.dispose();
   });
 

@@ -2,15 +2,17 @@
 
 Paths in this document are relative to `src/`.
 
-Framework bookkeeping is split by ownership. `runtime/handlers.ts` stores
-handler definitions, while `runtime/subscriptions/cache.ts` owns the canonical
-cache of built subscription graphs and its lifecycle metadata.
+Framework bookkeeping is split by ownership. `RuntimeRegistry` in
+`runtime/handlers.ts` stores handler definitions, while `SubscriptionRuntime`
+in `runtime/subscriptions/cache.ts` owns subscription definitions, graph
+construction, the canonical cache, and its lifecycle metadata.
 `runtime/subscriptions/keys.ts` owns canonical query-key serialization and its
 development validation.
-`runtime/event-metadata.ts` stores event interceptor lists, and
-`runtime/reset.ts` coordinates clears that span those stores. None of these
-modules owns reactive semantics: stamps, epochs, publication waves, and
-dependency evaluation live in `runtime/subscriptions/engine.ts`.
+Event handlers and interceptor lists are one immutable definition in
+`RuntimeRegistry`; `runtime/reset.ts` coordinates clears that span services.
+Reactive semantics—stamps, epochs, publication waves, and dependency
+evaluation—live in the `SubscriptionEngine` owned eagerly by
+`SubscriptionRuntime`.
 
 ## Two layers: definitions and instances
 
@@ -42,18 +44,18 @@ Two architectural facts explain why the instance-side metadata exists at all:
 
 ## Store summary
 
-| Store                                        | Owner                            | Purpose                                  |
-| -------------------------------------------- | -------------------------------- | ---------------------------------------- |
-| `handlers`                                   | `runtime/handlers.ts`            | All handler definitions                  |
-| `systemHandlers`                             | `runtime/handlers.ts`            | Framework handlers restored after clears |
-| `rootSubIdBySource`                          | `runtime/subscriptions/cache.ts` | Changed STATE key → owning root          |
-| `rootSubSourceById`                          | `runtime/subscriptions/cache.ts` | Is this id a root; what key it reads     |
-| `rootSubscriptionKeys`                       | `runtime/subscriptions/cache.ts` | Persistence guard for root cells         |
-| `subscriptionCache`                          | `runtime/subscriptions/cache.ts` | Canonical built instances                |
-| `dependentSubscriptionKeys`                  | `runtime/subscriptions/cache.ts` | Reverse edges for cascade invalidation   |
-| `provisionalCurrent` / `provisionalPrevious` | `runtime/subscriptions/cache.ts` | Two-generation aborted-render sweep      |
-| `subConfigById`                              | `runtime/subscriptions/cache.ts` | Per-subscription equality options        |
-| `interceptorsByEvent`                        | `runtime/event-metadata.ts`      | Per-event interceptor chains             |
+| Store                                        | Owner                 | Purpose                                           |
+| -------------------------------------------- | --------------------- | ------------------------------------------------- |
+| `handlers`                                   | `RuntimeRegistry`     | Typed handler projections                         |
+| `eventDefinitions`                           | `RuntimeRegistry`     | Atomic event handler + immutable interceptor list |
+| `systemHandlers`                             | `RuntimeRegistry`     | Framework handlers restored after clears          |
+| `rootSubIdBySource`                          | `SubscriptionRuntime` | Changed STATE key → owning root                   |
+| `rootSubSourceById`                          | `SubscriptionRuntime` | Is this id a root; what key it reads              |
+| `rootSubscriptionKeys`                       | `SubscriptionRuntime` | Persistence guard for root cells                  |
+| `subscriptionCache`                          | `SubscriptionRuntime` | Canonical built instances                         |
+| `dependentSubscriptionKeys`                  | `SubscriptionRuntime` | Reverse edges for cascade invalidation            |
+| `provisionalCurrent` / `provisionalPrevious` | `SubscriptionRuntime` | Two-generation aborted-render sweep               |
+| `subConfigById`                              | `SubscriptionRuntime` | Per-subscription equality options                 |
 
 ## Handler definitions — `handlers`
 
@@ -146,11 +148,10 @@ Two properties matter:
   not track. The invariant they enforce: a canonical cache entry never retains
   a terminal dependency node.
 
-`evictCachedSubscriptionForKernel` is the kernel-owned entry point used when a
-computed cell's last consumer leaves. It is root-guarded (roots persist) and
-identity-checked (`cache.get(key)?.node === subscription`) so a stale eviction
-request for an already-replaced key is a no-op, then delegates to the same
-closure removal.
+`SubscriptionRuntime.evict` is used when a computed cell's last consumer
+leaves. It is root-guarded (roots persist) and identity-checked
+(`cache.get(key)?.node === subscription`) so a stale eviction request for an
+already-replaced key is a no-op, then delegates to the same closure removal.
 
 ## Provisional subscriptions — two stores
 
@@ -178,28 +179,28 @@ cached instance renews the lease on its entire dormant dependency subtree
 (walked via forward `dependencyKeys`), not just the entry point, so a shared
 dependency in an older generation is not swept out from under a fresh parent.
 
-## Event metadata and subscription config
+## Event definitions and subscription config
 
-Two small independent maps are deliberately kept with their owning domains:
+The two domains keep their metadata with the definition it qualifies:
 
-- **`interceptorsByEvent` (`eventId → readonly Interceptor[]`)** lives in
-  `runtime/event-metadata.ts` and stores the chain applied around an event
-  handler.
-- **`subConfigById` (`subId → SubConfig`)** lives beside the subscription cache.
-  Its custom `equalityCheck` is read once when an instance is built and baked
-  into the node's spec.
+- **`eventDefinitions`** in `RuntimeRegistry` stores each event handler and its
+  immutable interceptor list together. Re-registration and ownership-token
+  release replace or remove the complete definition.
+- **`subConfigById`** lives in `SubscriptionRuntime`. Its custom
+  `equalityCheck` is read once when an instance is built and baked into the
+  node's spec.
 
 ## Clearing and lifecycle rules
 
 Clearing spans several stores. `runtime/reset.ts` coordinates public handler
 clears; `runtime/subscriptions/cache.ts` owns subscription-specific clearing:
 
-- **`assertSubscriptionsCanBeCleared`** (from the runtime) rejects any
+- **`SubscriptionRuntime.assertClearAllowed`** rejects any
   subscription-affecting clear while a graph is active. Mounted stores must not
   be orphaned. It guards `clearHandlers` (for `sub`/`subDeps`) and
   `clearSubscriptionCache`.
 - **`clearHandlers('sub', id)`** removes the definition _and_ cascades into the
-  instance cache via `clearSubscriptionCacheEntriesForId`, because leaving
+  instance cache by subscription id, because leaving
   instances of a removed handler would strand them. The paired `subDeps`
   handler, root-source metadata, and subscription config are cleared in the
   same operation.
@@ -215,13 +216,9 @@ clears; `runtime/subscriptions/cache.ts` owns subscription-specific clearing:
 
 ## Why cache policy lives outside the engine
 
-The split is deliberate. The engine owns graph semantics — stamps, epochs,
-waves, evaluation — and knows nothing about serialized keys, root persistence,
-provisional leases, or handler ids. Definitions live in `runtime/handlers.ts`;
-key serialization lives in `runtime/subscriptions/keys.ts`; cache policy lives
-in `runtime/subscriptions/cache.ts`. The previous engine
-spread this policy across the nodes themselves (dependency resolvers, revival,
-relinking); the current design replaces it with explicit side indexes. There is
-more cache metadata, but each subscription node carries fewer invariants — and
-the structural facts a node does not expose are recorded once, when it is
-cached.
+The split is deliberate. `SubscriptionEngine` owns graph semantics—stamps,
+epochs, waves, and evaluation—and knows nothing about serialized keys, root
+persistence, provisional leases, or handler ids. `SubscriptionRuntime` owns
+definition coordination and cache policy around that engine; key serialization
+remains in `runtime/subscriptions/keys.ts`. The structural facts an opaque node
+does not expose are recorded once when the service caches it.

@@ -1,56 +1,22 @@
 import { consoleLog } from '../core/logging';
 import { isEventVector } from '../core/validation';
-import { registerHandlerForKernel, registerSystemHandlerForKernel } from '../runtime/handlers';
-import {
-  createRuntimeStateKey,
-  getOrCreateRuntimeState,
-  type RuntimeKernel,
-} from '../runtime/kernel';
+import { type RuntimeCore } from '../runtime/core';
 
-import type {
-  DispatchLaterEffect,
-  DispatchVector,
-  EffectHandler,
-  EffectParams,
-  EventVector,
-  Id,
-} from '../types';
-
-const HANDLER_KIND = 'fx';
-const DELAYED_EFFECT_TIMERS =
-  createRuntimeStateKey<Set<ReturnType<typeof setTimeout>>>('reflex.delayed-effects');
-
-function getDelayedEffectTimers(runtime: RuntimeKernel): Set<ReturnType<typeof setTimeout>> {
-  return getOrCreateRuntimeState(runtime, DELAYED_EFFECT_TIMERS, () => new Set());
-}
+import type { DispatchLaterEffect, DispatchVector, EventVector } from '../types';
 
 export const DISPATCH_LATER = 'dispatch-later';
 export const DISPATCH = 'dispatch';
 
-/** @internal Register an effect handler in one runtime. */
-export function regEffectForKernel<K extends Id = Id>(
-  runtime: RuntimeKernel,
-  id: K,
-  handler: EffectHandler<EffectParams<K>>,
-): void {
-  registerHandlerForKernel(runtime, HANDLER_KIND, id, handler);
-}
-
 /** @internal Install dispatch effects in one runtime. */
-export function registerBuiltInEffectsForKernel(
-  runtime: RuntimeKernel,
+export function registerBuiltInEffects(
+  runtime: RuntimeCore,
   dispatchEvent: (event: DispatchVector) => void,
 ): void {
-  registerSystemHandlerForKernel(
-    runtime,
-    HANDLER_KIND,
-    DISPATCH_LATER,
-    (value: DispatchLaterEffect) => {
-      dispatchLater(runtime, value, dispatchEvent);
-    },
-  );
+  runtime.registry.registerSystem('fx', DISPATCH_LATER, (value: DispatchLaterEffect) => {
+    dispatchLater(runtime, value, dispatchEvent);
+  });
 
-  registerSystemHandlerForKernel(runtime, HANDLER_KIND, DISPATCH, (value: EventVector) => {
+  runtime.registry.registerSystem('fx', DISPATCH, (value: EventVector) => {
     if (!isEventVector(value)) {
       consoleLog(
         'error',
@@ -64,7 +30,7 @@ export function registerBuiltInEffectsForKernel(
 }
 
 function dispatchLater(
-  runtime: RuntimeKernel,
+  runtime: RuntimeCore,
   effect: unknown,
   dispatchEvent: (event: DispatchVector) => void,
 ): void {
@@ -82,7 +48,7 @@ function dispatchLater(
   if (ms < 0) {
     consoleLog('warn', '[reflex] dispatch-later effect with negative delay:', ms);
   }
-  const timers = getDelayedEffectTimers(runtime);
+  const timers = runtime.events.delayedEffectTimers;
   const timeout = setTimeout(
     () => {
       timers.delete(timeout);
@@ -91,11 +57,4 @@ function dispatchLater(
     Math.max(0, ms),
   );
   timers.add(timeout);
-}
-
-/** @internal Cancel delayed dispatch effects owned by one runtime. */
-export function clearDelayedEffectsForKernel(runtime: RuntimeKernel): void {
-  const timers = getDelayedEffectTimers(runtime);
-  for (const timer of timers) clearTimeout(timer);
-  timers.clear();
 }

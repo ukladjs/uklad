@@ -1,6 +1,6 @@
 import type {
   ReflexInspector as CoreReflexInspector,
-  createReflexInspectorForKernel,
+  createReflexInspector,
 } from '../../../reflex/src/inspector';
 import type { ReflexInspector as DevtoolsReflexInspector } from '../../src/client/types';
 
@@ -25,5 +25,5 @@ export type InspectorContract = Assert<
 
 /** The public factory return type must preserve the same assignability contract. */
 export type InspectorFactoryContract = Assert<
-  ReturnType<typeof createReflexInspectorForKernel> extends DevtoolsReflexInspector ? true : false
+  ReturnType<typeof createReflexInspector> extends DevtoolsReflexInspector ? true : false
 >;

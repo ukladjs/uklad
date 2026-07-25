@@ -1,6 +1,6 @@
 import type {
+  DevtoolsEffectFact,
   DevtoolsExecutionObserver,
-  DevtoolsLifecycleEffect,
   OperationEventVector,
 } from './runtime.js';
 import type {
@@ -52,26 +52,33 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
   private nextSequence = 0;
   private publishedRevision = 0;
   private readonly operations = new Map<string, MutableOperation>();
-  private readonly activeEvents: OperationReference[] = [];
   private readonly runtimeInstanceId: string;
 
   constructor(runtimeInstanceId: string) {
     this.runtimeInstanceId = runtimeInstanceId;
   }
 
-  accept(_event: OperationEventVector, parent?: {
-    readonly operation: { readonly operationId: string; readonly value: unknown };
-    readonly sourceEffectId?: string;
-    readonly sourceEffectIndex?: number;
-  }): { operationId: string; value: unknown } {
+  accept(
+    _event: OperationEventVector,
+    parent?: {
+      readonly operation: { readonly operationId: string; readonly value: unknown };
+      readonly sourceEffectId?: string;
+      readonly sourceEffectIndex?: number;
+    },
+  ): { operationId: string; value: unknown } {
     const parentReference = parent?.operation.value as OperationReference | undefined;
-    const operationId = parentReference?.operationId ?? `op_${this.runtimeInstanceId}_${++this.nextOperationId}`;
+    const operationId =
+      parentReference?.operationId ?? `op_${this.runtimeInstanceId}_${++this.nextOperationId}`;
     const reference: OperationReference = Object.freeze({
       operationId,
       eventInstanceId: `evt_${this.runtimeInstanceId}_${++this.nextEventId}`,
-      ...(parentReference === undefined ? {} : { parentEventInstanceId: parentReference.eventInstanceId }),
+      ...(parentReference === undefined
+        ? {}
+        : { parentEventInstanceId: parentReference.eventInstanceId }),
       ...(parent?.sourceEffectId === undefined ? {} : { sourceEffectId: parent.sourceEffectId }),
-      ...(parent?.sourceEffectIndex === undefined ? {} : { sourceEffectIndex: parent.sourceEffectIndex }),
+      ...(parent?.sourceEffectIndex === undefined
+        ? {}
+        : { sourceEffectIndex: parent.sourceEffectIndex }),
       acceptedSequence: ++this.nextSequence,
     });
     const operation = this.getOrCreate(reference);
@@ -96,7 +103,6 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
     operation.startedRevision ??= committedRevision;
     event.startedRevision = committedRevision;
     event.status = 'running';
-    this.activeEvents.push(event.reference);
   }
 
   transition(operationRef: { readonly value: unknown }, status: string, error?: unknown): void {
@@ -117,21 +123,24 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
     operation.committedRevisions.push(revision);
     event.committedRevision = revision;
     if (revision > this.publishedRevision)
-      operation.pendingPublishedRevision = Math.max(operation.pendingPublishedRevision ?? 0, revision);
+      operation.pendingPublishedRevision = Math.max(
+        operation.pendingPublishedRevision ?? 0,
+        revision,
+      );
   }
 
-  onEffect(effect: DevtoolsLifecycleEffect): void {
-    const reference = this.activeEvents.at(-1);
-    if (!reference) return;
-    const { operation, event } = this.resolveReference(reference);
-    event.effects.push(Object.freeze({
-      id: effect.type,
-      index: effect.index,
-      value: snapshotValue(effect.value),
-      status: effect.status,
-      durationMs: effect.durationMs,
-      ...(effect.error === undefined ? {} : { error: snapshotValue(effect.error) }),
-    }));
+  effect(operationRef: { readonly value: unknown }, effect: DevtoolsEffectFact): void {
+    const { operation, event } = this.resolve(operationRef);
+    event.effects.push(
+      Object.freeze({
+        id: effect.type,
+        index: effect.index,
+        value: snapshotValue(effect.value),
+        status: effect.status,
+        durationMs: effect.durationMs,
+        ...(effect.error === undefined ? {} : { error: snapshotValue(effect.error) }),
+      }),
+    );
     if (!['failed', 'invalid', 'unhandled'].includes(effect.status)) return;
     operation.hasNonTerminalError = true;
     this.recordError(operation, effect.error);
@@ -139,7 +148,6 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
 
   finished(operationRef: { readonly value: unknown }, status: string, error?: unknown): void {
     const { operation, event } = this.resolve(operationRef);
-    this.removeActiveEvent(event.reference);
     operation.pending.delete(event.reference.eventInstanceId);
     if (status === 'failed') {
       operation.status = 'failed';
@@ -170,7 +178,10 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
   published(revision: number): void {
     this.publishedRevision = Math.max(this.publishedRevision, revision);
     for (const operation of this.operations.values()) {
-      if (operation.pendingPublishedRevision !== undefined && operation.pendingPublishedRevision <= revision) {
+      if (
+        operation.pendingPublishedRevision !== undefined &&
+        operation.pendingPublishedRevision <= revision
+      ) {
         operation.pendingPublishedRevision = undefined;
         operation.publishedRevision = revision;
         this.settle(operation);
@@ -180,7 +191,6 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
   }
 
   disposed(error: unknown): void {
-    this.activeEvents.length = 0;
     for (const operation of this.operations.values()) {
       if (this.isTerminal(operation.status)) continue;
       operation.status = 'failed';
@@ -201,25 +211,49 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
       operationId: operation.operationId,
       rootEventInstanceId: operation.rootEventInstanceId,
       acceptedSequence: operation.acceptedSequence,
-      ...(operation.acceptedRevision === undefined ? {} : { acceptedRevision: operation.acceptedRevision }),
-      ...(operation.startedRevision === undefined ? {} : { startedRevision: operation.startedRevision }),
-      ...(operation.publishedRevision === undefined ? {} : { publishedRevision: operation.publishedRevision }),
+      ...(operation.acceptedRevision === undefined
+        ? {}
+        : { acceptedRevision: operation.acceptedRevision }),
+      ...(operation.startedRevision === undefined
+        ? {}
+        : { startedRevision: operation.startedRevision }),
+      ...(operation.publishedRevision === undefined
+        ? {}
+        : { publishedRevision: operation.publishedRevision }),
       status: operation.status,
       eventInstanceIds: Object.freeze([...operation.events.keys()]),
-      events: Object.freeze([...operation.events.values()].map((event) => Object.freeze({
-        eventInstanceId: event.reference.eventInstanceId,
-        ...(event.reference.parentEventInstanceId === undefined ? {} : { parentEventInstanceId: event.reference.parentEventInstanceId }),
-        ...(event.reference.sourceEffectId === undefined ? {} : { sourceEffectId: event.reference.sourceEffectId }),
-        ...(event.reference.sourceEffectIndex === undefined ? {} : { sourceEffectIndex: event.reference.sourceEffectIndex }),
-        acceptedSequence: event.reference.acceptedSequence,
-        ...(event.acceptedRevision === undefined ? {} : { acceptedRevision: event.acceptedRevision }),
-        ...(event.startedRevision === undefined ? {} : { startedRevision: event.startedRevision }),
-        ...(event.committedRevision === undefined ? {} : { committedRevision: event.committedRevision }),
-        status: event.status,
-        effects: Object.freeze([...event.effects]),
-      }))),
+      events: Object.freeze(
+        [...operation.events.values()].map((event) =>
+          Object.freeze({
+            eventInstanceId: event.reference.eventInstanceId,
+            ...(event.reference.parentEventInstanceId === undefined
+              ? {}
+              : { parentEventInstanceId: event.reference.parentEventInstanceId }),
+            ...(event.reference.sourceEffectId === undefined
+              ? {}
+              : { sourceEffectId: event.reference.sourceEffectId }),
+            ...(event.reference.sourceEffectIndex === undefined
+              ? {}
+              : { sourceEffectIndex: event.reference.sourceEffectIndex }),
+            acceptedSequence: event.reference.acceptedSequence,
+            ...(event.acceptedRevision === undefined
+              ? {}
+              : { acceptedRevision: event.acceptedRevision }),
+            ...(event.startedRevision === undefined
+              ? {}
+              : { startedRevision: event.startedRevision }),
+            ...(event.committedRevision === undefined
+              ? {}
+              : { committedRevision: event.committedRevision }),
+            status: event.status,
+            effects: Object.freeze([...event.effects]),
+          }),
+        ),
+      ),
       pendingEventInstanceIds: Object.freeze([...operation.pending]),
-      ...(operation.pendingPublishedRevision === undefined ? {} : { pendingPublishedRevision: operation.pendingPublishedRevision }),
+      ...(operation.pendingPublishedRevision === undefined
+        ? {}
+        : { pendingPublishedRevision: operation.pendingPublishedRevision }),
       committedRevisions: Object.freeze([...operation.committedRevisions]),
       errors: Object.freeze([...operation.errors]),
     });
@@ -244,22 +278,22 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
     return operation;
   }
 
-  private resolve(operationRef: { readonly value: unknown }): { operation: MutableOperation; event: MutableEvent } {
+  private resolve(operationRef: { readonly value: unknown }): {
+    operation: MutableOperation;
+    event: MutableEvent;
+  } {
     return this.resolveReference(operationRef.value as OperationReference);
   }
 
-  private resolveReference(reference: OperationReference): { operation: MutableOperation; event: MutableEvent } {
+  private resolveReference(reference: OperationReference): {
+    operation: MutableOperation;
+    event: MutableEvent;
+  } {
     const operation = this.operations.get(reference.operationId);
     const event = operation?.events.get(reference.eventInstanceId);
-    if (!operation || !event) throw new Error('[Reflex Devtools] operation observer received an unknown event.');
+    if (!operation || !event)
+      throw new Error('[Reflex Devtools] operation observer received an unknown event.');
     return { operation, event };
-  }
-
-  private removeActiveEvent(reference: OperationReference): void {
-    const index = this.activeEvents.findLastIndex(
-      (active) => active.eventInstanceId === reference.eventInstanceId,
-    );
-    if (index !== -1) this.activeEvents.splice(index, 1);
   }
 
   private settle(operation: MutableOperation): void {
@@ -282,7 +316,9 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
 
   private prune(): void {
     while (this.operations.size > MAX_RETAINED_OPERATIONS) {
-      const firstTerminal = [...this.operations.values()].find((operation) => this.isTerminal(operation.status));
+      const firstTerminal = [...this.operations.values()].find((operation) =>
+        this.isTerminal(operation.status),
+      );
       if (!firstTerminal) return;
       this.operations.delete(firstTerminal.operationId);
     }

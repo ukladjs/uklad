@@ -1,8 +1,8 @@
-import type { DevelopmentOperationReference } from './execution-observer';
+import type { RuntimeTrackingContext } from '../runtime/probe';
 import type { EventVector } from '../types';
 
-/** The executor's minimal work item. Operation metadata exists only with DevTools attached. */
+/** The executor's minimal work item. Tracking exists only with an attached probe. */
 export interface ExecutionEnvelope {
   readonly event: EventVector;
-  readonly operation?: DevelopmentOperationReference;
+  readonly tracking?: RuntimeTrackingContext;
 }

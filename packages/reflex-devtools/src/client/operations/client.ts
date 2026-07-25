@@ -1,6 +1,11 @@
 import { OperationCoordinator } from './coordinator.js';
 import type { DevtoolsOperationRuntime, OperationEventVector } from './runtime.js';
-import type { OperationClient, OperationHandle, OperationSnapshot, OperationWaitResult } from './types.js';
+import type {
+  OperationClient,
+  OperationHandle,
+  OperationSnapshot,
+  OperationWaitResult,
+} from './types.js';
 
 /**
  * Thin adapter over the DevTools-owned coordinator.
@@ -16,18 +21,15 @@ function createOperationAttachment(runtime: DevtoolsOperationRuntime): {
 } {
   const coordinator = new OperationCoordinator(runtime.runtimeInstanceId);
   const disposeExecution = runtime.observeExecution(coordinator);
-  const disposeLifecycle = runtime.observeLifecycle({
-    onEffect: (effect) => coordinator.onEffect(effect),
-  });
   return Object.freeze({
     client: Object.freeze({
       start(event: OperationEventVector): OperationHandle {
-      const operationId = runtime.dispatch(event as never);
-      return {
-        operationId,
-        runtimeInstanceId: runtime.runtimeInstanceId,
-        result: waitForOperation(runtime, coordinator, operationId),
-      };
+        const operationId = runtime.dispatch(event as never);
+        return {
+          operationId,
+          runtimeInstanceId: runtime.runtimeInstanceId,
+          result: waitForOperation(runtime, coordinator, operationId),
+        };
       },
       dispatchAndWait(event: OperationEventVector): Promise<OperationWaitResult> {
         return this.start(event).result;
@@ -37,13 +39,12 @@ function createOperationAttachment(runtime: DevtoolsOperationRuntime): {
       },
     }),
     dispose() {
-      disposeLifecycle();
       disposeExecution();
     },
   });
 }
 
-/** Compatibility attachment; the coordinator has no DevTools lifecycle hook. */
+/** Attach the DevTools-owned coordinator to one runtime execution probe. */
 export function acquireOperationClient(runtime: DevtoolsOperationRuntime): {
   readonly client: OperationClient;
   dispose(): void;

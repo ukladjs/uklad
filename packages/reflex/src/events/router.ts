@@ -1,29 +1,7 @@
-import { IS_DEV } from '../core/environment';
 import { consoleLog } from '../core/logging';
 import { scheduleAfterRender, scheduleNextTick } from '../core/scheduling';
-import { isEventVector } from '../core/validation';
-import { flushSubscriptionsForKernel, getStateRevisionsForKernel } from '../runtime/state';
-import { isRuntimeDisposed, type RuntimeKernel } from '../runtime/kernel';
-import { notifyRuntimeLifecycleForKernel } from '../runtime/lifecycle';
-import { cloneStructuredValue } from '../runtime/ownership';
-import { assertPublicationAllowedForKernel } from '../runtime/subscriptions/engine';
-import { registerBuiltInEffectsForKernel } from './effects';
-import { getActiveEffectExecutionForKernel } from './effect-executor';
-import type { ExecutionEnvelope } from './envelope';
-import {
-  acceptDevelopmentExecutionForKernel,
-  getDevelopmentExecutionObserverForKernel,
-  notifyDevelopmentExecutionForKernel,
-  type DevelopmentExecutionParent,
-} from './execution-observer';
-import {
-  getHandlingEnvelopeForKernel,
-  getHandlingEventIdForKernel,
-  getRunningHandlerEventIdForKernel,
-} from './runner';
-import { executeEventEnvelopeForKernel } from './execution';
 
-import type { DispatchVector, EventVector } from '../types';
+import type { EventVector } from '../types';
 
 type FsmState = 'idle' | 'scheduled' | 'running' | 'paused';
 type FsmTrigger = 'add-event' | 'run-queue' | 'pause' | 'finish-run' | 'resume';
@@ -87,7 +65,6 @@ export class EventQueue<WorkItem = EventVector> {
   getState(): FsmState {
     return this.fsmState;
   }
-
   getQueueLength(): number {
     return this.queue.length - this.queueHead;
   }
@@ -128,7 +105,6 @@ export class EventQueue<WorkItem = EventVector> {
     if (this.disposed) return;
     let nextState: FsmState;
     let action: (() => void) | undefined;
-
     switch (`${this.fsmState}:${trigger}`) {
       case 'idle:add-event':
         nextState = 'scheduled';
@@ -177,7 +153,6 @@ export class EventQueue<WorkItem = EventVector> {
         );
         return;
     }
-
     this.fsmState = nextState;
     action?.();
   }
@@ -189,7 +164,6 @@ export class EventQueue<WorkItem = EventVector> {
   private processFirstEvent(): boolean {
     const item = this.queue[this.queueHead];
     if (!item) return true;
-
     try {
       this.eventHandler(item);
       this.consumeFirstEvent();
@@ -211,13 +185,11 @@ export class EventQueue<WorkItem = EventVector> {
     while (remainingEvents > 0) {
       const item = this.queue[this.queueHead];
       if (!item) break;
-
       const scheduler = this.getScheduler(item);
       if (scheduler) {
         this.fsmTrigger('pause', scheduler);
         return;
       }
-
       if (!this.processFirstEvent()) return;
       remainingEvents -= 1;
     }
@@ -227,7 +199,6 @@ export class EventQueue<WorkItem = EventVector> {
   private pause(schedule: ScheduleFunction): void {
     schedule(() => this.fsmTrigger('resume'));
   }
-
   private resume(): void {
     if (!this.processFirstEvent()) return;
     this.runQueue();
@@ -255,181 +226,14 @@ export class EventQueue<WorkItem = EventVector> {
   private settleIdle(error?: unknown): void {
     const waiters = this.idleWaiters;
     this.idleWaiters = [];
-    if (error === undefined) {
-      for (const waiter of waiters) waiter.resolve();
-    } else {
-      for (const waiter of waiters) waiter.reject(error);
-    }
+    if (error === undefined) for (const waiter of waiters) waiter.resolve();
+    else for (const waiter of waiters) waiter.reject(error);
   }
 }
 
-function getEventQueue(runtime: RuntimeKernel): EventQueue<ExecutionEnvelope> {
-  return (runtime.eventQueue ??= new EventQueue<ExecutionEnvelope>(
-    (envelope) => executeEventEnvelopeForKernel(runtime, envelope),
-    (envelopes, reason, error) => {
-      const operations = envelopes.flatMap((envelope) =>
-        envelope.operation === undefined ? [] : [envelope.operation],
-      );
-      if (operations.length > 0)
-        notifyDevelopmentExecutionForKernel(runtime, 'dropped', operations, error);
-      notifyRuntimeLifecycleForKernel(
-        runtime,
-        'onEventDropped',
-        envelopes.map((envelope) => envelope.event),
-        reason,
-        error,
-      );
-    },
-    (envelope) => getEventScheduler(envelope.event),
-  ));
-}
-
-/** @internal Dispatch an event asynchronously in one runtime. */
-export function dispatchForKernel(
-  runtime: RuntimeKernel,
-  event: DispatchVector,
-  requireOperation = false,
-): ExecutionEnvelope | undefined {
-  if (isRuntimeDisposed(runtime)) return;
-  if (!isEventVector(event)) {
-    consoleLog('error', '[reflex] invalid dispatch event vector.');
-    return;
-  }
-
-  if (IS_DEV) {
-    const handlerId = getRunningHandlerEventIdForKernel(runtime);
-    if (handlerId !== null) {
-      consoleLog(
-        'warn',
-        `[reflex] dispatch called for '${String(event[0])}' from inside the event handler for '${handlerId}'. Event handlers must stay pure — return a ['dispatch', [...]] effect instead. The event was queued anyway.`,
-      );
-    }
-  }
-
-  const envelope = createExecutionEnvelopeForKernel(runtime, event as EventVector);
-  if (requireOperation && !envelope.operation) {
-    throw new Error(
-      '[reflex] operation dispatch could not be accepted by the development observer.',
-    );
-  }
-  getEventQueue(runtime).push(envelope);
-  if (envelope.operation)
-    notifyDevelopmentExecutionForKernel(
-      runtime,
-      'queued',
-      envelope.operation,
-      getStateRevisionsForKernel(runtime).committedRevision,
-    );
-  notifyRuntimeLifecycleForKernel(runtime, 'onEventQueued', envelope.event);
-  return envelope;
-}
-
-/** @internal Take ownership of caller input before accepting it into a runtime queue. */
-export function dispatchOwnedForKernel(runtime: RuntimeKernel, event: DispatchVector): void {
-  if (!isEventVector(event)) {
-    dispatchForKernel(runtime, event);
-    return;
-  }
-  dispatchForKernel(runtime, cloneAcceptedEvent(event));
-}
-
-/** @internal Dispatch and publish synchronously in one runtime. */
-export function dispatchSyncForKernel(runtime: RuntimeKernel, event: DispatchVector): void {
-  if (isRuntimeDisposed(runtime)) {
-    throw new Error(`[reflex] Runtime '${runtime.runtimeId}' has been disposed.`);
-  }
-  if (!isEventVector(event)) {
-    consoleLog('error', '[reflex] invalid dispatchSync event vector.');
-    return;
-  }
-
-  const handlingId = getHandlingEventIdForKernel(runtime);
-  if (handlingId !== null) {
-    const message = `[reflex] dispatchSync called for '${String(event[0])}' while event '${handlingId}' is being handled. dispatchSync must not be called from an event handler; return a ['dispatch', ...] effect instead.`;
-    consoleLog('error', message);
-    throw new Error(message);
-  }
-  if (!isEventQueueIdleForKernel(runtime)) {
-    throw new Error(
-      `[reflex] dispatchSync cannot overtake asynchronous work already accepted by runtime '${runtime.runtimeId}'. Await runtime.flush() first.`,
-    );
-  }
-
-  assertPublicationAllowedForKernel(runtime);
-  executeEventEnvelopeForKernel(runtime, createExecutionEnvelopeForKernel(runtime, event));
-  flushSubscriptionsForKernel(runtime);
-}
-
-/** @internal Wait for one runtime's accepted queue work and publish its state head. */
-export async function flushRuntime(runtime: RuntimeKernel): Promise<void> {
-  if (isRuntimeDisposed(runtime)) {
-    throw new Error(`[reflex] Runtime '${runtime.runtimeId}' has been disposed.`);
-  }
-  await getEventQueue(runtime).whenIdle();
-  flushSubscriptionsForKernel(runtime);
-}
-
-/** @internal Return whether one runtime's event queue is idle. */
-export function isEventQueueIdleForKernel(runtime: RuntimeKernel): boolean {
-  return getEventQueue(runtime).getState() === 'idle';
-}
-
-/** @internal Return whether one runtime is synchronously processing queue work. */
-export function isEventQueueRunningForKernel(runtime: RuntimeKernel): boolean {
-  return getEventQueue(runtime).getState() === 'running';
-}
-
-/** @internal Stop one runtime's event queue. */
-export function disposeEventQueueForKernel(runtime: RuntimeKernel): void {
-  getEventQueue(runtime).dispose();
-}
-
-/** @internal Install dispatch-dependent framework effects in one runtime. */
-export function initializeEventRouterForKernel(runtime: RuntimeKernel): void {
-  registerBuiltInEffectsForKernel(runtime, (event) => dispatchOwnedForKernel(runtime, event));
-}
-
-function cloneAcceptedEvent(event: DispatchVector): DispatchVector {
-  try {
-    const clonedEvent = cloneStructuredValue(event) as DispatchVector;
-    const metadata = (event as ScheduledEventVector).meta;
-    if (metadata !== undefined)
-      (clonedEvent as ScheduledEventVector).meta = cloneStructuredValue(metadata);
-    return clonedEvent;
-  } catch (error: unknown) {
-    throw new Error('[reflex] event input must be structured-cloneable so the runtime owns it.', {
-      cause: error,
-    });
-  }
-}
-
-/** @internal Construct optional development operation metadata only when observed. */
-export function createExecutionEnvelopeForKernel(
-  runtime: RuntimeKernel,
-  event: EventVector,
-): ExecutionEnvelope {
-  const observer = getDevelopmentExecutionObserverForKernel(runtime);
-  if (!observer) return Object.freeze({ event });
-
-  const activeEffect = getActiveEffectExecutionForKernel(runtime);
-  const handlingEnvelope = getHandlingEnvelopeForKernel(runtime);
-  const parent: DevelopmentExecutionParent | undefined = activeEffect?.envelope.operation
-    ? {
-        operation: activeEffect.envelope.operation,
-        sourceEffectId: activeEffect.effectId,
-        sourceEffectIndex: activeEffect.effectIndex,
-      }
-    : handlingEnvelope?.operation === undefined
-      ? undefined
-      : { operation: handlingEnvelope.operation };
-  const operation = acceptDevelopmentExecutionForKernel(runtime, event, parent);
-  return operation === undefined ? Object.freeze({ event }) : Object.freeze({ event, operation });
-}
-
-function getEventScheduler(event: EventVector): ScheduleFunction | undefined {
+export function getEventScheduler(event: EventVector): ScheduleFunction | undefined {
   const metadata = (event as ScheduledEventVector).meta;
   if (!metadata) return undefined;
-
   for (const key of Object.keys(metadata)) {
     const scheduler = eventSchedulers.get(key);
     if (scheduler) return scheduler;

@@ -1,27 +1,55 @@
 import { scheduleAfterRender } from '../core/scheduling';
-import { notifyDevelopmentExecutionForKernel } from '../events/execution-observer';
-import { isRuntimeDisposed, type RuntimeKernel } from './kernel';
-import { notifyRuntimeLifecycleForKernel } from './lifecycle';
-import {
-  getCachedSubscriptionForKernel,
-  getRootSubIdBySourceForKernel,
-} from './subscriptions/cache';
-import {
-  assertPublicationAllowedForKernel,
-  publishSubscriptionsForKernel,
-  type SubscriptionNode,
-} from './subscriptions/engine';
+import { isRuntimeDisposed, type RuntimeCore } from './core';
+import { notifyRuntimeProbe } from './probe';
+import type { SubscriptionNode } from './subscriptions/engine';
 import { getRootSubKey } from './subscriptions/keys';
 
 import type { State, DefaultAppState } from '../types';
 
-export interface StateStore {
-  state: any;
-  renderState: any;
-  flushScheduled: boolean;
-  initialized: boolean;
-  committedRevision: number;
-  publishedRevision: number;
+export class StateStore {
+  state: any = {};
+  renderState: any = {};
+  flushScheduled = false;
+  initialized = false;
+  committedRevision = 0;
+  publishedRevision = 0;
+
+  private readonly getRuntime: () => RuntimeCore;
+
+  constructor(getRuntime: () => RuntimeCore) {
+    this.getRuntime = getRuntime;
+  }
+
+  initialize<T = DefaultAppState>(value: State<NoInfer<T>>): void {
+    initializeState(this.getRuntime(), this, value);
+  }
+
+  get<T = DefaultAppState>(): State<T> {
+    return this.state as State<T>;
+  }
+
+  getRender<T = DefaultAppState>(): State<T> {
+    return this.renderState as State<T>;
+  }
+
+  getRevisions(): StateRevisions {
+    return {
+      committedRevision: this.committedRevision,
+      publishedRevision: this.publishedRevision,
+    };
+  }
+
+  commit<T = Record<string, any>>(newState: State<T>): number {
+    return commitState(this.getRuntime(), this, newState);
+  }
+
+  publish(): void {
+    publishState(this.getRuntime(), this);
+  }
+
+  get hasPendingPublication(): boolean {
+    return this.publishedRevision !== this.committedRevision;
+  }
 }
 
 /** Monotonic state-generation counters owned by one runtime. */
@@ -30,26 +58,14 @@ export interface StateRevisions {
   readonly publishedRevision: number;
 }
 
-function getStateStore(runtime: RuntimeKernel): StateStore {
-  return (runtime.state ??= {
-    state: {},
-    renderState: {},
-    flushScheduled: false,
-    initialized: false,
-    committedRevision: 0,
-    publishedRevision: 0,
-  });
-}
-
 type NoInfer<T> = [T][T extends any ? 0 : never];
 
-/** @internal Replace one runtime's state heads and publish surviving roots. */
-export function initStateForKernel<T = DefaultAppState>(
-  runtime: RuntimeKernel,
+function initializeState<T = DefaultAppState>(
+  runtime: RuntimeCore,
+  state: StateStore,
   value: State<NoInfer<T>>,
 ): void {
-  assertPublicationAllowedForKernel(runtime);
-  const state = getStateStore(runtime);
+  runtime.subscriptions.assertPublicationAllowed();
   const oldState = state.renderState;
   const changed = value !== state.state;
   const acceptedValue = value;
@@ -57,101 +73,73 @@ export function initStateForKernel<T = DefaultAppState>(
   state.initialized = true;
   state.state = acceptedValue;
   state.renderState = acceptedValue;
-  const recalculated = publishSubscriptionsForKernel(
-    runtime,
+  const includeEvidence = runtime.probe?.needsSubscriptionEvidence === true;
+  const recalculated = runtime.subscriptions.publish(
     collectChangedRoots(runtime, oldState, acceptedValue),
+    includeEvidence,
   );
   state.publishedRevision = state.committedRevision;
-  notifyRuntimeLifecycleForKernel(
-    runtime,
-    'onStatePublished',
-    acceptedValue,
-    state.publishedRevision,
-    recalculated,
-  );
-  notifyDevelopmentExecutionForKernel(runtime, 'published', state.publishedRevision);
+  if (runtime.probe) {
+    notifyRuntimeProbe(
+      runtime,
+      'published',
+      acceptedValue,
+      state.publishedRevision,
+      includeEvidence ? recalculated : undefined,
+    );
+  }
 }
 
-/** @internal Return the latest committed state for one runtime. */
-export function getStateForKernel<T = DefaultAppState>(runtime: RuntimeKernel): State<T> {
-  return getStateStore(runtime).state as State<T>;
-}
-
-/** @internal Return one runtime's render-visible state generation. */
-export function getRenderStateForKernel<T = DefaultAppState>(runtime: RuntimeKernel): State<T> {
-  return getStateStore(runtime).renderState as State<T>;
-}
-
-/** @internal Return one runtime's committed and render-published generations. */
-export function getStateRevisionsForKernel(runtime: RuntimeKernel): StateRevisions {
-  const state = getStateStore(runtime);
-  return {
-    committedRevision: state.committedRevision,
-    publishedRevision: state.publishedRevision,
-  };
-}
-
-/** @internal Commit one runtime's state generation and schedule publication. */
-export function updateStateForKernel<T = Record<string, any>>(
-  runtime: RuntimeKernel,
+function commitState<T = Record<string, any>>(
+  runtime: RuntimeCore,
+  state: StateStore,
   newState: State<T>,
 ): number {
-  const state = getStateStore(runtime);
   if (newState === state.state) return state.committedRevision;
   const previousState = state.state;
   state.initialized = true;
   state.state = newState;
   state.committedRevision++;
-  notifyRuntimeLifecycleForKernel(
-    runtime,
-    'onStateCommitted',
-    previousState,
-    newState,
-    state.committedRevision,
-  );
+  if (runtime.probe) {
+    notifyRuntimeProbe(runtime, 'stateCommitted', previousState, newState, state.committedRevision);
+  }
   if (state.flushScheduled) return state.committedRevision;
   state.flushScheduled = true;
   scheduleAfterRender(() => {
     state.flushScheduled = false;
     if (isRuntimeDisposed(runtime)) return;
-    flushSubscriptionsForKernel(runtime);
+    state.publish();
   });
   return state.committedRevision;
 }
 
-/** @internal Publish one runtime's latest state generation synchronously. */
-export function flushSubscriptionsForKernel(runtime: RuntimeKernel): void {
-  const state = getStateStore(runtime);
+function publishState(runtime: RuntimeCore, state: StateStore): void {
   if (state.renderState === state.state && state.publishedRevision === state.committedRevision)
     return;
-  assertPublicationAllowedForKernel(runtime);
+  runtime.subscriptions.assertPublicationAllowed();
   const oldState = state.renderState;
   const newState = state.state;
   const targetRevision = state.committedRevision;
   state.renderState = newState;
-  const recalculated = publishSubscriptionsForKernel(
-    runtime,
+  const includeEvidence = runtime.probe?.needsSubscriptionEvidence === true;
+  const recalculated = runtime.subscriptions.publish(
     collectChangedRoots(runtime, oldState, newState),
+    includeEvidence,
   );
   state.publishedRevision = targetRevision;
-  notifyRuntimeLifecycleForKernel(
-    runtime,
-    'onStatePublished',
-    newState,
-    targetRevision,
-    recalculated,
-  );
-  notifyDevelopmentExecutionForKernel(runtime, 'published', targetRevision);
-}
-
-/** @internal Return whether one runtime still has an unflushed state generation. */
-export function hasPendingStateFlushForKernel(runtime: RuntimeKernel): boolean {
-  const state = getStateStore(runtime);
-  return state.publishedRevision !== state.committedRevision;
+  if (runtime.probe) {
+    notifyRuntimeProbe(
+      runtime,
+      'published',
+      newState,
+      targetRevision,
+      includeEvidence ? recalculated : undefined,
+    );
+  }
 }
 
 function collectChangedRoots(
-  runtime: RuntimeKernel,
+  runtime: RuntimeCore,
   oldState: any,
   newState: any,
 ): SubscriptionNode<any>[] {
@@ -160,10 +148,10 @@ function collectChangedRoots(
   for (const key of keys) {
     if (Object.is(oldState[key], newState[key])) continue;
 
-    const subId = getRootSubIdBySourceForKernel(runtime, key);
+    const subId = runtime.subscriptions.getRootId(key);
     if (subId === undefined) continue;
 
-    const subscription = getCachedSubscriptionForKernel(runtime, getRootSubKey(subId));
+    const subscription = runtime.subscriptions.getCached(getRootSubKey(subId));
     if (subscription) dirtyRoots.push(subscription);
   }
   return dirtyRoots;

@@ -6,68 +6,24 @@
  * share one explicitly constructed runtime without reintroducing a singleton
  * into the library API.
  */
-import { getGlobalEqualityCheckForKernel, setGlobalEqualityCheckForKernel } from '../core/equality';
 import {
-  disableTracingForKernel,
-  enableTracingForKernel,
-  isTraceEnabledForKernel,
-  registerTraceCallbackForKernel,
-  removeTraceCallbackForKernel,
-  withOptionalTraceForKernel,
+  getGlobalEqualityCheck as getGlobalEqualityCheckInternal,
+  setGlobalEqualityCheck as setGlobalEqualityCheckInternal,
+} from '../core/equality';
+import {
+  disableTracing as disableTracingInternal,
+  enableTracing as enableTracingInternal,
+  isTraceEnabled as isTraceEnabledInternal,
+  registerTraceCallback as registerTraceCallbackInternal,
+  removeTraceCallback as removeTraceCallbackInternal,
+  withOptionalTrace as withOptionalTraceInternal,
 } from '../core/tracing';
-import { getInjectCofxInterceptorForKernel } from '../events/coeffects';
-import {
-  clearGlobalInterceptorsForKernel,
-  getGlobalInterceptorsForKernel,
-  regGlobalInterceptorForKernel,
-} from '../events/global-interceptors';
-import { executeForKernel } from '../events/interceptors';
-import { regEventErrorHandlerForKernel } from '../events/runner';
-import { clearAllForKernel, clearForKernel } from '../events/rate-limit';
-import { regEventForKernel } from '../events/registration';
-import { dispatchForKernel, dispatchSyncForKernel } from '../events/router';
-import { createReflexInspectorForKernel } from '../inspector';
-import {
-  flushSubscriptionsForKernel,
-  getStateForKernel,
-  getRenderStateForKernel,
-  hasPendingStateFlushForKernel,
-  initStateForKernel,
-  updateStateForKernel,
-} from '../runtime/state';
-import { getInterceptorsForKernel, setInterceptorsForKernel } from '../runtime/event-metadata';
-import {
-  getHandlerForKernel,
-  getHandlersForKernel,
-  hasHandlerForKernel,
-  registerHandlerForKernel,
-} from '../runtime/handlers';
-import { clearHandlersForKernel } from '../runtime/reset';
-import { createReflexRuntime, getRuntimeKernelForTests } from '../runtime/runtime';
-import {
-  clearSubscriptionCacheForKernel,
-  clearSubsForHotReloadForKernel,
-  clearSubsForKernel,
-  getRootSubSourceByIdForKernel,
-  getSubConfigForKernel,
-  getSubscriptionDiagnosticsForKernel,
-  hasCachedSubscriptionForKernel,
-  setRootSubSourceForKernel,
-  setSubConfigForKernel,
-  sweepProvisionalSubscriptionsForKernel,
-} from '../runtime/subscriptions/cache';
-import {
-  createSubscriptionForKernel,
-  getSubscriptionSnapshotForKernel,
-  publishSubscriptionsForKernel,
-  readSubscriptionForKernel,
-  subscribeToSubscriptionForKernel,
-} from '../runtime/subscriptions/engine';
-import {
-  getOrCreateSubscriptionForKernel,
-  getSubscriptionValueForKernel,
-} from '../subscriptions/queries';
-import { regSubForKernel } from '../subscriptions/registration';
+import { getInjectCofxInterceptor as getInjectCofxInterceptorInternal } from '../events/coeffects';
+import { execute as executeInterceptors } from '../events/interceptors';
+import { regEvent as registerEventInternal } from '../events/registration';
+import { createReflexInspector as createInspectorInternal } from '../inspector';
+import { clearHandlers as clearHandlersInternal } from '../runtime/reset';
+import { createReflexRuntime, getRuntimeCoreForTests } from '../runtime/runtime';
 import { createElement } from 'react';
 
 import type { Trace, TraceCallback, TraceOptions } from '../core/tracing';
@@ -106,30 +62,30 @@ export function ReflexTestProvider({ children }: { children?: ReactNode }): Reac
   return createElement(ReflexProvider, { runtime: testRuntime }, children);
 }
 
-const kernel = getRuntimeKernelForTests(testRuntime);
+const core = getRuntimeCoreForTests(testRuntime);
 
 export function initState<T extends Record<string, any> = DefaultAppState>(value: State<T>): void {
-  initStateForKernel(kernel, value);
+  core.state.initialize(value);
 }
 
 export function getState<T extends Record<string, any> = DefaultAppState>(): State<T> {
-  return getStateForKernel<T>(kernel);
+  return core.state.get<T>();
 }
 
 export function getRenderState<T extends Record<string, any> = DefaultAppState>(): State<T> {
-  return getRenderStateForKernel<T>(kernel);
+  return core.state.getRender<T>();
 }
 
 export function updateState<T = Record<string, any>>(value: State<T>): void {
-  updateStateForKernel(kernel, value);
+  core.state.commit(value);
 }
 
 export function flushSubscriptions(): void {
-  flushSubscriptionsForKernel(kernel);
+  core.state.publish();
 }
 
 export function hasPendingStateFlush(): boolean {
-  return hasPendingStateFlushForKernel(kernel);
+  return core.state.hasPendingPublication;
 }
 
 export function regEvent<T = DefaultAppState>(
@@ -138,7 +94,7 @@ export function regEvent<T = DefaultAppState>(
   registration?: EventRegistrationOptions<T> | Interceptor<T>[] | readonly unknown[],
   legacyInterceptors?: Interceptor<T>[],
 ): void {
-  regEventForKernel(kernel, id, handler, registration, legacyInterceptors);
+  registerEventInternal(core, id, handler, registration, legacyInterceptors);
 }
 
 export function regEffect<K extends Id = Id>(id: K, handler: EffectHandler<EffectParams<K>>): void {
@@ -146,9 +102,11 @@ export function regEffect<K extends Id = Id>(id: K, handler: EffectHandler<Effec
 }
 
 export const regCoeffect = testRuntime.regCoeffect.bind(testRuntime);
-export const dispatch = dispatchForKernel.bind(null, kernel);
-export const dispatchSync = dispatchSyncForKernel.bind(null, kernel);
-export const regEventErrorHandler = regEventErrorHandlerForKernel.bind(null, kernel);
+export const dispatch = core.events.dispatch.bind(core.events);
+export const dispatchSync = core.events.dispatchSync.bind(core.events);
+export function regEventErrorHandler(handler: ErrorHandler): void {
+  core.registry.register('error', 'event-handler', handler);
+}
 
 export function regSub<R = any, K extends Id = Id>(
   id: K,
@@ -156,16 +114,16 @@ export function regSub<R = any, K extends Id = Id>(
   depsFn?: (...params: any[]) => SubVector[],
   config?: SubConfig,
 ): void {
-  regSubForKernel(kernel, id, computeFn, depsFn, config);
+  core.subscriptions.register(id, computeFn, depsFn, config);
 }
 
 export function getSubscriptionValue<T>(subVector: SubVector): T {
-  return getSubscriptionValueForKernel<T>(kernel, subVector);
+  return core.subscriptions.read<T>(subVector);
 }
 
-export const getOrCreateSubscription = getOrCreateSubscriptionForKernel.bind(null, kernel);
+export const getOrCreateSubscription = core.subscriptions.getOrCreate.bind(core.subscriptions);
 export function getSubscriptionSnapshot<T>(node: SubscriptionNode<T>): T {
-  return getSubscriptionSnapshotForKernel(kernel, node);
+  return core.subscriptions.getSnapshot(node);
 }
 
 export function subscribeToSubscription<T>(
@@ -174,39 +132,44 @@ export function subscribeToSubscription<T>(
   componentName?: string,
   listenerKind?: SubscriptionListenerKind,
 ): () => void {
-  return subscribeToSubscriptionForKernel(kernel, node, listener, componentName, listenerKind);
+  return core.subscriptions.subscribe(node, listener, componentName, listenerKind);
 }
-export const clearSubscriptionCache = clearSubscriptionCacheForKernel.bind(null, kernel);
-export const clearSubs = clearSubsForKernel.bind(null, kernel);
-export const clearSubsForHotReload = clearSubsForHotReloadForKernel.bind(null, kernel);
-export const hasCachedSubscription = hasCachedSubscriptionForKernel.bind(null, kernel);
-export const getSubscriptionDiagnostics = getSubscriptionDiagnosticsForKernel.bind(null, kernel);
-export const getRootSubSourceById = getRootSubSourceByIdForKernel.bind(null, kernel);
-export const getSubConfig = getSubConfigForKernel.bind(null, kernel);
-export const setRootSubSource = setRootSubSourceForKernel.bind(null, kernel);
-export const setSubConfig = setSubConfigForKernel.bind(null, kernel);
-export const sweepProvisionalSubscriptions = sweepProvisionalSubscriptionsForKernel.bind(
-  null,
-  kernel,
+export const clearSubscriptionCache = core.subscriptions.clearCache.bind(core.subscriptions);
+export const clearSubs = core.subscriptions.clearAll.bind(core.subscriptions);
+export const clearSubsForHotReload = core.subscriptions.clearForHotReload.bind(core.subscriptions);
+export const hasCachedSubscription = core.subscriptions.hasCached.bind(core.subscriptions);
+export const getSubscriptionDiagnostics = core.subscriptions.diagnostics.bind(core.subscriptions);
+export function getRootSubSourceById(id: Id): string | undefined {
+  return core.subscriptions.rootSubSourceById.get(id);
+}
+export function getSubConfig(id: Id): SubConfig | undefined {
+  return core.subscriptions.subConfigById.get(id);
+}
+export const setRootSubSource = core.subscriptions.setRootSource.bind(core.subscriptions);
+export function setSubConfig(id: Id, config: SubConfig): void {
+  core.subscriptions.subConfigById.set(id, config);
+}
+export const sweepProvisionalSubscriptions = core.subscriptions.sweepProvisional.bind(
+  core.subscriptions,
 );
 export function createSubscription<T>(spec: SubscriptionSpec<T>): SubscriptionNode<T> {
-  return createSubscriptionForKernel(kernel, spec);
+  return core.subscriptions.engine.create(spec);
 }
 
 export function readSubscription<T>(node: SubscriptionNode<T>): T {
-  return readSubscriptionForKernel(kernel, node);
+  return core.subscriptions.engine.read(node);
 }
 
 export function publishSubscriptions(roots: SubscriptionNode<any>[]): void {
-  publishSubscriptionsForKernel(kernel, roots);
+  core.subscriptions.publish(roots);
 }
 
 export function getHandler<K extends HandlerKind>(kind: K, id: Id): HandlerByKind[K] | undefined {
-  return getHandlerForKernel(kernel, kind, id);
+  return core.registry.get(kind, id);
 }
 
 export function getHandlers(): HandlerRegistry {
-  return getHandlersForKernel(kernel);
+  return core.registry.handlers;
 }
 
 export function registerHandler<K extends HandlerKind, T extends HandlerByKind[K]>(
@@ -214,45 +177,47 @@ export function registerHandler<K extends HandlerKind, T extends HandlerByKind[K
   id: Id,
   handler: T,
 ): T {
-  return registerHandlerForKernel(kernel, kind, id, handler);
+  core.registry.register(kind, id, handler);
+  return handler;
 }
 
-export const hasHandler = hasHandlerForKernel.bind(null, kernel);
-export const clearHandlers = clearHandlersForKernel.bind(null, kernel);
-export const getInterceptors = getInterceptorsForKernel.bind(null, kernel);
-export const setInterceptors = setInterceptorsForKernel.bind(null, kernel);
+export const hasHandler = core.registry.has.bind(core.registry);
+export const clearHandlers = clearHandlersInternal.bind(null, core);
+export const getInterceptors = core.registry.getEventInterceptors.bind(core.registry);
+export const setInterceptors = core.registry.setEventInterceptors.bind(core.registry);
 
-export const regGlobalInterceptor = regGlobalInterceptorForKernel.bind(null, kernel);
-export const getGlobalInterceptors = getGlobalInterceptorsForKernel.bind(null, kernel);
-export const clearGlobalInterceptors = clearGlobalInterceptorsForKernel.bind(null, kernel);
-export const getInjectCofxInterceptor = getInjectCofxInterceptorForKernel.bind(null, kernel);
-export const execute = executeForKernel.bind(null, kernel) as (
+export const regGlobalInterceptor = core.registry.registerGlobalInterceptor.bind(core.registry);
+export const getGlobalInterceptors = core.registry.getGlobalInterceptors.bind(core.registry);
+export const clearGlobalInterceptors = core.registry.clearGlobalInterceptors.bind(core.registry);
+export const getInjectCofxInterceptor = getInjectCofxInterceptorInternal.bind(null, core);
+export const execute = executeInterceptors.bind(null, core) as (
   event: Id extends never ? never : [Id, ...any[]],
   interceptors: Interceptor[],
 ) => Context;
 
-export const setGlobalEqualityCheck = setGlobalEqualityCheckForKernel.bind(null, kernel);
-export const getGlobalEqualityCheck = getGlobalEqualityCheckForKernel.bind(null, kernel);
+export const setGlobalEqualityCheck = setGlobalEqualityCheckInternal.bind(null, core);
+export const getGlobalEqualityCheck = getGlobalEqualityCheckInternal.bind(null, core);
 
-export const enableTracing = enableTracingForKernel.bind(null, kernel);
-export const disableTracing = disableTracingForKernel.bind(null, kernel);
-export const isTraceEnabled = isTraceEnabledForKernel.bind(null, kernel);
-export const registerTraceCallback = registerTraceCallbackForKernel.bind(null, kernel) as (
+export const enableTracing = enableTracingInternal.bind(null, core);
+export const disableTracing = disableTracingInternal.bind(null, core);
+export const isTraceEnabled = isTraceEnabledInternal.bind(null, core);
+export const registerTraceCallback = registerTraceCallbackInternal.bind(null, core) as (
   key: string,
   callback: TraceCallback,
 ) => void;
-export const removeTraceCallback = removeTraceCallbackForKernel.bind(null, kernel);
+export const removeTraceCallback = removeTraceCallbackInternal.bind(null, core);
 export function withTrace<T>(options: TraceOptions, fn: () => T): T {
-  return withOptionalTraceForKernel(kernel, () => options, fn);
+  return withOptionalTraceInternal(core, () => options, fn);
 }
 
-export const clear = clearForKernel.bind(null, kernel);
-export const clearAll = clearAllForKernel.bind(null, kernel);
+export const clear = core.events.clearRateLimit.bind(core.events);
+export const clearAll = core.events.clearRateLimits.bind(core.events);
+export const testEventRuntime = core.events;
 export const debounceAndDispatch = testRuntime.debounceAndDispatch.bind(testRuntime);
 export const throttleAndDispatch = testRuntime.throttleAndDispatch.bind(testRuntime);
 
 export function createReflexInspector() {
-  return createReflexInspectorForKernel(kernel);
+  return createInspectorInternal(core);
 }
 
 export type { ErrorHandler, Trace };

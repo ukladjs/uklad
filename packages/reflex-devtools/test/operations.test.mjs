@@ -87,7 +87,7 @@ test('keeps concurrently accepted root operations separate', async () => {
   }
 });
 
-test('records effect evidence through the lifecycle attachment', async () => {
+test('records effect evidence through the execution probe', async () => {
   const runtime = createReflexRuntime({
     runtimeId: 'operations-effects',
     initialState: { saved: false },
@@ -113,10 +113,9 @@ test('records effect evidence through the lifecycle attachment', async () => {
     assert.throws(() => {
       event.effects[0].value.source = 'mutated';
     }, TypeError);
-    assert.deepEqual(
-      operations.get(operation.operationId).events[0].effects[0].value,
-      { source: 'operation-test' },
-    );
+    assert.deepEqual(operations.get(operation.operationId).events[0].effects[0].value, {
+      source: 'operation-test',
+    });
   } finally {
     runtime.dispose();
   }

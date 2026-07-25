@@ -10,18 +10,43 @@ export interface DevtoolsExecutionObserver {
       readonly sourceEffectIndex?: number;
     },
   ): { readonly operationId: string; readonly value: unknown };
-  queued(operation: { readonly operationId: string; readonly value: unknown }, revision: number): void;
-  started(operation: { readonly operationId: string; readonly value: unknown }, revision: number): void;
-  transition(operation: { readonly operationId: string; readonly value: unknown }, status: string, error?: unknown): void;
-  committed(operation: { readonly operationId: string; readonly value: unknown }, status: string, revision: number): void;
-  finished(operation: { readonly operationId: string; readonly value: unknown }, status: string, error?: unknown): void;
-  dropped(operations: readonly { readonly operationId: string; readonly value: unknown }[], error: unknown): void;
+  queued(
+    operation: { readonly operationId: string; readonly value: unknown },
+    revision: number,
+  ): void;
+  started(
+    operation: { readonly operationId: string; readonly value: unknown },
+    revision: number,
+  ): void;
+  transition(
+    operation: { readonly operationId: string; readonly value: unknown },
+    status: string,
+    error?: unknown,
+  ): void;
+  committed(
+    operation: { readonly operationId: string; readonly value: unknown },
+    status: string,
+    revision: number,
+  ): void;
+  effect?(
+    operation: { readonly operationId: string; readonly value: unknown },
+    effect: DevtoolsEffectFact,
+  ): void;
+  finished(
+    operation: { readonly operationId: string; readonly value: unknown },
+    status: string,
+    error?: unknown,
+  ): void;
+  dropped(
+    operations: readonly { readonly operationId: string; readonly value: unknown }[],
+    error: unknown,
+  ): void;
   published(revision: number): void;
   disposed(error: unknown): void;
 }
 
-/** Runtime-neutral effect fact supplied through the optional lifecycle port. */
-export interface DevtoolsLifecycleEffect {
+/** Runtime-neutral effect fact supplied through the optional execution probe. */
+export interface DevtoolsEffectFact {
   readonly type: string;
   readonly value: unknown;
   readonly index: number;
@@ -31,15 +56,10 @@ export interface DevtoolsLifecycleEffect {
   readonly error?: unknown;
 }
 
-export interface DevtoolsLifecycleObserver {
-  onEffect?(effect: DevtoolsLifecycleEffect): void;
-}
-
 export interface DevtoolsOperationRuntime {
   readonly runtimeId: string;
   readonly runtimeInstanceId: string;
   dispatch(event: never): string;
   flush(): Promise<void>;
   observeExecution(observer: DevtoolsExecutionObserver): () => void;
-  observeLifecycle(observer: DevtoolsLifecycleObserver): () => void;
 }

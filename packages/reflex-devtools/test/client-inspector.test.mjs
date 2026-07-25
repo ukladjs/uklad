@@ -77,17 +77,12 @@ class FakeWebSocket {
   }
 }
 
-function response(
-  body,
-  { ok = true, status = 200, protocolVersion = '2' } = {},
-) {
+function response(body, { ok = true, status = 200, protocolVersion = '2' } = {}) {
   return {
     ok,
     status,
     headers: new Headers(
-      protocolVersion === null
-        ? {}
-        : { 'Reflex-DevTools-Protocol-Version': protocolVersion },
+      protocolVersion === null ? {} : { 'Reflex-DevTools-Protocol-Version': protocolVersion },
     ),
     async json() {
       return body;
@@ -110,10 +105,7 @@ async function successfulFetch(url) {
 
 function createFakeInspector(
   state = { count: 1 },
-  {
-    runtimeId = 'runtime-test',
-    runtimeName = 'Runtime test',
-  } = {},
+  { runtimeId = 'runtime-test', runtimeName = 'Runtime test' } = {},
 ) {
   let traceCallback = null;
   let unsubscribeCount = 0;
@@ -195,7 +187,6 @@ function createFakeInspector(
 }
 
 function createOperationRuntime(runtimeId = 'runtime-test') {
-  let lifecycleObserveCount = 0;
   let executionDisposeCount = 0;
   return {
     runtimeId,
@@ -203,7 +194,9 @@ function createOperationRuntime(runtimeId = 'runtime-test') {
     getStateRevisions() {
       return { committedRevision: 0, publishedRevision: 0 };
     },
-    dispatch() { return 'operation-test'; },
+    dispatch() {
+      return 'operation-test';
+    },
     async flush() {},
     getOperationSnapshot() {
       return undefined;
@@ -215,13 +208,6 @@ function createOperationRuntime(runtimeId = 'runtime-test') {
         disposed = true;
         executionDisposeCount++;
       };
-    },
-    observeLifecycle() {
-      lifecycleObserveCount++;
-      return () => {};
-    },
-    get lifecycleObserveCount() {
-      return lifecycleObserveCount;
     },
     get executionDisposeCount() {
       return executionDisposeCount;
@@ -296,7 +282,10 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
   let cleanup;
 
   try {
-    assert.throws(() => enableDevtools({ serverUrl: 'localhost:4000' }), /requires a Reflex runtime/);
+    assert.throws(
+      () => enableDevtools({ serverUrl: 'localhost:4000' }),
+      /requires a Reflex runtime/,
+    );
     assert.throws(() => enableDevtools(fake.inspector), /requires a Reflex runtime/);
     assert.throws(
       () => enableDevtools({ createInspector: () => ({ ...fake.inspector, apiVersion: 1 }) }),
@@ -307,13 +296,17 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
       /runtime\.createInspector\(\) must return/,
     );
     assert.throws(
-      () => enableDevtools({ createInspector: () => ({ ...fake.inspector, runtimeId: ' runtime-test' }) }),
+      () =>
+        enableDevtools({
+          createInspector: () => ({ ...fake.inspector, runtimeId: ' runtime-test' }),
+        }),
       /runtime\.createInspector\(\) must return/,
     );
     assert.throws(
-      () => enableDevtools(fake.runtime, {
-        serverUrl: 'http://devtools.test:4000',
-      }),
+      () =>
+        enableDevtools(fake.runtime, {
+          serverUrl: 'http://devtools.test:4000',
+        }),
       /remote plaintext HTTP/,
     );
 
@@ -474,7 +467,7 @@ test('enables canonical operation snapshots through the DevTools configuration',
   }
 });
 
-test('attaches and disposes a lifecycle observer for coordinator-backed operations', async () => {
+test('attaches and disposes the execution probe for coordinator-backed operations', async () => {
   const originalFetch = globalThis.fetch;
   const originalWebSocket = globalThis.WebSocket;
   FakeWebSocket.instances = [];
@@ -492,7 +485,6 @@ test('attaches and disposes a lifecycle observer for coordinator-backed operatio
     await waitForTurn();
     await waitForTurn();
     cleanup();
-    assert.equal(operationRuntime.lifecycleObserveCount, 1);
     assert.equal(operationRuntime.executionDisposeCount, 1);
   } finally {
     cleanup?.();
@@ -662,10 +654,7 @@ test('fails closed when session bootstrap omits the protocol response header', a
     if (String(url).endsWith('/health')) {
       return response({ protocolVersion: 2 });
     }
-    return response(
-      { protocolVersion: 2, token: 'runtime-test-token' },
-      { protocolVersion: null },
-    );
+    return response({ protocolVersion: 2, token: 'runtime-test-token' }, { protocolVersion: null });
   };
 
   const fake = createFakeInspector();
@@ -706,10 +695,7 @@ test('fails closed when the server hello has the wrong runtime identity or epoch
         await waitForTurn();
         await waitForTurn();
         assert.equal(FakeWebSocket.instances.length, 1);
-        assert.equal(
-          FakeWebSocket.instances[0].readyState,
-          FakeWebSocket.CLOSED,
-        );
+        assert.equal(FakeWebSocket.instances[0].readyState, FakeWebSocket.CLOSED);
       } finally {
         cleanup();
       }
@@ -774,14 +760,8 @@ test('simultaneous runtime clients connect and clean up independently', async ()
       ),
       false,
     );
-    assert.equal(
-      warnings.filter((warning) => warning.includes('requires runtimeId')).length,
-      1,
-    );
-    logEvent(
-      { type: 'runtime-note', payload: { owner: 'second' } },
-      'runtime-second',
-    );
+    assert.equal(warnings.filter((warning) => warning.includes('requires runtimeId')).length, 1);
+    logEvent({ type: 'runtime-note', payload: { owner: 'second' } }, 'runtime-second');
     assert.equal(
       firstSocket.sent.some((event) => event.type === 'runtime-note'),
       false,
@@ -859,9 +839,7 @@ test('enabling the same runtime replaces only that runtime client', async () => 
 
     logEvent({ type: 'replacement-runtime-note', payload: true });
     assert.equal(
-      secondSocket.sent.some(
-        (event) => event.type === 'replacement-runtime-note',
-      ),
+      secondSocket.sent.some((event) => event.type === 'replacement-runtime-note'),
       true,
     );
 
@@ -1068,10 +1046,14 @@ test('cleanup aborts in-flight HTTP fallback events', async () => {
 
     assert.equal(eventSignals.length, 4);
     assert.ok(eventSignals.every((signal) => !signal.aborted));
-    assert.ok(eventHeaders.every((headers) =>
-      headers.get('x-reflex-runtime-id') === 'runtime-test'));
-    assert.ok(eventHeaders.every((headers) =>
-      headers.get('x-reflex-runtime-session') === 'runtime-session-test'));
+    assert.ok(
+      eventHeaders.every((headers) => headers.get('x-reflex-runtime-id') === 'runtime-test'),
+    );
+    assert.ok(
+      eventHeaders.every(
+        (headers) => headers.get('x-reflex-runtime-session') === 'runtime-session-test',
+      ),
+    );
 
     cleanup();
     assert.ok(eventSignals.every((signal) => signal.aborted));
@@ -1110,41 +1092,32 @@ test('redacts common secret keys before state and traces leave the runtime', asy
       payload: { connectedUIs: 1 },
     });
 
-    const stateEvent = socket.sent.find(
-      (event) => event.type === 'reflex-state',
-    );
+    const stateEvent = socket.sent.find((event) => event.type === 'reflex-state');
     assert.equal(stateEvent.payload.user.password, '[REDACTED]');
     assert.equal(stateEvent.payload.user.apiKey, '[REDACTED]');
     assert.equal(stateEvent.payload.user.displayName, 'Ada');
 
-    await fake.emitTraces([{
-      id: 1,
-      operation: 'login',
-      opType: 'event',
-      tags: {
-        event: ['login', { access_token: 'trace-secret' }],
-        patches: [{
-          op: 'replace',
-          path: ['user', 'password'],
-          value: 'patch-secret',
-        }],
+    await fake.emitTraces([
+      {
+        id: 1,
+        operation: 'login',
+        opType: 'event',
+        tags: {
+          event: ['login', { access_token: 'trace-secret' }],
+          patches: [
+            {
+              op: 'replace',
+              path: ['user', 'password'],
+              value: 'patch-secret',
+            },
+          ],
+        },
       },
-    }]);
-    const traceEvent = socket.sent.find(
-      (event) => event.type === 'reflex-traces',
-    );
-    assert.equal(
-      traceEvent.payload[0].tags.event[1].access_token,
-      '[REDACTED]',
-    );
-    assert.equal(
-      traceEvent.payload[0].tags.patches[0].value,
-      '[REDACTED]',
-    );
-    assert.doesNotMatch(
-      JSON.stringify(socket.sent),
-      /plain-text|trace-secret|patch-secret/,
-    );
+    ]);
+    const traceEvent = socket.sent.find((event) => event.type === 'reflex-traces');
+    assert.equal(traceEvent.payload[0].tags.event[1].access_token, '[REDACTED]');
+    assert.equal(traceEvent.payload[0].tags.patches[0].value, '[REDACTED]');
+    assert.doesNotMatch(JSON.stringify(socket.sent), /plain-text|trace-secret|patch-secret/);
   } finally {
     cleanup();
     globalThis.fetch = originalFetch;
@@ -1166,10 +1139,10 @@ test('applies subscription-result redaction to evaluation errors before transpor
     redaction: {
       state(value, context) {
         if (
-          context.dataKind === 'subscription-result'
-          && value
-          && typeof value === 'object'
-          && 'message' in value
+          context.dataKind === 'subscription-result' &&
+          value &&
+          typeof value === 'object' &&
+          'message' in value
         ) {
           return { ...value, message: '[REDACTED:EVALUATION_ERROR]' };
         }
@@ -1189,14 +1162,9 @@ test('applies subscription-result redaction to evaluation errors before transpor
     await waitForTurn();
 
     const result = socket.sent.find(
-      (event) =>
-        event.type === 'reflex-eval-sub-result'
-        && event.payload.evalId === 'eval-secret',
+      (event) => event.type === 'reflex-eval-sub-result' && event.payload.evalId === 'eval-secret',
     );
-    assert.equal(
-      result.payload.error.message,
-      '[REDACTED:EVALUATION_ERROR]',
-    );
+    assert.equal(result.payload.error.message, '[REDACTED:EVALUATION_ERROR]');
     assert.equal('stack' in result.payload.error, false);
   } finally {
     cleanup();
@@ -1258,7 +1226,8 @@ test('drops oversized telemetry before either transport and warns only once', as
     assert.equal(JSON.stringify(socket.sent).includes(marker), false);
 
     const payloadWarnings = warnings.filter((warning) =>
-      warning.includes('Dropped "reflex-state" telemetry before transport'));
+      warning.includes('Dropped "reflex-state" telemetry before transport'),
+    );
     assert.equal(payloadWarnings.length, 1);
     assert.match(payloadWarnings[0], /negotiated 512-byte runtime limit/);
     assert.match(payloadWarnings[0], /maxRuntimePayloadBytes/);
@@ -1304,7 +1273,8 @@ test('deduplicates bounded server telemetry-drop notices', async () => {
     socket.emit(notice);
 
     const noticeWarnings = warnings.filter((warning) =>
-      warning.includes('Server dropped "reflex-state" telemetry'));
+      warning.includes('Server dropped "reflex-state" telemetry'),
+    );
     assert.equal(noticeWarnings.length, 1);
     assert.match(noticeWarnings[0], /retention-limit/);
     assert.match(noticeWarnings[0], /reconnecting the runtime clears session retention/);
@@ -1372,7 +1342,8 @@ test('handles typed retention rejection from the HTTP fallback without reconnect
     assert.equal(FakeWebSocket.instances.length, 1);
     assert.equal(socket.readyState, FakeWebSocket.OPEN);
     const dropWarnings = warnings.filter((warning) =>
-      warning.includes('Server dropped "reflex-state" telemetry'));
+      warning.includes('Server dropped "reflex-state" telemetry'),
+    );
     assert.equal(dropWarnings.length, 1);
     assert.equal(
       warnings.some((warning) => warning.includes('rejected with HTTP 422')),
@@ -1426,7 +1397,8 @@ test('reports abnormal closes and preserves exponential reconnect backoff until 
     assert.equal(FakeWebSocket.instances.length, 3);
 
     const closeWarnings = warnings.filter((warning) =>
-      warning.includes('WebSocket closed abnormally'));
+      warning.includes('WebSocket closed abnormally'),
+    );
     assert.equal(closeWarnings.length, 1);
     assert.match(closeWarnings[0], /code 1009/);
     assert.match(closeWarnings[0], /Message exceeds frame limit/);

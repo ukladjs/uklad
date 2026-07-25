@@ -1,15 +1,49 @@
 import { scheduleAfterRender } from '../../core/scheduling';
-import { clearHandlerEntriesForKernel, SUBSCRIPTION_HANDLER_KINDS } from '../handlers';
-import { isRuntimeDisposed, type RuntimeKernel } from '../kernel';
+import { getGlobalEqualityCheck } from '../../core/equality';
+import { consoleLog } from '../../core/logging';
 import {
-  assertSubscriptionsCanBeClearedForKernel,
-  inspectSubscriptionForKernel,
+  mergeRuntimeProbeSpan,
+  withRuntimeProbeSpan,
+  type RuntimeProbeSubscription,
+} from '../probe';
+import {
+  SUB_DEPS_HANDLER_KIND,
+  SUB_HANDLER_KIND,
+  SUBSCRIPTION_HANDLER_KINDS,
+  type RegistrationOwnership,
+} from '../handlers';
+import { isRuntimeDisposed, type RuntimeCore } from '../core';
+import {
   type SubscriptionDiagnostic,
+  type SubscriptionListenerKind,
   type SubscriptionNode,
+  SubscriptionEngine,
 } from './engine';
-import { getRootSubKey } from './keys';
+import { getRootSubKey, getSubVectorKey } from './keys';
 
-import type { Id, SubConfig } from '../../types';
+import type {
+  EqualityCheckFn,
+  Id,
+  SubConfig,
+  SubDepsHandler,
+  SubHandler,
+  SubResult,
+  SubVector,
+} from '../../types';
+
+interface SubscriptionBuildFrame {
+  subVector: SubVector;
+  key: string;
+  subId: Id;
+  computeFn: SubHandler;
+  params: any[];
+  kind: 'root' | 'computed';
+  equalityCheck: EqualityCheckFn;
+  dependencyVectors: SubVector[];
+  dependencies: SubscriptionNode<any>[];
+  dependencyKeys: string[];
+  nextDependency: number;
+}
 
 interface SubscriptionEntry {
   node: SubscriptionNode<any>;
@@ -17,7 +51,7 @@ interface SubscriptionEntry {
   dependencyKeys: readonly string[];
 }
 
-export interface SubscriptionCacheState {
+export class SubscriptionRuntime {
   readonly rootSubIdBySource: Map<string, Id>;
   readonly rootSubSourceById: Map<Id, string>;
   readonly rootSubscriptionKeys: Set<string>;
@@ -27,149 +61,493 @@ export interface SubscriptionCacheState {
   provisionalCurrent: Map<string, SubscriptionNode<any>>;
   provisionalPrevious: Map<string, SubscriptionNode<any>>;
   provisionalSweepScheduled: boolean;
-}
+  equalityCheck: EqualityCheckFn | undefined;
 
-function getCacheState(runtime: RuntimeKernel): SubscriptionCacheState {
-  return (runtime.subscriptionCache ??= {
-    rootSubIdBySource: new Map(),
-    rootSubSourceById: new Map(),
-    rootSubscriptionKeys: new Set(),
-    subscriptionCache: new Map(),
-    dependentSubscriptionKeys: new Map(),
-    subConfigById: new Map(),
-    provisionalCurrent: new Map(),
-    provisionalPrevious: new Map(),
-    provisionalSweepScheduled: false,
-  });
-}
+  readonly engine: SubscriptionEngine;
+  private readonly getRuntime: () => RuntimeCore;
 
-/** @internal Set root subscription metadata for one runtime. */
-export function setRootSubSourceForKernel(
-  runtime: RuntimeKernel,
-  subId: Id,
-  sourceKey: string,
-): void {
-  const state = getCacheState(runtime);
-  const previousSource = state.rootSubSourceById.get(subId);
-  if (
-    previousSource !== undefined &&
-    previousSource !== sourceKey &&
-    state.rootSubIdBySource.get(previousSource) === subId
-  ) {
-    state.rootSubIdBySource.delete(previousSource);
+  constructor(getRuntime: () => RuntimeCore) {
+    this.getRuntime = getRuntime;
+    this.rootSubIdBySource = new Map();
+    this.rootSubSourceById = new Map();
+    this.rootSubscriptionKeys = new Set();
+    this.subscriptionCache = new Map();
+    this.dependentSubscriptionKeys = new Map();
+    this.subConfigById = new Map();
+    this.provisionalCurrent = new Map();
+    this.provisionalPrevious = new Map();
+    this.provisionalSweepScheduled = false;
+    this.equalityCheck = undefined;
+    this.engine = new SubscriptionEngine(getRuntime);
   }
 
-  const previousSubId = state.rootSubIdBySource.get(sourceKey);
-  if (previousSubId !== undefined && previousSubId !== subId) {
-    state.rootSubSourceById.delete(previousSubId);
-    state.rootSubscriptionKeys.delete(getRootSubKey(previousSubId));
+  register<R = any, K extends Id = Id>(
+    id: K,
+    computeFn?: ((...values: any[]) => SubResult<K, R>) | string,
+    depsFn?: (...params: any[]) => SubVector[],
+    config?: SubConfig,
+  ): RegistrationOwnership | undefined {
+    const runtime = this.getRuntime();
+    if (this.hasCachedId(id)) {
+      const message = `[reflex] Cannot register subscription '${id}' while a cached query for that id exists. Clear unused subscriptions before re-registering it.`;
+      consoleLog('error', message);
+      throw new Error(message);
+    }
+    if (runtime.registry.has(SUB_HANDLER_KIND, id)) {
+      consoleLog('warn', `[reflex] Overriding. Subscription '${id}' already registered.`);
+    }
+
+    let handlers: readonly [RegistrationOwnership, RegistrationOwnership] | undefined;
+    if (computeFn === undefined) {
+      handlers = this.registerRoot(id, id);
+    } else if (typeof computeFn === 'string') {
+      handlers = this.registerRoot(id, computeFn);
+    } else {
+      if (!depsFn) {
+        consoleLog(
+          'error',
+          `[reflex] Subscription '${id}' has computeFn but missing depsFn. Computed subscriptions must specify their dependencies.`,
+        );
+        return undefined;
+      }
+      this.clearRootSource(id);
+      handlers = [
+        runtime.registry.register(SUB_HANDLER_KIND, id, computeFn),
+        runtime.registry.register(SUB_DEPS_HANDLER_KIND, id, depsFn),
+      ];
+    }
+    if (!handlers) return undefined;
+
+    const normalizedConfig = normalizeSubConfig(id, config);
+    if (normalizedConfig) this.subConfigById.set(id, normalizedConfig);
+    else this.subConfigById.delete(id);
+
+    const [computeOwnership, depsOwnership] = handlers;
+    const isCurrent = () => computeOwnership.current && depsOwnership.current;
+    const assertReleasable = (): void => {
+      if (isCurrent()) this.assertDefinitionCanBeCleared(id);
+    };
+    const release = (): boolean => {
+      if (!isCurrent()) return false;
+      this.assertDefinitionCanBeCleared(id);
+      this.clearDefinitions(id);
+      return true;
+    };
+    return Object.freeze({
+      get current(): boolean {
+        return isCurrent();
+      },
+      assertReleasable,
+      release,
+    });
   }
 
-  state.rootSubIdBySource.set(sourceKey, subId);
-  state.rootSubSourceById.set(subId, sourceKey);
-  state.rootSubscriptionKeys.add(getRootSubKey(subId));
-}
+  getOrCreate(subVector: SubVector): SubscriptionNode<any> | null {
+    const runtime = this.getRuntime();
+    const frames: SubscriptionBuildFrame[] = [];
+    const buildingKeys = new Set<string>();
 
-/** @internal Get a root subscription id in one runtime. */
-export function getRootSubIdBySourceForKernel(
-  runtime: RuntimeKernel,
-  sourceKey: string,
-): Id | undefined {
-  return getCacheState(runtime).rootSubIdBySource.get(sourceKey);
-}
+    const resolve = (query: SubVector): SubscriptionNode<any> | undefined => {
+      const subId = query[0];
+      if (!runtime.registry.has(SUB_HANDLER_KIND, subId)) {
+        consoleLog('error', `[reflex] no sub handler registered for: ${subId}`);
+        return undefined;
+      }
 
-/** @internal Get a root source key in one runtime. */
-export function getRootSubSourceByIdForKernel(
-  runtime: RuntimeKernel,
-  subId: Id,
-): string | undefined {
-  return getCacheState(runtime).rootSubSourceById.get(subId);
-}
+      const rootSource = this.rootSubSourceById.get(subId);
+      if (rootSource !== undefined && query.length !== 1) {
+        throw new Error(`[reflex] Root subscription '${subId}' does not accept parameters.`);
+      }
 
-/** @internal Clear one runtime's root-source metadata for an id. */
-export function clearRootSubSourceForKernel(runtime: RuntimeKernel, subId: Id): void {
-  const state = getCacheState(runtime);
-  const sourceKey = state.rootSubSourceById.get(subId);
-  state.rootSubSourceById.delete(subId);
-  state.rootSubscriptionKeys.delete(getRootSubKey(subId));
-  if (sourceKey !== undefined && state.rootSubIdBySource.get(sourceKey) === subId) {
-    state.rootSubIdBySource.delete(sourceKey);
-  }
-}
+      const key = getSubVectorKey(query);
+      const existing = this.subscriptionCache.get(key)?.node;
+      if (existing) {
+        this.renewProvisionalTree(key);
+        mergeRuntimeProbeSpan(runtime, () => ({
+          'cached?': true,
+          subscriptionKey: key,
+        }));
+        return existing;
+      }
+      if (buildingKeys.has(key)) {
+        throw new Error(`[reflex] Circular subscription dependency detected at ${key}.`);
+      }
 
-function clearRootSubSourcesForKernel(runtime: RuntimeKernel): void {
-  const state = getCacheState(runtime);
-  state.rootSubIdBySource.clear();
-  state.rootSubSourceById.clear();
-  state.rootSubscriptionKeys.clear();
-}
+      const params = query.length > 1 ? query.slice(1) : [];
+      const depsFn = runtime.registry.get(SUB_DEPS_HANDLER_KIND, subId) as SubDepsHandler;
+      if (typeof depsFn !== 'function') {
+        throw new Error(`[reflex] Subscription '${subId}' has no dependency handler.`);
+      }
+      const dependencyVectors = depsFn(...(params as any[]));
+      if (!Array.isArray(dependencyVectors)) {
+        throw new Error(
+          `[reflex] Subscription '${subId}' dependency handler must return an array.`,
+        );
+      }
+      for (const dependencyVector of dependencyVectors) {
+        if (!Array.isArray(dependencyVector) || typeof dependencyVector[0] !== 'string') {
+          throw new Error(
+            `[reflex] Subscription '${subId}' returned an invalid dependency vector.`,
+          );
+        }
+      }
 
-/** @internal Get a cached subscription from one runtime. */
-export function getCachedSubscriptionForKernel(
-  runtime: RuntimeKernel,
-  key: string,
-): SubscriptionNode<any> | undefined {
-  return getCacheState(runtime).subscriptionCache.get(key)?.node;
-}
+      withRuntimeProbeSpan(
+        runtime,
+        () => ({ operation: subId, opType: 'sub/create', tags: { queryV: query } }),
+        () => {},
+      );
+      buildingKeys.add(key);
+      frames.push({
+        subVector: query,
+        key,
+        subId,
+        computeFn: runtime.registry.get(SUB_HANDLER_KIND, subId) as SubHandler,
+        params,
+        kind: rootSource === undefined ? 'computed' : 'root',
+        equalityCheck:
+          this.subConfigById.get(subId)?.equalityCheck ?? getGlobalEqualityCheck(runtime),
+        dependencyVectors,
+        dependencies: [],
+        dependencyKeys: [],
+        nextDependency: 0,
+      });
+      return undefined;
+    };
 
-/** @internal Cache a subscription in one runtime. */
-export function cacheSubscriptionForKernel(
-  runtime: RuntimeKernel,
-  key: string,
-  subscription: SubscriptionNode<any>,
-  subId: Id,
-  dependencyKeys: readonly string[],
-): void {
-  const state = getCacheState(runtime);
-  if (state.subscriptionCache.has(key)) {
+    const initial = resolve(subVector);
+    if (initial) return initial;
+    if (frames.length === 0) return null;
+
+    while (frames.length > 0) {
+      const frame = frames[frames.length - 1]!;
+      if (frame.nextDependency < frame.dependencyVectors.length) {
+        const dependencyVector = frame.dependencyVectors[frame.nextDependency++]!;
+        const depth = frames.length;
+        const dependency = resolve(dependencyVector);
+        if (dependency) {
+          frame.dependencies.push(dependency);
+          frame.dependencyKeys.push(getSubVectorKey(dependencyVector));
+        } else if (frames.length === depth) {
+          throw new Error(
+            `[reflex] Subscription '${frame.subId}' depends on missing subscription '${dependencyVector[0]}'.`,
+          );
+        }
+        continue;
+      }
+
+      const {
+        key,
+        subVector: query,
+        kind,
+        computeFn,
+        params,
+        equalityCheck,
+        dependencies,
+        dependencyKeys,
+        subId,
+      } = frame;
+      const subscription: SubscriptionNode<any> = this.engine.create({
+        key,
+        query,
+        kind,
+        compute: (...dependencyValues) =>
+          params.length > 0
+            ? computeFn(...dependencyValues, ...params)
+            : computeFn(...dependencyValues),
+        dependencies,
+        equalityCheck,
+        onActive: () => this.unmarkProvisional(key, subscription),
+        onUnused: () => this.evict(key, subscription),
+      });
+      this.cache(key, subscription, subId, dependencyKeys);
+      if (kind === 'computed') this.markProvisional(key, subscription);
+
+      frames.pop();
+      buildingKeys.delete(key);
+      const parent = frames[frames.length - 1];
+      if (!parent) return subscription;
+      parent.dependencies.push(subscription);
+      parent.dependencyKeys.push(key);
+    }
+
     throw new Error(
-      `[reflex] Subscription cache invariant violated: duplicate canonical key ${key}.`,
+      '[reflex] Invariant violation: subscription graph construction ended without producing a subscription.',
     );
   }
 
-  const ownedDependencyKeys = [...dependencyKeys];
-  state.subscriptionCache.set(key, {
-    node: subscription,
-    subId,
-    dependencyKeys: ownedDependencyKeys,
-  });
-  for (const dependencyKey of new Set(ownedDependencyKeys)) {
-    const dependents = state.dependentSubscriptionKeys.get(dependencyKey) ?? new Set<string>();
-    dependents.add(key);
-    state.dependentSubscriptionKeys.set(dependencyKey, dependents);
+  read<T>(query: SubVector): T {
+    const subscription = this.getOrCreate(query);
+    return subscription ? this.engine.read(subscription) : (undefined as T);
+  }
+
+  getSnapshot<T>(node: SubscriptionNode<T>): T {
+    return this.engine.getSnapshot(node);
+  }
+
+  subscribe<T>(
+    node: SubscriptionNode<T>,
+    listener: () => void,
+    label?: string,
+    kind?: SubscriptionListenerKind,
+  ): () => void {
+    return this.engine.subscribe(node, listener, label, kind);
+  }
+
+  publish(
+    roots: SubscriptionNode<any>[],
+    includeEvidence: boolean = false,
+  ): readonly RuntimeProbeSubscription[] {
+    return this.engine.publish(roots, includeEvidence);
+  }
+
+  inspect(node: SubscriptionNode<any>): SubscriptionDiagnostic {
+    return this.engine.inspect(node);
+  }
+
+  diagnostics(): readonly SubscriptionDiagnostic[] {
+    return Array.from(this.subscriptionCache.values(), ({ node }) => this.engine.inspect(node));
+  }
+
+  getCached(key: string): SubscriptionNode<any> | undefined {
+    return this.subscriptionCache.get(key)?.node;
+  }
+
+  getRootId(sourceKey: string): Id | undefined {
+    return this.rootSubIdBySource.get(sourceKey);
+  }
+
+  hasCached(key: string): boolean {
+    return this.subscriptionCache.has(key);
+  }
+
+  hasCachedId(subId: Id): boolean {
+    for (const entry of this.subscriptionCache.values()) {
+      if (entry.subId === subId) return true;
+    }
+    return false;
+  }
+
+  clearCache(key?: string): void {
+    this.engine.assertClearAllowed();
+    clearSubscriptionCacheEntries(this, key);
+  }
+
+  clearAll(): void {
+    this.engine.assertClearAllowed();
+    this.clearDefinitions();
+  }
+
+  clearForHotReload(subscriptionIds?: readonly Id[]): void {
+    if (subscriptionIds === undefined) {
+      this.clearDefinitions();
+      return;
+    }
+    for (const id of new Set(subscriptionIds)) this.clearDefinitions(id);
+  }
+
+  clearDefinitions(subId?: Id): void {
+    const runtime = this.getRuntime();
+    if (subId === undefined) {
+      for (const kind of SUBSCRIPTION_HANDLER_KINDS) runtime.registry.clear(kind);
+      this.rootSubIdBySource.clear();
+      this.rootSubSourceById.clear();
+      this.rootSubscriptionKeys.clear();
+      clearSubscriptionCacheEntries(this);
+      this.subConfigById.clear();
+      return;
+    }
+    for (const kind of SUBSCRIPTION_HANDLER_KINDS) runtime.registry.clear(kind, subId);
+    this.clearRootSource(subId);
+    const keys: string[] = [];
+    for (const [key, entry] of this.subscriptionCache) {
+      if (entry.subId === subId) keys.push(key);
+    }
+    removeSubscriptionCacheClosure(this, keys);
+    this.subConfigById.delete(subId);
+  }
+
+  assertDefinitionCanBeCleared(subId: Id): void {
+    const definitionKeys: string[] = [];
+    for (const [key, entry] of this.subscriptionCache) {
+      if (entry.subId === subId) definitionKeys.push(key);
+    }
+    const affectedKeys = collectSubscriptionCacheClosureKeys(this, definitionKeys);
+    for (const key of affectedKeys) {
+      const node = this.subscriptionCache.get(key)?.node;
+      if (node && this.engine.inspect(node).active) {
+        throw new Error(
+          `[reflex] Cannot clear subscription '${subId}' while its subscription graph is active.`,
+        );
+      }
+    }
+  }
+
+  assertClearAllowed(): void {
+    this.engine.assertClearAllowed();
+  }
+
+  assertPublicationAllowed(): void {
+    this.engine.assertPublicationAllowed();
+  }
+
+  private registerRoot(
+    id: Id,
+    sourceKey: string,
+  ): readonly [RegistrationOwnership, RegistrationOwnership] | undefined {
+    const runtime = this.getRuntime();
+    const conflictingSubId = this.rootSubIdBySource.get(sourceKey);
+    if (conflictingSubId !== undefined && conflictingSubId !== id) {
+      consoleLog(
+        'error',
+        `[reflex] Subscription '${id}' was not registered. Root key '${sourceKey}' is already used by subscription '${conflictingSubId}'.`,
+      );
+      return undefined;
+    }
+
+    this.setRootSource(id, sourceKey);
+    return [
+      runtime.registry.register(
+        SUB_HANDLER_KIND,
+        id,
+        () => runtime.state.getRender<Record<string, any>>()[sourceKey],
+      ),
+      runtime.registry.register(SUB_DEPS_HANDLER_KIND, id, () => []),
+    ];
+  }
+
+  setRootSource(subId: Id, sourceKey: string): void {
+    const previousSource = this.rootSubSourceById.get(subId);
+    if (
+      previousSource !== undefined &&
+      previousSource !== sourceKey &&
+      this.rootSubIdBySource.get(previousSource) === subId
+    ) {
+      this.rootSubIdBySource.delete(previousSource);
+    }
+    const previousSubId = this.rootSubIdBySource.get(sourceKey);
+    if (previousSubId !== undefined && previousSubId !== subId) {
+      this.rootSubSourceById.delete(previousSubId);
+      this.rootSubscriptionKeys.delete(getRootSubKey(previousSubId));
+    }
+    this.rootSubIdBySource.set(sourceKey, subId);
+    this.rootSubSourceById.set(subId, sourceKey);
+    this.rootSubscriptionKeys.add(getRootSubKey(subId));
+  }
+
+  private clearRootSource(subId: Id): void {
+    const sourceKey = this.rootSubSourceById.get(subId);
+    this.rootSubSourceById.delete(subId);
+    this.rootSubscriptionKeys.delete(getRootSubKey(subId));
+    if (sourceKey !== undefined && this.rootSubIdBySource.get(sourceKey) === subId) {
+      this.rootSubIdBySource.delete(sourceKey);
+    }
+  }
+
+  private cache(
+    key: string,
+    node: SubscriptionNode<any>,
+    subId: Id,
+    dependencyKeys: readonly string[],
+  ): void {
+    if (this.subscriptionCache.has(key)) {
+      throw new Error(
+        `[reflex] Subscription cache invariant violated: duplicate canonical key ${key}.`,
+      );
+    }
+    const ownedDependencyKeys = [...dependencyKeys];
+    this.subscriptionCache.set(key, {
+      node,
+      subId,
+      dependencyKeys: ownedDependencyKeys,
+    });
+    for (const dependencyKey of new Set(ownedDependencyKeys)) {
+      const dependents = this.dependentSubscriptionKeys.get(dependencyKey) ?? new Set<string>();
+      dependents.add(key);
+      this.dependentSubscriptionKeys.set(dependencyKey, dependents);
+    }
+  }
+
+  private evict(key: string, node: SubscriptionNode<any>): void {
+    if (this.rootSubscriptionKeys.has(key) || this.subscriptionCache.get(key)?.node !== node) {
+      return;
+    }
+    removeSubscriptionCacheClosure(this, [key]);
+  }
+
+  private markProvisional(key: string, node: SubscriptionNode<any>): void {
+    if (this.rootSubscriptionKeys.has(key)) return;
+    this.provisionalCurrent.set(key, node);
+    this.scheduleProvisionalSweep();
+  }
+
+  private unmarkProvisional(key: string, node: SubscriptionNode<any>): void {
+    if (this.provisionalCurrent.get(key) === node) this.provisionalCurrent.delete(key);
+    if (this.provisionalPrevious.get(key) === node) this.provisionalPrevious.delete(key);
+  }
+
+  private renewProvisionalTree(key: string): void {
+    const pendingKeys = [key];
+    const visited = new Set<string>();
+    let renewed = false;
+    while (pendingKeys.length > 0) {
+      const pendingKey = pendingKeys.pop()!;
+      if (visited.has(pendingKey)) continue;
+      visited.add(pendingKey);
+      const entry = this.subscriptionCache.get(pendingKey);
+      if (!entry) continue;
+      const isCurrent = this.provisionalCurrent.get(pendingKey) === entry.node;
+      const isPrevious = this.provisionalPrevious.get(pendingKey) === entry.node;
+      if (!isCurrent && !isPrevious) continue;
+      if (isPrevious) {
+        this.provisionalPrevious.delete(pendingKey);
+        this.provisionalCurrent.set(pendingKey, entry.node);
+        renewed = true;
+      }
+      for (const dependencyKey of entry.dependencyKeys) pendingKeys.push(dependencyKey);
+    }
+    if (renewed) this.scheduleProvisionalSweep();
+  }
+
+  sweepProvisional(): void {
+    const expiredKeys: string[] = [];
+    for (const [key, subscription] of this.provisionalPrevious) {
+      if (this.subscriptionCache.get(key)?.node === subscription) expiredKeys.push(key);
+    }
+    removeSubscriptionCacheClosure(this, expiredKeys);
+    this.provisionalPrevious = this.provisionalCurrent;
+    this.provisionalCurrent = new Map();
+    if (this.provisionalPrevious.size > 0) this.scheduleProvisionalSweep();
+  }
+
+  private scheduleProvisionalSweep(): void {
+    if (this.provisionalSweepScheduled) return;
+    this.provisionalSweepScheduled = true;
+    scheduleAfterRender(() => {
+      this.provisionalSweepScheduled = false;
+      if (isRuntimeDisposed(this.getRuntime())) return;
+      this.sweepProvisional();
+    });
   }
 }
 
-/** @internal Test cache membership in one runtime. */
-export function hasCachedSubscriptionForKernel(runtime: RuntimeKernel, key: string): boolean {
-  return getCacheState(runtime).subscriptionCache.has(key);
-}
-
-/** @internal Test whether one runtime has a cached query for an id. */
-export function hasCachedSubscriptionForIdForKernel(runtime: RuntimeKernel, subId: Id): boolean {
-  for (const entry of getCacheState(runtime).subscriptionCache.values()) {
-    if (entry.subId === subId) return true;
+function normalizeSubConfig(id: Id, config: SubConfig | undefined): SubConfig | undefined {
+  if (config == null) return undefined;
+  if (typeof config !== 'object') {
+    consoleLog('warn', `[reflex] Subscription '${id}' config must be an object. Using defaults.`);
+    return undefined;
   }
-  return false;
-}
-
-/** @internal Return cache-only diagnostics for one runtime. */
-export function getSubscriptionDiagnosticsForKernel(
-  runtime: RuntimeKernel,
-): readonly SubscriptionDiagnostic[] {
-  return Array.from(getCacheState(runtime).subscriptionCache.values(), ({ node }) =>
-    inspectSubscriptionForKernel(runtime, node),
+  if (config.equalityCheck === undefined || typeof config.equalityCheck === 'function') {
+    return config;
+  }
+  consoleLog(
+    'warn',
+    `[reflex] Subscription '${id}' equalityCheck must be a function. Using the global equality check.`,
   );
+  return undefined;
 }
 
-/** @internal Clear all or one cache key in a runtime. */
-export function clearSubscriptionCacheForKernel(runtime: RuntimeKernel, key?: string): void {
-  assertSubscriptionsCanBeClearedForKernel(runtime);
-  clearSubscriptionCacheEntriesForKernel(runtime, key);
-}
-
-function clearSubscriptionCacheEntriesForKernel(runtime: RuntimeKernel, key?: string): void {
-  const state = getCacheState(runtime);
+function clearSubscriptionCacheEntries(state: SubscriptionRuntime, key?: string): void {
   if (key === undefined) {
     state.subscriptionCache.clear();
     state.dependentSubscriptionKeys.clear();
@@ -177,24 +555,14 @@ function clearSubscriptionCacheEntriesForKernel(runtime: RuntimeKernel, key?: st
     state.provisionalPrevious.clear();
     return;
   }
-  removeSubscriptionCacheClosure(runtime, [key]);
-}
-
-function clearSubscriptionCacheEntriesForIdForKernel(runtime: RuntimeKernel, subId: Id): void {
-  const keys: string[] = [];
-  for (const [key, entry] of getCacheState(runtime).subscriptionCache) {
-    if (entry.subId === subId) keys.push(key);
-  }
-  removeSubscriptionCacheClosure(runtime, keys);
+  removeSubscriptionCacheClosure(state, [key]);
 }
 
 function removeSubscriptionCacheClosure(
-  runtime: RuntimeKernel,
+  state: SubscriptionRuntime,
   initialKeys: Iterable<string>,
 ): void {
-  const state = getCacheState(runtime);
   const keysToRemove = collectSubscriptionCacheClosureKeys(state, initialKeys);
-
   for (const key of keysToRemove) {
     const entry = state.subscriptionCache.get(key);
     if (entry) {
@@ -212,12 +580,11 @@ function removeSubscriptionCacheClosure(
 }
 
 function collectSubscriptionCacheClosureKeys(
-  state: SubscriptionCacheState,
+  state: SubscriptionRuntime,
   initialKeys: Iterable<string>,
 ): Set<string> {
   const keys = new Set<string>();
   const pendingKeys = Array.from(initialKeys);
-
   while (pendingKeys.length > 0) {
     const key = pendingKeys.pop()!;
     if (keys.has(key)) continue;
@@ -227,177 +594,4 @@ function collectSubscriptionCacheClosureKeys(
     }
   }
   return keys;
-}
-
-/** @internal Assert that clearing one definition cannot detach an active graph. */
-export function assertSubscriptionDefinitionCanBeClearedForKernel(
-  runtime: RuntimeKernel,
-  subId: Id,
-): void {
-  const state = getCacheState(runtime);
-  const definitionKeys: string[] = [];
-  for (const [key, entry] of state.subscriptionCache) {
-    if (entry.subId === subId) definitionKeys.push(key);
-  }
-
-  const affectedKeys = collectSubscriptionCacheClosureKeys(state, definitionKeys);
-  for (const key of affectedKeys) {
-    const node = state.subscriptionCache.get(key)?.node;
-    if (node && inspectSubscriptionForKernel(runtime, node).active) {
-      throw new Error(
-        `[reflex] Cannot clear subscription '${subId}' while its subscription graph is active.`,
-      );
-    }
-  }
-}
-
-/** @internal Evict an unused computed subscription from one runtime. */
-export function evictCachedSubscriptionForKernel(
-  runtime: RuntimeKernel,
-  key: string,
-  subscription: SubscriptionNode<any>,
-): void {
-  const state = getCacheState(runtime);
-  if (
-    state.rootSubscriptionKeys.has(key) ||
-    state.subscriptionCache.get(key)?.node !== subscription
-  ) {
-    return;
-  }
-  removeSubscriptionCacheClosure(runtime, [key]);
-}
-
-function scheduleProvisionalSweepForKernel(runtime: RuntimeKernel): void {
-  const state = getCacheState(runtime);
-  if (state.provisionalSweepScheduled) return;
-  state.provisionalSweepScheduled = true;
-  scheduleAfterRender(() => {
-    state.provisionalSweepScheduled = false;
-    if (isRuntimeDisposed(runtime)) return;
-    sweepProvisionalSubscriptionsForKernel(runtime);
-  });
-}
-
-/** @internal Mark a newly read computed subscription provisional in one runtime. */
-export function markProvisionalSubscriptionForKernel(
-  runtime: RuntimeKernel,
-  key: string,
-  subscription: SubscriptionNode<any>,
-): void {
-  const state = getCacheState(runtime);
-  if (state.rootSubscriptionKeys.has(key)) return;
-  state.provisionalCurrent.set(key, subscription);
-  scheduleProvisionalSweepForKernel(runtime);
-}
-
-/** @internal Remove a provisional mark in one runtime. */
-export function unmarkProvisionalSubscriptionForKernel(
-  runtime: RuntimeKernel,
-  key: string,
-  subscription: SubscriptionNode<any>,
-): void {
-  const state = getCacheState(runtime);
-  if (state.provisionalCurrent.get(key) === subscription) state.provisionalCurrent.delete(key);
-  if (state.provisionalPrevious.get(key) === subscription) state.provisionalPrevious.delete(key);
-}
-
-/** @internal Renew a dormant dependency component in one runtime. */
-export function renewProvisionalSubscriptionTreeForKernel(
-  runtime: RuntimeKernel,
-  rootKey: string,
-): void {
-  const state = getCacheState(runtime);
-  const pendingKeys = [rootKey];
-  const visited = new Set<string>();
-  let renewed = false;
-
-  while (pendingKeys.length > 0) {
-    const key = pendingKeys.pop()!;
-    if (visited.has(key)) continue;
-    visited.add(key);
-    const entry = state.subscriptionCache.get(key);
-    if (!entry) continue;
-
-    const isCurrent = state.provisionalCurrent.get(key) === entry.node;
-    const isPrevious = state.provisionalPrevious.get(key) === entry.node;
-    if (!isCurrent && !isPrevious) continue;
-    if (isPrevious) {
-      state.provisionalPrevious.delete(key);
-      state.provisionalCurrent.set(key, entry.node);
-      renewed = true;
-    }
-    for (const dependencyKey of entry.dependencyKeys) pendingKeys.push(dependencyKey);
-  }
-
-  if (renewed) scheduleProvisionalSweepForKernel(runtime);
-}
-
-/** @internal Advance one runtime's provisional lease generation. */
-export function sweepProvisionalSubscriptionsForKernel(runtime: RuntimeKernel): void {
-  const state = getCacheState(runtime);
-  const expiredKeys: string[] = [];
-  for (const [key, subscription] of state.provisionalPrevious) {
-    if (state.subscriptionCache.get(key)?.node === subscription) expiredKeys.push(key);
-  }
-  removeSubscriptionCacheClosure(runtime, expiredKeys);
-  state.provisionalPrevious = state.provisionalCurrent;
-  state.provisionalCurrent = new Map();
-  if (state.provisionalPrevious.size > 0) scheduleProvisionalSweepForKernel(runtime);
-}
-
-/** @internal Get subscription configuration from one runtime. */
-export function getSubConfigForKernel(runtime: RuntimeKernel, subId: Id): SubConfig | undefined {
-  return getCacheState(runtime).subConfigById.get(subId);
-}
-
-/** @internal Set subscription configuration in one runtime. */
-export function setSubConfigForKernel(runtime: RuntimeKernel, subId: Id, config: SubConfig): void {
-  getCacheState(runtime).subConfigById.set(subId, config);
-}
-
-/** @internal Clear subscription configuration in one runtime. */
-export function clearSubConfigsForKernel(runtime: RuntimeKernel, subId?: Id): void {
-  const state = getCacheState(runtime);
-  if (subId === undefined) state.subConfigById.clear();
-  else state.subConfigById.delete(subId);
-}
-
-/** @internal Remove subscription definitions and metadata from one runtime. */
-export function clearSubscriptionDefinitionsForKernel(runtime: RuntimeKernel, subId?: Id): void {
-  if (subId === undefined) {
-    for (const kind of SUBSCRIPTION_HANDLER_KINDS) {
-      clearHandlerEntriesForKernel(runtime, kind);
-    }
-    clearRootSubSourcesForKernel(runtime);
-    clearSubscriptionCacheEntriesForKernel(runtime);
-    clearSubConfigsForKernel(runtime);
-    return;
-  }
-
-  for (const kind of SUBSCRIPTION_HANDLER_KINDS) {
-    clearHandlerEntriesForKernel(runtime, kind, subId);
-  }
-  clearRootSubSourceForKernel(runtime, subId);
-  clearSubscriptionCacheEntriesForIdForKernel(runtime, subId);
-  clearSubConfigsForKernel(runtime, subId);
-}
-
-/** @internal Clear every subscription definition and cached query in one runtime. */
-export function clearSubsForKernel(runtime: RuntimeKernel): void {
-  assertSubscriptionsCanBeClearedForKernel(runtime);
-  clearSubscriptionDefinitionsForKernel(runtime);
-}
-
-/** @internal HMR-clear one runtime whose React tree is about to remount. */
-export function clearSubsForHotReloadForKernel(
-  runtime: RuntimeKernel,
-  subscriptionIds?: readonly Id[],
-): void {
-  if (subscriptionIds === undefined) {
-    clearSubscriptionDefinitionsForKernel(runtime);
-    return;
-  }
-  for (const subscriptionId of new Set(subscriptionIds)) {
-    clearSubscriptionDefinitionsForKernel(runtime, subscriptionId);
-  }
 }

@@ -1,116 +1,172 @@
 # Code conventions
 
-These conventions keep Reflex's implementation coherent while preserving one
-small public package surface.
+These conventions keep ownership visible in the implementation while
+preserving a small public package surface.
 
 ## Ownership tree
 
 ```text
 src/
-  index.ts                         public re-export boundary
-  types.ts                         public contracts and augmentation anchors
+  index.ts                         combined public entrypoint
+  vanilla.ts                       React-free public entrypoint
+  react.ts                         React-only public entrypoint
+  contracts.ts                     store-local contract types
+  types.ts                         shared public domain types
   core/
     environment.ts                 environment detection
     equality.ts                    equality policy
     immer.ts                       Immer integration
     logging.ts                     logging adapter
     scheduling.ts                  host scheduling primitives
-    tracing.ts                     trace collection and delivery
+    tracing.ts                     optional probe-backed trace compatibility
     validation.ts                  untyped-boundary guards
   runtime/
-    state.ts                      live/published STATE generations
-    event-metadata.ts              per-event interceptor metadata
-    handlers.ts                    typed handler stores
-    reset.ts                       cross-store reset coordination
+    core.ts                        runtime composition root and stable shape
+    runtime.ts                     public façade and module lifecycle
+    state.ts                       StateStore
+    handlers.ts                    RuntimeRegistry
+    probe.ts                       sole optional instrumentation channel
+    lifecycle.ts                   passive compatibility adapter
+    reset.ts                       cross-service reset coordination
     subscriptions/
-      cache.ts                     query cache and lifecycle metadata
+      cache.ts                     SubscriptionRuntime
       engine.ts                    reactive graph semantics
       keys.ts                      canonical query-key serialization
   events/
+    router.ts                      EventQueue and event scheduling primitive
+    execution.ts                   runner → commit → effects coordinator
+    runner.ts                      pure event evaluation
+    committer.ts                   state commit primitive
+    effect-executor.ts             post-commit effects
+    execution-observer.ts          DevTools probe adapter
     coeffects.ts
     effects.ts
-    global-interceptors.ts
     interceptors.ts
-    pipeline.ts
-    rate-limit.ts
     registration.ts
-    router.ts
-  subscriptions/
-    queries.ts                     graph construction and imperative reads
-    registration.ts                root and computed definitions
   react/
+    context.ts
     hot-reload.ts
     use-subscription.ts
 ```
 
-`core` owns reusable technical primitives. `runtime` owns mutable framework
-state and lifecycle mechanics. `events` and `subscriptions` own their public
-domain operations. `react` is an adapter over the subscription/runtime layers;
-no other folder imports React.
+`core/*` contains reusable technical primitives. `runtime/core.ts` is the
+composition root for one application runtime. The four runtime services own
+mutable domain state:
+
+- `StateStore`
+- `RuntimeRegistry`
+- `EventRuntime`
+- `SubscriptionRuntime`
+
+The public runtime façade delegates to those services. It must not duplicate
+their state or become a generic service locator with lazily populated
+extensions.
+
+## Service-shaped internal APIs
+
+Production callers use the owning service directly:
+
+```ts
+core.events.dispatch(event);
+core.state.commit(candidateState);
+core.registry.getEvent(eventId);
+core.subscriptions.read(query);
+```
+
+Do not add `*ForCore`, `*ForRuntime`, or legacy `*ForKernel` wrapper families.
+A free function is appropriate for a stateless algorithm or a narrow
+coordinator, not as an accessor for state already owned by a service.
+
+Mandatory services are eagerly constructed and remain present for the lifetime
+of the runtime. Only `core.probe` may be absent.
 
 ## Dependency direction
 
-A module may import only the dependencies listed for its layer:
+| Module                      | May import from                                                            |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `types.ts` / `contracts.ts` | External type packages and each other where required                       |
+| `core/*`                    | Public types, other `core/*`, external packages                            |
+| Service implementations     | Public types, technical core, narrow peer service types, external packages |
+| Event coordinators          | Public types, technical core, runtime services, other event modules        |
+| `runtime/core.ts`           | Every mandatory service needed to compose the stable runtime               |
+| `runtime/runtime.ts`        | Runtime services and narrow public adapters                                |
+| `react/*`                   | Public types, runtime/subscription APIs, React                             |
+| Public entrypoints          | Modules required to assemble the supported public API                      |
 
-| Module            | May import from                                             |
-| ----------------- | ----------------------------------------------------------- |
-| `types.ts`        | External type packages only                                 |
-| `core/*`          | `types.ts`, other `core/*`, external packages               |
-| `runtime/*`       | `types.ts`, `core/*`, other `runtime/*`, external packages  |
-| `events/*`        | `types.ts`, `core/*`, `runtime/*`, other `events/*`         |
-| `subscriptions/*` | `types.ts`, `core/*`, `runtime/*`, other `subscriptions/*`  |
-| `react/*`         | `types.ts`, `core/*`, `runtime/*`, `subscriptions/*`, React |
-| `index.ts`        | Any module needed to assemble the supported public API      |
+`runtime/core.ts` is the deliberate composition-root exception to ordinary
+layering: it imports concrete service constructors. Services receive a closure
+that resolves their owning `RuntimeCore`, avoiding construction-order globals.
+They may import the `RuntimeCore` type and narrow lifecycle predicates, but must
+not create another runtime.
 
-`events/*` and `subscriptions/*` do not import each other. Shared behavior
-belongs in `core` or `runtime`, depending on whether it owns mutable framework
-state. Internal modules import concrete files, never `index.ts` and never an
-internal barrel. This keeps dependency direction visible and avoids cycles or
-module-initialization surprises.
+No non-React module imports React. Internal modules import concrete files,
+never `index.ts` and never an internal barrel.
 
-The package root is the public boundary. Add a root export only when it is a
-supported user-facing contract. Repository-side public consumers target
-`src/index.ts`; installed consumers import the package root. Neither imports a
-physical internal module, which is not a public subpath API.
+## Mutable state
 
-Exports from physical internal modules provide repository-level visibility;
-they are not package API and do not need an `@internal` tag by default. Reserve
-`@internal` for deliberately exposed test seams, integration hooks, or helpers
-whose status would otherwise be ambiguous.
+- Put hot mutable state on its owning typed service.
+- Do not put queues, registries, timers, caches, revisions, or execution guards
+  in generic maps.
+- Optional integrations keep retained state in their package or in a `WeakMap`
+  keyed by `RuntimeCore`.
+- Cross-service operations belong in a small coordinator such as
+  `runtime/reset.ts`; they do not transfer ownership.
+- Scheduled callbacks capture the owning service/runtime explicitly.
+
+## Instrumentation
+
+All instrumentation goes through `RuntimeProbe`.
+
+- `probe === undefined` is the normal path.
+- Capability flags must guard patches, subscription evidence, spans, timing,
+  and diagnostic DTO construction.
+- Probe callbacks report facts only. Their return values must never select
+  execution policy.
+- Probe failures are isolated from application behavior.
+- Queue work carries only opaque tokens for probes that accepted that exact
+  occurrence.
+- Retained traces, operation ledgers, serialization, redaction, and delivery
+  belong outside ordinary core execution.
+
+Do not introduce a second lifecycle, outcome, trace, or operation callback
+channel.
+
+## Registration and disposal
+
+Registries return opaque ownership tokens. Callers may ask a token whether it
+still owns the current generation, preflight destructive release, and release
+it. Version counters are registry implementation details; the runtime façade
+must not inspect them.
+
+An event definition contains its handler and immutable interceptor list.
+Replacing or clearing an event updates that complete definition atomically.
+
+Module disposal validates every registration before running user cleanup, then
+releases registrations in reverse order. Disposers are idempotent.
 
 ## File layout
 
-Use this order unless a single implementation class followed by thin exported
-wrappers is clearer:
+Use this order unless keeping one service class contiguous is clearer:
 
-1. External imports first, followed by a blank line.
-2. Internal imports that exist at runtime, ordered from lower layers to the
-   current layer, followed by internal type-only imports. Use `import type` for
-   erased bindings.
-3. Module types, constants, and mutable singleton state.
-4. Public operations, grouped by capability; keep overloads directly above
-   their implementation.
-5. Private helpers next to the capability they implement.
-6. Intentional module-load registration or initialization, always last.
+1. External runtime imports.
+2. Internal runtime imports from lower-level primitives to coordinators.
+3. Type-only imports.
+4. Module types and constants.
+5. The owning service or public operations.
+6. Private algorithms and helpers.
+7. Intentional module-load initialization, if any.
 
-Small deviations are acceptable when they keep one implementation class beside
-its thin exported wrappers or otherwise make a lifecycle easier to follow.
-
-Prefer one responsibility per file, descriptive domain names, and the existing
-vocabulary (`event`, `effect`, `coeffect`, `subscription`, `handler`, `query`).
-Do not introduce synonyms for established concepts or a folder for every tiny
-file.
+Prefer one cohesive owner per file. Split out a file when it represents a real
+algorithm, adapter, or dependency boundary—not merely to create a wrapper
+around an owner's field.
 
 ## Comments and API documentation
 
-- Add JSDoc to public functions and types when callers need to understand
-  timing, lifecycle, error behavior, ownership, or a non-obvious constraint.
-- Document overloads when their accepted forms have different meanings. Mark
-  deliberate test or integration seams with `@internal`.
-- Use inline comments for the reason behind an invariant, evaluation order,
-  side effect, or deliberate tradeoff. Do not narrate syntax that the code
-  already expresses.
-- Keep comments concise and current. Remove historical explanations once they
-  no longer help maintain the present design; use version control for history.
-- Make module-load side effects explicit near the final statement that performs
-  them. Initialization order is part of the runtime contract.
+- Explain timing, ownership, error policy, and invariants that are not obvious
+  from the types.
+- Mark deliberate test or integration seams with `@internal`.
+- Document why evaluation order or a side effect is necessary; do not narrate
+  syntax.
+- Keep comments in the present tense and remove historical names after a
+  migration completes.
+- Treat initialization and disposal order as part of the runtime contract.

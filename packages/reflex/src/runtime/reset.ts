@@ -1,28 +1,18 @@
 import { consoleLog } from '../core/logging';
-import { clearInterceptorsForKernel } from './event-metadata';
-import {
-  clearHandlerEntriesForKernel,
-  hasHandlerForKernel,
-  isHandlerKind,
-  isSubscriptionHandlerKind,
-} from './handlers';
-import type { RuntimeKernel } from './kernel';
-import { clearSubscriptionDefinitionsForKernel } from './subscriptions/cache';
-import { assertSubscriptionsCanBeClearedForKernel } from './subscriptions/engine';
+import { isHandlerKind, isSubscriptionHandlerKind, type HandlerKind } from './handlers';
 
+import type { RuntimeCore } from './core';
 import type { Id } from '../types';
-import type { HandlerKind } from './handlers';
 
-/** @internal Clear registrations owned by one runtime. */
-export function clearHandlersForKernel(runtime: RuntimeKernel, kind?: HandlerKind, id?: Id): void {
+/** @internal Cross-service reset coordination for one runtime core. */
+export function clearHandlers(runtime: RuntimeCore, kind?: HandlerKind, id?: Id): void {
   if (kind === undefined || isSubscriptionHandlerKind(kind)) {
-    assertSubscriptionsCanBeClearedForKernel(runtime);
+    runtime.subscriptions.assertClearAllowed();
   }
 
   if (kind === undefined) {
-    clearHandlerEntriesForKernel(runtime);
-    clearInterceptorsForKernel(runtime);
-    clearSubscriptionDefinitionsForKernel(runtime);
+    runtime.registry.clear();
+    runtime.subscriptions.clearDefinitions();
     return;
   }
 
@@ -31,22 +21,13 @@ export function clearHandlersForKernel(runtime: RuntimeKernel, kind?: HandlerKin
     return;
   }
 
-  if (id === undefined) {
-    if (isSubscriptionHandlerKind(kind)) clearSubscriptionDefinitionsForKernel(runtime);
-    else {
-      clearHandlerEntriesForKernel(runtime, kind);
-      if (kind === 'event') clearInterceptorsForKernel(runtime);
-    }
+  if (isSubscriptionHandlerKind(kind)) {
+    runtime.subscriptions.clearDefinitions(id);
     return;
   }
 
-  const handlerExisted = hasHandlerForKernel(runtime, kind, id);
-  if (isSubscriptionHandlerKind(kind)) clearSubscriptionDefinitionsForKernel(runtime, id);
-  else {
-    clearHandlerEntriesForKernel(runtime, kind, id);
-    if (kind === 'event') clearInterceptorsForKernel(runtime, id);
-  }
-
+  const handlerExisted = id === undefined || runtime.registry.has(kind, id);
+  runtime.registry.clear(kind, id);
   if (!handlerExisted) {
     consoleLog('warn', `[reflex] cannot clear ${kind} handler for ${id}: handler not found.`);
   }

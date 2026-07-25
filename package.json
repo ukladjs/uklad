@@ -17,6 +17,7 @@
     "build:devtools": "pnpm run build:reflex && pnpm run build:devtools-ui && pnpm run build:devtools-package",
     "build:mcp": "pnpm --filter @flexsurfer/reflex-devtools-mcp build",
     "build:examples": "pnpm --filter todomvc build && pnpm --filter @flexsurfer/reflex-devtools-playground build",
+    "format": "pnpm -r --if-present format",
     "check": "pnpm run build && pnpm -r --if-present check",
     "test": "pnpm run build && pnpm -r --if-present test:unit",
     "clean": "pnpm -r --reverse --if-present clean",

@@ -1,13 +1,13 @@
-import { clear, clearAll, debounceAndDispatch, throttleAndDispatch } from './runtime-test-api';
-import { dispatchForKernel } from '../events/router';
+import {
+  clear,
+  clearAll,
+  debounceAndDispatch,
+  testEventRuntime,
+  throttleAndDispatch,
+} from './runtime-test-api';
 import type { EventVector } from '../types';
 
-jest.mock('../events/router', () => ({
-  ...jest.requireActual('../events/router'),
-  dispatchForKernel: jest.fn(),
-}));
-
-const mockDispatch = dispatchForKernel as jest.MockedFunction<typeof dispatchForKernel>;
+let mockDispatch: jest.SpiedFunction<typeof testEventRuntime.dispatch>;
 
 describe('debounce', () => {
   beforeEach(() => {
@@ -15,10 +15,12 @@ describe('debounce', () => {
     jest.clearAllTimers();
     jest.useFakeTimers();
     clearAll();
+    mockDispatch = jest.spyOn(testEventRuntime, 'dispatch').mockImplementation();
   });
 
   afterEach(() => {
     jest.runOnlyPendingTimers();
+    mockDispatch.mockRestore();
     jest.useRealTimers();
     clearAll();
   });
@@ -52,7 +54,7 @@ describe('debounce', () => {
       jest.advanceTimersByTime(1100);
 
       expect(mockDispatch).toHaveBeenCalledTimes(1);
-      expect(mockDispatch).toHaveBeenCalledWith(expect.anything(), event2);
+      expect(mockDispatch).toHaveBeenCalledWith(event2);
     });
   });
 
@@ -91,7 +93,7 @@ describe('debounce', () => {
 
       jest.advanceTimersByTime(1);
       expect(mockDispatch).toHaveBeenCalledTimes(1);
-      expect(mockDispatch).toHaveBeenCalledWith(expect.anything(), event);
+      expect(mockDispatch).toHaveBeenCalledWith(event);
     });
 
     it('should cancel previous timeout when called multiple times with same event key', () => {
@@ -108,7 +110,7 @@ describe('debounce', () => {
 
       jest.advanceTimersByTime(100);
       expect(mockDispatch).toHaveBeenCalledTimes(1);
-      expect(mockDispatch).toHaveBeenCalledWith(expect.anything(), event);
+      expect(mockDispatch).toHaveBeenCalledWith(event);
     });
 
     it('should handle multiple different event keys independently', () => {
@@ -122,11 +124,11 @@ describe('debounce', () => {
       // At 200 ms overall, only event2 is due.
       jest.advanceTimersByTime(100);
       expect(mockDispatch).toHaveBeenCalledTimes(1);
-      expect(mockDispatch).toHaveBeenCalledWith(expect.anything(), event2);
+      expect(mockDispatch).toHaveBeenCalledWith(event2);
 
       jest.advanceTimersByTime(100);
       expect(mockDispatch).toHaveBeenCalledTimes(2);
-      expect(mockDispatch).toHaveBeenCalledWith(expect.anything(), event1);
+      expect(mockDispatch).toHaveBeenCalledWith(event1);
     });
 
     it('should handle zero duration', () => {
@@ -136,7 +138,7 @@ describe('debounce', () => {
 
       jest.advanceTimersByTime(0);
       expect(mockDispatch).toHaveBeenCalledTimes(1);
-      expect(mockDispatch).toHaveBeenCalledWith(expect.anything(), event);
+      expect(mockDispatch).toHaveBeenCalledWith(event);
     });
   });
 
@@ -147,7 +149,7 @@ describe('debounce', () => {
       throttleAndDispatch(event, 500);
 
       expect(mockDispatch).toHaveBeenCalledTimes(1);
-      expect(mockDispatch).toHaveBeenCalledWith(expect.anything(), event);
+      expect(mockDispatch).toHaveBeenCalledWith(event);
     });
 
     it('should ignore subsequent calls within throttle period', () => {
@@ -173,7 +175,7 @@ describe('debounce', () => {
 
       throttleAndDispatch(event, 500);
       expect(mockDispatch).toHaveBeenCalledTimes(2);
-      expect(mockDispatch).toHaveBeenCalledWith(expect.anything(), event);
+      expect(mockDispatch).toHaveBeenCalledWith(event);
     });
 
     it('should handle multiple different event keys independently', () => {
@@ -184,8 +186,8 @@ describe('debounce', () => {
       throttleAndDispatch(event2, 500);
 
       expect(mockDispatch).toHaveBeenCalledTimes(2);
-      expect(mockDispatch).toHaveBeenNthCalledWith(1, expect.anything(), event1);
-      expect(mockDispatch).toHaveBeenNthCalledWith(2, expect.anything(), event2);
+      expect(mockDispatch).toHaveBeenNthCalledWith(1, event1);
+      expect(mockDispatch).toHaveBeenNthCalledWith(2, event2);
 
       throttleAndDispatch(event1, 500);
       throttleAndDispatch(event2, 500);
@@ -214,12 +216,12 @@ describe('debounce', () => {
       throttleAndDispatch(throttleEvent, 300);
 
       expect(mockDispatch).toHaveBeenCalledTimes(1);
-      expect(mockDispatch).toHaveBeenCalledWith(expect.anything(), throttleEvent);
+      expect(mockDispatch).toHaveBeenCalledWith(throttleEvent);
 
       jest.advanceTimersByTime(300);
 
       expect(mockDispatch).toHaveBeenCalledTimes(2);
-      expect(mockDispatch).toHaveBeenCalledWith(expect.anything(), debounceEvent);
+      expect(mockDispatch).toHaveBeenCalledWith(debounceEvent);
     });
 
     it('should handle clearing during active debounce/throttle', () => {

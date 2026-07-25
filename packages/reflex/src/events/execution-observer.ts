@@ -1,6 +1,8 @@
-import { createRuntimeStateKey, getRuntimeState, type RuntimeKernel } from '../runtime/kernel';
-import { consoleLog } from '../core/logging';
+import { attachRuntimeProbe, getRuntimeTrackingToken, type RuntimeProbe } from '../runtime/probe';
 
+import type { RuntimeCore } from '../runtime/core';
+import type { RuntimeProbeEffect } from '../runtime/probe';
+import type { RuntimeTrackingContext } from '../runtime/probe';
 import type { EventVector } from '../types';
 
 /** Opaque development metadata created and owned by an optional integration. */
@@ -16,8 +18,8 @@ export interface DevelopmentExecutionParent {
 }
 
 /**
- * Narrow, optional development seam. Core reports execution facts but never
- * creates operation records, snapshots, or outcome objects itself.
+ * Structural compatibility contract consumed by DevTools. It is installed as
+ * one passive RuntimeProbe; core retains no operation model.
  */
 export interface DevelopmentExecutionObserver {
   accept(event: EventVector, parent?: DevelopmentExecutionParent): DevelopmentOperationReference;
@@ -33,6 +35,7 @@ export interface DevelopmentExecutionObserver {
     status: 'committed' | 'unchanged' | 'skipped',
     committedRevision: number,
   ): void;
+  effect?(operation: DevelopmentOperationReference, result: RuntimeProbeEffect): void;
   finished(
     operation: DevelopmentOperationReference,
     status: 'completed' | 'rejected' | 'failed',
@@ -43,69 +46,109 @@ export interface DevelopmentExecutionObserver {
   disposed(error: unknown): void;
 }
 
-type DevelopmentExecutionNotification = Exclude<keyof DevelopmentExecutionObserver, 'accept'>;
+interface ObserverAttachment {
+  readonly observer: DevelopmentExecutionObserver;
+  readonly probe: RuntimeProbe;
+  readonly detach: () => void;
+}
 
-const DEVELOPMENT_EXECUTION_OBSERVER = createRuntimeStateKey<DevelopmentExecutionObserver>(
-  'reflex.development-execution-observer',
-);
+const OBSERVERS = new WeakMap<RuntimeCore, ObserverAttachment>();
 
-/** @internal Install one optional development observer for this runtime. */
-export function observeDevelopmentExecutionForKernel(
-  runtime: RuntimeKernel,
+/** @internal Install the DevTools observer through the runtime's sole probe channel. */
+export function observeDevelopmentExecution(
+  runtime: RuntimeCore,
   observer: DevelopmentExecutionObserver,
 ): () => void {
-  if (getRuntimeState(runtime, DEVELOPMENT_EXECUTION_OBSERVER) !== undefined) {
+  if (OBSERVERS.has(runtime)) {
     throw new Error('[reflex] A development execution observer is already installed.');
   }
-  runtime.extensions.set(DEVELOPMENT_EXECUTION_OBSERVER.symbol, observer);
+
+  const probe: RuntimeProbe = {
+    needsPatches: false,
+    needsSubscriptionEvidence: false,
+    needsSpans: false,
+    tracksOperations: true,
+    eventAccepted(event, parent): DevelopmentOperationReference {
+      const parentOperation = getRuntimeTrackingToken(parent?.tracking, probe) as
+        DevelopmentOperationReference | undefined;
+      return observer.accept(
+        event,
+        parentOperation === undefined
+          ? undefined
+          : {
+              operation: parentOperation,
+              ...(parent?.sourceEffectId === undefined
+                ? {}
+                : { sourceEffectId: parent.sourceEffectId }),
+              ...(parent?.sourceEffectIndex === undefined
+                ? {}
+                : { sourceEffectIndex: parent.sourceEffectIndex }),
+            },
+      );
+    },
+    eventQueued(token, revision): void {
+      observer.queued(token as DevelopmentOperationReference, revision);
+    },
+    eventStarted(token, revision): void {
+      observer.started(token as DevelopmentOperationReference, revision);
+    },
+    transition(token, result): void {
+      observer.transition(token as DevelopmentOperationReference, result.status, result.error);
+    },
+    committed(token, result): void {
+      observer.committed(
+        token as DevelopmentOperationReference,
+        result.status,
+        result.committedRevision,
+      );
+    },
+    effect(token, result): void {
+      observer.effect?.(token as DevelopmentOperationReference, result);
+    },
+    eventFinished(token, status, error): void {
+      observer.finished(token as DevelopmentOperationReference, status, error);
+    },
+    eventsDropped(tokens, _reason, error): void {
+      observer.dropped(tokens as readonly DevelopmentOperationReference[], error);
+    },
+    published(_state, revision): void {
+      observer.published(revision);
+    },
+    runtimeDisposed(error): void {
+      observer.disposed(error);
+    },
+  };
+
+  const detachProbe = attachRuntimeProbe(runtime, probe);
+  const attachment: ObserverAttachment = {
+    observer,
+    probe,
+    detach: detachProbe,
+  };
+  OBSERVERS.set(runtime, attachment);
+
+  let observing = true;
   return () => {
-    if (getRuntimeState(runtime, DEVELOPMENT_EXECUTION_OBSERVER) === observer)
-      runtime.extensions.delete(DEVELOPMENT_EXECUTION_OBSERVER.symbol);
+    if (!observing) return;
+    observing = false;
+    if (OBSERVERS.get(runtime) === attachment) OBSERVERS.delete(runtime);
+    detachProbe();
   };
 }
 
-/** @internal Read the observer without allocating runtime extension state. */
-export function getDevelopmentExecutionObserverForKernel(
-  runtime: RuntimeKernel,
+/** @internal Read the optional observer without allocating any runtime state. */
+export function getDevelopmentExecutionObserver(
+  runtime: RuntimeCore,
 ): DevelopmentExecutionObserver | undefined {
-  return getRuntimeState(runtime, DEVELOPMENT_EXECUTION_OBSERVER);
+  return OBSERVERS.get(runtime)?.observer;
 }
 
-/**
- * Ask the optional observer to accept an operation without allowing a
- * diagnostic failure to block ordinary dispatch. Explicit operation callers
- * can require the resulting reference before enqueuing work.
- */
-export function acceptDevelopmentExecutionForKernel(
-  runtime: RuntimeKernel,
-  event: EventVector,
-  parent?: DevelopmentExecutionParent,
+/** @internal Resolve the DevTools operation reference from one accepted envelope. */
+export function getDevelopmentOperationReference(
+  runtime: RuntimeCore,
+  tracking: RuntimeTrackingContext | undefined,
 ): DevelopmentOperationReference | undefined {
-  const observer = getDevelopmentExecutionObserverForKernel(runtime);
-  if (!observer) return undefined;
-  try {
-    return observer.accept(event, parent);
-  } catch (error) {
-    consoleLog('warn', '[reflex] development execution observer failed during accept.', error);
-    return undefined;
-  }
-}
-
-/**
- * Notify the optional development observer without allowing diagnostic code to
- * change application execution.
- */
-export function notifyDevelopmentExecutionForKernel(
-  runtime: RuntimeKernel,
-  method: DevelopmentExecutionNotification,
-  ...args: unknown[]
-): void {
-  const observer = getDevelopmentExecutionObserverForKernel(runtime);
-  if (!observer) return;
-  try {
-    const callback = observer[method] as (...values: unknown[]) => void;
-    callback.apply(observer, args);
-  } catch (error) {
-    consoleLog('warn', `[reflex] development execution observer failed during ${method}.`, error);
-  }
+  const probe = OBSERVERS.get(runtime)?.probe;
+  if (!probe) return undefined;
+  return getRuntimeTrackingToken(tracking, probe) as DevelopmentOperationReference | undefined;
 }

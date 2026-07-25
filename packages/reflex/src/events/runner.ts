@@ -1,51 +1,20 @@
-import { produce, produceWithPatches, type Draft } from 'immer';
+import { produce, produceWithPatches, type Draft, type Patch } from 'immer';
 
 import { IS_DEV } from '../core/environment';
 import { ensurePatchesEnabled } from '../core/immer';
 import { consoleLog } from '../core/logging';
-import { isTraceEnabledForKernel, mergeOptionalTraceForKernel } from '../core/tracing';
-import { getInterceptorsForKernel } from '../runtime/event-metadata';
-import {
-  getHandlerForKernel,
-  registerHandlerForKernel,
-  registerSystemHandlerForKernel,
-} from '../runtime/handlers';
-import {
-  createRuntimeStateKey,
-  getOrCreateRuntimeState,
-  type RuntimeKernel,
-} from '../runtime/kernel';
-import {
-  hasRuntimeLifecycleObservers,
-  notifyRuntimeLifecycleForKernel,
-} from '../runtime/lifecycle';
-import { getStateForKernel } from '../runtime/state';
-import { getGlobalInterceptorsForKernel } from './global-interceptors';
-import { executeForKernel } from './interceptors';
-
-import type { ExecutionEnvelope } from './envelope';
+import { type RuntimeCore } from '../runtime/core';
+import { execute } from './interceptors';
 
 import type {
   Context,
   State,
-  ErrorHandler,
   Effects,
   EventHandler,
   EventVector,
-  Id,
   Interceptor,
   ReflexError,
 } from '../types';
-
-const HANDLER_KIND = 'event';
-const ERROR_HANDLER_KIND = 'error';
-const EVENT_ERROR_HANDLER_ID = 'event-handler';
-
-interface PipelineState {
-  handlingEventId: Id | null;
-  handlingEnvelope: ExecutionEnvelope | null;
-  runningHandlerEventId: Id | null;
-}
 
 /** The result exposed by the event runner, not by the interceptor pipeline. */
 export interface EventRunResult {
@@ -54,54 +23,9 @@ export interface EventRunResult {
   readonly candidateState?: unknown;
   readonly effects: readonly unknown[];
   readonly invalidEffects: readonly unknown[];
+  readonly patches?: readonly Patch[];
+  readonly reversePatches?: readonly Patch[];
   readonly error?: unknown;
-}
-
-const PIPELINE_STATE = createRuntimeStateKey<PipelineState>('reflex.pipeline');
-
-function getPipelineState(runtime: RuntimeKernel): PipelineState {
-  return getOrCreateRuntimeState(runtime, PIPELINE_STATE, () => ({
-    handlingEventId: null,
-    handlingEnvelope: null,
-    runningHandlerEventId: null,
-  }));
-}
-
-/** @internal Return the event being handled by one runtime. */
-export function getHandlingEventIdForKernel(runtime: RuntimeKernel): Id | null {
-  return getPipelineState(runtime).handlingEventId;
-}
-
-/** @internal Return the pure handler currently running in one runtime. */
-export function getRunningHandlerEventIdForKernel(runtime: RuntimeKernel): Id | null {
-  return getPipelineState(runtime).runningHandlerEventId;
-}
-
-/** @internal Mark the complete event execution (runner, commit, effects) as active. */
-export function beginHandlingEventForKernel(
-  runtime: RuntimeKernel,
-  envelope: ExecutionEnvelope,
-): void {
-  const state = getPipelineState(runtime);
-  state.handlingEventId = envelope.event[0];
-  state.handlingEnvelope = envelope;
-}
-
-/** @internal Clear the event-execution guard after effects have completed. */
-export function endHandlingEventForKernel(runtime: RuntimeKernel): void {
-  const state = getPipelineState(runtime);
-  state.handlingEventId = null;
-  state.handlingEnvelope = null;
-}
-
-/** @internal Return the event occurrence synchronously owning the execution lane. */
-export function getHandlingEnvelopeForKernel(runtime: RuntimeKernel): ExecutionEnvelope | null {
-  return getPipelineState(runtime).handlingEnvelope;
-}
-
-/** @internal Register one runtime's event-pipeline error handler. */
-export function regEventErrorHandlerForKernel(runtime: RuntimeKernel, handler: ErrorHandler): void {
-  registerHandlerForKernel(runtime, ERROR_HANDLER_KIND, EVENT_ERROR_HANDLER_ID, handler);
 }
 
 /** Log and rethrow an unhandled event-pipeline exception. */
@@ -118,11 +42,11 @@ export function defaultErrorHandler(originalError: Error, reflexError: ReflexErr
  * Run an event through interceptors and its handler without committing state or
  * invoking effects. `Context` is confined to this component.
  */
-export function runEventForKernel(runtime: RuntimeKernel, event: EventVector): EventRunResult {
-  const previousState = getStateForKernel<State>(runtime);
+export function runEvent(runtime: RuntimeCore, event: EventVector): EventRunResult {
+  const previousState = runtime.state.get<State>();
   const eventId = event[0];
-  const handler = getHandlerForKernel(runtime, HANDLER_KIND, eventId);
-  if (!handler) {
+  const definition = runtime.registry.getEvent(eventId);
+  if (!definition) {
     return Object.freeze({
       status: 'missing-handler' as const,
       previousState,
@@ -132,12 +56,15 @@ export function runEventForKernel(runtime: RuntimeKernel, event: EventVector): E
   }
 
   const interceptors = [
-    getInjectGlobalInterceptorsForKernel(runtime),
-    ...getInterceptorsForKernel(runtime, eventId),
-    createEventHandlerInterceptor(runtime, handler),
+    runtime.events.injectGlobalInterceptors,
+    ...definition.interceptors,
+    createEventHandlerInterceptor(runtime, definition.handler),
   ];
 
-  const context = executeForKernel(runtime, event, interceptors);
+  const context = execute(runtime, event, interceptors) as Context & {
+    readonly runtimePatches?: readonly Patch[];
+    readonly runtimeReversePatches?: readonly Patch[];
+  };
   const finalEffects = Array.isArray(context.effects) ? context.effects : [];
   const invalidEffects = [
     ...(context.invalidEffects ?? []),
@@ -149,25 +76,16 @@ export function runEventForKernel(runtime: RuntimeKernel, event: EventVector): E
     ...(context.newState === undefined ? {} : { candidateState: context.newState }),
     effects: Object.freeze([...finalEffects]),
     invalidEffects: Object.freeze(invalidEffects),
+    ...(context.runtimePatches === undefined ? {} : { patches: context.runtimePatches }),
+    ...(context.runtimeReversePatches === undefined
+      ? {}
+      : { reversePatches: context.runtimeReversePatches }),
     ...(context.executionError === undefined ? {} : { error: context.executionError }),
   });
 }
 
-const GLOBAL_INTERCEPTOR = createRuntimeStateKey<Interceptor>('reflex.inject-global-interceptors');
-
-/** @internal Inject the current global interceptors into an event pipeline. */
-export function getInjectGlobalInterceptorsForKernel(runtime: RuntimeKernel): Interceptor {
-  return getOrCreateRuntimeState(runtime, GLOBAL_INTERCEPTOR, () => ({
-    id: 'inject-global-interceptors',
-    before(context) {
-      context.queue = [...getGlobalInterceptorsForKernel(runtime), ...context.queue];
-      return context;
-    },
-  }));
-}
-
 function createEventHandlerInterceptor(
-  runtime: RuntimeKernel,
+  runtime: RuntimeCore,
   handler: EventHandler<any>,
 ): Interceptor {
   return {
@@ -180,30 +98,23 @@ function createEventHandlerInterceptor(
 
       const recipe = (draftState: Draft<State>) => {
         const coeffects = { ...context.coeffects, draftState };
-        const state = getPipelineState(runtime);
-        state.runningHandlerEventId = event[0];
+        runtime.events.runningHandlerEventId = event[0];
         try {
           effects = handler(coeffects, ...params) ?? [];
         } finally {
-          state.runningHandlerEventId = null;
+          runtime.events.runningHandlerEventId = null;
         }
       };
 
-      const tracingEnabled = isTraceEnabledForKernel(runtime);
-      if (tracingEnabled || hasRuntimeLifecycleObservers(runtime)) {
+      const patchesRequested = runtime.probe?.needsPatches === true;
+      let patches: readonly Patch[] | undefined;
+      let reversePatches: readonly Patch[] | undefined;
+      if (patchesRequested) {
         ensurePatchesEnabled();
-        const [producedState, patches, reversePatches] = produceWithPatches(
-          context.previousState as State,
-          recipe,
-        );
-        newState = producedState;
-        notifyRuntimeLifecycleForKernel(runtime, 'onStatePlanned', {
-          previousState: context.previousState,
-          plannedState: producedState,
-          patches,
-        });
-        if (tracingEnabled)
-          mergeOptionalTraceForKernel(runtime, () => ({ patches, reversePatches, effects }));
+        const produced = produceWithPatches(context.previousState as State, recipe);
+        newState = produced[0];
+        patches = produced[1];
+        reversePatches = produced[2];
       } else {
         newState = produce(context.previousState as State, recipe);
       }
@@ -224,21 +135,19 @@ function createEventHandlerInterceptor(
           ...context,
           invalidEffects: [...(context.invalidEffects ?? []), effects],
           newState,
+          ...(patches === undefined ? {} : { runtimePatches: patches }),
+          ...(reversePatches === undefined ? {} : { runtimeReversePatches: reversePatches }),
         };
       }
 
       const nextEffects = [...(context.effects || []), ...effects];
-      return { ...context, effects: nextEffects, newState };
+      return {
+        ...context,
+        effects: nextEffects,
+        newState,
+        ...(patches === undefined ? {} : { runtimePatches: patches }),
+        ...(reversePatches === undefined ? {} : { runtimeReversePatches: reversePatches }),
+      };
     },
   };
-}
-
-/** @internal Install the framework event error handler in one runtime. */
-export function registerBuiltInErrorHandler(runtime: RuntimeKernel): void {
-  registerSystemHandlerForKernel(
-    runtime,
-    ERROR_HANDLER_KIND,
-    EVENT_ERROR_HANDLER_ID,
-    defaultErrorHandler,
-  );
 }

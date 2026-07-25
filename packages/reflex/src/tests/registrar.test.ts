@@ -4,12 +4,12 @@ import {
   clearSubs,
   getHandler,
   getHandlers,
-  getInterceptors,
+  getEventInterceptors,
   getRootSubSourceById,
   getSubConfig,
   hasHandler,
   registerHandler,
-  setInterceptors,
+  setEventInterceptors,
   setRootSubSource,
   setSubConfig,
 } from './runtime-test-api';
@@ -70,12 +70,12 @@ describe('handler registry', () => {
       before: (context: Context) => context,
     };
     registerHandler('event', eventId, () => undefined);
-    setInterceptors(eventId, [interceptor]);
+    setEventInterceptors(eventId, [interceptor]);
 
     clearHandlers('event', eventId);
 
     expect(getHandler('event', eventId)).toBeUndefined();
-    expect(getInterceptors(eventId)).toEqual([]);
+    expect(getEventInterceptors(eventId)).toEqual([]);
   });
 
   it('owns an immutable interceptor list after registration', () => {
@@ -86,10 +86,10 @@ describe('handler registry', () => {
     const registered = [interceptor];
 
     registerHandler('event', 'immutable-event', () => undefined);
-    setInterceptors('immutable-event', registered);
+    setEventInterceptors('immutable-event', registered);
     registered.length = 0;
 
-    const stored = getInterceptors('immutable-event');
+    const stored = getEventInterceptors('immutable-event');
     expect(stored).toEqual([interceptor]);
     expect(Object.isFrozen(stored)).toBe(true);
   });

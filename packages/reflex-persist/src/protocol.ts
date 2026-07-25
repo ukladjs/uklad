@@ -53,7 +53,7 @@ export function assertProtocolAvailable(runtime: Runtime, includeSnapshot: boole
   if (handlers.sub[PERSIST_IDS.STATUS] !== undefined) {
     collisions.push(`subscription:${PERSIST_IDS.STATUS}`);
   }
-  if (runtime.getGlobalInterceptors().some(({ id }) => id === PERSIST_IDS.WRITER)) {
+  if (runtime.getInterceptors().some(({ id }) => id === PERSIST_IDS.WRITER)) {
     collisions.push(`interceptor:${PERSIST_IDS.WRITER}`);
   }
   if (collisions.length > 0) {

@@ -180,12 +180,12 @@ export function registerHandler<K extends HandlerKind, T extends HandlerByKind[K
 
 export const hasHandler = core.registry.has.bind(core.registry);
 export const clearHandlers = clearHandlersInternal.bind(null, core);
-export const getInterceptors = core.registry.getEventInterceptors.bind(core.registry);
-export const setInterceptors = core.registry.setEventInterceptors.bind(core.registry);
+export const getEventInterceptors = core.registry.getEventInterceptors.bind(core.registry);
+export const setEventInterceptors = core.registry.setEventInterceptors.bind(core.registry);
 
-export const regGlobalInterceptor = core.registry.registerGlobalInterceptor.bind(core.registry);
-export const getGlobalInterceptors = core.registry.getGlobalInterceptors.bind(core.registry);
-export const clearGlobalInterceptors = core.registry.clearGlobalInterceptors.bind(core.registry);
+export const registerInterceptor = core.events.registerInterceptor.bind(core.events);
+export const getInterceptors = core.events.getInterceptors.bind(core.events);
+export const clearInterceptors = core.events.clearInterceptors.bind(core.events);
 export const getInjectCofxInterceptor = getInjectCofxInterceptorInternal.bind(null, core);
 export const execute = executeInterceptors.bind(null, core) as (
   event: Id extends never ? never : [Id, ...any[]],

@@ -55,8 +55,6 @@ export class RuntimeRegistry {
     createVersionRegistry();
   private nextVersion = 0;
   private readonly eventDefinitions = new Map<Id, RuntimeEventDefinition>();
-  private globalInterceptors: Interceptor[] = [];
-  private readonly globalInterceptorVersions = new Map<string, number>();
 
   get<K extends HandlerKind>(kind: K, id: Id): HandlerByKind[K] | undefined {
     return this.handlers[kind][id];
@@ -97,49 +95,6 @@ export class RuntimeRegistry {
     const handler = this.handlers.event[id];
     if (handler !== undefined) {
       this.eventDefinitions.set(id, createEventDefinition(handler, interceptors));
-    }
-  }
-
-  registerGlobalInterceptor(interceptor: Interceptor): RegistrationOwnership {
-    const existingIndex = this.globalInterceptors.findIndex(({ id }) => id === interceptor.id);
-    this.globalInterceptors =
-      existingIndex === -1
-        ? [...this.globalInterceptors, interceptor]
-        : this.globalInterceptors.map((existing, index) =>
-            index === existingIndex ? interceptor : existing,
-          );
-    const version = this.bumpVersion();
-    this.globalInterceptorVersions.set(interceptor.id, version);
-    const isCurrent = () => this.globalInterceptorVersions.get(interceptor.id) === version;
-    const release = (): boolean => {
-      if (!isCurrent()) return false;
-      this.globalInterceptors = this.globalInterceptors.filter(
-        (existing) => existing.id !== interceptor.id,
-      );
-      this.globalInterceptorVersions.set(interceptor.id, this.bumpVersion());
-      return true;
-    };
-    return Object.freeze({
-      get current(): boolean {
-        return isCurrent();
-      },
-      release,
-    });
-  }
-
-  getGlobalInterceptors(): Interceptor[] {
-    return [...this.globalInterceptors];
-  }
-
-  clearGlobalInterceptors(id?: string): void {
-    const removedIds =
-      id === undefined ? this.globalInterceptors.map((interceptor) => interceptor.id) : [id];
-    this.globalInterceptors =
-      id === undefined
-        ? []
-        : this.globalInterceptors.filter((interceptor) => interceptor.id !== id);
-    for (const removedId of removedIds) {
-      this.globalInterceptorVersions.set(removedId, this.bumpVersion());
     }
   }
 

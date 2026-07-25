@@ -6,6 +6,8 @@ import {
 } from '../runtime/runtime';
 import { waitForScheduled } from './test-utils';
 
+import type { Interceptor } from '../types';
+
 interface CounterContracts extends ReflexContracts {
   state: { count: number; label: string };
   events: {
@@ -54,6 +56,27 @@ describe('instance-scoped runtime', () => {
     expect(eventDefinition).toBe(core.registry.getEvent('increment'));
     expect(Object.isFrozen(eventDefinition)).toBe(true);
     expect(Object.isFrozen(eventDefinition?.interceptors)).toBe(true);
+
+    runtime.dispose();
+  });
+
+  it('owns global interceptors in the event runtime', () => {
+    const runtime = createCounterRuntime('runtime-interceptors', 0);
+    const core = getRuntimeCoreForTests(runtime);
+    const interceptor: Interceptor<CounterContracts['state']> = {
+      id: 'runtime-interceptor',
+      before: jest.fn((context) => context),
+    };
+
+    runtime.registerInterceptor(interceptor);
+
+    expect(runtime.getInterceptors()).toEqual([interceptor]);
+    expect(core.events.getInterceptors()).toEqual([interceptor]);
+    expect(Object.hasOwn(core.registry, 'globalInterceptors')).toBe(false);
+    expect('registerGlobalInterceptor' in core.registry).toBe(false);
+
+    runtime.dispatchSync(['increment', 1]);
+    expect(interceptor.before).toHaveBeenCalledTimes(1);
 
     runtime.dispose();
   });

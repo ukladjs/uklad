@@ -277,23 +277,23 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return dispose;
   }
 
-  regGlobalInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void {
+  registerInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void {
     this.assertUsable();
     this.recordOwnership(
-      this.#core.registry.registerGlobalInterceptor(interceptor as unknown as Interceptor),
+      this.#core.events.registerInterceptor(interceptor as unknown as Interceptor),
     );
   }
 
-  getGlobalInterceptors(): Interceptor<ContractState<TContracts>>[] {
+  getInterceptors(): Interceptor<ContractState<TContracts>>[] {
     this.assertUsable();
-    return this.#core.registry.getGlobalInterceptors() as unknown as Interceptor<
+    return this.#core.events.getInterceptors() as unknown as Interceptor<
       ContractState<TContracts>
     >[];
   }
 
-  clearGlobalInterceptors(id?: string): void {
+  clearInterceptors(id?: string): void {
     this.assertUsable();
-    this.#core.registry.clearGlobalInterceptors(id);
+    this.#core.events.clearInterceptors(id);
   }
 
   setEqualityCheck(equalityCheck: EqualityCheckFn): void {
@@ -433,7 +433,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     markRuntimeDisposed(this.#core);
     notifyRuntimeProbe(this.#core, 'runtimeDisposed', disposeError);
     disposeTracing(this.#core);
-    this.#core.registry.clearGlobalInterceptors();
+    this.#core.events.clearInterceptors();
     clearHandlers(this.#core);
     detachRuntimeProbes(this.#core);
   }

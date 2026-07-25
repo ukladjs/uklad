@@ -36,13 +36,16 @@ export class EventRuntime {
   readonly throttleTimers: Set<ReturnType<typeof setTimeout>> = new Set();
   readonly injectGlobalInterceptors: Interceptor;
   private readonly getRuntime: () => RuntimeCore;
+  private globalInterceptors: Interceptor[] = [];
+  private readonly globalInterceptorVersions = new Map<string, number>();
+  private nextGlobalInterceptorVersion = 0;
 
   constructor(getRuntime: () => RuntimeCore) {
     this.getRuntime = getRuntime;
     this.injectGlobalInterceptors = {
       id: 'inject-global-interceptors',
       before(context) {
-        context.queue = [...getRuntime().registry.getGlobalInterceptors(), ...context.queue];
+        context.queue = [...getRuntime().events.getInterceptors(), ...context.queue];
         return context;
       },
     };
@@ -69,6 +72,49 @@ export class EventRuntime {
     legacyInterceptors?: Interceptor<T>[],
   ): RegistrationOwnership {
     return regEvent(this.getRuntime(), id, handler, registration, legacyInterceptors);
+  }
+
+  registerInterceptor(interceptor: Interceptor): RegistrationOwnership {
+    const existingIndex = this.globalInterceptors.findIndex(({ id }) => id === interceptor.id);
+    this.globalInterceptors =
+      existingIndex === -1
+        ? [...this.globalInterceptors, interceptor]
+        : this.globalInterceptors.map((existing, index) =>
+            index === existingIndex ? interceptor : existing,
+          );
+    const version = this.bumpGlobalInterceptorVersion();
+    this.globalInterceptorVersions.set(interceptor.id, version);
+    const isCurrent = () => this.globalInterceptorVersions.get(interceptor.id) === version;
+    const release = (): boolean => {
+      if (!isCurrent()) return false;
+      this.globalInterceptors = this.globalInterceptors.filter(
+        (existing) => existing.id !== interceptor.id,
+      );
+      this.globalInterceptorVersions.set(interceptor.id, this.bumpGlobalInterceptorVersion());
+      return true;
+    };
+    return Object.freeze({
+      get current(): boolean {
+        return isCurrent();
+      },
+      release,
+    });
+  }
+
+  getInterceptors(): Interceptor[] {
+    return [...this.globalInterceptors];
+  }
+
+  clearInterceptors(id?: string): void {
+    const removedIds =
+      id === undefined ? this.globalInterceptors.map((interceptor) => interceptor.id) : [id];
+    this.globalInterceptors =
+      id === undefined
+        ? []
+        : this.globalInterceptors.filter((interceptor) => interceptor.id !== id);
+    for (const removedId of removedIds) {
+      this.globalInterceptorVersions.set(removedId, this.bumpGlobalInterceptorVersion());
+    }
   }
 
   execute(envelope: ExecutionEnvelope): void {
@@ -190,6 +236,10 @@ export class EventRuntime {
     }, durationMs);
     this.throttleTimers.add(timeout);
     this.dispatch(acceptedEvent);
+  }
+
+  private bumpGlobalInterceptorVersion(): number {
+    return ++this.nextGlobalInterceptorVersion;
   }
 }
 

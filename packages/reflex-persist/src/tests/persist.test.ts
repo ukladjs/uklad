@@ -379,7 +379,7 @@ describe('persist', () => {
       storage: createMemoryStorage({ 'reflex/count': entry(1, 41) }).storage,
       keys: ['count'],
     });
-    runtime.regGlobalInterceptor({
+    runtime.registerInterceptor({
       id: 'block-sync-hydrate-after-handler',
       after: (context) => {
         if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {
@@ -750,7 +750,7 @@ describe('persist', () => {
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
     handle.hydrate();
-    runtime.regGlobalInterceptor({
+    runtime.registerInterceptor({
       id: 'block-purge-after-handler',
       after: (context) => {
         if (context.coeffects.event[0] === PERSIST_IDS.PURGE) {
@@ -1005,7 +1005,7 @@ describe('persist', () => {
       keys: ['count'],
       experimentalAsync: true,
     });
-    runtime.regGlobalInterceptor({
+    runtime.registerInterceptor({
       id: 'block-hydrate-after-handler',
       after: (context) => {
         if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {

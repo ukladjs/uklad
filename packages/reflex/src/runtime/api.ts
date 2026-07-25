@@ -92,9 +92,9 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
     options?: WatchSubscriptionOptions,
   ): ReflexDisposer;
 
-  regGlobalInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void;
-  getGlobalInterceptors(): Interceptor<ContractState<TContracts>>[];
-  clearGlobalInterceptors(id?: string): void;
+  registerInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void;
+  getInterceptors(): Interceptor<ContractState<TContracts>>[];
+  clearInterceptors(id?: string): void;
   setEqualityCheck(equalityCheck: EqualityCheckFn): void;
   getEqualityCheck(): EqualityCheckFn;
 

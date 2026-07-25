@@ -6,7 +6,7 @@
 import { waitForScheduled } from './test-utils';
 import { createReflexRuntime, getRuntimeCoreForTests } from '../runtime/runtime';
 import {
-  clearGlobalInterceptors,
+  clearInterceptors,
   disableTracing,
   dispatch,
   enableTracing,
@@ -14,7 +14,7 @@ import {
   initState,
   regEffect,
   regEvent,
-  regGlobalInterceptor,
+  registerInterceptor,
   registerTraceCallback,
   removeTraceCallback,
 } from './runtime-test-api';
@@ -35,7 +35,7 @@ describe('Conditional patch generation', () => {
   });
 
   afterEach(() => {
-    clearGlobalInterceptors();
+    clearInterceptors();
     removeTraceCallback('trace-patches-test');
     disableTracing();
   });
@@ -89,7 +89,7 @@ describe('Conditional patch generation', () => {
       collected.push(...traces);
     });
     regEffect('trace-after-effect', () => {});
-    regGlobalInterceptor({
+    registerInterceptor({
       id: 'trace-after-interceptor',
       after: (context) => {
         context.effects.push(['trace-after-effect', { key: 'value' }]);

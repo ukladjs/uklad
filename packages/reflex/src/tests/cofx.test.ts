@@ -1,5 +1,5 @@
 import {
-  clearGlobalInterceptors,
+  clearInterceptors,
   dispatch,
   getState,
   getInjectCofxInterceptor,
@@ -14,7 +14,7 @@ import { waitForScheduled } from './test-utils';
 describe('regCofx - Co-Effects', () => {
   beforeEach(() => {
     initState({ counter: 0, messages: [] });
-    clearGlobalInterceptors();
+    clearInterceptors();
     regCoeffect('now', (coeffects) => ({
       ...coeffects,
       now: Date.now(),

@@ -60,6 +60,7 @@
     "README.md",
     "LICENSE",
     "llms.txt",
+    "benchmarks",
     "templates",
     "reflex_logo.jpg"
   ],
@@ -84,6 +85,11 @@
     "test:types:package": "tsc --noEmit -p tests/types/package/tsconfig.json",
     "test:types:compat": "tsc6 --noEmit -p tests/types/package/tsconfig.json",
     "test:types:legacy": "node tests/legacy-consumer/run.js",
+    "benchmark": "pnpm run build && node --expose-gc benchmarks/run.mjs",
+    "benchmark:state": "pnpm run build && node --expose-gc benchmarks/run.mjs state",
+    "benchmark:subscriptions": "pnpm run build && node --expose-gc benchmarks/run.mjs subscriptions",
+    "benchmark:events": "pnpm run build && node --expose-gc benchmarks/run.mjs events",
+    "benchmark:memory": "pnpm run build && node --expose-gc benchmarks/run.mjs memory",
     "prepublishOnly": "pnpm run check && pnpm run test:ci"
   },
   "devDependencies": {

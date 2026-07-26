@@ -159,12 +159,13 @@ channel.
 ## Registration and disposal
 
 Registries return opaque ownership tokens. Callers may ask a token whether it
-still owns the current generation, preflight destructive release, and release
-it. Version counters are registry implementation details; the runtime façade
-must not inspect them.
+still identifies the installed registration, preflight destructive release,
+and release it. Duplicate IDs throw; callers must dispose or explicitly clear
+the old registration before installing another one.
 
 An event definition contains its handler and immutable interceptor list.
-Replacing or clearing an event updates that complete definition atomically.
+Registering an existing event ID throws. Clearing an event removes the complete
+definition atomically.
 
 Module disposal validates every registration before running user cleanup, then
 releases registrations in reverse order. Disposers are idempotent.

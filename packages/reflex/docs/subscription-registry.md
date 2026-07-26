@@ -21,9 +21,10 @@ conflate:
 
 - **Definitions** — `id → handler function`. Written at registration
   (`regRootSub`, `regSub`, `regEvent`, …), read whenever an instance is built
-  or an event is handled. Re-registering an event replaces its definition; a
-  subscription can be replaced only while none of its queries is cached.
-  Clears remove either a selected definition or the complete registry.
+  or an event is handled. Definition IDs are unique, so duplicate registration
+  throws. HMR must clear or dispose the old definition before registering its
+  replacement. Clears remove either a selected definition or the complete
+  registry.
 - **Instances** — `serialized query key → built subscription graph`. Created
   lazily on first read of a query vector, evicted when their last consumer
   leaves. One definition (`['todos-by-id']`) produces many instances
@@ -186,8 +187,8 @@ dependency in an older generation is not swept out from under a fresh parent.
 The two domains keep their metadata with the definition it qualifies:
 
 - **`eventDefinitions`** in `RuntimeRegistry` stores each event handler and its
-  immutable interceptor list together. Re-registration and ownership-token
-  release replace or remove the complete definition.
+  immutable interceptor list together. Duplicate registration is rejected;
+  ownership-token release removes the complete definition.
 - **`subConfigById`** lives in `SubscriptionRuntime`. Its custom
   `equalityCheck` is read once when an instance is built and baked into the
   node's spec.

@@ -2,6 +2,7 @@ import {
   clearInterceptors,
   dispatch,
   getState,
+  handlerRegistry,
   initState,
   regCoeffect,
   regEvent,
@@ -14,6 +15,8 @@ describe('regCofx - Co-Effects', () => {
   beforeEach(() => {
     initState({ counter: 0, messages: [] });
     clearInterceptors();
+    handlerRegistry.cofx.clear('now');
+    handlerRegistry.cofx.clear('random');
     regCoeffect('now', (coeffects) => ({
       ...coeffects,
       now: Date.now(),

@@ -170,7 +170,9 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   regEventErrorHandler(handler: ErrorHandler): void {
     this.assertUsable();
-    this.recordOwnership(this.#core.registry.error.register('event-handler', handler));
+    this.recordOwnership(
+      this.#core.registry.error.registerSystemOverride('event-handler', handler),
+    );
   }
 
   regRootSub(id: Id, sourceKey: string): void {

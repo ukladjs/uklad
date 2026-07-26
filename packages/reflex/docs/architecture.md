@@ -25,7 +25,7 @@ hot-path capability and is `undefined` in an uninstrumented runtime.
 | Owner                 | State and policy it owns                                                                                          |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `StateStore`          | Live and published state heads, flush scheduling, and primitive committed/published revisions                     |
-| `RuntimeRegistry`     | Handler stores, immutable event definitions, global interceptors, system baselines, and registration generations  |
+| `RuntimeRegistry`     | Handler stores, immutable event definitions, global interceptors, system baselines, and registration identities   |
 | `EventRuntime`        | Event queue, execution guards, current effect lineage, dispatch timers, rate limits, and global injection         |
 | `SubscriptionRuntime` | Definitions, root indexes, canonical cache, reverse edges, provisional leases, equality options, and graph engine |
 | `RuntimeProbe`        | Optional passive execution facts requested by tracing or DevTools; it owns no application semantics               |
@@ -80,9 +80,9 @@ records, or trace objects. The queue uses a head index instead of repeated
 ### Event definitions
 
 `RuntimeRegistry` stores an event handler and its interceptor list as one
-immutable `RuntimeEventDefinition`. Re-registering an event atomically replaces
-both. Omitting registration options therefore clears a previous interceptor
-chain instead of accidentally retaining it.
+immutable `RuntimeEventDefinition`. Event IDs are unique: registering an ID
+that is already present throws. HMR and feature replacement must dispose or
+clear the old definition before registering the new one.
 
 Global interceptors are registry-owned. `EventRuntime` owns the interceptor
 that injects the registry's current global list into a running chain.
@@ -191,9 +191,10 @@ when an attached probe sets `needsSubscriptionEvidence`.
 ## Registration ownership
 
 Every mutable registration returns an opaque `RegistrationOwnership` token.
-The token knows whether it still owns the current generation and can release
-that generation without deleting a newer replacement. Version counters remain
-private to `RuntimeRegistry`.
+The token identifies the exact installed registration and can release it only
+while it is still current. If an explicit clear has already removed it, a stale
+token cannot delete a registration installed afterward. Registries do not use
+replacement generations because duplicate registration is rejected.
 
 `registerModule()` records these tokens. Disposal first asks every token to
 validate destructive release, runs user cleanup, and releases tokens in reverse
@@ -212,7 +213,7 @@ Paths are relative to `src/`.
 | `runtime/validation.ts`               | Strict public runtime boundary assertions                                         |
 | `runtime/state.ts`                    | `StateStore` and the single state-publication boundary                            |
 | `runtime/handler-types.ts`            | Registry, event-definition, and ownership-token contracts                         |
-| `runtime/registry.ts`                 | Typed `HandlerRecord`s, system baselines, and registration generations            |
+| `runtime/registry.ts`                 | Typed `HandlerRecord`s, system baselines, and unique registration identities      |
 | `runtime/probe-types.ts`              | Passive instrumentation contracts and fact DTOs                                   |
 | `runtime/probe.ts`                    | Sole optional passive instrumentation capability                                  |
 | `runtime/lifecycle-types.ts`          | Compatibility lifecycle observer contract                                         |

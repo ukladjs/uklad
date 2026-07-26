@@ -357,6 +357,8 @@ describe('Type-safe Event Handlers', () => {
 describe('regEvent with cofx', () => {
   beforeEach(() => {
     initState({ counter: 0, messages: [], timestamp: 0, randomValue: 0 });
+    handlerRegistry.cofx.clear('now');
+    handlerRegistry.cofx.clear('random');
     regCoeffect('now', (coeffects) => ({
       ...coeffects,
       now: Date.now(),
@@ -584,9 +586,8 @@ describe('regEvent with cofx', () => {
       expect(interceptorCall).toHaveBeenCalledTimes(1);
     });
 
-    it('should replace and clear event interceptors when re-registering an id', () => {
+    it('should reject re-registering an event id', () => {
       const staleCall = jest.fn();
-      const replacementCall = jest.fn();
       const handler = ({ draftState }: CoEffects) => {
         draftState.counter += 1;
       };
@@ -602,29 +603,14 @@ describe('regEvent with cofx', () => {
           },
         ],
       });
-      regEvent('test-reregister-interceptors', handler, {
-        interceptors: [
-          {
-            id: 'replacement-interceptor',
-            before: (context) => {
-              replacementCall();
-              return context;
-            },
-          },
-        ],
-      });
+      expect(() => regEvent('test-reregister-interceptors', handler)).toThrow(
+        "Event handler 'test-reregister-interceptors' is already registered",
+      );
 
       dispatchSync(['test-reregister-interceptors']);
 
-      expect(staleCall).not.toHaveBeenCalled();
-      expect(replacementCall).toHaveBeenCalledTimes(1);
-
-      regEvent('test-reregister-interceptors', handler);
-      dispatchSync(['test-reregister-interceptors']);
-
-      expect(staleCall).not.toHaveBeenCalled();
-      expect(replacementCall).toHaveBeenCalledTimes(1);
-      expect(getState().counter).toBe(2);
+      expect(staleCall).toHaveBeenCalledTimes(1);
+      expect(getState().counter).toBe(1);
     });
 
     it('should support interceptor-only options', async () => {
@@ -1035,6 +1021,7 @@ describe('regEvent with cofx', () => {
 
     it('should handle errors in global interceptors gracefully', async () => {
       const errorHandler = jest.fn();
+      handlerRegistry.error.clear('event-handler');
       registerHandler(handlerRegistry.error, 'event-handler', errorHandler);
 
       const faultyGlobalInterceptor: Interceptor = {

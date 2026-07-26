@@ -1,5 +1,6 @@
 import { hasNonSerializableSubParam } from '../runtime/subscriptions/keys';
 import {
+  clearSubscriptionHandlers,
   clearSubscriptionCache,
   getOrCreateSubscription,
   getSubConfig,
@@ -172,7 +173,7 @@ describe('Subscription registry lifecycle', () => {
   });
 
   describe('subscription key contract', () => {
-    it('replaces an omitted config instead of retaining stale registration metadata', () => {
+    it('requires clearing before registering a subscription id again', () => {
       regSub(
         'sweep-config-reset',
         () => 1,
@@ -181,6 +182,15 @@ describe('Subscription registry lifecycle', () => {
       );
       expect(getSubConfig('sweep-config-reset')?.equalityCheck).toBe(Object.is);
 
+      expect(() =>
+        regSub(
+          'sweep-config-reset',
+          () => 2,
+          () => [],
+        ),
+      ).toThrow("Subscription handler 'sweep-config-reset' is already registered");
+
+      clearSubscriptionHandlers('sweep-config-reset');
       regSub(
         'sweep-config-reset',
         () => 2,
@@ -210,9 +220,7 @@ describe('Subscription registry lifecycle', () => {
           () => 2,
           () => [],
         ),
-      ).toThrow(
-        "Cannot register subscription 'sweep-override' while a cached query for that id exists",
-      );
+      ).toThrow("Subscription handler 'sweep-override' is already registered");
       expect(getSubscriptionValue(['sweep-override'])).toBe(1);
     });
 

@@ -21,13 +21,12 @@ describe('framework handler lifecycle', () => {
     expect(getHandler(handlerRegistry.error, 'event-handler')).toBe(defaultErrorHandler);
   });
 
-  it('restores a built-in effect after a targeted override clear', () => {
+  it('rejects overriding a built-in effect', () => {
     const builtInDispatch = getHandler(handlerRegistry.fx, DISPATCH);
     const override = () => undefined;
-    regEffect(DISPATCH, override);
-    expect(getHandler(handlerRegistry.fx, DISPATCH)).toBe(override);
-
-    handlerRegistry.fx.clear(DISPATCH);
+    expect(() => regEffect(DISPATCH, override)).toThrow(
+      "Effect handler 'dispatch' is already registered",
+    );
 
     expect(getHandler(handlerRegistry.fx, DISPATCH)).toBe(builtInDispatch);
   });

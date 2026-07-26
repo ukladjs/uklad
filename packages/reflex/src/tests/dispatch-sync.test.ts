@@ -1,4 +1,3 @@
-import { defaultErrorHandler } from '../events/runner';
 import {
   clearSubscriptionCache,
   dispatch,
@@ -10,7 +9,6 @@ import {
   initState,
   regEffect,
   regEvent,
-  regEventErrorHandler,
   regRootSub,
   regSub,
   subscribeToSubscription,
@@ -111,8 +109,6 @@ describe('dispatchSync', () => {
 
     expect(() => dispatchSync(['ds-reentrant'])).toThrow(/dispatchSync/);
     expect(getState()['ds-counter']).toBe(0);
-
-    regEventErrorHandler(defaultErrorHandler);
   });
 
   it('should throw when called from within an effect handler', () => {
@@ -164,8 +160,6 @@ describe('dispatchSync', () => {
     });
 
     expect(() => dispatchSync(['ds-boom'])).toThrow('sync boom');
-
-    regEventErrorHandler(defaultErrorHandler);
   });
 
   it('should reject invalid event vectors without throwing', () => {

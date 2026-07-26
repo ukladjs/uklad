@@ -21,6 +21,6 @@ export interface RegistrationOwnership {
   readonly current: boolean;
   /** Validate destructive release before user cleanup runs. */
   assertReleasable?(): void;
-  /** Remove this registration without touching a newer replacement. */
+  /** Remove this registration without touching one installed after an explicit clear. */
   release(): boolean;
 }

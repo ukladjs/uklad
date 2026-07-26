@@ -1,4 +1,3 @@
-import { defaultErrorHandler } from '../events/runner';
 import { waitForScheduled } from './test-utils';
 import {
   disableTracing,
@@ -31,11 +30,12 @@ describe('Error tracing', () => {
   afterAll(() => {
     removeTraceCallback('trace-errors-test');
     disableTracing();
-    regEventErrorHandler(defaultErrorHandler);
+    handlerRegistry.error.clear('event-handler');
   });
 
   beforeEach(() => {
     collected = [];
+    handlerRegistry.error.clear('event-handler');
   });
 
   it('attaches handler exceptions to the event trace', async () => {
@@ -152,7 +152,7 @@ describe('Queue failure isolation', () => {
   beforeAll(() => {
     initState({});
     // Default handler rethrows, so the exception reaches the router.
-    regEventErrorHandler(defaultErrorHandler);
+    handlerRegistry.error.clear('event-handler');
   });
 
   it('loudly reports the exception without dropping later accepted events', async () => {

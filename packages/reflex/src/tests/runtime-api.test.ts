@@ -13,6 +13,8 @@ interface CounterContracts extends ReflexContracts {
   events: {
     increment: [amount: number];
     cascade: [amount: number];
+    fail: [];
+    'module-increment': [amount: number];
   };
   subscriptions: {
     count: { params: []; result: number };
@@ -290,16 +292,13 @@ describe('instance-scoped runtime', () => {
 
   it('rejects flush on queue failure and remains usable afterward', async () => {
     const runtime = createCounterRuntime('flush-error', 0);
-    runtime.regEvent('increment', () => {
+    runtime.regEvent('fail', () => {
       throw new Error('queue failed');
     });
 
-    runtime.dispatch(['increment', 1]);
+    runtime.dispatch(['fail']);
     await expect(runtime.flush()).rejects.toThrow('queue failed');
 
-    runtime.regEvent('increment', ({ draftState }, amount) => {
-      draftState.count += amount;
-    });
     runtime.dispatch(['increment', 2]);
     await expect(runtime.flush()).resolves.toBeUndefined();
     expect(runtime.getState().count).toBe(2);
@@ -308,16 +307,13 @@ describe('instance-scoped runtime', () => {
 
   it('reports an unobserved queue failure to the next flush, not a later one', async () => {
     const runtime = createCounterRuntime('flush-pending-error', 0);
-    runtime.regEvent('increment', () => {
+    runtime.regEvent('fail', () => {
       throw new Error('unobserved queue failure');
     });
 
-    runtime.dispatch(['increment', 1]);
+    runtime.dispatch(['fail']);
     await waitForScheduled();
 
-    runtime.regEvent('increment', ({ draftState }, amount) => {
-      draftState.count += amount;
-    });
     runtime.dispatch(['increment', 2]);
 
     await expect(runtime.flush()).rejects.toThrow('unobserved queue failure');
@@ -434,31 +430,43 @@ describe('instance-scoped runtime', () => {
     ).toThrow('runtime name must be between 1 and 128 characters');
   });
 
-  it('installs and disposes feature registrations idempotently by generation', () => {
+  it('rejects duplicate registrations and supports dispose-then-register HMR', () => {
     const runtime = createCounterRuntime('modules', 0);
     const builtInDispatchEffect = runtime.getHandlers().fx.dispatch;
-    const sharedHandler: RuntimeEventHandler<CounterContracts, 'increment'> = ({ draftState }) => {
+    const sharedHandler: RuntimeEventHandler<CounterContracts, 'module-increment'> = ({
+      draftState,
+    }) => {
       draftState.count += 1;
     };
 
     const disposeFirst = runtime.registerModule((scope) => {
-      scope.regEvent('increment', sharedHandler);
+      scope.regEvent('module-increment', sharedHandler);
     });
-    const disposeSecond = runtime.registerModule((scope) => {
-      scope.regEvent('increment', sharedHandler);
-    });
-    const disposeBuiltInOverride = runtime.registerModule((scope) => {
-      scope.regEffect('dispatch', () => {});
-    });
+    expect(() =>
+      runtime.registerModule((scope) => {
+        scope.regEvent('module-increment', sharedHandler);
+      }),
+    ).toThrow("Event handler 'module-increment' is already registered");
+    expect(() =>
+      runtime.registerModule((scope) => {
+        scope.regEffect('dispatch', () => {});
+      }),
+    ).toThrow("Effect handler 'dispatch' is already registered");
+    expect(runtime.getHandlers().fx.dispatch).toBe(builtInDispatchEffect);
 
-    disposeFirst();
-    runtime.dispatchSync(['increment', 999]);
+    runtime.dispatchSync(['module-increment', 999]);
     expect(runtime.getState().count).toBe(1);
+    disposeFirst();
+    expect(runtime.getHandlers().event['module-increment']).toBeUndefined();
 
-    disposeSecond();
-    disposeSecond();
-    expect(runtime.getHandlers().event.increment).toBeUndefined();
-    disposeBuiltInOverride();
+    const disposeReplacement = runtime.registerModule((scope) => {
+      scope.regEvent('module-increment', sharedHandler);
+    });
+    runtime.dispatchSync(['module-increment', 999]);
+    expect(runtime.getState().count).toBe(2);
+    disposeReplacement();
+    disposeReplacement();
+    expect(runtime.getHandlers().event['module-increment']).toBeUndefined();
     expect(runtime.getHandlers().fx.dispatch).toBe(builtInDispatchEffect);
     runtime.dispose();
   });

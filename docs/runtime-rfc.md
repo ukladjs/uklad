@@ -40,7 +40,7 @@ Each runtime exclusively owns:
 
 | Concern              | Instance-owned state                                                                                        |
 | -------------------- | ----------------------------------------------------------------------------------------------------------- |
-| State             | live write head, render/read head, pending publication flag                                                 |
+| State                | live write head, render/read head, pending publication flag                                                 |
 | Events               | queue, queue state, current event/handler metadata, event interceptors                                      |
 | Registries           | event, effect, coeffect, subscription, dependency, and error handlers; framework built-ins                  |
 | Cross-cutting policy | ordered global interceptors and default subscription equality function                                      |
@@ -94,6 +94,12 @@ The contract is compile-time only. Runtime validation and externally supplied sc
 `runtime.registerModule(feature)` executes a synchronous installer and returns an idempotent disposer. Registrations made through the supplied runtime during installation are owned by that installation. An optional feature cleanup runs before definitions are detached so it can release module-owned watchers and other resources. Disposal then removes only registrations that still refer to that installation; it never clears unrelated or newer handlers.
 
 Module installers cannot call `registerModule` recursively. Compose installers as ordinary synchronous functions inside one module installation when a feature has submodules; this keeps registration ownership unambiguous.
+
+Event, effect, coeffect, subscription, and global-interceptor IDs are unique
+within a runtime. Registering an ID that already exists throws instead of
+replacing its handler. HMR must dispose the old module (or use the scoped
+subscription HMR clear) before evaluating registrations from the new module.
+Framework effects cannot be overridden through ordinary registration.
 
 A subscription definition cannot be removed while one of its graphs is active. Applications must unmount/unwatch consumers before disposing the feature; Reflex fails loudly instead of leaving a partially detached graph. Repeated disposal is a no-op. These rules make route-level lazy loading and dispose-then-install HMR deterministic.
 

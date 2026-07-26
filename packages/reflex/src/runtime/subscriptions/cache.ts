@@ -393,13 +393,12 @@ export class SubscriptionRuntime {
 
   private prepareRegistration(id: Id): void {
     const runtime = this.getRuntime();
+    runtime.registry.sub.assertAvailable(id);
+    runtime.registry.subDeps.assertAvailable(id);
     if (this.hasCachedId(id)) {
-      const message = `[reflex] Cannot register subscription '${id}' while a cached query for that id exists. Clear unused subscriptions before re-registering it.`;
+      const message = `[reflex] Cannot register subscription '${id}' while a cached query for that id exists. Clear the subscription before registering it again.`;
       consoleLog('error', message);
       throw new Error(message);
-    }
-    if (runtime.registry.sub.has(id)) {
-      consoleLog('warn', `[reflex] Overriding. Subscription '${id}' already registered.`);
     }
   }
 

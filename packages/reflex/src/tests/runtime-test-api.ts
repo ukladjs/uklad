@@ -101,7 +101,7 @@ export const regCoeffect = testRuntime.regCoeffect.bind(testRuntime);
 export const dispatch = core.events.dispatch.bind(core.events);
 export const dispatchSync = core.events.dispatchSync.bind(core.events);
 export function regEventErrorHandler(handler: ErrorHandler): void {
-  core.registry.error.register('event-handler', handler);
+  core.registry.error.registerSystemOverride('event-handler', handler);
 }
 
 export function regSub<R = any, K extends Id = Id>(
@@ -175,6 +175,8 @@ export function getHandlers(): HandlerRegistry {
 export function registerHandler<T>(record: HandlerRecord<T>, id: Id, handler: T): T {
   if (record === core.registry.event) {
     core.events.registerEvent(id, handler as EventHandler);
+  } else if (record === core.registry.error) {
+    core.registry.error.registerSystemOverride(id, handler as ErrorHandler);
   } else {
     record.register(id, handler);
   }

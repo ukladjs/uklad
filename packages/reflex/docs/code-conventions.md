@@ -19,6 +19,7 @@ src/
     immer.ts                       Immer integration
     logging.ts                     logging adapter
     scheduling.ts                  host scheduling primitives
+    structured-clone.ts             structured-clone-compatible value copying
     tracing-types.ts               public trace DTOs
     validation.ts                  untyped-boundary guards
   runtime/
@@ -27,7 +28,6 @@ src/
     runtime.ts                     public façade implementation and module lifecycle
     validation.ts                  strict runtime boundary assertions
     state.ts                       StateStore
-    structured-clone.ts            queued event input ownership
     handler-types.ts               registry contracts
     registrations.ts               RegistrationStore and cleanup handles
     registry.ts                    Typed RuntimeRegistry composition

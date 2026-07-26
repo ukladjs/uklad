@@ -2,7 +2,7 @@ import { IS_DEV } from '../core/environment';
 import { consoleLog } from '../core/logging';
 import { isEventVector } from '../core/validation';
 import { isRuntimeDisposed, type RuntimeCore } from './core';
-import { cloneStructuredValue } from './structured-clone';
+import { cloneStructuredValue } from '../core/structured-clone';
 import { createRegistrationHandle, RegistrationStore } from './registrations';
 import { assertRuntimeUsable } from './validation';
 import {

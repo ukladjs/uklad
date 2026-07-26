@@ -104,7 +104,7 @@ runtime.registerModule((scope) => {
   scope.regEvent('counter/increment', ({ draftState }) => {
     draftState.counter += 1;
   });
-  scope.regSub('counter');
+  scope.regRootSub('counter', 'counter');
 });
 
 function Counter() {

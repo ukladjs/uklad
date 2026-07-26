@@ -69,8 +69,7 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
   ): void;
   regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void;
   regEventErrorHandler(handler: ErrorHandler): void;
-  regSub<TId extends string>(id: TId): void;
-  regSub<TId extends string>(id: TId, sourceKey: string): void;
+  regRootSub<TId extends string>(id: TId, sourceKey: string): void;
   regSub<TId extends string>(
     id: TId,
     compute: RuntimeSubscriptionHandler<TContracts, TId>,

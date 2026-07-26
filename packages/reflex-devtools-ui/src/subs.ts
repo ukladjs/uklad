@@ -1,25 +1,25 @@
 import type { TraceItem } from "./types/Trace";
-import { regSub } from './runtime';
+import { regRootSub, regSub } from './runtime';
 
 // Subscriptions for devtools state
-regSub('state');
-regSub('activeSubs');
-regSub('handlerKeys');
-regSub('handlerUsage');
-regSub('traces');
-regSub('isConnected');
-regSub('capabilities');
-regSub('runtimes');
-regSub('selectedRuntimeId');
-regSub('pendingRuntimeId');
-regSub('sessionEpoch');
-regSub('filter');
-regSub('splitPosition');
-regSub('isDragging');
-regSub('selectedTrace');
-regSub('settings');
+regRootSub('state', 'state');
+regRootSub('activeSubs', 'activeSubs');
+regRootSub('handlerKeys', 'handlerKeys');
+regRootSub('handlerUsage', 'handlerUsage');
+regRootSub('traces', 'traces');
+regRootSub('isConnected', 'isConnected');
+regRootSub('capabilities', 'capabilities');
+regRootSub('runtimes', 'runtimes');
+regRootSub('selectedRuntimeId', 'selectedRuntimeId');
+regRootSub('pendingRuntimeId', 'pendingRuntimeId');
+regRootSub('sessionEpoch', 'sessionEpoch');
+regRootSub('filter', 'filter');
+regRootSub('splitPosition', 'splitPosition');
+regRootSub('isDragging', 'isDragging');
+regRootSub('selectedTrace', 'selectedTrace');
+regRootSub('settings', 'settings');
 // Dispatch modal state
-regSub('dispatchModalOpenState');
+regRootSub('dispatchModalOpenState', 'dispatchModalOpenState');
 
 // Settings
 regSub('showRenders', (settings) => settings.showRenders, () => [['settings']]);

@@ -22,7 +22,7 @@ const disposeFeature = runtime.registerModule((scope) => {
   scope.regEvent('count/increment', ({ draftState }) => {
     draftState.count += 1;
   });
-  scope.regSub('count');
+  scope.regRootSub('count', 'count');
 });
 
 function Root() {

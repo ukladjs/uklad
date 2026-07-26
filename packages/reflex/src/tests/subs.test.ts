@@ -6,6 +6,7 @@ import {
   getSubscriptionValue,
   hasCachedSubscription,
   initState,
+  regRootSub,
   regSub,
   subscribeToSubscription,
   sweepProvisionalSubscriptions,
@@ -13,7 +14,7 @@ import {
 import { waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('Subscription registry lifecycle', () => {
-  regSub('sweep-todos');
+  regRootSub('sweep-todos', 'sweep-todos');
   regSub(
     'sweep-count',
     (todos) => (todos || []).length,
@@ -191,7 +192,7 @@ describe('Subscription registry lifecycle', () => {
     });
 
     it('supports an empty string as an explicit root source key', () => {
-      regSub('sweep-empty-source', '');
+      regRootSub('sweep-empty-source', '');
       initState({ '': 'empty-key-value' });
 
       expect(getSubscriptionValue(['sweep-empty-source'])).toBe('empty-key-value');

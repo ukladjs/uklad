@@ -33,7 +33,7 @@ runtime.regEffect('log', ({ message }) => {
   const value: string = message;
   void value;
 });
-runtime.regSub('count');
+runtime.regRootSub('count', 'count');
 runtime.regSub(
   'scaled',
   (count: number, factor: number) => count * factor,

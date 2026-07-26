@@ -15,7 +15,7 @@ function ValueView() {
 }
 
 function installValueFeature(runtime: ReflexRuntime<any>) {
-  runtime.regSub('value');
+  runtime.regRootSub('value', 'value');
   runtime.regEvent('set', ({ draftState }, value: number) => {
     draftState.value = value;
   });

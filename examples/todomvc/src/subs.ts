@@ -4,8 +4,8 @@ import type { Showing, Todos } from './state';
 import { SUB_IDS } from './sub-ids';
 import { todoRuntime } from './runtime';
 
-todoRuntime.regSub(SUB_IDS.TODOS, 'todos');
-todoRuntime.regSub(SUB_IDS.SHOWING);
+todoRuntime.regRootSub(SUB_IDS.TODOS, 'todos');
+todoRuntime.regRootSub(SUB_IDS.SHOWING, SUB_IDS.SHOWING);
 
 todoRuntime.regSub(
   SUB_IDS.VISIBLE_TODOS,

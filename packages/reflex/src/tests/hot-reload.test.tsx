@@ -162,7 +162,7 @@ describe('Hot Reload System', () => {
 
   describe('setupSubsHotReload', () => {
     it('should provide dispose and accept functions', () => {
-      runtime.regSub('value');
+      runtime.regRootSub('value', 'value');
       const { dispose, accept } = setupSubsHotReload(runtime);
 
       expect(typeof dispose).toBe('function');
@@ -202,7 +202,7 @@ describe('Hot Reload System', () => {
         initialState: { value: 1 },
         runtimeId: 'explicit-hmr-runtime',
       });
-      runtime.regSub('value');
+      runtime.regRootSub('value', 'value');
       const unsubscribe = runtime.watchSubscription(['value'], () => {});
       const { dispose } = setupSubsHotReload(runtime);
 
@@ -218,8 +218,8 @@ describe('Hot Reload System', () => {
         initialState: { value: 1, persistStatus: 'idle' },
         runtimeId: 'scoped-hmr-runtime',
       });
-      runtime.regSub('value');
-      runtime.regSub('persist-status', 'persistStatus');
+      runtime.regRootSub('value', 'value');
+      runtime.regRootSub('persist-status', 'persistStatus');
       const unsubscribe = runtime.watchSubscription(['value'], () => {});
       const { dispose } = setupSubsHotReload(runtime, ['value']);
 
@@ -236,7 +236,7 @@ describe('Hot Reload System', () => {
     it('should work with a complete hot reload workflow', () => {
       const mockCallback = jest.fn();
 
-      runtime.regSub('value');
+      runtime.regRootSub('value', 'value');
       const { dispose, accept } = setupSubsHotReload(runtime);
       registerHotReloadCallback(runtime, mockCallback);
 

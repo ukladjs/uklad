@@ -11,7 +11,7 @@ describe('parallel runtime isolation', () => {
       initialState: { value: initial },
       runtimeId: `parallel-${runtimeId}`,
     });
-    runtime.regSub('value');
+    runtime.regRootSub('value', 'value');
     runtime.regEvent('increment', ({ draftState }, delta: number) => {
       draftState.value += delta;
     });

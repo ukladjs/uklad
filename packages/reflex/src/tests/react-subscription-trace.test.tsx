@@ -14,7 +14,7 @@ describe('React subscription tracing', () => {
   it('records hook notifications as render traces rather than watches', async () => {
     const runtime = createReflexRuntime({ initialState: { value: 1 }, runtimeId: 'render-trace' });
     const traces: Array<{ opType?: string }> = [];
-    runtime.regSub('value');
+    runtime.regRootSub('value', 'value');
     runtime.regEvent('set-value', ({ draftState }, value: number) => {
       draftState.value = value;
     });

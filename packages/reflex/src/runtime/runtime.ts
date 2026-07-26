@@ -173,10 +173,16 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     this.recordOwnership(this.#core.registry.error.register('event-handler', handler));
   }
 
+  regRootSub(id: Id, sourceKey: string): void {
+    this.assertUsable();
+    const ownership = this.#core.subscriptions.registerRoot(id, sourceKey);
+    if (ownership) this.recordOwnership(ownership);
+  }
+
   regSub(
     id: Id,
-    compute?: RuntimeSubscriptionHandler<TContracts, any> | string,
-    dependencies?: (...params: any[]) => ContractSubscribeVector<TContracts>[],
+    compute: RuntimeSubscriptionHandler<TContracts, any>,
+    dependencies: (...params: any[]) => ContractSubscribeVector<TContracts>[],
     config?: SubConfig,
   ): void {
     this.assertUsable();

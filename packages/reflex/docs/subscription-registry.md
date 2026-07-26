@@ -20,10 +20,10 @@ The handler and subscription-cache modules separate two things that are easy to
 conflate:
 
 - **Definitions** — `id → handler function`. Written at registration
-  (`regSub`, `regEvent`, …), read whenever an instance is built or an event is
-  handled. Re-registering an event replaces its definition; a subscription can
-  be replaced only while none of its queries is cached. Clears remove either a
-  selected definition or the complete registry.
+  (`regRootSub`, `regSub`, `regEvent`, …), read whenever an instance is built
+  or an event is handled. Re-registering an event replaces its definition; a
+  subscription can be replaced only while none of its queries is cached.
+  Clears remove either a selected definition or the complete registry.
 - **Instances** — `serialized query key → built subscription graph`. Created
   lazily on first read of a query vector, evicted when their last consumer
   leaves. One definition (`['todos-by-id']`) produces many instances
@@ -63,10 +63,10 @@ Two architectural facts explain why the instance-side metadata exists at all:
 `event`, `fx`, `cofx`, `sub`, `subDeps`, and `error`. Internal callers operate
 on these properties directly instead of passing handler-kind strings. Each
 record stores ids in a null-prototype object, so valid string ids such as
-`constructor` and `__proto__` cannot collide with `Object.prototype`. `regSub`
-writes to both `registry.sub` and `registry.subDeps`. A root subscription
-registers a `sub` handler that reads one top-level state key and a `subDeps`
-handler returning `[]`.
+`constructor` and `__proto__` cannot collide with `Object.prototype`.
+`regRootSub` and `regSub` both write to `registry.sub` and `registry.subDeps`.
+A root subscription registers a `sub` handler that reads one top-level state
+key and a `subDeps` handler returning `[]`.
 
 This is the only registry devtools reads directly (`getHandlers`) to enumerate
 what the app declares. Overwriting an existing id warns; it is allowed for
@@ -118,9 +118,10 @@ one key would split watchers and publications across them — an invariant
 violation, not a recoverable condition, so it fails loudly.
 
 - **`subId`** supports id-scoped operations without parsing JSON keys:
-  `hasCachedSubscriptionForId` (used to reject `regSub` re-registration while
-  instances exist) and `clearSubscriptionCacheEntriesForId` (clearing a
-  subscription definition must drop every parameterized instance of that id).
+  `hasCachedSubscriptionForId` (used to reject `regRootSub`/`regSub`
+  re-registration while instances exist) and
+  `clearSubscriptionCacheEntriesForId` (clearing a subscription definition
+  must drop every parameterized instance of that id).
 - **`dependencyKeys`** are the forward edges, walked by
   `renewProvisionalSubscriptionTree` to renew a whole dormant subtree on a
   cache hit.

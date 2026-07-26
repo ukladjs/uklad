@@ -25,7 +25,7 @@ function createCounterRuntime(runtimeId: string, count: number) {
     runtimeId,
     name: `Runtime ${runtimeId}`,
   });
-  runtime.regSub('count');
+  runtime.regRootSub('count', 'count');
   runtime.regEvent('increment', ({ draftState }, amount) => {
     draftState.count += amount;
   });
@@ -470,7 +470,7 @@ describe('instance-scoped runtime', () => {
     });
     let cleanedUp = false;
     const disposeFeature = runtime.registerModule((scope) => {
-      scope.regSub('value');
+      scope.regRootSub('value', 'value');
       return () => {
         cleanedUp = true;
       };
@@ -491,8 +491,10 @@ describe('instance-scoped runtime', () => {
       initialState: { feature: 1, shell: 2 },
       runtimeId: 'unrelated-active-module',
     });
-    runtime.regSub('shell');
-    const disposeFeature = runtime.registerModule((scope) => scope.regSub('feature'));
+    runtime.regRootSub('shell', 'shell');
+    const disposeFeature = runtime.registerModule((scope) =>
+      scope.regRootSub('feature', 'feature'),
+    );
     const unwatchShell = runtime.watchSubscription(['shell'], () => {});
 
     expect(() => disposeFeature()).not.toThrow();

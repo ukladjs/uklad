@@ -5,6 +5,7 @@ import {
   getOrCreateSubscription,
   getSubscriptionSnapshot,
   initState,
+  regRootSub,
   regSub,
   subscribeToSubscription,
   updateState,
@@ -48,7 +49,7 @@ describe('shallowEqual', () => {
 });
 
 describe('per-sub equalityCheck config with shallowEqual', () => {
-  regSub('se-items');
+  regRootSub('se-items', 'se-items');
   regSub(
     'se-mapped',
     (items: number[]) => items.map((n) => n),

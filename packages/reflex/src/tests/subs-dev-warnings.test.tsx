@@ -12,11 +12,12 @@ import {
   getOrCreateSubscription,
   initState,
   ReflexTestProvider,
+  regRootSub,
   regSub,
 } from './runtime-test-api';
 
 describe('Dev warnings for non-serializable subscription params', () => {
-  regSub('warn-items');
+  regRootSub('warn-items', 'warn-items');
   regSub(
     'warn-by-filter',
     (items) => items,

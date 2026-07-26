@@ -12,4 +12,5 @@ export const devtoolsRuntime = createReflexRuntime({
 export const dispatch = devtoolsRuntime.dispatch.bind(devtoolsRuntime);
 export const regEvent = devtoolsRuntime.regEvent.bind(devtoolsRuntime);
 export const regEffect = devtoolsRuntime.regEffect.bind(devtoolsRuntime);
+export const regRootSub = devtoolsRuntime.regRootSub.bind(devtoolsRuntime);
 export const regSub = devtoolsRuntime.regSub.bind(devtoolsRuntime);

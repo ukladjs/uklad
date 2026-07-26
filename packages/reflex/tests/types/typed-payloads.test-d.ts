@@ -247,8 +247,14 @@ runtime.regSub(
   () => [],
 );
 
-// root subs and undeclared ids keep working
+// Root subs use their own registration API.
+runtime.regRootSub('some-root', 'some-root');
+// @ts-expect-error root subscriptions require an explicit source key
+runtime.regRootSub('some-root');
+// @ts-expect-error regSub only registers computed subscriptions
 runtime.regSub('some-root');
+// @ts-expect-error source-key subscriptions use regRootSub
+runtime.regSub('some-root', 'state-key');
 legacyRuntime.regSub(
   'legacy-sorted',
   () => [] as Todo[],

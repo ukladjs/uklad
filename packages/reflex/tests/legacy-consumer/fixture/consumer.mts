@@ -7,7 +7,7 @@ import type { ErrorHandler, EventRegistrationOptions, Interceptor } from '@flexs
 const runtime = createReflexRuntime({ initialState: {} });
 runtime.dispatch(['legacy/esm']);
 runtime.regEvent('legacy/esm', () => undefined);
-runtime.regSub('legacy/root');
+runtime.regRootSub('legacy/root', 'legacy/root');
 runtime.regSub(
   'legacy/doubled',
   (count: number) => count * 2,

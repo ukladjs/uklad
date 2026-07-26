@@ -10,7 +10,7 @@ const runtime = createReflexRuntime({ initialState: { count: 0 } });
 runtime.regEvent('inc', ({ draftState }) => {
   draftState.count += 1;
 });
-runtime.regSub('count');
+runtime.regRootSub('count', 'count');
 runtime.regSub(
   'doubled',
   (count) => count * 2,

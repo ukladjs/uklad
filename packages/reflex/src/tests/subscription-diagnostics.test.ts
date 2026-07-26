@@ -4,6 +4,7 @@ import {
   getSubscriptionDiagnostics,
   getSubscriptionSnapshot,
   initState,
+  regRootSub,
   regSub,
   subscribeToSubscription,
 } from './runtime-test-api';
@@ -12,7 +13,7 @@ import type { SubVector } from '../types';
 let computedRuns = 0;
 
 describe('subscription diagnostics', () => {
-  regSub('diagnostic-source');
+  regRootSub('diagnostic-source', 'diagnostic-source');
   regSub(
     'diagnostic-double',
     (value: number) => {

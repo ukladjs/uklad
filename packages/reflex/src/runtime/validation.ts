@@ -47,7 +47,7 @@ export function assertRegisteredSubscription(runtime: RuntimeCore, query: unknow
   }
   if (!runtime.registry.sub.has(query[0])) {
     throw new Error(
-      `[reflex] No subscription registered for '${query[0]}' in runtime '${runtime.identity.runtimeId}'. Register it with regSub() before use.`,
+      `[reflex] No subscription registered for '${query[0]}' in runtime '${runtime.identity.runtimeId}'. Register it with regRootSub() or regSub() before use.`,
     );
   }
 }

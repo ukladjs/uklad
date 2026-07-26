@@ -65,9 +65,10 @@ For compile-checked dispatch payloads, declare the typed payload maps (section 1
 - Put all I/O here: localStorage, HTTP, timers, analytics, navigation.
 - Effects should be small, defensive, and fail-soft (log, do not crash app state flow).
 
-## 5) Subscriptions `regSub`
+## 5) Subscriptions `regRootSub` and `regSub`
 
-- Define root subscriptions first `regSub(id, "pathKey")`.
+- Define direct top-level state subscriptions first with `regRootSub(id, "pathKey")`.
+- Define computed subscriptions with `regSub(id, computeFn, depsFn)`.
 - Build derived subscriptions from other subscriptions only.
 - Use parameterized subscriptions for by-id and section-specific queries.
 - Subscription params must be plain JSON-serializable values (ids, strings, numbers). Never pass `Map`/`Set`/`RegExp`, functions, `undefined`, Symbols, BigInt, `NaN`/`Infinity`, or circular structures as params (at any nesting depth) — subscription caching and re-subscription key on `JSON.stringify(subVector)`, so such params collide, go stale, or throw (reflex warns in dev).
@@ -271,7 +272,7 @@ runtime.regEvent('todos/add', ({ draftState }, text: string) => {
   return [['storage/set_todos', current(draftState.todos)]];
 });
 
-runtime.regSub('todos/list', 'todos');
+runtime.regRootSub('todos/list', 'todos');
 runtime.regSub(
   'todos/open_count',
   (todos: Todo[]) => todos.filter((todo) => !todo.done).length,

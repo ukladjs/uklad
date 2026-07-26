@@ -394,7 +394,7 @@ export function persist<TContracts extends ReflexContracts>(
   let disposeModule: (() => void) | undefined;
   try {
     disposeModule = runtime.registerModule((scope) => {
-      scope.regSub(PERSIST_IDS.STATUS, PERSIST_IDS.STATUS);
+      scope.regRootSub(PERSIST_IDS.STATUS, PERSIST_IDS.STATUS);
       scope.regEvent(
         PERSIST_IDS.ATTACH,
         ({ draftState }, _payload: unknown, authorization: unknown) => {

@@ -11,6 +11,7 @@ import {
   getSubscriptionSnapshot,
   initState,
   regEvent,
+  regRootSub,
   regSub,
   subscribeToSubscription,
 } from './runtime-test-api';
@@ -21,7 +22,7 @@ describe('Mount recompute cascades', () => {
 
   let sortCount = 0;
 
-  regSub('mc-items');
+  regRootSub('mc-items', 'mc-items');
   regSub(
     'mc-sorted',
     (items: any[]) => {

@@ -11,13 +11,14 @@ import {
   regEffect,
   regEvent,
   regEventErrorHandler,
+  regRootSub,
   regSub,
   subscribeToSubscription,
 } from './runtime-test-api';
 import { waitForScheduled, waitForAnimationFrame, waitForSubscription } from './test-utils';
 
 describe('dispatchSync', () => {
-  regSub('ds-counter');
+  regRootSub('ds-counter', 'ds-counter');
   regSub(
     'ds-double',
     (counter) => counter * 2,

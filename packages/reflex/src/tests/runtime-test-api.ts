@@ -106,11 +106,15 @@ export function regEventErrorHandler(handler: ErrorHandler): void {
 
 export function regSub<R = any, K extends Id = Id>(
   id: K,
-  computeFn?: ((...values: any[]) => SubResult<K, R>) | string,
-  depsFn?: (...params: any[]) => SubVector[],
+  computeFn: (...values: any[]) => SubResult<K, R>,
+  depsFn: (...params: any[]) => SubVector[],
   config?: SubConfig,
 ): void {
   core.subscriptions.register(id, computeFn, depsFn, config);
+}
+
+export function regRootSub<K extends Id = Id>(id: K, sourceKey: string): void {
+  core.subscriptions.registerRoot(id, sourceKey);
 }
 
 export function getSubscriptionValue<T>(subVector: SubVector): T {

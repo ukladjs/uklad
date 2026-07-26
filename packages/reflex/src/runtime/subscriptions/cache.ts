@@ -80,63 +80,40 @@ export class SubscriptionRuntime {
 
   register<R = any, K extends Id = Id>(
     id: K,
-    computeFn?: ((...values: any[]) => SubResult<K, R>) | string,
-    depsFn?: (...params: any[]) => SubVector[],
+    computeFn: (...values: any[]) => SubResult<K, R>,
+    depsFn: (...params: any[]) => SubVector[],
     config?: SubConfig,
   ): RegistrationOwnership | undefined {
+    this.prepareRegistration(id);
+    if (typeof computeFn !== 'function' || typeof depsFn !== 'function') {
+      consoleLog(
+        'error',
+        `[reflex] Subscription '${id}' must specify both computeFn and depsFn. Register direct state subscriptions with regRootSub().`,
+      );
+      return undefined;
+    }
+
     const runtime = this.getRuntime();
-    if (this.hasCachedId(id)) {
-      const message = `[reflex] Cannot register subscription '${id}' while a cached query for that id exists. Clear unused subscriptions before re-registering it.`;
-      consoleLog('error', message);
-      throw new Error(message);
-    }
-    if (runtime.registry.sub.has(id)) {
-      consoleLog('warn', `[reflex] Overriding. Subscription '${id}' already registered.`);
-    }
+    this.clearRootSource(id);
+    return this.createRegistrationOwnership(
+      id,
+      [runtime.registry.sub.register(id, computeFn), runtime.registry.subDeps.register(id, depsFn)],
+      config,
+    );
+  }
 
-    let handlers: readonly [RegistrationOwnership, RegistrationOwnership] | undefined;
-    if (computeFn === undefined) {
-      handlers = this.registerRoot(id, id);
-    } else if (typeof computeFn === 'string') {
-      handlers = this.registerRoot(id, computeFn);
-    } else {
-      if (!depsFn) {
-        consoleLog(
-          'error',
-          `[reflex] Subscription '${id}' has computeFn but missing depsFn. Computed subscriptions must specify their dependencies.`,
-        );
-        return undefined;
-      }
-      this.clearRootSource(id);
-      handlers = [
-        runtime.registry.sub.register(id, computeFn),
-        runtime.registry.subDeps.register(id, depsFn),
-      ];
+  registerRoot(id: Id, sourceKey: string): RegistrationOwnership | undefined {
+    if (typeof sourceKey !== 'string') {
+      consoleLog(
+        'error',
+        `[reflex] Root subscription '${id}' must specify a sourceKey. Call regRootSub(id, sourceKey).`,
+      );
+      return undefined;
     }
+    this.prepareRegistration(id);
+    const handlers = this.registerRootHandlers(id, sourceKey);
     if (!handlers) return undefined;
-
-    const normalizedConfig = normalizeSubscriptionConfig(id, config);
-    if (normalizedConfig) this.subConfigById.set(id, normalizedConfig);
-    else this.subConfigById.delete(id);
-
-    const [computeOwnership, depsOwnership] = handlers;
-    const isCurrent = () => computeOwnership.current && depsOwnership.current;
-    const assertReleasable = (): void => {
-      if (isCurrent()) this.assertDefinitionCanBeCleared(id);
-    };
-    const release = (): boolean => {
-      if (!isCurrent()) return false;
-      this.assertDefinitionCanBeCleared(id);
-      this.clearDefinitions(id);
-      return true;
-    };
-    return Object.freeze({
-      get current(): boolean {
-        return isCurrent();
-      },
-      assertReleasable,
-      release,
-    });
+    return this.createRegistrationOwnership(id, handlers);
   }
 
   getOrCreate(subVector: SubVector): SubscriptionNode<any> | null {
@@ -390,7 +367,7 @@ export class SubscriptionRuntime {
     this.engine.assertPublicationAllowed();
   }
 
-  private registerRoot(
+  private registerRootHandlers(
     id: Id,
     sourceKey: string,
   ): readonly [RegistrationOwnership, RegistrationOwnership] | undefined {
@@ -412,6 +389,47 @@ export class SubscriptionRuntime {
       ),
       runtime.registry.subDeps.register(id, () => []),
     ];
+  }
+
+  private prepareRegistration(id: Id): void {
+    const runtime = this.getRuntime();
+    if (this.hasCachedId(id)) {
+      const message = `[reflex] Cannot register subscription '${id}' while a cached query for that id exists. Clear unused subscriptions before re-registering it.`;
+      consoleLog('error', message);
+      throw new Error(message);
+    }
+    if (runtime.registry.sub.has(id)) {
+      consoleLog('warn', `[reflex] Overriding. Subscription '${id}' already registered.`);
+    }
+  }
+
+  private createRegistrationOwnership(
+    id: Id,
+    handlers: readonly [RegistrationOwnership, RegistrationOwnership],
+    config?: SubConfig,
+  ): RegistrationOwnership {
+    const normalizedConfig = normalizeSubscriptionConfig(id, config);
+    if (normalizedConfig) this.subConfigById.set(id, normalizedConfig);
+    else this.subConfigById.delete(id);
+
+    const [computeOwnership, depsOwnership] = handlers;
+    const isCurrent = () => computeOwnership.current && depsOwnership.current;
+    const assertReleasable = (): void => {
+      if (isCurrent()) this.assertDefinitionCanBeCleared(id);
+    };
+    const release = (): boolean => {
+      if (!isCurrent()) return false;
+      this.assertDefinitionCanBeCleared(id);
+      this.clearDefinitions(id);
+      return true;
+    };
+    return Object.freeze({
+      get current(): boolean {
+        return isCurrent();
+      },
+      assertReleasable,
+      release,
+    });
   }
 
   setRootSource(subId: Id, sourceKey: string): void {

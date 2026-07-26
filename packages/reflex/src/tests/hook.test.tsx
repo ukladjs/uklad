@@ -11,19 +11,20 @@ import {
   initState,
   ReflexTestProvider,
   regEvent,
+  regRootSub,
   regSub,
 } from './runtime-test-api';
 import { waitForAnimationFrame, waitForEventAndSubscription } from './test-utils';
 
 describe('React Hooks', () => {
-  regSub('user');
+  regRootSub('user', 'user');
   regSub(
     'user-name',
     (user) => user?.name,
     () => [['user']],
   );
-  regSub('user-email-str', 'userEmail');
-  regSub('todos');
+  regRootSub('user-email-str', 'userEmail');
+  regRootSub('todos', 'todos');
   regSub(
     'todos-count',
     (todos) => (todos || []).length,
@@ -110,7 +111,7 @@ describe('React Hooks', () => {
     });
 
     it('should reject duplicate root-key registration with different sub ids', () => {
-      regSub('user-email-str-duplicate', 'userEmail');
+      regRootSub('user-email-str-duplicate', 'userEmail');
 
       expectLogCall(
         'error',
@@ -269,7 +270,7 @@ describe('React Hooks', () => {
         draftState.counter = value;
       });
 
-      regSub('counter');
+      regRootSub('counter', 'counter');
 
       initState({
         counter: 0,
@@ -396,7 +397,7 @@ describe('React Hooks', () => {
     });
 
     it('should render consistent values across subscriptions sharing a dependency', async () => {
-      regSub('cons-base');
+      regRootSub('cons-base', 'cons-base');
       regSub(
         'cons-x10',
         (v: number) => v * 10,

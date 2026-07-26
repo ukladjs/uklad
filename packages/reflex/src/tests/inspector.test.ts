@@ -10,6 +10,7 @@ import {
   regCoeffect,
   regEffect,
   regEvent,
+  regRootSub,
   regSub,
   withTrace,
 } from './runtime-test-api';
@@ -35,7 +36,7 @@ describe('Reflex inspector', () => {
     regEvent('inspector-event', () => undefined);
     regEffect('inspector-effect', () => {});
     regCoeffect('inspector-coeffect', (coeffects) => coeffects);
-    regSub('count');
+    regRootSub('count', 'count');
 
     const inspector = createReflexInspector();
     const snapshot = inspector.getSnapshot();
@@ -61,7 +62,7 @@ describe('Reflex inspector', () => {
   it('evaluates subscriptions on demand without evaluating during snapshot reads', () => {
     let computedRuns = 0;
     initState({ count: 2 });
-    regSub('count');
+    regRootSub('count', 'count');
     regSub(
       'double-count',
       (count: number) => {

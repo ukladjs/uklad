@@ -10,7 +10,7 @@ async function renderRequest(requestId: string, initialValue: number, increment:
     initialState: { requestId, value: initialValue },
     runtimeId: `request-${requestId}`,
   });
-  runtime.regSub('value');
+  runtime.regRootSub('value', 'value');
   runtime.regEvent('increment', ({ draftState }, amount: number) => {
     draftState.value += amount;
   });

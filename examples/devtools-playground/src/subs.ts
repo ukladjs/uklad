@@ -3,12 +3,12 @@ import type { PlaygroundContracts } from './state';
 
 /** Install the shared subscription graph on one runtime. */
 export function installPlaygroundSubscriptions(runtime: ReflexRuntime<PlaygroundContracts>): void {
-  runtime.regSub('users');
-  runtime.regSub('counter');
-  runtime.regSub('isLoading');
-  runtime.regSub('nestedCollections');
-  runtime.regSub('userMap');
-  runtime.regSub('permissionsSet');
+  runtime.regRootSub('users', 'users');
+  runtime.regRootSub('counter', 'counter');
+  runtime.regRootSub('isLoading', 'isLoading');
+  runtime.regRootSub('nestedCollections', 'nestedCollections');
+  runtime.regRootSub('userMap', 'userMap');
+  runtime.regRootSub('permissionsSet', 'permissionsSet');
 
   function randomBlockingDelay() {
     const delay = Math.floor(Math.random() * 200) + 1;

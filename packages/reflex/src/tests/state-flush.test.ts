@@ -16,6 +16,7 @@ import {
   getSubscriptionValue,
   initState,
   regEvent,
+  regRootSub,
   regSub,
   subscribeToSubscription,
   updateState,
@@ -29,8 +30,8 @@ const waitForFlush = async () => {
 };
 
 describe('Subscription flush', () => {
-  regSub('flush-counter');
-  regSub('flush-other');
+  regRootSub('flush-counter', 'flush-counter');
+  regRootSub('flush-other', 'flush-other');
   regSub(
     'flush-double',
     (counter) => counter * 2,

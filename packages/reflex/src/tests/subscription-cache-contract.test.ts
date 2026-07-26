@@ -9,6 +9,7 @@ import {
   initState,
   readSubscription,
   regEvent,
+  regRootSub,
   regSub,
   subscribeToSubscription,
 } from './runtime-test-api';
@@ -24,7 +25,7 @@ let lengthRuns = 0;
 let selectedRuns = 0;
 
 describe('Subscription cache contract', () => {
-  regSub('cache-items');
+  regRootSub('cache-items', 'cache-items');
   regSub(
     'cache-count',
     (items: number[]) => (items || []).length,
@@ -40,7 +41,7 @@ describe('Subscription cache contract', () => {
     (items: number[]) => items.length,
     () => [['cache-even-items']],
   );
-  regSub('cache-revive-source');
+  regRootSub('cache-revive-source', 'cache-revive-source');
   regSub(
     'cache-revive-double',
     (value: number) => value * 2,
@@ -62,7 +63,7 @@ describe('Subscription cache contract', () => {
     },
     () => [['cache-default-mapped']],
   );
-  regSub('cache-selected');
+  regRootSub('cache-selected', 'cache-selected');
   regSub(
     'cache-selected-value',
     (selected: string | undefined) => {
@@ -71,7 +72,7 @@ describe('Subscription cache contract', () => {
     },
     () => [['cache-selected']],
   );
-  regSub('cache-shared-source');
+  regRootSub('cache-shared-source', 'cache-shared-source');
   regSub(
     'cache-shared-dependency',
     (value: number) => value * 2,
@@ -278,7 +279,7 @@ describe('Subscription cache contract', () => {
   it('invalidates dormant dependents when a subscription handler is cleared', () => {
     const sourceId = 'cache-clear-handler-source';
     const derivedId = 'cache-clear-handler-derived';
-    regSub(sourceId);
+    regRootSub(sourceId, sourceId);
     regSub(
       derivedId,
       (value: number) => value * 2,
@@ -298,7 +299,7 @@ describe('Subscription cache contract', () => {
   it('does not let an old HMR cleanup evict a replacement graph', () => {
     const sourceId = 'cache-hmr-source';
     const derivedId = 'cache-hmr-derived';
-    regSub(sourceId);
+    regRootSub(sourceId, sourceId);
     regSub(
       derivedId,
       (value: number) => value * 2,
@@ -311,7 +312,7 @@ describe('Subscription cache contract', () => {
     expect(getSubscriptionSnapshot(oldSubscription)).toBe(2);
 
     clearSubsForHotReload();
-    regSub(sourceId);
+    regRootSub(sourceId, sourceId);
     regSub(
       derivedId,
       (value: number) => value * 3,

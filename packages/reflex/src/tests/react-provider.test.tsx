@@ -10,7 +10,7 @@ import { createReflexRuntime, type ReflexRuntime } from '../runtime/runtime';
 
 function createValueRuntime(runtimeId: string, value: number) {
   const runtime = createReflexRuntime({ initialState: { value }, runtimeId });
-  runtime.regSub('value');
+  runtime.regRootSub('value', 'value');
   runtime.regEvent('set', ({ draftState }, nextValue: number) => {
     draftState.value = nextValue;
   });

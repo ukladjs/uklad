@@ -58,7 +58,8 @@ active/dormant boundaries, and deep registered graphs.
 - Computation errors are retained. A dependency publication or subsequent
   snapshot request retries them, including Suspense-style transient throws.
   The first successful result never compares against a missing previous value.
-- `regSub` cannot replace a handler while cached queries for that id exist.
+- `regRootSub` and `regSub` cannot replace a handler while cached queries for
+  that id exist.
 - Registry and subscription-handler clearing is rejected while a graph is
   active and cascades through cached dependents. HMR uses an internal reset
   followed by a keyed remount.

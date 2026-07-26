@@ -28,7 +28,8 @@ src/
     validation.ts                  strict runtime boundary assertions
     state.ts                       StateStore
     handler-types.ts               registry contracts
-    registry.ts                    RuntimeRegistry and typed HandlerRecords
+    registrations.ts               RegistrationStore and cleanup handles
+    registry.ts                    Typed RuntimeRegistry composition
     events.ts                      EventRuntime, event definitions, and registration metadata
     probe-types.ts                 instrumentation contracts and DTOs
     probe.ts                       sole optional instrumentation channel
@@ -158,10 +159,11 @@ channel.
 
 ## Registration and disposal
 
-Registries return opaque ownership tokens. Callers may ask a token whether it
-still identifies the installed registration, preflight destructive release,
-and release it. Duplicate IDs throw; callers must dispose or explicitly clear
-the old registration before installing another one.
+`RegistrationStore` is the only registration-identity implementation. Stores
+return opaque `RegistrationHandle`s that can report whether they still identify
+the installed value, preflight destructive release, and release it. Duplicate
+IDs throw; callers must dispose or explicitly clear the old registration before
+installing another one.
 
 An event definition contains its handler and immutable interceptor list.
 Registering an existing event ID throws. Clearing an event removes the complete

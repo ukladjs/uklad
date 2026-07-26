@@ -25,7 +25,7 @@ describe('framework handler lifecycle', () => {
     const builtInDispatch = getHandler(handlerRegistry.fx, DISPATCH);
     const override = () => undefined;
     expect(() => regEffect(DISPATCH, override)).toThrow(
-      "Effect handler 'dispatch' is already registered",
+      "Registration 'dispatch' is already registered",
     );
 
     expect(getHandler(handlerRegistry.fx, DISPATCH)).toBe(builtInDispatch);

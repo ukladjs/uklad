@@ -15,12 +15,3 @@ export type HandlerRegistry = {
   subDeps: Partial<Record<string, SubDepsHandler>>;
   error: Partial<Record<string, ErrorHandler>>;
 };
-
-export interface RegistrationOwnership {
-  /** True only while this token still owns the current registration. */
-  readonly current: boolean;
-  /** Validate destructive release before user cleanup runs. */
-  assertReleasable?(): void;
-  /** Remove this registration without touching one installed after an explicit clear. */
-  release(): boolean;
-}

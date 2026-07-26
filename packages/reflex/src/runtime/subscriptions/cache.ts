@@ -6,9 +6,10 @@ import { SubscriptionEngine } from './engine';
 import { getRootSubKey, getSubVectorKey } from './keys';
 import { normalizeSubscriptionConfig } from './validation';
 import { getDefaultEqualityCheck } from './equality';
+import { createRegistrationHandle } from '../registrations';
 
 import type { RuntimeProbeSubscription } from '../probe-types';
-import type { RegistrationOwnership } from '../handler-types';
+import type { RegistrationHandle } from '../registrations';
 import type { SubscriptionDiagnostic, SubscriptionListenerKind, SubscriptionNode } from './types';
 import type {
   EqualityCheckFn,
@@ -83,7 +84,7 @@ export class SubscriptionRuntime {
     computeFn: (...values: any[]) => SubResult<K, R>,
     depsFn: (...params: any[]) => SubVector[],
     config?: SubConfig,
-  ): RegistrationOwnership | undefined {
+  ): RegistrationHandle | undefined {
     this.prepareRegistration(id);
     if (typeof computeFn !== 'function' || typeof depsFn !== 'function') {
       consoleLog(
@@ -95,14 +96,14 @@ export class SubscriptionRuntime {
 
     const runtime = this.getRuntime();
     this.clearRootSource(id);
-    return this.createRegistrationOwnership(
+    return this.createSubscriptionRegistration(
       id,
       [runtime.registry.sub.register(id, computeFn), runtime.registry.subDeps.register(id, depsFn)],
       config,
     );
   }
 
-  registerRoot(id: Id, sourceKey: string): RegistrationOwnership | undefined {
+  registerRoot(id: Id, sourceKey: string): RegistrationHandle | undefined {
     if (typeof sourceKey !== 'string') {
       consoleLog(
         'error',
@@ -113,7 +114,7 @@ export class SubscriptionRuntime {
     this.prepareRegistration(id);
     const handlers = this.registerRootHandlers(id, sourceKey);
     if (!handlers) return undefined;
-    return this.createRegistrationOwnership(id, handlers);
+    return this.createSubscriptionRegistration(id, handlers);
   }
 
   getOrCreate(subVector: SubVector): SubscriptionNode<any> | null {
@@ -370,7 +371,7 @@ export class SubscriptionRuntime {
   private registerRootHandlers(
     id: Id,
     sourceKey: string,
-  ): readonly [RegistrationOwnership, RegistrationOwnership] | undefined {
+  ): readonly [RegistrationHandle, RegistrationHandle] | undefined {
     const runtime = this.getRuntime();
     const conflictingSubId = this.rootSubIdBySource.get(sourceKey);
     if (conflictingSubId !== undefined && conflictingSubId !== id) {
@@ -402,30 +403,28 @@ export class SubscriptionRuntime {
     }
   }
 
-  private createRegistrationOwnership(
+  private createSubscriptionRegistration(
     id: Id,
-    handlers: readonly [RegistrationOwnership, RegistrationOwnership],
+    handlers: readonly [RegistrationHandle, RegistrationHandle],
     config?: SubConfig,
-  ): RegistrationOwnership {
+  ): RegistrationHandle {
     const normalizedConfig = normalizeSubscriptionConfig(id, config);
     if (normalizedConfig) this.subConfigById.set(id, normalizedConfig);
     else this.subConfigById.delete(id);
 
-    const [computeOwnership, depsOwnership] = handlers;
-    const isCurrent = () => computeOwnership.current && depsOwnership.current;
+    const [computeRegistration, depsRegistration] = handlers;
+    const isActive = () => computeRegistration.active && depsRegistration.active;
     const assertReleasable = (): void => {
-      if (isCurrent()) this.assertDefinitionCanBeCleared(id);
+      if (isActive()) this.assertDefinitionCanBeCleared(id);
     };
     const release = (): boolean => {
-      if (!isCurrent()) return false;
+      if (!isActive()) return false;
       this.assertDefinitionCanBeCleared(id);
       this.clearDefinitions(id);
       return true;
     };
-    return Object.freeze({
-      get current(): boolean {
-        return isCurrent();
-      },
+    return createRegistrationHandle({
+      isActive,
       assertReleasable,
       release,
     });

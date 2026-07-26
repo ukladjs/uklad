@@ -50,7 +50,7 @@ describe('Global Interceptors', () => {
       registerInterceptor(interceptor1);
       registerInterceptor(interceptor2);
       expect(() => registerInterceptor(interceptor1Updated)).toThrow(
-        "Global interceptor 'test-1' is already registered",
+        "Registration 'test-1' is already registered",
       );
 
       const globals = getInterceptors();

@@ -446,12 +446,12 @@ describe('instance-scoped runtime', () => {
       runtime.registerModule((scope) => {
         scope.regEvent('module-increment', sharedHandler);
       }),
-    ).toThrow("Event handler 'module-increment' is already registered");
+    ).toThrow("Registration 'module-increment' is already registered");
     expect(() =>
       runtime.registerModule((scope) => {
         scope.regEffect('dispatch', () => {});
       }),
-    ).toThrow("Effect handler 'dispatch' is already registered");
+    ).toThrow("Registration 'dispatch' is already registered");
     expect(runtime.getHandlers().fx.dispatch).toBe(builtInDispatchEffect);
 
     runtime.dispatchSync(['module-increment', 999]);

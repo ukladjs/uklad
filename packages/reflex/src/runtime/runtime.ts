@@ -36,7 +36,8 @@ import {
 
 import type { TraceCallback } from '../core/tracing-types';
 import type { ReflexInspector } from '../inspector-types';
-import type { HandlerRegistry, RegistrationOwnership } from './handler-types';
+import type { HandlerRegistry } from './handler-types';
+import type { RegistrationHandle } from './registrations';
 import type { RuntimeLifecycleObserver } from './lifecycle-types';
 import type { SubscriptionDiagnostic } from './subscriptions/types';
 import type {
@@ -64,7 +65,7 @@ export type {
 } from './api';
 
 interface ModuleInstallation {
-  readonly registrations: RegistrationOwnership[];
+  readonly registrations: RegistrationHandle[];
   cleanup: ReflexDisposer | undefined;
   disposed: boolean;
 }
@@ -153,32 +154,32 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     options?: EventRegistrationOptions<ContractState<TContracts>>,
   ): void {
     this.assertUsable();
-    this.recordOwnership(this.#core.events.registerEvent(id, handler as any, options));
+    this.recordRegistration(this.#core.events.registerEvent(id, handler as any, options));
   }
 
   regEffect(id: Id, handler: (value: any) => void): void {
     this.assertUsable();
-    this.recordOwnership(this.#core.registry.fx.register(id, handler));
+    this.recordRegistration(this.#core.registry.fx.register(id, handler));
   }
 
   regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void {
     this.assertUsable();
-    this.recordOwnership(
+    this.recordRegistration(
       this.#core.registry.cofx.register(id, handler as unknown as CoEffectHandler),
     );
   }
 
   regEventErrorHandler(handler: ErrorHandler): void {
     this.assertUsable();
-    this.recordOwnership(
+    this.recordRegistration(
       this.#core.registry.error.registerSystemOverride('event-handler', handler),
     );
   }
 
   regRootSub(id: Id, sourceKey: string): void {
     this.assertUsable();
-    const ownership = this.#core.subscriptions.registerRoot(id, sourceKey);
-    if (ownership) this.recordOwnership(ownership);
+    const registration = this.#core.subscriptions.registerRoot(id, sourceKey);
+    if (registration) this.recordRegistration(registration);
   }
 
   regSub(
@@ -188,13 +189,13 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     config?: SubConfig,
   ): void {
     this.assertUsable();
-    const ownership = this.#core.subscriptions.register(
+    const registration = this.#core.subscriptions.register(
       id,
       compute as any,
       dependencies as any,
       config,
     );
-    if (ownership) this.recordOwnership(ownership);
+    if (registration) this.recordRegistration(registration);
   }
 
   getSubscriptionValue(query: ContractSubscribeVector<TContracts>): unknown {
@@ -284,7 +285,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   registerInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void {
     this.assertUsable();
-    this.recordOwnership(
+    this.recordRegistration(
       this.#core.events.registerInterceptor(interceptor as unknown as Interceptor),
     );
   }
@@ -454,8 +455,8 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     this.#core.subscriptions.clearDefinitions();
   }
 
-  private recordOwnership(ownership: RegistrationOwnership): void {
-    this.activeInstallation?.registrations.push(ownership);
+  private recordRegistration(registration: RegistrationHandle): void {
+    this.activeInstallation?.registrations.push(registration);
   }
 
   private disposeInstallation(installation: ModuleInstallation): void {

@@ -1,5 +1,5 @@
 /**
- * Clone a value at an event-queue ownership boundary.
+ * Clone a value before an event enters the runtime queue.
  *
  * JSDOM intentionally omits structuredClone, so use the same realm-preserving
  * fallback as the prior runtime when a native implementation is unavailable.

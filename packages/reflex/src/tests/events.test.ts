@@ -604,7 +604,7 @@ describe('regEvent with cofx', () => {
         ],
       });
       expect(() => regEvent('test-reregister-interceptors', handler)).toThrow(
-        "Event handler 'test-reregister-interceptors' is already registered",
+        "Registration 'test-reregister-interceptors' is already registered",
       );
 
       dispatchSync(['test-reregister-interceptors']);

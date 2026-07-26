@@ -32,7 +32,7 @@ hot-path capability and is `undefined` in an uninstrumented runtime.
 
 `runtime/api.ts` owns the public runtime contract. `runtime/runtime.ts`
 implements that façade: it validates public input, delegates to the owning
-service, tracks module registration tokens, owns watches, and coordinates
+service, tracks module registration handles, owns watches, and coordinates
 terminal disposal. It is not a second store for engine state.
 
 ## Event flow
@@ -183,23 +183,21 @@ The surrounding service owns:
 - forward and reverse cache edges for safe closure invalidation;
 - two-generation provisional leases for aborted React renders;
 - per-definition equality configuration;
-- subscription registration ownership tokens.
+- subscription registration handles.
 
 Diagnostic subscription snapshots are created only for an inspector request or
 when an attached probe sets `needsSubscriptionEvidence`.
 
-## Registration ownership
+## Registration lifecycle
 
-Every mutable registration returns an opaque `RegistrationOwnership` token.
-The token identifies the exact installed registration and can release it only
-while it is still current. If an explicit clear has already removed it, a stale
-token cannot delete a registration installed afterward. Registries do not use
-replacement generations because duplicate registration is rejected.
+Every mutable registration returns an opaque `RegistrationHandle`.
+`runtime/registrations.ts` is the only implementation of registration identity,
+duplicate detection, and safe release. If an explicit clear has already removed
+a value, a stale handle cannot delete a registration installed afterward.
 
-`registerModule()` records these tokens. Disposal first asks every token to
-validate destructive release, runs user cleanup, and releases tokens in reverse
-order. Subscription tokens reject release while an affected graph is active.
-This removes handler-version probing from the public runtime façade.
+`registerModule()` records these handles. Disposal first asks every handle to
+validate destructive release, runs user cleanup, and releases handles in reverse
+order. Subscription handles reject release while an affected graph is active.
 
 ## Module map
 
@@ -212,8 +210,9 @@ Paths are relative to `src/`.
 | `runtime/runtime.ts`                  | Public runtime façade, modules, watches, restore, flush, and disposal             |
 | `runtime/validation.ts`               | Strict public runtime boundary assertions                                         |
 | `runtime/state.ts`                    | `StateStore` and the single state-publication boundary                            |
-| `runtime/handler-types.ts`            | Registry, event-definition, and ownership-token contracts                         |
-| `runtime/registry.ts`                 | Typed `HandlerRecord`s, system baselines, and unique registration identities      |
+| `runtime/handler-types.ts`            | Public handler-registry projection contract                                       |
+| `runtime/registrations.ts`            | Unique registration store, system baselines, and cleanup handles                  |
+| `runtime/registry.ts`                 | Typed runtime registry composition                                                |
 | `runtime/probe-types.ts`              | Passive instrumentation contracts and fact DTOs                                   |
 | `runtime/probe.ts`                    | Sole optional passive instrumentation capability                                  |
 | `runtime/lifecycle-types.ts`          | Compatibility lifecycle observer contract                                         |

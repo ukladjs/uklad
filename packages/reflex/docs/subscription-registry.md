@@ -49,7 +49,7 @@ Two architectural facts explain why the instance-side metadata exists at all:
 | -------------------------------------------- | --------------------- | ------------------------------------------------- |
 | `handlers`                                   | `RuntimeRegistry`     | Public typed handler projections                  |
 | `eventDefinitions`                           | `RuntimeRegistry`     | Atomic event handler + immutable interceptor list |
-| `systemHandlers`                             | `HandlerRecord`       | Framework handlers restored after clears          |
+| system baselines                             | `RegistrationStore`   | Framework handlers restored after clears          |
 | `rootSubIdBySource`                          | `SubscriptionRuntime` | Changed STATE key → owning root                   |
 | `rootSubSourceById`                          | `SubscriptionRuntime` | Is this id a root; what key it reads              |
 | `rootSubscriptionKeys`                       | `SubscriptionRuntime` | Persistence guard for root cells                  |
@@ -58,28 +58,26 @@ Two architectural facts explain why the instance-side metadata exists at all:
 | `provisionalCurrent` / `provisionalPrevious` | `SubscriptionRuntime` | Two-generation aborted-render sweep               |
 | `subConfigById`                              | `SubscriptionRuntime` | Per-subscription equality options                 |
 
-## Handler definitions — `HandlerRecord`
+## Handler definitions — `RegistrationStore`
 
-`RuntimeRegistry` exposes one typed `HandlerRecord` property per handler kind:
+`RuntimeRegistry` exposes one typed `RegistrationStore` property per handler kind:
 `event`, `fx`, `cofx`, `sub`, `subDeps`, and `error`. Internal callers operate
-on these properties directly instead of passing handler-kind strings. Each
-record stores ids in a null-prototype object, so valid string ids such as
-`constructor` and `__proto__` cannot collide with `Object.prototype`.
+on these properties directly instead of passing handler-kind strings. The store
+is the single implementation of duplicate detection, registration identity,
+safe release, ordering, and framework baselines. Its public `values` projection
+uses a null-prototype object, so valid string ids such as `constructor` and
+`__proto__` cannot collide with `Object.prototype`.
 `regRootSub` and `regSub` both write to `registry.sub` and `registry.subDeps`.
 A root subscription registers a `sub` handler that reads one top-level state
 key and a `subDeps` handler returning `[]`.
 
 This is the only registry devtools reads directly (`getHandlers`) to enumerate
-what the app declares. Overwriting an existing id warns; it is allowed for
-non-subscription kinds but rejected for subscriptions while cached instances of
-that id exist (see clearing rules).
+what the app declares. Registering an existing ID throws for every handler kind.
 
-Framework-owned effects, coeffects, and the default event error handler are also
-recorded in `systemHandlers`. They may be overridden through the normal
-registration APIs, but clearing an override restores the framework
-implementation. A full `clearHandlers()` does the same, so reset/test helpers
-cannot silently remove `dispatch`, `dispatch-later`, `now`, `random`, or the
-default error handler for the rest of the process lifetime.
+Framework-owned dispatch effects and the default event error handler are stored
+as system baselines. Ordinary registration cannot replace them. The explicit
+event-error-handler API may install one user override; clearing it restores the
+framework implementation. A full `clearHandlers()` restores every baseline.
 
 ## Root source registry — three stores
 
@@ -186,9 +184,9 @@ dependency in an older generation is not swept out from under a fresh parent.
 
 The two domains keep their metadata with the definition it qualifies:
 
-- **`eventDefinitions`** in `RuntimeRegistry` stores each event handler and its
+- **`eventDefinitions`** in `EventRuntime` stores each event handler and its
   immutable interceptor list together. Duplicate registration is rejected;
-  ownership-token release removes the complete definition.
+  registration-handle release removes the complete definition.
 - **`subConfigById`** lives in `SubscriptionRuntime`. Its custom
   `equalityCheck` is read once when an instance is built and baked into the
   node's spec.

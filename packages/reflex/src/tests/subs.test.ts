@@ -188,7 +188,7 @@ describe('Subscription registry lifecycle', () => {
           () => 2,
           () => [],
         ),
-      ).toThrow("Subscription handler 'sweep-config-reset' is already registered");
+      ).toThrow("Registration 'sweep-config-reset' is already registered");
 
       clearSubscriptionHandlers('sweep-config-reset');
       regSub(
@@ -220,7 +220,7 @@ describe('Subscription registry lifecycle', () => {
           () => 2,
           () => [],
         ),
-      ).toThrow("Subscription handler 'sweep-override' is already registered");
+      ).toThrow("Registration 'sweep-override' is already registered");
       expect(getSubscriptionValue(['sweep-override'])).toBe(1);
     });
 

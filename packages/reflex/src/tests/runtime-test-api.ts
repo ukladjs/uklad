@@ -18,7 +18,7 @@ import { getInjectCofxInterceptor as getInjectCofxInterceptorInternal } from '..
 import { execute as executeInterceptors } from '../events/interceptors';
 import { createReflexInspector as createInspectorInternal } from '../inspector';
 import { createReflexRuntime, getRuntimeCoreForTests } from '../runtime/runtime';
-import type { HandlerRecord } from '../runtime/registry';
+import type { RegistrationStore } from '../runtime/registrations';
 import { createElement } from 'react';
 
 import type { Trace, TraceCallback, TraceOptions } from '../core/tracing';
@@ -164,7 +164,7 @@ export function publishSubscriptions(roots: SubscriptionNode<any>[]): void {
   core.subscriptions.publish(roots);
 }
 
-export function getHandler<T>(record: HandlerRecord<T>, id: Id): T | undefined {
+export function getHandler<T>(record: RegistrationStore<T>, id: Id): T | undefined {
   return record.get(id);
 }
 
@@ -172,7 +172,7 @@ export function getHandlers(): HandlerRegistry {
   return core.registry.handlers;
 }
 
-export function registerHandler<T>(record: HandlerRecord<T>, id: Id, handler: T): T {
+export function registerHandler<T>(record: RegistrationStore<T>, id: Id, handler: T): T {
   if (record === core.registry.event) {
     core.events.registerEvent(id, handler as EventHandler);
   } else if (record === core.registry.error) {
@@ -183,7 +183,7 @@ export function registerHandler<T>(record: HandlerRecord<T>, id: Id, handler: T)
   return handler;
 }
 
-export const hasHandler = <T>(record: HandlerRecord<T>, id: Id): boolean => record.has(id);
+export const hasHandler = <T>(record: RegistrationStore<T>, id: Id): boolean => record.has(id);
 export function clearHandlers(): void {
   core.subscriptions.assertClearAllowed();
   core.registry.clear();

@@ -2,7 +2,8 @@ import { IS_DEV } from '../core/environment';
 import { consoleLog } from '../core/logging';
 import { isEventVector } from '../core/validation';
 import { isRuntimeDisposed, type RuntimeCore } from './core';
-import { cloneStructuredValue } from './ownership';
+import { cloneStructuredValue } from './structured-clone';
+import { createRegistrationHandle, RegistrationStore } from './registrations';
 import { assertRuntimeUsable } from './validation';
 import { acceptRuntimeEvent, notifyDroppedRuntimeEvents, notifyTrackedRuntimeEvent } from './probe';
 import { EventQueue, getEventScheduler } from '../events/router';
@@ -12,7 +13,7 @@ import { getInjectCofxInterceptor } from '../events/coeffects';
 import { isInterceptor } from '../events/interceptors';
 
 import type { ExecutionEnvelope } from '../events/envelope';
-import type { RegistrationOwnership } from './handler-types';
+import type { RegistrationHandle } from './registrations';
 import type { RuntimeProbeParent } from './probe-types';
 import type {
   DispatchVector,
@@ -49,8 +50,7 @@ export class EventRuntime {
   readonly throttleTimers: Set<ReturnType<typeof setTimeout>> = new Set();
   readonly injectGlobalInterceptors: Interceptor;
   private readonly getRuntime: () => RuntimeCore;
-  private globalInterceptors: Interceptor[] = [];
-  private readonly globalInterceptorOwners = new Map<string, symbol>();
+  private readonly globalInterceptors = new RegistrationStore<Interceptor>();
   private readonly eventDefinitions = new Map<string, RuntimeEventDefinition>();
 
   constructor(getRuntime: () => RuntimeCore) {
@@ -82,16 +82,14 @@ export class EventRuntime {
     id: string,
     handler: EventHandler<T>,
     options?: EventRegistrationOptions<T>,
-  ): RegistrationOwnership {
+  ): RegistrationHandle {
     const interceptors = this.buildEventInterceptors(id, options);
-    const ownership = this.getRuntime().registry.event.register(id, handler);
+    const registration = this.getRuntime().registry.event.register(id, handler);
     this.eventDefinitions.set(id, createEventDefinition(handler, interceptors));
-    return Object.freeze({
-      get current(): boolean {
-        return ownership.current;
-      },
+    return createRegistrationHandle({
+      isActive: () => registration.active,
       release: (): boolean => {
-        if (!ownership.current || !ownership.release()) return false;
+        if (!registration.active || !registration.release()) return false;
         const currentHandler = this.getRuntime().registry.event.get(id);
         if (currentHandler === undefined) this.eventDefinitions.delete(id);
         else
@@ -120,41 +118,16 @@ export class EventRuntime {
     else this.eventDefinitions.delete(id);
   }
 
-  registerInterceptor(interceptor: Interceptor): RegistrationOwnership {
-    if (this.globalInterceptorOwners.has(interceptor.id)) {
-      throw new Error(`[reflex] Global interceptor '${interceptor.id}' is already registered.`);
-    }
-    this.globalInterceptors = [...this.globalInterceptors, interceptor];
-    const owner = Symbol(interceptor.id);
-    this.globalInterceptorOwners.set(interceptor.id, owner);
-    const isCurrent = () => this.globalInterceptorOwners.get(interceptor.id) === owner;
-    const release = (): boolean => {
-      if (!isCurrent()) return false;
-      this.globalInterceptors = this.globalInterceptors.filter(
-        (existing) => existing.id !== interceptor.id,
-      );
-      this.globalInterceptorOwners.delete(interceptor.id);
-      return true;
-    };
-    return Object.freeze({
-      get current(): boolean {
-        return isCurrent();
-      },
-      release,
-    });
+  registerInterceptor(interceptor: Interceptor): RegistrationHandle {
+    return this.globalInterceptors.register(interceptor.id, interceptor);
   }
 
   getInterceptors(): Interceptor[] {
-    return [...this.globalInterceptors];
+    return this.globalInterceptors.list();
   }
 
   clearInterceptors(id?: string): void {
-    this.globalInterceptors =
-      id === undefined
-        ? []
-        : this.globalInterceptors.filter((interceptor) => interceptor.id !== id);
-    if (id === undefined) this.globalInterceptorOwners.clear();
-    else this.globalInterceptorOwners.delete(id);
+    this.globalInterceptors.clear(id);
   }
 
   execute(envelope: ExecutionEnvelope): void {

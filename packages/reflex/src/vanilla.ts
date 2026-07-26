@@ -1,5 +1,5 @@
 // Detect separately initialized package copies before exposing public state.
-import './runtime/instance';
+import './runtime/duplicate-runtime-detection';
 
 /** Create the explicit owner of one Reflex application. */
 export { createReflexRuntime } from './runtime/runtime';

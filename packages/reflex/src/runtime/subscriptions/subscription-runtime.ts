@@ -41,6 +41,7 @@ interface SubscriptionEntry {
   dependencyKeys: readonly string[];
 }
 
+/** Runtime-owned subscription definitions, cache, leases, and graph engine. */
 export class SubscriptionRuntime {
   readonly rootSubIdBySource: Map<string, Id>;
   readonly rootSubSourceById: Map<Id, string>;

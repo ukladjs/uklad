@@ -203,40 +203,42 @@ order. Subscription handles reject release while an affected graph is active.
 
 Paths are relative to `src/`.
 
-| Path                                  | Responsibility                                                                    |
-| ------------------------------------- | --------------------------------------------------------------------------------- |
-| `runtime/core.ts`                     | Stable service shape, identity, composition, and terminal marker                  |
-| `runtime/api.ts`                      | Public runtime contract, handler types, and state revision DTO                    |
-| `runtime/runtime.ts`                  | Public runtime façade, modules, watches, restore, flush, and disposal             |
-| `runtime/validation.ts`               | Strict public runtime boundary assertions                                         |
-| `runtime/state.ts`                    | `StateStore` and the single state-publication boundary                            |
-| `runtime/handler-types.ts`            | Public handler-registry projection contract                                       |
-| `runtime/registrations.ts`            | Unique registration store, system baselines, and cleanup handles                  |
-| `runtime/registry.ts`                 | Typed runtime registry composition                                                |
-| `runtime/probe-types.ts`              | Passive instrumentation contracts and fact DTOs                                   |
-| `runtime/probe.ts`                    | Sole optional passive instrumentation capability                                  |
-| `runtime/tracing.ts`                  | Optional compatibility trace collector backed by a probe                          |
-| `runtime/lifecycle-types.ts`          | Compatibility lifecycle observer contract                                         |
-| `runtime/lifecycle.ts`                | Compatibility lifecycle observer projected onto `RuntimeProbe`                    |
-| `runtime/subscriptions/types.ts`      | Opaque graph handles, specs, listener metadata, and diagnostics                   |
-| `runtime/subscriptions/validation.ts` | Subscription registration option validation                                       |
-| `runtime/subscriptions/cache.ts`      | `SubscriptionRuntime`: definitions, construction, cache, leases, and engine owner |
-| `runtime/subscriptions/cell.ts`       | Cached node values, errors, stamps, and listener delivery                         |
-| `runtime/subscriptions/engine.ts`     | Reactive graph activation, traversal, publication, and release                    |
-| `runtime/subscriptions/keys.ts`       | Canonical query-key serialization                                                 |
-| `runtime/events.ts`                   | `EventRuntime`, dispatch orchestration, timers, rate limits, and event lineage    |
-| `events/router.ts`                    | `EventQueue` and event scheduling primitive                                       |
-| `events/execution.ts`                 | Runner → commit → effects coordinator and probe fact emission                     |
-| `events/runner.ts`                    | Interceptor chain and pure handler evaluation                                     |
-| `events/committer.ts`                 | State transition commit primitive                                                 |
-| `events/effect-executor.ts`           | Post-commit effects and exact synchronous child causality                         |
-| `events/execution-observer-types.ts`  | Structural DevTools observer contract                                             |
-| `events/execution-observer.ts`        | DevTools observer-to-probe adapter                                                |
-| `core/tracing-types.ts`               | Public trace and trace-error DTOs                                                 |
-| `inspector-types.ts`                  | Public inspector and DevTools runtime-port contracts                              |
-| `inspector.ts`                        | Runtime-bound structural inspection adapter                                       |
-| `react/types.ts`                      | Public React provider and typed-hook contracts                                    |
-| `react/*`                             | Provider, `useSyncExternalStore` binding, and hot reload                          |
+| Path                                            | Responsibility                                                                    |
+| ----------------------------------------------- | --------------------------------------------------------------------------------- |
+| `runtime/core.ts`                               | Stable service shape, identity, composition, and terminal marker                  |
+| `runtime/duplicate-runtime-detection.ts`        | Development-time duplicate package-copy detection                                 |
+| `runtime/api.ts`                                | Public runtime contract, handler types, and state revision DTO                    |
+| `runtime/runtime.ts`                            | Public runtime façade, modules, watches, restore, flush, and disposal             |
+| `runtime/validation.ts`                         | Strict public runtime boundary assertions                                         |
+| `runtime/state.ts`                              | `StateStore` and the single state-publication boundary                            |
+| `runtime/structured-clone.ts`                   | Structured-clone-compatible ownership of queued event inputs                      |
+| `runtime/handler-types.ts`                      | Public handler-registry projection contract                                       |
+| `runtime/registrations.ts`                      | Unique registration store, system baselines, and cleanup handles                  |
+| `runtime/registry.ts`                           | Typed runtime registry composition                                                |
+| `runtime/probe-types.ts`                        | Passive instrumentation contracts and fact DTOs                                   |
+| `runtime/probe.ts`                              | Sole optional passive instrumentation capability                                  |
+| `runtime/tracing.ts`                            | Optional compatibility trace collector backed by a probe                          |
+| `runtime/lifecycle-types.ts`                    | Compatibility lifecycle observer contract                                         |
+| `runtime/lifecycle.ts`                          | Compatibility lifecycle observer projected onto `RuntimeProbe`                    |
+| `runtime/subscriptions/types.ts`                | Opaque graph handles, specs, listener metadata, and diagnostics                   |
+| `runtime/subscriptions/validation.ts`           | Subscription registration option validation                                       |
+| `runtime/subscriptions/subscription-runtime.ts` | `SubscriptionRuntime`: definitions, construction, cache, leases, and engine owner |
+| `runtime/subscriptions/cell.ts`                 | Cached node values, errors, stamps, and listener delivery                         |
+| `runtime/subscriptions/engine.ts`               | Reactive graph activation, traversal, publication, and release                    |
+| `runtime/subscriptions/keys.ts`                 | Canonical query-key serialization                                                 |
+| `runtime/event-runtime.ts`                      | `EventRuntime`, dispatch orchestration, timers, rate limits, and event lineage    |
+| `events/envelope.ts`                            | Queued event execution envelope                                                   |
+| `events/router.ts`                              | `EventQueue` and event scheduling primitive                                       |
+| `events/execution.ts`                           | Runner → commit → effects coordinator and probe fact emission                     |
+| `events/runner.ts`                              | Interceptor chain and pure handler evaluation                                     |
+| `events/effect-executor.ts`                     | Post-commit effects and exact synchronous child causality                         |
+| `events/execution-observer-types.ts`            | Structural DevTools observer contract                                             |
+| `events/execution-observer.ts`                  | DevTools observer-to-probe adapter                                                |
+| `core/tracing-types.ts`                         | Public trace and trace-error DTOs                                                 |
+| `inspector-types.ts`                            | Public inspector and DevTools runtime-port contracts                              |
+| `inspector.ts`                                  | Runtime-bound structural inspection adapter                                       |
+| `react/types.ts`                                | Public React provider and typed-hook contracts                                    |
+| `react/*`                                       | Provider, `useSyncExternalStore` binding, and hot reload                          |
 
 ## Invariants
 

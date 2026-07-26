@@ -36,7 +36,7 @@ interface RuntimeEventDefinition {
   readonly interceptors: readonly Interceptor[];
 }
 
-/** Runtime-owned event orchestration: queueing, dispatch, execution and rate limits. */
+/** Runtime-owned event orchestration: queueing, dispatch, execution, and rate limits. */
 export class EventRuntime {
   readonly queue: EventQueue<ExecutionEnvelope>;
   handlingEventId: string | null = null;

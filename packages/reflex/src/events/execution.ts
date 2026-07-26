@@ -1,12 +1,27 @@
 import { consoleLog } from '../core/logging';
 import { notifyTrackedRuntimeEvent } from '../runtime/probe';
-import { createCommitResult } from './committer';
 import { executeEffects } from './effect-executor';
 import type { ExecutionEnvelope } from './envelope';
 import { runEvent } from './runner';
 
 import type { RuntimeCore } from '../runtime/core';
 import type { RuntimeProbeTransition } from '../runtime/probe-types';
+
+interface CommitResult {
+  readonly status: 'committed' | 'unchanged' | 'skipped';
+  readonly committedRevision: number;
+}
+
+/** Construct probe evidence only for an observed event. */
+function createCommitResult(
+  status: CommitResult['status'],
+  committedRevision: number,
+): CommitResult {
+  return Object.freeze({
+    status,
+    committedRevision,
+  });
+}
 
 /**
  * Coordinate one envelope through runner → commit → effects. Instrumentation is

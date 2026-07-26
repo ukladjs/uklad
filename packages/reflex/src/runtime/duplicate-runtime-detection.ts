@@ -28,7 +28,7 @@ const SHOULD_DETECT_DUPLICATE_RUNTIME =
 const runtimeInstance = Object.freeze({});
 
 /**
- * @internal Register one module-local runtime identity in the current realm.
+ * @internal Register one module-local runtime identity for duplicate-copy detection.
  * Exported only so duplicate detection can be tested without loading two builds.
  */
 export function registerRuntimeInstance(instance: object): void {

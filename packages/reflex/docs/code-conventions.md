@@ -22,14 +22,16 @@ src/
     validation.ts                  untyped-boundary guards
   runtime/
     core.ts                        runtime composition root and stable shape
+    duplicate-runtime-detection.ts package-copy duplicate detection
     api.ts                         public runtime contract
     runtime.ts                     public façade implementation and module lifecycle
     validation.ts                  strict runtime boundary assertions
     state.ts                       StateStore
+    structured-clone.ts            queued event input ownership
     handler-types.ts               registry contracts
     registrations.ts               RegistrationStore and cleanup handles
     registry.ts                    Typed RuntimeRegistry composition
-    events.ts                      EventRuntime, event definitions, and registration metadata
+    event-runtime.ts               EventRuntime, event definitions, and registration metadata
     probe-types.ts                 instrumentation contracts and DTOs
     probe.ts                       sole optional instrumentation channel
     tracing.ts                     optional probe-backed trace compatibility
@@ -38,15 +40,15 @@ src/
     subscriptions/
       types.ts                     graph contracts and diagnostics
       validation.ts                subscription registration validation
-      cache.ts                     SubscriptionRuntime
+      subscription-runtime.ts      SubscriptionRuntime
       cell.ts                      cached node value and listener lifecycle
       engine.ts                    reactive graph orchestration
       keys.ts                      canonical query-key serialization
   events/
+    envelope.ts                    queued event execution envelope
     router.ts                      EventQueue and event scheduling primitive
     execution.ts                   runner → commit → effects coordinator
     runner.ts                      pure event evaluation
-    committer.ts                   state commit primitive
     effect-executor.ts             post-commit effects
     execution-observer-types.ts    DevTools observer contract
     execution-observer.ts          DevTools probe adapter

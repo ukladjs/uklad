@@ -4,7 +4,7 @@ Paths in this document are relative to `src/`.
 
 Framework bookkeeping is split by ownership. `RuntimeRegistry` in
 `runtime/registry.ts` stores handler definitions, while `SubscriptionRuntime`
-in `runtime/subscriptions/cache.ts` owns subscription definitions, graph
+in `runtime/subscriptions/subscription-runtime.ts` owns subscription definitions, graph
 construction, the canonical cache, and its lifecycle metadata.
 `runtime/subscriptions/keys.ts` owns canonical query-key serialization and its
 development validation.
@@ -194,7 +194,7 @@ The two domains keep their metadata with the definition it qualifies:
 ## Clearing and lifecycle rules
 
 Clearing spans several stores. `runtime/runtime.ts` coordinates the full public
-handler clear; typed handler records and `runtime/subscriptions/cache.ts` own
+handler clear; typed handler records and `runtime/subscriptions/subscription-runtime.ts` own
 selective internal clearing:
 
 - **`SubscriptionRuntime.assertClearAllowed`** rejects any

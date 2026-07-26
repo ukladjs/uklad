@@ -1,6 +1,6 @@
 jest.mock('../core/environment', () => ({ IS_DEV: true }));
 
-import { registerRuntimeInstance } from '../runtime/instance';
+import { registerRuntimeInstance } from '../runtime/duplicate-runtime-detection';
 
 const RUNTIME_MARKER_KEY = Symbol.for('@flexsurfer/reflex/runtime');
 

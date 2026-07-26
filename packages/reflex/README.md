@@ -153,6 +153,8 @@ Side effects (HTTP, storage, timers, navigation) live in **effects/coeffects**, 
 - [Step-by-Step Tutorial](https://reflex.js.org/docs/quick-start.html)
 - [Best Practices](https://reflex.js.org/docs/api-reference.html)
 - [API Reference](https://reflex.js.org/docs/best-practices.html)
+- [Re-frame parity tradeoffs](./docs/re-frame-parity-tradeoffs.md) - What Reflex gains, pays,
+  and should improve in its JavaScript implementation
 - [AI Reference (llms.txt)](./llms.txt) - Full Reflex guide for AI assistants; use as a fallback/reference, not as always-loaded instructions
 
 - Examples

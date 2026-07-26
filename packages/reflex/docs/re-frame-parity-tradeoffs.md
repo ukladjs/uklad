@@ -1,0 +1,294 @@
+# Re-frame parity tradeoffs
+
+Reflex keeps re-frame's durable ideas, but JavaScript does not have
+ClojureScript's persistent values, structural equality, value-semantic vectors,
+or Reagent reactions. This document records the mechanisms Reflex currently
+uses to close those gaps and where each mechanism helps or hurts.
+
+This is a decision aid for the current 0.x implementation, not a promise that
+every mechanism should survive 1.0.
+
+| Direction   | Meaning                                                       |
+| ----------- | ------------------------------------------------------------- |
+| **Keep**    | The benefit is architectural and worth preserving.            |
+| **Tune**    | The choice is sound, but its cost or boundary needs work.     |
+| **Isolate** | Retain it for compatibility, not as the preferred future API. |
+| **Rework**  | Decide on a simpler or stricter contract before 1.0.          |
+
+## At a glance
+
+| Re-frame goal                    | Current Reflex mechanism                                | Main benefit                                                | Main cost                                                       | Direction                               |
+| -------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------- |
+| One immutable application state  | One state per runtime, updated through Immer            | Ergonomic immutable transitions and structural sharing      | Proxy/value-model constraints and update cost                   | **Keep, tune**                          |
+| Reactive derived data            | A custom cached subscription DAG                        | Coherent, selective recomputation                           | Considerable lifecycle and cache complexity                     | **Keep, measure**                       |
+| Structural subscription equality | `fast-deep-equal` by default                            | Stops propagation when an allocated result is unchanged     | Up to O(result size) per recomputation                          | **Tune**                                |
+| Value-semantic query vectors     | `JSON.stringify(query)` cache keys                      | Simple, inspectable canonical keys                          | Unsupported values collide or throw                             | **Rework**                              |
+| Immutable data events            | String-ID arrays copied with structured-clone semantics | Queued work owns a stable input snapshot                    | Copy cost, restricted payloads, uneven ingress rules            | **Tune, isolate vectors**               |
+| Serialized event handling        | Async FIFO queue plus `dispatchSync`                    | Deterministic ordering and reentrancy protection            | Two timing models and no per-event completion                   | **Rework**                              |
+| Cross-cutting event behavior     | Generic before/after interceptor context                | Flexible composition and re-frame familiarity               | Implicit authority and difficult static analysis                | **Isolate**                             |
+| Pure handlers and external work  | Effects/coeffects represented as data                   | Testable, portable logic with commit-before-effect ordering | Weak runtime contracts and detached async work                  | **Keep, evolve**                        |
+| Batched rendering                | Separate committed and published state heads            | One coherent subscription generation per render wave        | Temporary read disagreement and headless latency                | **Rework**                              |
+| Dynamic registration             | Runtime-owned string registries and disposable modules  | Isolation, lazy loading, SSR, and safe cleanup              | The callable catalog is dynamic and only partly self-describing | **Keep ownership, evolve registration** |
+
+## 1. One state per runtime, updated with Immer — Keep, tune
+
+- **Description:** Each runtime owns one state object. Event handlers receive an
+  Immer draft; normal execution uses `produce`, while observed execution uses
+  `produceWithPatches` only when patches are requested. See
+  [`runner.ts`](../src/events/runner.ts), [`immer.ts`](../src/core/immer.ts), and
+  [`state.ts`](../src/runtime/state.ts).
+- **Why:** This approximates re-frame's immutable `app-db` while letting
+  JavaScript authors write direct-looking mutations.
+- **Pros:** Structural sharing makes top-level `Object.is` checks cheap; no-op
+  recipes preserve the old state identity; recipes do not mutate old
+  snapshots; and optional patches support tracing and future history features.
+- **Cons:** Proxies add work and have escape hazards; draft-derived values must
+  be converted with `current()` before entering effects; `Map` and `Set`
+  support is opt-in and process-wide; and supported state value types need a
+  clear contract.
+- **Alternatives:** Manual immutable reducers, a persistent-data-structure
+  library, a reducer that returns a complete next state, or a different
+  copy-on-write engine.
+- **Direction:** Keep the immutable transition boundary and Immer for now.
+  Publish a supported-value policy and benchmark large/deep updates on both
+  V8 and Hermes. Keep patch generation demand-driven and keep the executor
+  boundary open to another state engine.
+
+## 2. Custom subscription DAG — Keep, measure
+
+- **Description:** Registered subscriptions form a static DAG per serialized
+  query. Active graphs update in one topological push wave; dormant graphs use
+  a memoized pull; unused computed nodes are evicted. See
+  [`subscription-runtime.ts`](../src/runtime/subscriptions/subscription-runtime.ts)
+  and [`engine.ts`](../src/runtime/subscriptions/engine.ts).
+- **Why:** This recreates re-frame's derived reactions without depending on
+  React and guarantees that every listener sees a settled generation.
+- **Pros:** Shared dependencies run once, fan-in sees coherent inputs,
+  equality-stable branches stop downstream work, and the same graph works in
+  React, React Native, SSR, tests, and headless processes.
+- **Cons:** Activation rollback, aborted-render leases, reverse invalidation,
+  terminal eviction, HMR, error retention, and reentrancy guards make this a
+  substantial custom engine. Static dependencies also rule out convenient
+  data-dependent graphs.
+- **Alternatives:** Per-hook selectors, Reselect-style memoization, signals,
+  proxy-based dependency tracking, or an observable library.
+- **Direction:** Keep the DAG because it is a real differentiator. Protect it
+  with contract tests, property tests, memory tests, and budgets for wide,
+  deep, and mount-heavy graphs. Add compute/equality timing before adding more
+  graph features.
+
+## 3. `fast-deep-equal` subscription cutoffs — Tune
+
+- **Description:** Root subscriptions compare by `Object.is`; computed
+  subscriptions use `fast-deep-equal` by default and retain the previous
+  result object when equal. A runtime or individual subscription can instead
+  use `shallowEqual`, `Object.is`, or a custom comparator. See
+  [`equality.ts`](../src/core/equality.ts) and
+  [`cell.ts`](../src/runtime/subscriptions/cell.ts).
+- **Why:** It approximates ClojureScript `=` and allows a compute function to
+  allocate an equivalent result without waking React or downstream
+  subscriptions.
+- **Pros:** The safe default prevents many accidental renders, makes ordinary
+  selectors easy to write, and turns equality into a propagation cutoff for
+  the whole graph.
+- **Cons:** A successful recomputation can require a full traversal of a large
+  result; cyclic or unusual values need another policy; `Map`/`Set` equality
+  changes only after `enableMapSet()`; and an incorrect custom comparator can
+  hide real changes.
+- **Alternatives:** `Object.is` plus memoized selectors, shallow equality,
+  domain-specific version stamps, or explicit immutable result types.
+- **Direction:** Keep deep equality as the compatibility default during 0.x,
+  but make its cost visible. Document `shallowEqual`/`Object.is` for large
+  results and use benchmarks to decide whether 1.0 should require an explicit
+  equality policy.
+
+## 4. JSON-serialized subscription identity — Rework
+
+- **Description:** A query such as `['todo/by-id', 42]` is cached and rebound in
+  React under `JSON.stringify(query)`. Development mode warns about values
+  known not to survive that encoding. See
+  [`keys.ts`](../src/runtime/subscriptions/keys.ts) and
+  [`use-subscription.ts`](../src/react/use-subscription.ts).
+- **Why:** Re-frame vectors have value semantics and can be map keys. JavaScript
+  arrays do not, so Reflex needs a stable primitive key.
+- **Pros:** The key is simple, deterministic for JSON-safe inputs, readable in
+  diagnostics, and reusable by both the graph cache and React binding.
+- **Cons:** `undefined`, functions, symbols, non-finite numbers, `Map`, `Set`,
+  and other values can collide; `BigInt` and cycles can throw; equivalent
+  objects with different property insertion order can create different keys;
+  and warnings do not enforce correctness.
+- **Alternatives:** Enforce scalar/JSON-safe parameters, use a tagged canonical
+  serializer, accept a per-subscription key function, or derive keys from
+  validated descriptors.
+- **Direction:** First make invalid parameters fail at the public boundary.
+  Then choose either a small tagged canonical serializer or descriptor-defined
+  keying before 1.0. A cache key must never silently alias a different query.
+
+## 5. String-ID event vectors with structured-clone ownership — Tune, isolate vectors
+
+- **Description:** Events are `[id, ...params]`. Public async dispatch,
+  rate-limited dispatch, and built-in child dispatch copy accepted vectors with
+  structured-clone-compatible semantics before queued or delayed work uses
+  them. `dispatchSync` consumes its vector immediately. See
+  [`event-runtime.ts`](../src/runtime/event-runtime.ts),
+  [`structured-clone.ts`](../src/core/structured-clone.ts), and
+  [`types.ts`](../src/types.ts).
+- **Why:** Re-frame events are immutable data values. A queued JavaScript array
+  otherwise remains mutable by its caller after `dispatch()` returns.
+- **Pros:** The runtime receives a stable snapshot, values follow familiar
+  worker-style copy semantics, and function payloads cannot quietly turn a
+  data command into hidden behavior.
+- **Cons:** Each owned async dispatch pays a deep-copy cost; the allowed value
+  model is narrower than TypeScript types imply and can vary when only the
+  built-in fallback is available; positional parameters are fragile to version;
+  runtime validation checks only the vector shape and registered ID; and
+  lower-level Inspector dispatch currently bypasses the owned-dispatch helper.
+- **Alternatives:** Descriptor-backed object commands, immutable/frozen caller
+  values, clone only at trust or async boundaries, or normalize public commands
+  once into a private executor format.
+- **Direction:** Keep snapshot ownership for all queued work and test it at
+  every ingress, including Inspector/operation paths. Prefer validated,
+  object-shaped descriptor inputs for new code; retain vectors as a compact
+  compatibility and internal execution format.
+
+## 6. Async serialized event queue plus `dispatchSync` — Rework
+
+- **Description:** `dispatch()` enters a per-runtime FIFO state machine and
+  runs on a later host task. Events added during a run wait for another queue
+  cycle; event metadata can pause work until a yield or render boundary.
+  `dispatchSync()` is an idle-only escape hatch. See
+  [`router.ts`](../src/events/router.ts) and
+  [`event-runtime.ts`](../src/runtime/event-runtime.ts).
+- **Why:** This follows re-frame's event router, prevents reentrant transitions,
+  preserves order, and naturally batches bursts of UI events.
+- **Pros:** State transitions are serialized, one failure does not discard
+  later accepted events, handler-triggered dispatch cannot mutate midway
+  through the current transition, and async dispatch is platform-neutral.
+- **Cons:** Fire-and-forget dispatch has no exact result or completion handle;
+  `flush()` is a runtime-wide boundary; sync and async dispatch have different
+  timing/error behavior; and render/yield scheduling is coupled to event-array
+  metadata.
+- **Alternatives:** Fully synchronous reducer dispatch, a promise-returning
+  command queue, an actor mailbox with per-message handles, or a normalized
+  operation executor over a private queue.
+- **Direction:** Preserve serialized transitions, not the current queue API.
+  Give individual invocations authoritative completion handles, keep queue
+  states private, and move timer/render/task scheduling out of event metadata.
+
+## 7. Generic interceptor context — Isolate
+
+- **Description:** Global and event-local interceptors run `before` and `after`
+  around a handler through a generic `Context` containing coeffects, effects,
+  queue, stack, and transition state. See
+  [`interceptors-executor.ts`](../src/events/interceptors-executor.ts).
+- **Why:** This mirrors re-frame and provides one extension point for
+  coeffects, policy, logging, validation, and other cross-cutting behavior.
+- **Pros:** Ordering is explicit, behavior is composable, and applications can
+  add middleware without changing the event runner.
+- **Cons:** The broad context is implicit authority: behavior, inputs, and
+  effects can differ from what a handler or descriptor declares. The
+  before/after queue-stack model is hard to analyze, and the implementation
+  repeatedly copies contexts and queue arrays.
+- **Alternatives:** Narrow phase-specific hooks, handler wrappers, explicit
+  input providers, effect policies, or descriptor middleware with declared
+  capabilities.
+- **Direction:** Do not expose interceptor internals through new APIs. Keep the
+  pipeline behind the legacy executor while replacing common uses with narrow,
+  enforceable hooks. Promote it only if real applications justify its
+  complexity before 1.0.
+
+## 8. Effects and coeffects as data — Keep, evolve
+
+- **Description:** Handlers receive injected environmental inputs and return
+  effect tuples. Reflex commits the candidate state before executing effects;
+  synchronous failures are isolated, while promises and delayed work are
+  currently detached. See [`execution.ts`](../src/events/execution.ts),
+  [`effect-executor.ts`](../src/events/effect-executor.ts), and
+  [`built-in-effects.ts`](../src/events/built-in-effects.ts).
+- **Why:** This is re-frame's main purity boundary: domain transitions describe
+  external work instead of performing it directly.
+- **Pros:** Handlers are portable and easy to test; effect intent is visible to
+  tracing and tools; platform adapters can differ; and commit-before-effect
+  gives a clear local transaction boundary.
+- **Cons:** Runtime checks validate only tuple shape and registration; effect
+  promises are not awaited, cancelled, or retried; an effect failure cannot
+  roll back committed state; and a failed coeffect injection is logged but the
+  handler still runs.
+- **Alternatives:** Direct injected service calls, thunks, sagas/observables, or
+  typed command outcomes connected to a task supervisor.
+- **Direction:** Keep the data boundary. Add schemas, adapter identity,
+  capability policy, explicit coeffect failure behavior, and required versus
+  detached completion. Put cancellation/retry/concurrency in a supervised task
+  layer rather than in the event queue.
+
+## 9. Separate committed and published state heads — Rework
+
+- **Description:** Each event advances live `state`, while subscriptions read
+  `renderState`. Consecutive commits coalesce behind a render-oriented
+  scheduler; publication promotes the latest head, diffs top-level keys with
+  `Object.is`, settles the DAG, and then notifies `useSyncExternalStore`.
+  `dispatchSync()` publishes inline. See [`state.ts`](../src/runtime/state.ts),
+  [`scheduling.ts`](../src/core/scheduling.ts), and
+  [`use-subscription.ts`](../src/react/use-subscription.ts).
+- **Why:** The design batches renders while ensuring newly mounted and already
+  active subscriptions cannot observe different state generations.
+- **Pros:** React sees a coherent snapshot, bursts produce one notification
+  wave, unchanged top-level branches are cheap to skip, and intermediate
+  generations do not cause render churn.
+- **Cons:** `getState()` can be newer than every subscription; exact operation
+  completion must distinguish committed from published revisions;
+  `dispatchSync()` can publish earlier async commits; and browser-oriented
+  scheduling adds latency and policy to the headless core.
+- **Alternatives:** One synchronously published state head with notification
+  batching in the React adapter, microtask publication, or an external-store
+  version model whose adapter chooses render priority.
+- **Direction:** Re-evaluate this before 1.0. Prefer one synchronous core state
+  head and adapter-owned React batching if correctness tests and render-count
+  benchmarks show equivalent behavior.
+
+## 10. Runtime-owned dynamic registries and modules — Keep ownership, evolve registration
+
+- **Description:** Every explicit runtime owns its state, queue, handlers,
+  subscription graph, tracing, timers, and registry. IDs are registered
+  dynamically; duplicates fail; `registerModule()` records opaque handles for
+  safe reverse-order disposal. See [`runtime.ts`](../src/runtime/runtime.ts),
+  [`registrations.ts`](../src/runtime/registrations.ts), and
+  [`architecture.md`](./architecture.md).
+- **Why:** Dynamic `reg-*` APIs preserve re-frame's module model, while explicit
+  runtime ownership fixes the isolation limits of package-global state.
+- **Pros:** SSR requests, tests, widgets, stories, and agent sandboxes can be
+  isolated; modules can load lazily; stale handles cannot delete newer
+  registrations; and DevTools can route to an exact runtime.
+- **Cons:** The callable catalog is known only after code executes; arbitrary
+  registration and interceptors can bypass a static manifest; active
+  subscription graphs constrain replacement/disposal; and string namespaces
+  still need human discipline.
+- **Alternatives:** A package singleton, immutable store construction from a
+  static module list, generated registries, or descriptor-first module
+  installation.
+- **Direction:** Keep explicit runtimes and disposable modules. Make validated
+  descriptors/modules the preferred authoring contract and generate manifests
+  from them. Retain raw dynamic registration as a compatibility and low-level
+  escape hatch.
+
+## Recommended improvement order
+
+1. **Close correctness gaps:** enforce safe subscription parameters and make
+   every asynchronous event ingress take ownership consistently.
+2. **Use the pre-1.0 window:** decide whether vectors, the queue, generic
+   interceptors, and dual state heads are stable concepts or a legacy executor.
+3. **Strengthen external work:** add enforceable effect/coeffect contracts and
+   supervised async completion without weakening effects-as-data.
+4. **Measure before changing defaults:** benchmark Immer, structured cloning,
+   deep/shallow equality, graph churn, render counts, memory, and Hermes.
+
+The parts worth protecting are one explicit runtime owner, immutable serialized
+transitions, effects as visible data, and a coherent derived-state graph. The
+parts most likely to improve are the JavaScript compatibility mechanisms around
+those principles, not the principles themselves.
+
+## Related documents
+
+- [Reflex architecture](./architecture.md)
+- [Subscription runtime](./subscription-runtime.md)
+- [Foundation ADR](https://github.com/flexsurfer/reflex/blob/main/ADR-001-REFLEX-FOUNDATION.md)

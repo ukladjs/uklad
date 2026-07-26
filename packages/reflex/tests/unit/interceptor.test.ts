@@ -1,4 +1,4 @@
-import { isInterceptor } from '../../src/events/interceptors';
+import { isInterceptor } from '../../src/events/interceptors-executor';
 import {
   clearHandlers,
   execute,

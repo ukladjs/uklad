@@ -7,7 +7,7 @@ import type { DispatchLaterEffect, DispatchVector, EventVector } from '../types'
 export const DISPATCH_LATER = 'dispatch-later';
 export const DISPATCH = 'dispatch';
 
-/** @internal Install dispatch effects in one runtime. */
+/** @internal Install built-in dispatch effects in one runtime. */
 export function registerBuiltInEffects(
   runtime: RuntimeCore,
   dispatchEvent: (event: DispatchVector) => void,

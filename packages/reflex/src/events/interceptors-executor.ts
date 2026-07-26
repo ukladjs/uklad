@@ -1,3 +1,4 @@
+/** Interceptor validation and before/after chain execution. */
 import { mergeRuntimeProbeSpan, notifyRuntimeProbe } from '../runtime/probe';
 import type { RuntimeCore } from '../runtime/core';
 

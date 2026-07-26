@@ -12,9 +12,9 @@ import {
   notifyTrackedRuntimeEvent,
 } from './probe';
 import { EventQueue, getEventScheduler } from '../events/router';
-import { registerBuiltInEffects } from '../events/effects';
+import { registerBuiltInEffects } from '../events/built-in-effects';
 import { executeEventEnvelope } from '../events/execution';
-import { isInterceptor } from '../events/interceptors';
+import { isInterceptor } from '../events/interceptors-executor';
 
 import type { ExecutionEnvelope } from '../events/envelope';
 import type { RegistrationHandle } from './registrations';

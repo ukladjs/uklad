@@ -1,5 +1,5 @@
 import { acquireTracing, registerTraceCallback, removeTraceCallback } from './runtime/tracing';
-import { DISPATCH, DISPATCH_LATER } from './events/effects';
+import { DISPATCH, DISPATCH_LATER } from './events/built-in-effects';
 import {
   getDevelopmentOperationReference,
   observeDevelopmentExecution,

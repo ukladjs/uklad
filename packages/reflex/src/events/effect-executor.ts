@@ -2,7 +2,7 @@ import { consoleLog } from '../core/logging';
 import { isEventVector } from '../core/validation';
 import { hasTrackedRuntimeEventCallback, notifyTrackedRuntimeEvent } from '../runtime/probe';
 import { type RuntimeCore } from '../runtime/core';
-import { DISPATCH, DISPATCH_LATER } from './effects';
+import { DISPATCH, DISPATCH_LATER } from './built-in-effects';
 import type { ExecutionEnvelope } from './envelope';
 
 import type { DispatchLaterEffect } from '../types';

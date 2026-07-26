@@ -53,8 +53,8 @@ src/
     execution-observer-types.ts    DevTools observer contract
     execution-observer.ts          DevTools probe adapter
     coeffects.ts
-    effects.ts
-    interceptors.ts
+    built-in-effects.ts
+    interceptors-executor.ts
   react/
     types.ts                       public React binding contracts
     context.ts

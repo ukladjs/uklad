@@ -4,7 +4,7 @@ import './runtime/duplicate-runtime-detection';
 /** Create the explicit owner of one Reflex application. */
 export { createReflexRuntime } from './runtime/runtime';
 
-export { DISPATCH, DISPATCH_LATER } from './events/effects';
+export { DISPATCH, DISPATCH_LATER } from './events/built-in-effects';
 export { shallowEqual } from './core/equality';
 export { current, enableMapSet, original } from './core/immer';
 

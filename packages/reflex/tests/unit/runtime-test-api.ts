@@ -14,7 +14,7 @@ import {
   removeTraceCallback as removeTraceCallbackInternal,
   withOptionalTrace as withOptionalTraceInternal,
 } from '../../src/runtime/tracing';
-import { execute as executeInterceptors } from '../../src/events/interceptors';
+import { execute as executeInterceptors } from '../../src/events/interceptors-executor';
 import { createReflexInspector as createInspectorInternal } from '../../src/inspector';
 import { createReflexRuntime, getRuntimeCoreForTests } from '../../src/runtime/runtime';
 import type { RegistrationStore } from '../../src/runtime/registrations';

@@ -4,7 +4,7 @@ import { IS_DEV } from '../core/environment';
 import { ensurePatchesEnabled } from '../core/immer';
 import { consoleLog } from '../core/logging';
 import { type RuntimeCore } from '../runtime/core';
-import { execute } from './interceptors';
+import { execute } from './interceptors-executor';
 
 import type {
   Context,

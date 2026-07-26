@@ -27,10 +27,19 @@ but replacing every mechanism at once would combine several independent risks:
 The project therefore needs to distinguish its durable architectural principles
 from the current mechanisms that implement them.
 
-The goal is not to redesign Reflex around AI or to turn it into an agent
-framework. Agents are clients of Reflex, just as applications, tests, developer
-tools, and remote gateways are clients. The goal is to make Reflex behavior
-explicit, typed, inspectable, reproducible, and machine-verifiable.
+Reflex is intentionally designed for AI-assisted and agent-authored
+development. Agents are the primary authoring and maintenance clients, while
+applications, tests, developer tools, and remote gateways remain runtime
+clients. This is not an excuse to weaken runtime correctness; it means the
+project can place more invariants in explicit instructions, readonly types,
+descriptors, generated templates, and verification checks instead of paying
+defensive runtime costs for every possible human mistake.
+
+This constraint permits deliberate optimizations at trusted authoring
+boundaries. For example, agent-authored events may use immutable borrowed
+payloads instead of cloning, and subscription authors may select an equality
+algorithm based on the expected output and recomputation cost. External or
+untrusted boundaries still require explicit validation or ownership.
 
 ## Decision
 
@@ -53,7 +62,35 @@ These are behavioral invariants. They do not require a particular event syntax,
 queue implementation, interceptor model, subscription graph, or rendering
 scheduler.
 
-### 2. Current executor remains during the descriptor phase
+### 2. AI-first authoring and explicit optimization contracts
+
+AI-first is an architectural constraint, not only a documentation preference.
+The agent instructions, descriptors, types, templates, and tests together form
+the authoring contract that lets Reflex avoid unnecessary defensive work while
+keeping violations visible.
+
+- **Events:** Event vectors and payload values are immutable after `dispatch()`
+  is called. The preferred agent-authored path does not deep-clone every event;
+  development builds should deep-freeze or otherwise guard accepted payloads so
+  mutation is reported at its source. Structured cloning remains appropriate
+  for external, plugin, remote, or otherwise untrusted ingress, and may remain
+  as a compatibility mode during the 0.x transition.
+- **Subscriptions:** Every non-root subscription should be evaluated for
+  result size, recomputation frequency, structural sharing, and downstream
+  fan-out. Its descriptor or registration should select the appropriate
+  equality policy (`Object.is`, shallow, deep, or a domain-specific comparator)
+  through subscription options. `fast-deep-equal` remains a compatibility
+  fallback, not an instruction to pay deep equality cost blindly everywhere.
+- **Optimization rule:** Prefer a strict, machine-readable contract plus a
+  development guard over an always-on defensive copy when the trust boundary is
+  controlled by agent-authored code. Preserve an explicit safe path for data
+  crossing a trust boundary.
+
+This policy does not assume that agents are infallible. Contract violations must
+still fail in development and be covered by tests; runtime validation remains
+mandatory at descriptor and external-ingress boundaries.
+
+### 3. Current executor remains during the descriptor phase
 
 The existing event execution model remains the initial execution backend while
 typed descriptors and runtime contracts are introduced.
@@ -77,7 +114,7 @@ Compatibility during this phase means behavioral continuity for the existing
 repository, examples, and tests. It is not a pre-1.0 promise that every current
 API or timing behavior will remain part of the stable public contract.
 
-### 3. Descriptors become the authoritative authoring contract
+### 4. Descriptors become the authoritative authoring contract
 
 New application definitions should use typed descriptors assembled into
 modules. A descriptor is the authoritative source for the contract it declares;
@@ -109,7 +146,7 @@ does not automatically make it callable by an agent, remote gateway, or
 developer tool. Externally callable definitions are private by default and must
 be exposed explicitly.
 
-### 4. Descriptors are independent of the current executor
+### 5. Descriptors are independent of the current executor
 
 Descriptor APIs must not expose or require:
 
@@ -153,7 +190,7 @@ descriptors.
 No descriptor-level feature may depend on an incidental behavior of the current
 event-vector or interceptor implementation.
 
-### 5. Runtime manifests must describe enforced truth
+### 6. Runtime manifests must describe enforced truth
 
 The runtime manifest is a versioned snapshot of the active descriptor catalog.
 It must include a manifest revision or digest that changes when the callable
@@ -176,7 +213,7 @@ Machine-readable metadata is useful only when it describes actual runtime
 boundaries. Reflex must prefer an honest partial contract over a complete-looking
 manifest that execution can bypass.
 
-### 6. Environmental inputs and effects remain explicit
+### 7. Environmental inputs and effects remain explicit
 
 Coeffects remain supported by the current executor, but descriptor-backed
 environmental inputs must be declared, validated, and captured for the concrete
@@ -199,7 +236,7 @@ An effect handler returning normally does not, by itself, prove that external
 work succeeded. The existing effect model may initially provide only partial
 verification, which must be reported honestly.
 
-### 7. Operations own execution truth; traces remain passive
+### 8. Operations own execution truth; traces remain passive
 
 Operation identity, causality, revisions, completion, results, and structured
 errors are execution facts. The core runtime owns those facts.
@@ -217,7 +254,7 @@ Operation support may be implemented incrementally, but new descriptor and
 executor work must move toward this boundary rather than adding more execution
 logic to tracing or lifecycle observers.
 
-### 8. Queue and scheduling behavior are provisional
+### 9. Queue and scheduling behavior are provisional
 
 The existing asynchronous event queue remains in the current executor during
 the descriptor phase. Its serialized ordering is supported for that executor,
@@ -241,7 +278,7 @@ separate concerns from state-transition serialization. React render scheduling
 is an adapter concern. Future work must not combine these concerns into one
 general semantic scheduler.
 
-### 9. React and headless execution remain separate concerns
+### 10. React and headless execution remain separate concerns
 
 Reflex core must remain usable without React, `document`,
 `requestAnimationFrame`, or a browser event loop.
@@ -278,7 +315,12 @@ transitional architecture from becoming a permanent hidden dependency:
    timer service, or React adapter according to their actual responsibility.
 9. No new public API exposes the current executor's internal context, queue
    state, or scheduling metadata.
-10. Before 1.0, the project must explicitly decide whether to retain, replace,
+10. Agent instructions, templates, and examples state the immutable-event
+    contract and the expected equality-policy decision for each non-root
+    subscription.
+11. No-copy event paths require a development mutation guard and an explicit
+    trust boundary; external ingress must validate, freeze, or clone payloads.
+12. Before 1.0, the project must explicitly decide whether to retain, replace,
     or isolate the current event executor.
 
 ## Consequences
@@ -290,6 +332,10 @@ transitional architecture from becoming a permanent hidden dependency:
   every runtime subsystem.
 - Applications gain typed object inputs, runtime validation, module validation,
   discovery, and machine-readable contracts earlier.
+- Agent-authored applications can trade defensive allocation for explicit
+  immutable-event and per-subscription equality contracts.
+- Equality and ownership decisions become inspectable authoring choices instead
+  of hidden package-wide defaults.
 - The normalized execution boundary creates a place to compare the existing
   executor with a simpler alternative.
 - The project can make the eventual execution-model decision using measured
@@ -303,6 +349,11 @@ transitional architecture from becoming a permanent hidden dependency:
   coeffects, raw dispatch, and dynamic registration remain.
 - Exact operation completion remains more complicated while event cascades and
   delayed publication are supported.
+- The framework depends more heavily on agent instructions, readonly types, and
+  development guards; integrations that bypass those contracts need a safer
+  ownership mode.
+- Subscription authors must make more deliberate equality choices, and a poor
+  comparator can trade correctness or CPU for apparent simplicity.
 - The implementation must clearly report partial verification instead of
   presenting every registered handler as machine-safe.
 - Work invested in adapting the current executor may later be removed.
@@ -358,6 +409,12 @@ The descriptor phase is complete only when:
   revisions;
 - operations and DevTools can consume outcomes without reconstructing root
   identity from traces;
+- agent-facing instructions, templates, and readonly types describe the
+  immutable-event contract and its development-time enforcement;
+- external event ingress has an explicit validate, freeze, or clone ownership
+  policy;
+- subscription descriptors or registrations can declare an equality policy and
+  benchmark guidance exists for large, frequently recomputed outputs;
 - existing event behavior remains covered by conformance tests; and
 - descriptor definitions contain no dependency on event-vector layout,
   interceptor internals, queue FSM states, or React timing.
@@ -391,6 +448,7 @@ The provisional status must not continue indefinitely by default.
 ## Related documents
 
 - [Reflex architecture](packages/reflex/docs/architecture.md)
+- [Re-frame parity tradeoffs](packages/reflex/docs/re-frame-parity-tradeoffs.md)
 - [Agent-first priorities](docs/agent-first-priorities.md)
 - [Agent operation RFC](docs/agent-operation-rfc.md)
 - [Runtime RFC](docs/runtime-rfc.md)

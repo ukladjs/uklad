@@ -88,12 +88,7 @@ export type {
   SubscribeVector,
   SubVector,
 } from './types';
-export type {
-  HandlerByKind,
-  HandlerKind,
-  HandlerRegistry,
-  RegistryHandler,
-} from './runtime/handler-types';
+export type { HandlerRegistry } from './runtime/handler-types';
 export type { SubscriptionDiagnostic } from './runtime/subscriptions/types';
 export type {
   Trace,

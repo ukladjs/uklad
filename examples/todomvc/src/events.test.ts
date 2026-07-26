@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { CoEffects, EventHandler, HandlerKind } from '@flexsurfer/reflex';
+import type { CoEffects, EventHandler } from '@flexsurfer/reflex';
 
 import type { TodoState } from './state';
 import { EVENT_IDS } from './event-ids';
@@ -8,7 +8,7 @@ import { todoRuntime } from './runtime';
 
 import './events';
 
-const getHandler = (kind: HandlerKind, id: string) => todoRuntime.getHandlers()[kind][id];
+const getEventHandler = (id: string) => todoRuntime.getHandlers().event[id];
 
 // Persistence is handled by @flexsurfer/reflex-persist (see storage.ts), so
 // handlers return no storage effects — they only mutate the draft state.
@@ -16,7 +16,7 @@ const getHandler = (kind: HandlerKind, id: string) => todoRuntime.getHandlers()[
 describe('TodoMVC Event Handlers (Pure Functions)', () => {
   describe('ADD_TODO handler', () => {
     it('should add a new todo with correct properties', () => {
-      const handler = getHandler('event', EVENT_IDS.ADD_TODO) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.ADD_TODO) as EventHandler;
       expect(handler).toBeDefined();
 
       const mockState: TodoState = {
@@ -44,7 +44,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
     });
 
     it('should trim whitespace from title', () => {
-      const handler = getHandler('event', EVENT_IDS.ADD_TODO) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.ADD_TODO) as EventHandler;
 
       const mockState: TodoState = {
         todos: new Map(),
@@ -65,7 +65,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
 
   describe('TOGGLE_DONE handler', () => {
     it('should toggle todo completion status', () => {
-      const handler = getHandler('event', EVENT_IDS.TOGGLE_DONE) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.TOGGLE_DONE) as EventHandler;
 
       const mockState: TodoState = {
         todos: new Map([[1, { id: 1, title: 'Test Todo', done: false }]]),
@@ -87,7 +87,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
     });
 
     it('should handle non-existent todo gracefully', () => {
-      const handler = getHandler('event', EVENT_IDS.TOGGLE_DONE) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.TOGGLE_DONE) as EventHandler;
 
       const mockState: TodoState = {
         todos: new Map(),
@@ -107,7 +107,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
 
   describe('DELETE_TODO handler', () => {
     it('should remove todo from map', () => {
-      const handler = getHandler('event', EVENT_IDS.DELETE_TODO) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.DELETE_TODO) as EventHandler;
 
       const mockState: TodoState = {
         todos: new Map([
@@ -135,7 +135,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
 
   describe('SAVE handler', () => {
     it('should update todo title with event2 suffix', () => {
-      const handler = getHandler('event', EVENT_IDS.SAVE) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.SAVE) as EventHandler;
 
       const mockState: TodoState = {
         todos: new Map([[1, { id: 1, title: 'Original Title', done: false }]]),
@@ -154,7 +154,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
     });
 
     it('should trim whitespace before adding suffix', () => {
-      const handler = getHandler('event', EVENT_IDS.SAVE) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.SAVE) as EventHandler;
 
       const mockState: TodoState = {
         todos: new Map([[1, { id: 1, title: 'Original', done: false }]]),
@@ -174,7 +174,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
 
   describe('COMPLETE_ALL_TOGGLE handler', () => {
     it('should mark all as completed when not all are completed', () => {
-      const handler = getHandler('event', EVENT_IDS.COMPLETE_ALL_TOGGLE) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.COMPLETE_ALL_TOGGLE) as EventHandler;
 
       const mockState: TodoState = {
         todos: new Map([
@@ -199,7 +199,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
     });
 
     it('should mark all as incomplete when all are completed', () => {
-      const handler = getHandler('event', EVENT_IDS.COMPLETE_ALL_TOGGLE) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.COMPLETE_ALL_TOGGLE) as EventHandler;
 
       const mockState: TodoState = {
         todos: new Map([
@@ -223,7 +223,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
 
   describe('CLEAR_COMPLETED handler', () => {
     it('should remove only completed todos', () => {
-      const handler = getHandler('event', EVENT_IDS.CLEAR_COMPLETED) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.CLEAR_COMPLETED) as EventHandler;
 
       const mockState: TodoState = {
         todos: new Map([
@@ -251,7 +251,7 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
 
   describe('SET_SHOWING handler', () => {
     it('should update showing filter', () => {
-      const handler = getHandler('event', EVENT_IDS.SET_SHOWING) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.SET_SHOWING) as EventHandler;
 
       const mockState: TodoState = {
         todos: new Map(),
@@ -273,14 +273,17 @@ describe('TodoMVC Event Handlers (Pure Functions)', () => {
     });
 
     it('should work with all filter values', () => {
-      const handler = getHandler('event', EVENT_IDS.SET_SHOWING) as EventHandler;
+      const handler = getEventHandler(EVENT_IDS.SET_SHOWING) as EventHandler;
 
       const mockState: TodoState = {
         todos: new Map(),
         showing: 'all',
       };
 
-      handler({ event: [EVENT_IDS.SET_SHOWING, 'done'], draftState: mockState } as CoEffects, 'done');
+      handler(
+        { event: [EVENT_IDS.SET_SHOWING, 'done'], draftState: mockState } as CoEffects,
+        'done',
+      );
       expect(mockState.showing).toBe('done');
 
       handler({ event: [EVENT_IDS.SET_SHOWING, 'all'], draftState: mockState } as CoEffects, 'all');

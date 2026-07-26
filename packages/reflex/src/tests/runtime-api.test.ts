@@ -268,11 +268,11 @@ describe('instance-scoped runtime', () => {
     expect(firstInspector.getSnapshot().state).toBe(first.getState());
     expect(secondInspector.getSnapshot().state).toBe(second.getState());
 
-    first.clearHandlers('event');
+    unwatchFirst();
+    first.clearHandlers();
     expect(first.getHandlers().event.increment).toBeUndefined();
     expect(second.getHandlers().event.increment).toBeDefined();
 
-    unwatchFirst();
     unwatchSecond();
     first.dispose();
     second.dispose();

@@ -34,7 +34,6 @@ src/
     probe.ts                       sole optional instrumentation channel
     lifecycle-types.ts             compatibility observer contract
     lifecycle.ts                   passive compatibility adapter
-    reset.ts                       cross-service reset coordination
     subscriptions/
       types.ts                     graph contracts and diagnostics
       validation.ts                subscription registration validation
@@ -136,7 +135,7 @@ never `index.ts` and never an internal barrel.
 - Optional integrations keep retained state in their package or in a `WeakMap`
   keyed by `RuntimeCore`.
 - Cross-service operations belong in a small coordinator such as
-  `runtime/reset.ts`; they do not transfer ownership.
+  `runtime/runtime.ts`; they do not transfer ownership.
 - Scheduled callbacks capture the owning service/runtime explicitly.
 
 ## Instrumentation

@@ -217,7 +217,6 @@ Paths are relative to `src/`.
 | `runtime/probe.ts`                    | Sole optional passive instrumentation capability                                  |
 | `runtime/lifecycle-types.ts`          | Compatibility lifecycle observer contract                                         |
 | `runtime/lifecycle.ts`                | Compatibility lifecycle observer projected onto `RuntimeProbe`                    |
-| `runtime/reset.ts`                    | Cross-service clear coordination                                                  |
 | `runtime/subscriptions/types.ts`      | Opaque graph handles, specs, listener metadata, and diagnostics                   |
 | `runtime/subscriptions/validation.ts` | Subscription registration option validation                                       |
 | `runtime/subscriptions/cache.ts`      | `SubscriptionRuntime`: definitions, construction, cache, leases, and engine owner |

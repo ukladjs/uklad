@@ -9,7 +9,7 @@ construction, the canonical cache, and its lifecycle metadata.
 `runtime/subscriptions/keys.ts` owns canonical query-key serialization and its
 development validation.
 Event handlers and interceptor lists are one immutable definition in
-`RuntimeRegistry`; `runtime/reset.ts` coordinates clears that span services.
+`RuntimeRegistry`; `runtime/runtime.ts` coordinates clears that span services.
 Reactive semantics—stamps, epochs, publication waves, and dependency
 evaluation—live in the `SubscriptionEngine` owned eagerly by
 `SubscriptionRuntime`.
@@ -119,8 +119,8 @@ violation, not a recoverable condition, so it fails loudly.
 
 - **`subId`** supports id-scoped operations without parsing JSON keys:
   `hasCachedSubscriptionForId` (used to reject `regSub` re-registration while
-  instances exist) and `clearSubscriptionCacheEntriesForId` (a targeted
-  `clearHandlers('sub', id)` must drop every parameterized instance of that id).
+  instances exist) and `clearSubscriptionCacheEntriesForId` (clearing a
+  subscription definition must drop every parameterized instance of that id).
 - **`dependencyKeys`** are the forward edges, walked by
   `renewProvisionalSubscriptionTree` to renew a whole dormant subtree on a
   cache hit.
@@ -193,21 +193,21 @@ The two domains keep their metadata with the definition it qualifies:
 
 ## Clearing and lifecycle rules
 
-Clearing spans several stores. `runtime/reset.ts` coordinates public handler
-clears; `runtime/subscriptions/cache.ts` owns subscription-specific clearing:
+Clearing spans several stores. `runtime/runtime.ts` coordinates the full public
+handler clear; typed handler records and `runtime/subscriptions/cache.ts` own
+selective internal clearing:
 
 - **`SubscriptionRuntime.assertClearAllowed`** rejects any
   subscription-affecting clear while a graph is active. Mounted stores must not
-  be orphaned. It guards `clearHandlers` (for `sub`/`subDeps`) and
+  be orphaned. It guards `clearHandlers`, subscription definition clears, and
   `clearSubscriptionCache`.
-- **`clearHandlers('sub', id)`** removes the definition _and_ cascades into the
-  instance cache by subscription id, because leaving
-  instances of a removed handler would strand them. The paired `subDeps`
-  handler, root-source metadata, and subscription config are cleared in the
-  same operation.
-- **`clearHandlers('event', id)`** removes both the handler and its interceptor
-  metadata, so a later registration cannot inherit a stale chain.
-- **`clearHandlers('error', 'event-handler')`** removes a user override and
+- **`SubscriptionRuntime.clearDefinitions(id)`** clears both `registry.sub` and
+  `registry.subDeps`, then cascades into the instance cache by subscription id.
+  Root-source metadata and subscription config are cleared in the same
+  operation.
+- **`registry.event.clear(id)`** is paired with event-definition cleanup, so a
+  later registration cannot inherit a stale interceptor chain.
+- **`registry.error.clear('event-handler')`** removes a user override and
   restores the framework default error handler.
 - **`clearSubs`** clears the instance cache, both handler kinds, and configs —
   the full public reset, subject to the active-graph guard.

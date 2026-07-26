@@ -4,7 +4,7 @@
  * generation, not the live state).
  */
 import {
-  clearHandlers,
+  clearSubscriptionHandlers,
   clearSubscriptionCache,
   clearSubs,
   dispatch,
@@ -60,7 +60,7 @@ describe('Subscription flush', () => {
       expect(() => clearSubscriptionCache()).toThrow(
         'Cannot clear subscriptions while a subscription graph is active',
       );
-      expect(() => clearHandlers('sub')).toThrow(
+      expect(() => clearSubscriptionHandlers()).toThrow(
         'Cannot clear subscriptions while a subscription graph is active',
       );
       expect(() => clearSubs()).toThrow(

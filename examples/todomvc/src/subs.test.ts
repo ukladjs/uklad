@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { HandlerKind, SubDepsHandler, SubHandler } from '@flexsurfer/reflex';
+import type { SubDepsHandler, SubHandler } from '@flexsurfer/reflex';
 
 import type { TodoState } from './state';
 import { SUB_IDS } from './sub-ids';
@@ -8,14 +8,14 @@ import { todoRuntime } from './runtime';
 
 import './subs';
 
-const getHandler = (kind: HandlerKind, id: string) => todoRuntime.getHandlers()[kind][id];
+const handlers = todoRuntime.getHandlers();
 const initState = (state: TodoState) => todoRuntime.restoreState(state);
 
 describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
   describe('Root Subscriptions', () => {
     describe('TODOS subscription', () => {
       it('should return todos from state', () => {
-        const handler = getHandler('sub', SUB_IDS.TODOS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.TODOS] as SubHandler;
         expect(handler).toBeDefined();
 
         const mockState: TodoState = {
@@ -37,7 +37,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should handle empty todos map', () => {
-        const handler = getHandler('sub', SUB_IDS.TODOS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.TODOS] as SubHandler;
 
         const mockState: TodoState = {
           todos: new Map(),
@@ -55,7 +55,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
 
     describe('SHOWING subscription', () => {
       it('should return showing filter from state', () => {
-        const handler = getHandler('sub', SUB_IDS.SHOWING) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.SHOWING] as SubHandler;
         expect(handler).toBeDefined();
 
         const mockState: TodoState = {
@@ -71,7 +71,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should handle all showing states', () => {
-        const handler = getHandler('sub', SUB_IDS.SHOWING) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.SHOWING] as SubHandler;
 
         const testCases = ['all', 'active', 'done'] as const;
 
@@ -93,7 +93,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
   describe('Computed Subscriptions', () => {
     describe('VISIBLE_TODOS subscription', () => {
       it('should return all todos when showing is all', () => {
-        const handler = getHandler('sub', SUB_IDS.VISIBLE_TODOS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.VISIBLE_TODOS] as SubHandler;
         expect(handler).toBeDefined();
 
         const todos = new Map([
@@ -113,7 +113,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should return only active todos when showing is active', () => {
-        const handler = getHandler('sub', SUB_IDS.VISIBLE_TODOS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.VISIBLE_TODOS] as SubHandler;
 
         const todos = new Map([
           [1, { id: 1, title: 'Todo 1', done: false }],
@@ -131,7 +131,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should return only done todos when showing is done', () => {
-        const handler = getHandler('sub', SUB_IDS.VISIBLE_TODOS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.VISIBLE_TODOS] as SubHandler;
 
         const todos = new Map([
           [1, { id: 1, title: 'Todo 1', done: false }],
@@ -149,14 +149,14 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should return empty array when todos is null or undefined', () => {
-        const handler = getHandler('sub', SUB_IDS.VISIBLE_TODOS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.VISIBLE_TODOS] as SubHandler;
 
         expect(handler(null, 'all')).toEqual([]);
         expect(handler(undefined, 'all')).toEqual([]);
       });
 
       it('should return empty array when todos is empty', () => {
-        const handler = getHandler('sub', SUB_IDS.VISIBLE_TODOS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.VISIBLE_TODOS] as SubHandler;
 
         const result = handler(new Map(), 'all');
         expect(result).toEqual([]);
@@ -165,7 +165,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
 
     describe('ALL_COMPLETE subscription', () => {
       it('should return true when all todos are complete', () => {
-        const handler = getHandler('sub', SUB_IDS.ALL_COMPLETE) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.ALL_COMPLETE] as SubHandler;
         expect(handler).toBeDefined();
 
         const todos = new Map([
@@ -179,7 +179,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should return false when some todos are incomplete', () => {
-        const handler = getHandler('sub', SUB_IDS.ALL_COMPLETE) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.ALL_COMPLETE] as SubHandler;
 
         const todos = new Map([
           [1, { id: 1, title: 'Todo 1', done: true }],
@@ -192,7 +192,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should return false when all todos are incomplete', () => {
-        const handler = getHandler('sub', SUB_IDS.ALL_COMPLETE) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.ALL_COMPLETE] as SubHandler;
 
         const todos = new Map([
           [1, { id: 1, title: 'Todo 1', done: false }],
@@ -204,14 +204,14 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should return false when todos is empty', () => {
-        const handler = getHandler('sub', SUB_IDS.ALL_COMPLETE) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.ALL_COMPLETE] as SubHandler;
 
         const result = handler(new Map());
         expect(result).toBe(false);
       });
 
       it('should return true when there is only one complete todo', () => {
-        const handler = getHandler('sub', SUB_IDS.ALL_COMPLETE) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.ALL_COMPLETE] as SubHandler;
 
         const todos = new Map([[1, { id: 1, title: 'Single Todo', done: true }]]);
 
@@ -220,7 +220,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should return false when there is only one incomplete todo', () => {
-        const handler = getHandler('sub', SUB_IDS.ALL_COMPLETE) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.ALL_COMPLETE] as SubHandler;
 
         const todos = new Map([[1, { id: 1, title: 'Single Todo', done: false }]]);
 
@@ -229,7 +229,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should have correct dependencies', () => {
-        const depsHandler = getHandler('subDeps', SUB_IDS.ALL_COMPLETE) as SubDepsHandler;
+        const depsHandler = handlers.subDeps[SUB_IDS.ALL_COMPLETE] as SubDepsHandler;
         expect(depsHandler).toBeDefined();
 
         const deps = depsHandler();
@@ -239,7 +239,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
 
     describe('FOOTER_COUNTS subscription', () => {
       it('should return correct counts for mixed todos', () => {
-        const handler = getHandler('sub', SUB_IDS.FOOTER_COUNTS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.FOOTER_COUNTS] as SubHandler;
         expect(handler).toBeDefined();
 
         const todos = new Map([
@@ -255,7 +255,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should return correct counts when all todos are active', () => {
-        const handler = getHandler('sub', SUB_IDS.FOOTER_COUNTS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.FOOTER_COUNTS] as SubHandler;
 
         const todos = new Map([
           [1, { id: 1, title: 'Todo 1', done: false }],
@@ -268,7 +268,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should return correct counts when all todos are done', () => {
-        const handler = getHandler('sub', SUB_IDS.FOOTER_COUNTS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.FOOTER_COUNTS] as SubHandler;
 
         const todos = new Map([
           [1, { id: 1, title: 'Todo 1', done: true }],
@@ -280,14 +280,14 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should return zero counts when todos is empty', () => {
-        const handler = getHandler('sub', SUB_IDS.FOOTER_COUNTS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.FOOTER_COUNTS] as SubHandler;
 
         const result = handler(new Map());
         expect(result).toEqual([0, 0]); // [active, done]
       });
 
       it('should handle single todo correctly', () => {
-        const handler = getHandler('sub', SUB_IDS.FOOTER_COUNTS) as SubHandler;
+        const handler = handlers.sub[SUB_IDS.FOOTER_COUNTS] as SubHandler;
 
         const activeTodos = new Map([[1, { id: 1, title: 'Single Active', done: false }]]);
 
@@ -298,7 +298,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       });
 
       it('should have correct dependencies', () => {
-        const depsHandler = getHandler('subDeps', SUB_IDS.FOOTER_COUNTS) as SubDepsHandler;
+        const depsHandler = handlers.subDeps[SUB_IDS.FOOTER_COUNTS] as SubDepsHandler;
         expect(depsHandler).toBeDefined();
 
         const deps = depsHandler();

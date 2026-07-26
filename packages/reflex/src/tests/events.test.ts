@@ -4,6 +4,7 @@ import {
   dispatch,
   dispatchSync,
   getState,
+  handlerRegistry,
   initState,
   regCoeffect,
   regEffect,
@@ -30,7 +31,7 @@ interface EventTestState {
 describe('regEvent', () => {
   // Prevent expected handler failures from reaching the console.
   beforeAll(() => {
-    registerHandler('error', 'event-handler', () => undefined);
+    registerHandler(handlerRegistry.error, 'event-handler', () => undefined);
   });
 
   describe('Initialize state', () => {
@@ -1034,7 +1035,7 @@ describe('regEvent with cofx', () => {
 
     it('should handle errors in global interceptors gracefully', async () => {
       const errorHandler = jest.fn();
-      registerHandler('error', 'event-handler', errorHandler);
+      registerHandler(handlerRegistry.error, 'event-handler', errorHandler);
 
       const faultyGlobalInterceptor: Interceptor = {
         id: 'faulty-global',

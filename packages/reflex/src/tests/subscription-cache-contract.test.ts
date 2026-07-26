@@ -1,5 +1,5 @@
 import {
-  clearHandlers,
+  clearSubscriptionHandlers,
   clearSubscriptionCache,
   clearSubsForHotReload,
   dispatch,
@@ -287,7 +287,7 @@ describe('Subscription cache contract', () => {
     initState({ [sourceId]: 2 });
     expect(getSubscriptionValue([derivedId])).toBe(4);
 
-    clearHandlers('sub', sourceId);
+    clearSubscriptionHandlers(sourceId);
     initState({ [sourceId]: 3 });
 
     expect(() => getSubscriptionValue([derivedId])).toThrow(

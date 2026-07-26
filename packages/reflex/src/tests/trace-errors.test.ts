@@ -1,11 +1,11 @@
 import { defaultErrorHandler } from '../events/runner';
 import { waitForScheduled } from './test-utils';
 import {
-  clearHandlers,
   disableTracing,
   dispatch,
   enableTracing,
   getHandlers,
+  handlerRegistry,
   initState,
   regEffect,
   regEvent,
@@ -143,7 +143,7 @@ describe('Error tracing', () => {
       expect(trace.tags.error.message).toBe('unhandled');
       expect(trace.tags.error.eventV).toEqual(['trace-unhandled-boom']);
     } finally {
-      clearHandlers('error');
+      handlerRegistry.error.clear();
     }
   });
 });

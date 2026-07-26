@@ -128,12 +128,11 @@ Events and subscriptions are pure functions. In explicit-runtime code, install t
 Use `runtime.getHandlers().event[EVENT_ID]` to get the raw handler after installing the feature. Build a mock `coeffects` object with `draftState` (and any injected coeffects), call the handler, then assert mutations on `draftState` and the returned effect tuples.
 
 ```ts
-import { getHandler } from '@flexsurfer/reflex';
 import type { EventHandler, CoEffects } from '@flexsurfer/reflex';
 import './events'; // side-effect import registers handlers
 
 it('ADD_TODO should add a todo and persist', () => {
-  const handler = getHandler('event', EVENT_IDS.ADD_TODO) as EventHandler;
+  const handler = runtime.getHandlers().event[EVENT_IDS.ADD_TODO] as EventHandler;
 
   const mockSTATE = { todos: [], showing: 'all' };
   const coeffects = {
@@ -153,7 +152,7 @@ it('ADD_TODO should add a todo and persist', () => {
 });
 
 it('ADD_TODO should ignore empty input', () => {
-  const handler = getHandler('event', EVENT_IDS.ADD_TODO) as EventHandler;
+  const handler = runtime.getHandlers().event[EVENT_IDS.ADD_TODO] as EventHandler;
 
   const mockSTATE = { todos: [], showing: 'all' };
   const coeffects = { event: [EVENT_IDS.ADD_TODO, '  '], draftState: mockSTATE, now: 1 } as CoEffects;
@@ -169,12 +168,11 @@ it('ADD_TODO should ignore empty input', () => {
 Computed subscriptions: call `handler(inputFromParentSub1, inputFromParentSub2, ...)` directly — the handler receives its parent subscription values as positional arguments.
 
 ```ts
-import { getHandler, initState } from '@flexsurfer/reflex';
 import type { SubHandler, SubDepsHandler } from '@flexsurfer/reflex';
 import './subs';
 
 it('OPEN_COUNT computed sub counts active todos', () => {
-  const handler = getHandler('sub', SUB_IDS.TODOS_OPEN_COUNT) as SubHandler;
+  const handler = runtime.getHandlers().sub[SUB_IDS.TODOS_OPEN_COUNT] as SubHandler;
   const todos = [
     { id: 1, title: 'A', done: false },
     { id: 2, title: 'B', done: true },

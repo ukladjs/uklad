@@ -17,8 +17,8 @@ import {
 import { getInjectCofxInterceptor as getInjectCofxInterceptorInternal } from '../events/coeffects';
 import { execute as executeInterceptors } from '../events/interceptors';
 import { createReflexInspector as createInspectorInternal } from '../inspector';
-import { clearHandlers as clearHandlersInternal } from '../runtime/reset';
 import { createReflexRuntime, getRuntimeCoreForTests } from '../runtime/runtime';
+import type { HandlerRecord } from '../runtime/registry';
 import { createElement } from 'react';
 
 import type { Trace, TraceCallback, TraceOptions } from '../core/tracing';
@@ -40,7 +40,7 @@ import type {
   SubResult,
   SubVector,
 } from '../types';
-import type { HandlerByKind, HandlerKind, HandlerRegistry } from '../runtime/handler-types';
+import type { HandlerRegistry } from '../runtime/handler-types';
 import type {
   SubscriptionListenerKind,
   SubscriptionNode,
@@ -59,6 +59,7 @@ export function ReflexTestProvider({ children }: { children?: ReactNode }): Reac
 }
 
 const core = getRuntimeCoreForTests(testRuntime);
+export const handlerRegistry = core.registry;
 
 export function initState<T extends Record<string, any> = DefaultAppState>(value: State<T>): void {
   core.state.initialize(value);
@@ -159,30 +160,38 @@ export function publishSubscriptions(roots: SubscriptionNode<any>[]): void {
   core.subscriptions.publish(roots);
 }
 
-export function getHandler<K extends HandlerKind>(kind: K, id: Id): HandlerByKind[K] | undefined {
-  return core.registry[kind].get(id) as HandlerByKind[K] | undefined;
+export function getHandler<T>(record: HandlerRecord<T>, id: Id): T | undefined {
+  return record.get(id);
 }
 
 export function getHandlers(): HandlerRegistry {
   return core.registry.handlers;
 }
 
-export function registerHandler<K extends HandlerKind, T extends HandlerByKind[K]>(
-  kind: K,
-  id: Id,
-  handler: T,
-): T {
-  if (kind === 'event') {
-    core.events.registerEvent(id, handler as HandlerByKind['event']);
+export function registerHandler<T>(record: HandlerRecord<T>, id: Id, handler: T): T {
+  if (record === core.registry.event) {
+    core.events.registerEvent(id, handler as EventHandler);
   } else {
-    core.registry[kind].register(id, handler as never);
+    record.register(id, handler);
   }
   return handler;
 }
 
-export const hasHandler = <K extends HandlerKind>(kind: K, id: Id): boolean =>
-  core.registry[kind].has(id);
-export const clearHandlers = clearHandlersInternal.bind(null, core);
+export const hasHandler = <T>(record: HandlerRecord<T>, id: Id): boolean => record.has(id);
+export function clearHandlers(): void {
+  core.subscriptions.assertClearAllowed();
+  core.registry.clear();
+  core.events.clearEventDefinitions();
+  core.subscriptions.clearDefinitions();
+}
+export function clearEventHandlers(id?: Id): void {
+  core.registry.event.clear(id);
+  core.events.clearEventDefinitions(id);
+}
+export function clearSubscriptionHandlers(id?: Id): void {
+  core.subscriptions.assertClearAllowed();
+  core.subscriptions.clearDefinitions(id);
+}
 export const getEventInterceptors = core.events.getEventInterceptors.bind(core.events);
 export const setEventInterceptors = core.events.setEventInterceptors.bind(core.events);
 

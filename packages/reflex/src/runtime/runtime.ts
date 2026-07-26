@@ -19,7 +19,6 @@ import {
 } from '../core/tracing';
 import { defaultErrorHandler } from '../events/runner';
 import { createReflexInspector } from '../inspector';
-import { clearHandlers } from './reset';
 import {
   createRuntimeCore,
   isRuntimeDisposed,
@@ -37,7 +36,7 @@ import {
 
 import type { TraceCallback } from '../core/tracing-types';
 import type { ReflexInspector } from '../inspector-types';
-import type { HandlerKind, HandlerRegistry, RegistrationOwnership } from './handler-types';
+import type { HandlerRegistry, RegistrationOwnership } from './handler-types';
 import type { RuntimeLifecycleObserver } from './lifecycle-types';
 import type { SubscriptionDiagnostic } from './subscriptions/types';
 import type {
@@ -344,9 +343,9 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return this.#core.registry.handlers;
   }
 
-  clearHandlers(kind?: HandlerKind, id?: Id): void {
+  clearHandlers(): void {
     this.assertUsable();
-    clearHandlers(this.#core, kind, id);
+    this.clearHandlersInternal();
   }
 
   clearSubs(): void {
@@ -432,12 +431,19 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     notifyRuntimeProbe(this.#core, 'runtimeDisposed', disposeError);
     disposeTracing(this.#core);
     this.#core.events.clearInterceptors();
-    clearHandlers(this.#core);
+    this.clearHandlersInternal();
     detachRuntimeProbes(this.#core);
   }
 
   private assertUsable(): void {
     assertRuntimeUsable(this.#core);
+  }
+
+  private clearHandlersInternal(): void {
+    this.#core.subscriptions.assertClearAllowed();
+    this.#core.registry.clear();
+    this.#core.events.clearEventDefinitions();
+    this.#core.subscriptions.clearDefinitions();
   }
 
   private recordOwnership(ownership: RegistrationOwnership): void {

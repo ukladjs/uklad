@@ -1,12 +1,15 @@
 import type { Context, EventHandler, Interceptor, SubDepsHandler, SubHandler } from '../types';
 import {
   clearHandlers,
+  clearEventHandlers,
+  clearSubscriptionHandlers,
   clearSubs,
   getHandler,
   getHandlers,
   getEventInterceptors,
   getRootSubSourceById,
   getSubConfig,
+  handlerRegistry,
   hasHandler,
   registerHandler,
   setEventInterceptors,
@@ -24,14 +27,14 @@ describe('handler registry', () => {
     (id) => {
       const handler: EventHandler = () => undefined;
 
-      expect(getHandler('event', id)).toBeUndefined();
-      expect(hasHandler('event', id)).toBe(false);
+      expect(getHandler(handlerRegistry.event, id)).toBeUndefined();
+      expect(hasHandler(handlerRegistry.event, id)).toBe(false);
 
-      registerHandler('event', id, handler);
+      registerHandler(handlerRegistry.event, id, handler);
 
-      expect(getHandler('event', id)).toBe(handler);
+      expect(getHandler(handlerRegistry.event, id)).toBe(handler);
       expect(getHandlers().event[id]).toBe(handler);
-      expect(hasHandler('event', id)).toBe(true);
+      expect(hasHandler(handlerRegistry.event, id)).toBe(true);
       expect(Object.getPrototypeOf(getHandlers().event)).toBeNull();
     },
   );
@@ -40,24 +43,30 @@ describe('handler registry', () => {
     const registry = getHandlers();
     const handler = jest.fn();
 
-    registerHandler('event', 'live-handler', handler);
+    registerHandler(handlerRegistry.event, 'live-handler', handler);
 
     expect(registry.event['live-handler']).toBe(handler);
   });
 
   it('does not log when a handler lookup misses', () => {
-    expect(getHandler('event', 'missing-handler')).toBeUndefined();
+    expect(getHandler(handlerRegistry.event, 'missing-handler')).toBeUndefined();
     expect(getTestLogCalls().error).toEqual([]);
   });
 
   it('correlates handler lookup types with their kinds', () => {
     const eventHandler: EventHandler = () => undefined;
     const depsHandler: SubDepsHandler = () => [];
-    registerHandler('event', 'typed-event', eventHandler);
-    registerHandler('subDeps', 'typed-sub', depsHandler);
+    registerHandler(handlerRegistry.event, 'typed-event', eventHandler);
+    registerHandler(handlerRegistry.subDeps, 'typed-sub', depsHandler);
 
-    const typedEventHandler: EventHandler | undefined = getHandler('event', 'typed-event');
-    const typedDepsHandler: SubDepsHandler | undefined = getHandler('subDeps', 'typed-sub');
+    const typedEventHandler: EventHandler | undefined = getHandler(
+      handlerRegistry.event,
+      'typed-event',
+    );
+    const typedDepsHandler: SubDepsHandler | undefined = getHandler(
+      handlerRegistry.subDeps,
+      'typed-sub',
+    );
 
     expect(typedEventHandler).toBe(eventHandler);
     expect(typedDepsHandler).toBe(depsHandler);
@@ -69,12 +78,12 @@ describe('handler registry', () => {
       id: 'metadata',
       before: (context: Context) => context,
     };
-    registerHandler('event', eventId, () => undefined);
+    registerHandler(handlerRegistry.event, eventId, () => undefined);
     setEventInterceptors(eventId, [interceptor]);
 
-    clearHandlers('event', eventId);
+    clearEventHandlers(eventId);
 
-    expect(getHandler('event', eventId)).toBeUndefined();
+    expect(getHandler(handlerRegistry.event, eventId)).toBeUndefined();
     expect(getEventInterceptors(eventId)).toEqual([]);
   });
 
@@ -85,7 +94,7 @@ describe('handler registry', () => {
     };
     const registered = [interceptor];
 
-    registerHandler('event', 'immutable-event', () => undefined);
+    registerHandler(handlerRegistry.event, 'immutable-event', () => undefined);
     setEventInterceptors('immutable-event', registered);
     registered.length = 0;
 
@@ -98,29 +107,29 @@ describe('handler registry', () => {
     const subId = 'subscription-with-metadata';
     const subHandler: SubHandler = () => 1;
     const depsHandler: SubDepsHandler = () => [];
-    registerHandler('sub', subId, subHandler);
-    registerHandler('subDeps', subId, depsHandler);
+    registerHandler(handlerRegistry.sub, subId, subHandler);
+    registerHandler(handlerRegistry.subDeps, subId, depsHandler);
     setRootSubSource(subId, 'source-key');
     setSubConfig(subId, { equalityCheck: Object.is });
 
-    clearHandlers('sub', subId);
+    clearSubscriptionHandlers(subId);
 
-    expect(getHandler('sub', subId)).toBeUndefined();
-    expect(getHandler('subDeps', subId)).toBeUndefined();
+    expect(getHandler(handlerRegistry.sub, subId)).toBeUndefined();
+    expect(getHandler(handlerRegistry.subDeps, subId)).toBeUndefined();
     expect(getRootSubSourceById(subId)).toBeUndefined();
     expect(getSubConfig(subId)).toBeUndefined();
   });
 
   it('preserves clearSubs as the complete subscription reset', () => {
     const subId = 'clear-subs-definition';
-    registerHandler('sub', subId, () => 1);
-    registerHandler('subDeps', subId, () => []);
+    registerHandler(handlerRegistry.sub, subId, () => 1);
+    registerHandler(handlerRegistry.subDeps, subId, () => []);
     setSubConfig(subId, { equalityCheck: Object.is });
 
     clearSubs();
 
-    expect(getHandler('sub', subId)).toBeUndefined();
-    expect(getHandler('subDeps', subId)).toBeUndefined();
+    expect(getHandler(handlerRegistry.sub, subId)).toBeUndefined();
+    expect(getHandler(handlerRegistry.subDeps, subId)).toBeUndefined();
     expect(getSubConfig(subId)).toBeUndefined();
   });
 });

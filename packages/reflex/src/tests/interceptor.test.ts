@@ -1,5 +1,11 @@
 import { isInterceptor } from '../events/interceptors';
-import { clearHandlers, execute, getState, registerHandler } from './runtime-test-api';
+import {
+  clearHandlers,
+  execute,
+  getState,
+  handlerRegistry,
+  registerHandler,
+} from './runtime-test-api';
 import type { Interceptor, Context, EventVector } from '../types';
 
 function createTestInterceptor(
@@ -181,7 +187,7 @@ describe('interceptor', () => {
 
     it('should handle error with custom error handler', () => {
       const errorHandler = jest.fn();
-      registerHandler('error', 'event-handler', errorHandler);
+      registerHandler(handlerRegistry.error, 'event-handler', errorHandler);
 
       const faultyInterceptor = createTestInterceptor('faulty', {
         before: () => {
@@ -218,7 +224,7 @@ describe('interceptor', () => {
 
     it('should handle error in after phase', () => {
       const errorHandler = jest.fn();
-      registerHandler('error', 'event-handler', errorHandler);
+      registerHandler(handlerRegistry.error, 'event-handler', errorHandler);
 
       const faultyInterceptor = createTestInterceptor('faulty', {
         before: (ctx) => ctx,

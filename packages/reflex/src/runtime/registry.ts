@@ -1,22 +1,17 @@
 import { consoleLog } from '../core/logging';
 
 import type { Id } from '../types';
+import type { HandlerRegistry, RegistrationOwnership } from './handler-types';
 import type {
-  HandlerByKind,
-  HandlerKind,
-  HandlerRegistry,
-  RegistrationOwnership,
-} from './handler-types';
+  CoEffectHandler,
+  EffectHandler,
+  ErrorHandler,
+  EventHandler,
+  SubDepsHandler,
+  SubHandler,
+} from '../types';
 
-export type {
-  HandlerByKind,
-  HandlerKind,
-  HandlerRegistry,
-  RegistrationOwnership,
-  RegistryHandler,
-} from './handler-types';
-
-const HANDLER_KINDS: readonly HandlerKind[] = ['event', 'fx', 'cofx', 'sub', 'subDeps', 'error'];
+export type { HandlerRegistry, RegistrationOwnership } from './handler-types';
 
 /**
  * One typed handler namespace in a runtime registry.
@@ -29,11 +24,6 @@ export class HandlerRecord<T> {
   private readonly systemHandlers: Partial<Record<string, T>> = createRecord();
   private readonly versions: Partial<Record<string, number>> = createRecord();
   private nextVersion = 0;
-  private readonly kind: HandlerKind;
-
-  constructor(kind: HandlerKind) {
-    this.kind = kind;
-  }
 
   get(id: Id): T | undefined {
     return this.handlers[id];
@@ -45,7 +35,7 @@ export class HandlerRecord<T> {
 
   register(id: Id, handler: T): RegistrationOwnership {
     if (this.has(id)) {
-      consoleLog('warn', `[reflex] overwriting ${this.kind} handler for:`, id);
+      consoleLog('warn', '[reflex] overwriting handler for:', id);
     }
     this.handlers[id] = handler;
     const version = this.bumpVersion(id);
@@ -98,16 +88,16 @@ export class HandlerRecord<T> {
 /**
  * Cohesive handler registry owned eagerly by one runtime core.
  *
- * Handler kinds are represented by typed records so internal callers do not
- * dispatch registry operations through string arguments.
+ * Handler namespaces are represented by typed records so internal callers
+ * never dispatch registry operations through string arguments.
  */
 export class RuntimeRegistry {
-  readonly event: HandlerRecord<HandlerByKind['event']> = new HandlerRecord('event');
-  readonly fx: HandlerRecord<HandlerByKind['fx']> = new HandlerRecord('fx');
-  readonly cofx: HandlerRecord<HandlerByKind['cofx']> = new HandlerRecord('cofx');
-  readonly sub: HandlerRecord<HandlerByKind['sub']> = new HandlerRecord('sub');
-  readonly subDeps: HandlerRecord<HandlerByKind['subDeps']> = new HandlerRecord('subDeps');
-  readonly error: HandlerRecord<HandlerByKind['error']> = new HandlerRecord('error');
+  readonly event: HandlerRecord<EventHandler<any, any>> = new HandlerRecord();
+  readonly fx: HandlerRecord<EffectHandler> = new HandlerRecord();
+  readonly cofx: HandlerRecord<CoEffectHandler<any>> = new HandlerRecord();
+  readonly sub: HandlerRecord<SubHandler> = new HandlerRecord();
+  readonly subDeps: HandlerRecord<SubDepsHandler> = new HandlerRecord();
+  readonly error: HandlerRecord<ErrorHandler> = new HandlerRecord();
 
   readonly handlers: HandlerRegistry = {
     event: this.event.handlers,
@@ -126,10 +116,6 @@ export class RuntimeRegistry {
     this.subDeps.clear();
     this.error.clear();
   }
-}
-
-export function isHandlerKind(value: string): value is HandlerKind {
-  return HANDLER_KINDS.includes(value as HandlerKind);
 }
 
 function createRecord<T>(): Partial<Record<string, T>> {

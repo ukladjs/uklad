@@ -18,7 +18,7 @@ import type {
 } from '../contracts';
 import type { TraceCallback } from '../core/tracing-types';
 import type { ReflexInspector } from '../inspector-types';
-import type { HandlerKind, HandlerRegistry } from './handler-types';
+import type { HandlerRegistry } from './handler-types';
 import type { RuntimeLifecycleObserver } from './lifecycle-types';
 import type { SubscriptionDiagnostic } from './subscriptions/types';
 import type {
@@ -27,7 +27,6 @@ import type {
   EqualityCheckFn,
   ErrorHandler,
   EventRegistrationOptions,
-  Id,
   Interceptor,
   SubConfig,
 } from '../types';
@@ -106,7 +105,7 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
   throttleAndDispatch(event: ContractDispatchVector<TContracts>, durationMs: number): void;
 
   getHandlers(): HandlerRegistry;
-  clearHandlers(kind?: HandlerKind, id?: Id): void;
+  clearHandlers(): void;
   clearSubs(): void;
   clearSubscriptionCache(key?: string): void;
   getSubscriptionDiagnostics(): readonly SubscriptionDiagnostic[];

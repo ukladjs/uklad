@@ -7,6 +7,7 @@ import {
   dispatch,
   hasCachedSubscription,
   hasHandler,
+  handlerRegistry,
   initState,
   ReflexTestProvider,
   regEvent,
@@ -115,7 +116,7 @@ describe('React Hooks', () => {
         'error',
         "[reflex] Subscription 'user-email-str-duplicate' was not registered. Root key 'userEmail' is already used by subscription 'user-email-str'.",
       );
-      expect(hasHandler('sub', 'user-email-str-duplicate')).toBe(false);
+      expect(hasHandler(handlerRegistry.sub, 'user-email-str-duplicate')).toBe(false);
     });
 
     it('should handle subscription with parameters', () => {

@@ -7,19 +7,13 @@ import type {
   SubHandler,
 } from '../types';
 
-export type HandlerByKind = {
-  event: EventHandler<any, any>;
-  fx: EffectHandler;
-  cofx: CoEffectHandler<any>;
-  sub: SubHandler;
-  subDeps: SubDepsHandler;
-  error: ErrorHandler;
-};
-
-export type HandlerKind = keyof HandlerByKind;
-export type RegistryHandler = HandlerByKind[HandlerKind];
 export type HandlerRegistry = {
-  [K in HandlerKind]: Partial<Record<string, HandlerByKind[K]>>;
+  event: Partial<Record<string, EventHandler<any, any>>>;
+  fx: Partial<Record<string, EffectHandler>>;
+  cofx: Partial<Record<string, CoEffectHandler<any>>>;
+  sub: Partial<Record<string, SubHandler>>;
+  subDeps: Partial<Record<string, SubDepsHandler>>;
+  error: Partial<Record<string, ErrorHandler>>;
 };
 
 export interface RegistrationOwnership {

@@ -204,39 +204,6 @@ describe('instance-scoped runtime', () => {
     runtime.dispose();
   });
 
-  it('keeps lifecycle compatibility observers passive', () => {
-    const runtime = createReflexRuntime({
-      initialState: { count: 0 },
-      runtimeId: 'passive-observer',
-    });
-    runtime.regCoeffect('broken', () => {
-      throw new Error('expected coeffect failure');
-    });
-    runtime.regEvent(
-      'increment',
-      ({ draftState }) => {
-        draftState.count += 1;
-      },
-      { coeffects: [['broken']] },
-    );
-    const onEventStarted = jest.fn(() => true);
-    const onEventError = jest.fn(() => true);
-    const detach = runtime.observeLifecycle({ onEventStarted, onEventError });
-
-    runtime.dispatchSync(['increment']);
-
-    expect(runtime.getState().count).toBe(1);
-    expect(onEventStarted).toHaveBeenCalledTimes(1);
-    expect(onEventError).toHaveBeenCalledWith(
-      'coeffect',
-      expect.objectContaining({ message: 'expected coeffect failure' }),
-    );
-
-    detach();
-    expect(getRuntimeCoreForTests(runtime).probe).toBeUndefined();
-    runtime.dispose();
-  });
-
   it('isolates state heads, handlers, queues, subscriptions, and inspectors', async () => {
     const first = createCounterRuntime('first', 1);
     const second = createCounterRuntime('second', 10);

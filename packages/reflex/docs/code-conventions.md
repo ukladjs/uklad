@@ -35,8 +35,6 @@ src/
     probe-types.ts                 instrumentation contracts and DTOs
     probe.ts                       sole optional instrumentation channel
     tracing.ts                     optional probe-backed trace compatibility
-    lifecycle-types.ts             compatibility observer contract
-    lifecycle.ts                   passive compatibility adapter
     subscriptions/
       types.ts                     graph contracts and diagnostics
       validation.ts                subscription registration validation

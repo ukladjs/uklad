@@ -47,15 +47,6 @@ export type {
   RuntimeSubscriptionHandler,
 } from './runtime/api';
 export type {
-  RuntimeLifecycleEffect,
-  RuntimeLifecycleEffectStatus,
-  RuntimeLifecycleErrorKind,
-  RuntimeLifecycleObserver,
-  RuntimeLifecyclePatch,
-  RuntimeLifecycleStatePlan,
-  RuntimeLifecycleSubscription,
-} from './runtime/lifecycle-types';
-export type {
   AppState,
   CoEffectHandler,
   CoEffects,

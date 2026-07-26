@@ -19,7 +19,6 @@ import type {
 import type { TraceCallback } from '../core/tracing-types';
 import type { ReflexInspector } from '../inspector-types';
 import type { HandlerRegistry } from './handler-types';
-import type { RuntimeLifecycleObserver } from './lifecycle-types';
 import type { SubscriptionDiagnostic } from './subscriptions/types';
 import type {
   CoEffectHandler,
@@ -108,8 +107,6 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
   clearSubs(): void;
   clearSubscriptionCache(key?: string): void;
   getSubscriptionDiagnostics(): readonly SubscriptionDiagnostic[];
-
-  observeLifecycle(observer: RuntimeLifecycleObserver): ReflexDisposer;
 
   registerModule(module: ReflexModule<ReflexRuntime<TContracts>>): ReflexDisposer;
   createInspector(): ReflexInspector;

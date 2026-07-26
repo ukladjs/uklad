@@ -218,8 +218,6 @@ Paths are relative to `src/`.
 | `runtime/probe-types.ts`                        | Passive instrumentation contracts and fact DTOs                                   |
 | `runtime/probe.ts`                              | Sole optional passive instrumentation capability                                  |
 | `runtime/tracing.ts`                            | Optional compatibility trace collector backed by a probe                          |
-| `runtime/lifecycle-types.ts`                    | Compatibility lifecycle observer contract                                         |
-| `runtime/lifecycle.ts`                          | Compatibility lifecycle observer projected onto `RuntimeProbe`                    |
 | `runtime/subscriptions/types.ts`                | Opaque graph handles, specs, listener metadata, and diagnostics                   |
 | `runtime/subscriptions/validation.ts`           | Subscription registration option validation                                       |
 | `runtime/subscriptions/subscription-runtime.ts` | `SubscriptionRuntime`: definitions, construction, cache, leases, and engine owner |

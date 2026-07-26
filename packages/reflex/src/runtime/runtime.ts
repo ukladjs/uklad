@@ -25,7 +25,6 @@ import {
   markRuntimeDisposed,
   type RuntimeCore,
 } from './core';
-import { observeRuntimeLifecycle } from './lifecycle';
 import { detachRuntimeProbes, notifyRuntimeProbe } from './probe';
 import {
   assertDispatchableEvent,
@@ -38,7 +37,6 @@ import type { TraceCallback } from '../core/tracing-types';
 import type { ReflexInspector } from '../inspector-types';
 import type { HandlerRegistry } from './handler-types';
 import type { RegistrationHandle } from './registrations';
-import type { RuntimeLifecycleObserver } from './lifecycle-types';
 import type { SubscriptionDiagnostic } from './subscriptions/types';
 import type {
   ReflexRuntime,
@@ -376,11 +374,6 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   getSubscriptionDiagnostics(): readonly SubscriptionDiagnostic[] {
     this.assertUsable();
     return this.#core.subscriptions.diagnostics();
-  }
-
-  observeLifecycle(observer: RuntimeLifecycleObserver): ReflexDisposer {
-    this.assertUsable();
-    return observeRuntimeLifecycle(this.#core, observer);
   }
 
   registerModule(module: ReflexModule<ReflexRuntime<TContracts>>): ReflexDisposer {

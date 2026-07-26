@@ -12,6 +12,7 @@ src/
   react.ts                         React-only public entrypoint
   contracts.ts                     store-local contract types
   types.ts                         shared public domain types
+  duplicate-package-detection.ts   package-copy duplicate detection
   core/
     environment.ts                 environment detection
     equality.ts                    equality policy
@@ -22,7 +23,6 @@ src/
     validation.ts                  untyped-boundary guards
   runtime/
     core.ts                        runtime composition root and stable shape
-    duplicate-runtime-detection.ts package-copy duplicate detection
     api.ts                         public runtime contract
     runtime.ts                     public façade implementation and module lifecycle
     validation.ts                  strict runtime boundary assertions

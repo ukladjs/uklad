@@ -1,5 +1,5 @@
-import { IS_DEV } from '../core/environment';
-import { consoleLog } from '../core/logging';
+import { IS_DEV } from './core/environment';
+import { consoleLog } from './core/logging';
 
 declare const process:
   | {
@@ -28,7 +28,7 @@ const SHOULD_DETECT_DUPLICATE_RUNTIME =
 const runtimeInstance = Object.freeze({});
 
 /**
- * @internal Register one module-local runtime identity for duplicate-copy detection.
+ * @internal Register one module-local package identity for duplicate-copy detection.
  * Exported only so duplicate detection can be tested without loading two builds.
  */
 export function registerRuntimeInstance(instance: object): void {
@@ -64,7 +64,7 @@ export function registerRuntimeInstance(instance: object): void {
   try {
     consoleLog(
       'warn',
-      '[reflex] Multiple Reflex runtimes detected in the same JavaScript realm. Each copy owns a separate state, handler registry, subscription cache, and trace callback registry; Reflex will not merge state across copies. Ensure your application resolves a single copy of @flexsurfer/reflex.',
+      '[reflex] Multiple copies of @flexsurfer/reflex detected in the same JavaScript realm. Each copy owns a separate state, handler registry, subscription cache, and trace callback registry; do not mix providers, hooks, or runtime helpers across copies. Ensure your application resolves a single copy of @flexsurfer/reflex.',
     );
   } catch {
     // A diagnostic must not make module initialization fail.

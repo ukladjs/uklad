@@ -206,7 +206,7 @@ Paths are relative to `src/`.
 | Path                                            | Responsibility                                                                    |
 | ----------------------------------------------- | --------------------------------------------------------------------------------- |
 | `runtime/core.ts`                               | Stable service shape, identity, composition, and terminal marker                  |
-| `runtime/duplicate-runtime-detection.ts`        | Development-time duplicate package-copy detection                                 |
+| `duplicate-package-detection.ts`                | Development-time duplicate package-copy detection                                 |
 | `runtime/api.ts`                                | Public runtime contract, handler types, and state revision DTO                    |
 | `runtime/runtime.ts`                            | Public runtime façade, modules, watches, restore, flush, and disposal             |
 | `runtime/validation.ts`                         | Strict public runtime boundary assertions                                         |

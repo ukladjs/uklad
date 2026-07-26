@@ -204,14 +204,18 @@ describe('Package Consumption Tests', () => {
   test('Node with unset NODE_ENV warns when CJS and ESM initialize separate runtimes', () => {
     const warnings = loadBothModuleFormatsWithNodeEnv(undefined);
     expect(warnings).toEqual([
-      expect.stringContaining('Multiple Reflex runtimes detected in the same JavaScript realm'),
+      expect.stringContaining(
+        'Multiple copies of @flexsurfer/reflex detected in the same JavaScript realm',
+      ),
     ]);
   });
 
   test('Development warns when CJS and ESM initialize separate runtimes', () => {
     const warnings = loadBothModuleFormatsWithNodeEnv('development');
     expect(warnings).toEqual([
-      expect.stringContaining('Multiple Reflex runtimes detected in the same JavaScript realm'),
+      expect.stringContaining(
+        'Multiple copies of @flexsurfer/reflex detected in the same JavaScript realm',
+      ),
     ]);
   });
 

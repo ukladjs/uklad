@@ -14,7 +14,6 @@ import {
   removeTraceCallback as removeTraceCallbackInternal,
   withOptionalTrace as withOptionalTraceInternal,
 } from '../runtime/tracing';
-import { getInjectCofxInterceptor as getInjectCofxInterceptorInternal } from '../events/coeffects';
 import { execute as executeInterceptors } from '../events/interceptors';
 import { createReflexInspector as createInspectorInternal } from '../inspector';
 import { createReflexRuntime, getRuntimeCoreForTests } from '../runtime/runtime';
@@ -204,7 +203,6 @@ export const setEventInterceptors = core.events.setEventInterceptors.bind(core.e
 export const registerInterceptor = core.events.registerInterceptor.bind(core.events);
 export const getInterceptors = core.events.getInterceptors.bind(core.events);
 export const clearInterceptors = core.events.clearInterceptors.bind(core.events);
-export const getInjectCofxInterceptor = getInjectCofxInterceptorInternal.bind(null, core);
 export const execute = executeInterceptors.bind(null, core) as (
   event: Id extends never ? never : [Id, ...any[]],
   interceptors: Interceptor[],

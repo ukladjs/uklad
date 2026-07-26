@@ -5,17 +5,22 @@ import { isRuntimeDisposed, type RuntimeCore } from './core';
 import { cloneStructuredValue } from './structured-clone';
 import { createRegistrationHandle, RegistrationStore } from './registrations';
 import { assertRuntimeUsable } from './validation';
-import { acceptRuntimeEvent, notifyDroppedRuntimeEvents, notifyTrackedRuntimeEvent } from './probe';
+import {
+  acceptRuntimeEvent,
+  notifyDroppedRuntimeEvents,
+  notifyRuntimeProbe,
+  notifyTrackedRuntimeEvent,
+} from './probe';
 import { EventQueue, getEventScheduler } from '../events/router';
 import { registerBuiltInEffects } from '../events/effects';
 import { executeEventEnvelope } from '../events/execution';
-import { getInjectCofxInterceptor } from '../events/coeffects';
 import { isInterceptor } from '../events/interceptors';
 
 import type { ExecutionEnvelope } from '../events/envelope';
 import type { RegistrationHandle } from './registrations';
 import type { RuntimeProbeParent } from './probe-types';
 import type {
+  Context,
   DispatchVector,
   EventHandler,
   EventRegistrationOptions,
@@ -294,6 +299,30 @@ export class EventRuntime {
 
     return [...coeffectInterceptors, ...eventInterceptors];
   }
+}
+
+/** Create a coeffect interceptor bound to one runtime. */
+function getInjectCofxInterceptor(runtime: RuntimeCore, id: string, value?: any): Interceptor {
+  return {
+    id: `inject-${id}`,
+    before(context: Context): Context {
+      const handler = runtime.registry.cofx.get(id);
+      if (!handler) {
+        const error = new Error(`[reflex] No cofx handler registered for ${id}`);
+        consoleLog('error', '[reflex] No cofx handler registered for', id);
+        notifyRuntimeProbe(runtime, 'error', 'missing-coeffect', error);
+        return context;
+      }
+
+      try {
+        context.coeffects = handler({ ...context.coeffects }, value);
+      } catch (error: unknown) {
+        consoleLog('error', `[reflex] Error in :${id} coeffect handler:`, error);
+        notifyRuntimeProbe(runtime, 'error', 'coeffect', error);
+      }
+      return context;
+    },
+  };
 }
 
 function createEventDefinition(

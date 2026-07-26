@@ -17,18 +17,18 @@ every mechanism should survive 1.0.
 
 ## At a glance
 
-| Re-frame goal                    | Current Reflex mechanism                                | Main benefit                                                | Main cost                                                       | Direction                               |
-| -------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------- |
-| One immutable application state  | One state per runtime, updated through Immer            | Ergonomic immutable transitions and structural sharing      | Proxy/value-model constraints and update cost                   | **Keep, tune**                          |
-| Reactive derived data            | A custom cached subscription DAG                        | Coherent, selective recomputation                           | Considerable lifecycle and cache complexity                     | **Keep, measure**                       |
-| Structural subscription equality | `fast-deep-equal` by default                            | Stops propagation when an allocated result is unchanged     | Up to O(result size) per recomputation                          | **Tune**                                |
-| Value-semantic query vectors     | `JSON.stringify(query)` cache keys                      | Simple, inspectable canonical keys                          | Unsupported values collide or throw                             | **Rework**                              |
-| Immutable data events            | String-ID arrays copied with structured-clone semantics | Queued work owns a stable input snapshot                    | Copy cost, restricted payloads, uneven ingress rules            | **Tune, isolate vectors**               |
-| Serialized event handling        | Async FIFO queue plus `dispatchSync`                    | Deterministic ordering and reentrancy protection            | Two timing models and no per-event completion                   | **Rework**                              |
-| Cross-cutting event behavior     | Generic before/after interceptor context                | Flexible composition and re-frame familiarity               | Implicit authority and difficult static analysis                | **Isolate**                             |
-| Pure handlers and external work  | Effects/coeffects represented as data                   | Testable, portable logic with commit-before-effect ordering | Weak runtime contracts and detached async work                  | **Keep, evolve**                        |
-| Batched rendering                | Separate committed and published state heads            | One coherent subscription generation per render wave        | Temporary read disagreement and headless latency                | **Rework**                              |
-| Dynamic registration             | Runtime-owned string registries and disposable modules  | Isolation, lazy loading, SSR, and safe cleanup              | The callable catalog is dynamic and only partly self-describing | **Keep ownership, evolve registration** |
+| Re-frame goal                    | Current Reflex mechanism                                                    | Main benefit                                                | Main cost                                                                        | Direction                               |
+| -------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------- |
+| One immutable application state  | One state per runtime, updated through Immer                                | Ergonomic immutable transitions and structural sharing      | Proxy/value-model constraints and update cost                                    | **Keep, tune**                          |
+| Reactive derived data            | A custom cached subscription DAG                                            | Coherent, selective recomputation                           | Considerable lifecycle and cache complexity                                      | **Keep, measure**                       |
+| Structural subscription equality | `fast-deep-equal` by default                                                | Stops propagation when an allocated result is unchanged     | Up to O(result size) per recomputation                                           | **Tune**                                |
+| Value-semantic query vectors     | `JSON.stringify(query)` cache keys                                          | Simple, inspectable canonical keys                          | Unsupported values collide or throw                                              | **Rework**                              |
+| Immutable data events            | String-ID arrays with an immutable contract; cloning at external boundaries | Agent-generated events stay cheap and predictable           | The contract needs type/dev enforcement; cloning still costs at trust boundaries | **Rework, isolate cloning**             |
+| Serialized event handling        | Async FIFO queue plus `dispatchSync`                                        | Deterministic ordering and reentrancy protection            | Two timing models and no per-event completion                                    | **Rework**                              |
+| Cross-cutting event behavior     | Generic before/after interceptor context                                    | Flexible composition and re-frame familiarity               | Implicit authority and difficult static analysis                                 | **Isolate**                             |
+| Pure handlers and external work  | Effects/coeffects represented as data                                       | Testable, portable logic with commit-before-effect ordering | Weak runtime contracts and detached async work                                   | **Keep, evolve**                        |
+| Batched rendering                | Separate committed and published state heads                                | One coherent subscription generation per render wave        | Temporary read disagreement and headless latency                                 | **Rework**                              |
+| Dynamic registration             | Runtime-owned string registries and disposable modules                      | Isolation, lazy loading, SSR, and safe cleanup              | The callable catalog is dynamic and only partly self-describing                  | **Keep ownership, evolve registration** |
 
 ## 1. One state per runtime, updated with Immer — Keep, tune
 
@@ -124,32 +124,34 @@ every mechanism should survive 1.0.
   Then choose either a small tagged canonical serializer or descriptor-defined
   keying before 1.0. A cache key must never silently alias a different query.
 
-## 5. String-ID event vectors with structured-clone ownership — Tune, isolate vectors
+## 5. String-ID event vectors with an immutable contract — Rework, isolate cloning
 
-- **Description:** Events are `[id, ...params]`. Public async dispatch,
-  rate-limited dispatch, and built-in child dispatch copy accepted vectors with
-  structured-clone-compatible semantics before queued or delayed work uses
-  them. `dispatchSync` consumes its vector immediately. See
+- **Description:** Events are `[id, ...params]`. The intended agent-first
+  contract is that the vector and all payload values are immutable after
+  `dispatch()` is called. The current 0.x implementation gives queued and
+  delayed work structured-clone ownership; `dispatchSync` consumes its vector
+  immediately. See
   [`event-runtime.ts`](../src/runtime/event-runtime.ts),
   [`structured-clone.ts`](../src/core/structured-clone.ts), and
   [`types.ts`](../src/types.ts).
-- **Why:** Re-frame events are immutable data values. A queued JavaScript array
-  otherwise remains mutable by its caller after `dispatch()` returns.
-- **Pros:** The runtime receives a stable snapshot, values follow familiar
-  worker-style copy semantics, and function payloads cannot quietly turn a
-  data command into hidden behavior.
-- **Cons:** Each owned async dispatch pays a deep-copy cost; the allowed value
-  model is narrower than TypeScript types imply and can vary when only the
-  built-in fallback is available; positional parameters are fragile to version;
-  runtime validation checks only the vector shape and registered ID; and
-  lower-level Inspector dispatch currently bypasses the owned-dispatch helper.
-- **Alternatives:** Descriptor-backed object commands, immutable/frozen caller
-  values, clone only at trust or async boundaries, or normalize public commands
-  once into a private executor format.
-- **Direction:** Keep snapshot ownership for all queued work and test it at
-  every ingress, including Inspector/operation paths. Prefer validated,
-  object-shaped descriptor inputs for new code; retain vectors as a compact
-  compatibility and internal execution format.
+- **Why:** Re-frame events are immutable data values. Agent-authored code can
+  follow that contract directly, so copying every event is defensive overhead
+  rather than required application logic.
+- **Pros:** Immutable-by-contract dispatch avoids deep-copy CPU and memory cost;
+  event values remain simple and portable; and agent instructions, readonly
+  types, and development checks can make violations visible at their source.
+- **Cons:** Instructions are not runtime enforcement; aliases held by external
+  code can still mutate payloads; deep-freezing changes caller-owned objects and
+  needs special handling for `Map`/`Set`; and untrusted integrations still need
+  an ownership boundary.
+- **Alternatives:** Keep structured cloning as the default, deep-freeze events,
+  fingerprint payloads before execution, use descriptor-backed object commands,
+  or expose explicit `dispatchCloned()`/trusted-dispatch modes.
+- **Direction:** For agent-first application code, make immutable event payloads
+  the documented and readonly-typed contract, add a development deep-freeze or
+  mutation guard, and prefer a no-copy/freeze path. Retain structured cloning
+  as an explicit boundary for external, plugin, or otherwise untrusted inputs;
+  preserve vectors as a compact compatibility and internal execution format.
 
 ## 6. Async serialized event queue plus `dispatchSync` — Rework
 

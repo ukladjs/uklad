@@ -25,6 +25,5 @@
     "noUnusedParameters": true,
     "types": []
   },
-  "include": ["src"],
-  "exclude": ["src/tests"]
+  "include": ["src"]
 }

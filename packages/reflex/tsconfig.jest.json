@@ -1,11 +1,12 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "rootDir": ".",
     "declaration": false,
     "declarationMap": false,
     "isolatedDeclarations": false,
     "types": ["jest"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/unit/**/*.ts", "tests/unit/**/*.tsx"],
   "exclude": []
 }

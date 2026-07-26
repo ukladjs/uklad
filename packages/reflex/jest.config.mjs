@@ -11,7 +11,7 @@ export default {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
   transform: tsJest.transform,
   coverageProvider: 'v8',
-  coveragePathIgnorePatterns: ['/node_modules/', '/dist/', '/src/tests/'],
+  coveragePathIgnorePatterns: ['/node_modules/', '/dist/', '/tests/unit/'],
   testEnvironmentOptions: {
     customExportConditions: ['react-jsx'],
   },

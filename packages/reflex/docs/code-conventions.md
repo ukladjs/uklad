@@ -19,7 +19,6 @@ src/
     logging.ts                     logging adapter
     scheduling.ts                  host scheduling primitives
     tracing-types.ts               public trace DTOs
-    tracing.ts                     optional probe-backed trace compatibility
     validation.ts                  untyped-boundary guards
   runtime/
     core.ts                        runtime composition root and stable shape
@@ -33,6 +32,7 @@ src/
     events.ts                      EventRuntime, event definitions, and registration metadata
     probe-types.ts                 instrumentation contracts and DTOs
     probe.ts                       sole optional instrumentation channel
+    tracing.ts                     optional probe-backed trace compatibility
     lifecycle-types.ts             compatibility observer contract
     lifecycle.ts                   passive compatibility adapter
     subscriptions/

@@ -15,7 +15,7 @@ import {
   withTrace,
 } from './runtime-test-api';
 
-import type { Trace } from '../core/tracing';
+import type { Trace } from '../runtime/tracing';
 
 const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80));
 

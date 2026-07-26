@@ -1,4 +1,4 @@
-import { acquireTracing, registerTraceCallback, removeTraceCallback } from './core/tracing';
+import { acquireTracing, registerTraceCallback, removeTraceCallback } from './runtime/tracing';
 import { DISPATCH, DISPATCH_LATER } from './events/effects';
 import {
   getDevelopmentOperationReference,

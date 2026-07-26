@@ -1,16 +1,22 @@
-import { consoleLog } from './logging';
-import { attachRuntimeProbe, getRuntimeTrackingToken } from '../runtime/probe';
+import { consoleLog } from '../core/logging';
+import { attachRuntimeProbe, getRuntimeTrackingToken } from './probe';
 
-import type { RuntimeCore } from '../runtime/core';
+import type { RuntimeCore } from './core';
 import type {
   RuntimeProbe,
   RuntimeProbeEffect,
   RuntimeProbeParent,
   RuntimeProbeSpan,
   RuntimeProbeTransition,
-} from '../runtime/probe-types';
+} from './probe-types';
 import type { EventVector } from '../types';
-import type { Trace, TraceCallback, TraceErrorTag, TraceOptions, TraceTags } from './tracing-types';
+import type {
+  Trace,
+  TraceCallback,
+  TraceErrorTag,
+  TraceOptions,
+  TraceTags,
+} from '../core/tracing-types';
 
 export type {
   Trace,
@@ -19,7 +25,7 @@ export type {
   TraceId,
   TraceOptions,
   TraceTags,
-} from './tracing-types';
+} from '../core/tracing-types';
 
 interface TraceEventToken {
   readonly event: EventVector;

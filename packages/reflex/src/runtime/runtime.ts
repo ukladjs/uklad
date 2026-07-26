@@ -16,7 +16,7 @@ import {
   enableTracing,
   registerTraceCallback,
   removeTraceCallback,
-} from '../core/tracing';
+} from './tracing';
 import { defaultErrorHandler } from '../events/runner';
 import { createReflexInspector } from '../inspector';
 import {

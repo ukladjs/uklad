@@ -82,6 +82,40 @@ export default defineConfig([
     },
   },
   {
+    files: ['src/core/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'react',
+              message: 'React dependencies belong in src/react.',
+            },
+            {
+              name: 'react-dom',
+              message: 'React dependencies belong in src/react.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['react/*', 'react-dom/*'],
+              message: 'React dependencies belong in src/react.',
+            },
+            {
+              group: ['../index', '../../index', '../../../index'],
+              message: 'Internal modules must import concrete files, not the public index.',
+            },
+            {
+              group: ['../runtime/**', '../../runtime/**', '../../../runtime/**'],
+              message: 'Core primitives must not import runtime services.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['jest.config.mjs', 'jest.setup.js', 'tests/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: {

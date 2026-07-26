@@ -1,11 +1,11 @@
 import { scheduleAfterRender } from '../../core/scheduling';
 import { consoleLog } from '../../core/logging';
+import { getDefaultEqualityCheck } from '../../core/equality';
 import { mergeRuntimeProbeSpan, withRuntimeProbeSpan } from '../probe';
 import { isRuntimeDisposed, type RuntimeCore } from '../core';
 import { SubscriptionEngine } from './engine';
 import { getRootSubKey, getSubVectorKey } from './keys';
 import { normalizeSubscriptionConfig } from './validation';
-import { getDefaultEqualityCheck } from './equality';
 import { createRegistrationHandle } from '../registrations';
 
 import type { RuntimeProbeSubscription } from '../probe-types';

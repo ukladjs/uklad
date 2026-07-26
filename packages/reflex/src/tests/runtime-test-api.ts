@@ -13,7 +13,7 @@ import {
   registerTraceCallback as registerTraceCallbackInternal,
   removeTraceCallback as removeTraceCallbackInternal,
   withOptionalTrace as withOptionalTraceInternal,
-} from '../core/tracing';
+} from '../runtime/tracing';
 import { getInjectCofxInterceptor as getInjectCofxInterceptorInternal } from '../events/coeffects';
 import { execute as executeInterceptors } from '../events/interceptors';
 import { createReflexInspector as createInspectorInternal } from '../inspector';
@@ -21,7 +21,7 @@ import { createReflexRuntime, getRuntimeCoreForTests } from '../runtime/runtime'
 import type { RegistrationStore } from '../runtime/registrations';
 import { createElement } from 'react';
 
-import type { Trace, TraceCallback, TraceOptions } from '../core/tracing';
+import type { Trace, TraceCallback, TraceOptions } from '../runtime/tracing';
 import type { ReactElement, ReactNode } from 'react';
 import { ReflexProvider } from '../react/context';
 import type {

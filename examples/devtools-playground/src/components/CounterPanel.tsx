@@ -4,6 +4,7 @@ import { useReflexRuntime, useSubscription } from '@flexsurfer/reflex/react';
 function CounterPanel() {
   const runtime = useReflexRuntime();
   const counter = useSubscription<number>(['counter'], 'CounterPanel');
+  const effectDispatchCount = useSubscription<number>(['effectDispatchCount'], 'CounterPanel');
   const isLoading = useSubscription<boolean>(['isLoading'], 'CounterPanel');
 
   const handleIncrement = useCallback(() => runtime.dispatch(['increment-counter']), [runtime]);
@@ -46,13 +47,16 @@ function CounterPanel() {
       <section className="counter-section">
         <h2>Counter</h2>
         <p className="sub-info">
-          Subscriptions: <code>counter</code>, <code>isLoading</code>
+          Subscriptions: <code>counter</code>, <code>effectDispatchCount</code>, <code>isLoading</code>
         </p>
         <div className="counter">
           <button onClick={handleIncrement} className="counter-button">
             Count: {counter}
           </button>
         </div>
+        <p>
+          Event dispatched from effect: <strong>{effectDispatchCount}</strong>
+        </p>
       </section>
 
       <section className="actions-section">
@@ -66,6 +70,12 @@ function CounterPanel() {
           </button>
           <button onClick={dispatchBadParams} className="test-button">
             Test Bad Params
+          </button>
+          <button
+            onClick={() => runtime.dispatch(['dispatch-event-from-effect'])}
+            className="test-button"
+          >
+            Test Dispatch from Effect
           </button>
           <button
             onClick={() => runtime.dispatch(['test-event-with-immer-proxy'])}

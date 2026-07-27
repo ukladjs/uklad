@@ -3,11 +3,6 @@ import type { PlaygroundContracts } from './state';
 
 /** Install the environment-independent event and effect handlers. */
 export function installPlaygroundEvents(registrar: ReflexRegistrar<PlaygroundContracts>): void {
-  registrar.regCoeffect('now', (coeffects) => ({
-    ...coeffects,
-    now: Date.now(),
-  }));
-
   registrar.regEvent('increment-counter', (coeffects) => {
     const { draftState } = coeffects;
     draftState.counter = draftState.counter + 1;
@@ -15,6 +10,17 @@ export function installPlaygroundEvents(registrar: ReflexRegistrar<PlaygroundCon
     draftState.field1.field2 = 'test';
     draftState.field1.field4 = {};
     draftState.field1.field4.field3 = 'test2';
+  });
+
+  // The custom effect handler dispatches the follow-up event after this
+  // handler commits, so its state change appears as a child event in the
+  // runtime trace.
+  registrar.regEvent('dispatch-event-from-effect', () => {
+    return [['dispatch-event-effect', ['effect-dispatched']]];
+  });
+
+  registrar.regEvent('effect-dispatched', ({ draftState }) => {
+    draftState.effectDispatchCount += 1;
   });
 
   registrar.regEvent('toggle-user', (coeffects, userId: number) => {
@@ -154,9 +160,4 @@ export function installPlaygroundEvents(registrar: ReflexRegistrar<PlaygroundCon
     },
     { coeffects: [['local-storage-get', 'test-app.counter']] },
   );
-
-  // Runtime-agnostic effect, registered once for both runtimes
-  registrar.regEffect('fake-effect', (param) => {
-    console.log('fake-effect', param);
-  });
 }

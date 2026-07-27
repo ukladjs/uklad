@@ -5,6 +5,7 @@ import type { PlaygroundContracts } from './state';
 export function installPlaygroundSubscriptions(registrar: ReflexRegistrar<PlaygroundContracts>): void {
   registrar.regRootSub('users', 'users');
   registrar.regRootSub('counter', 'counter');
+  registrar.regRootSub('effectDispatchCount', 'effectDispatchCount');
   registrar.regRootSub('isLoading', 'isLoading');
   registrar.regRootSub('nestedCollections', 'nestedCollections');
   registrar.regRootSub('userMap', 'userMap');

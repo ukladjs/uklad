@@ -7,11 +7,20 @@ import type { PlaygroundContracts } from './state';
 // runtimes and never know which one they run in.
 
 export const effectModes = {
+  'dispatch-event-effect': 'real',
   'local-storage-set': 'real',
   'set-document-title': 'real',
 } as const;
 
 export function installBrowserEffects(registrar: ReflexRegistrar<PlaygroundContracts>): void {
+  registrar.regEffect('dispatch-event-effect', (event, runtime) => {
+    runtime.dispatch(event);
+  });
+
+  registrar.regEffect('fake-effect', (param) => {
+    console.log('fake-effect', param);
+  });
+
   registrar.regEffect('local-storage-set', ({ key, value }: { key: string; value: unknown }) => {
     window.localStorage.setItem(key, JSON.stringify(value));
   });

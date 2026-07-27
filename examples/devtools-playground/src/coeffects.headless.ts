@@ -10,6 +10,11 @@ export const coeffectModes = {
 } as const;
 
 export function installHeadlessCoeffects(registrar: ReflexRegistrar<PlaygroundContracts>): void {
+  registrar.regCoeffect('now', (coeffects) => ({
+    ...coeffects,
+    now: Date.now(),
+  }));
+  
   registrar.regCoeffect('local-storage-get', (cofx, key: string) => {
     cofx.localStorageValue = memoryStorage.get(key) ?? null;
     return cofx;

@@ -7,7 +7,7 @@ import CollectionsPanel from './components/CollectionsPanel';
 type TabId = 'counter' | 'users' | 'collections';
 
 const TABS: { id: TabId; label: string; subs: string }[] = [
-  { id: 'counter',     label: 'Counter & Actions',  subs: 'counter, isLoading' },
+  { id: 'counter',     label: 'Counter & Actions',  subs: 'counter, effectDispatchCount, isLoading' },
   { id: 'users',       label: 'Users',               subs: 'users, isLoading, user-by-id' },
   { id: 'collections', label: 'Collections',         subs: 'userMap, permissionsSet, nestedCollections-comp' },
 ];

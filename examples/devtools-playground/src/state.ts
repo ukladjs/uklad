@@ -3,6 +3,7 @@ import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
 export interface PlaygroundState extends Record<string, any> {
   users: Array<{ id: number; name: string; active: boolean }>;
   counter: number;
+  effectDispatchCount: number;
   isLoading: boolean;
   immerPayloadTest: { test: string };
   userMap: Map<string, { id: number; name: string; role: string }>;
@@ -29,6 +30,7 @@ export function createInitialState(): PlaygroundState {
       { id: 3, name: 'Bob Johnson', active: true },
     ],
     counter: 0,
+    effectDispatchCount: 0,
     isLoading: false,
     immerPayloadTest: { test: 'test' },
     // Map and Set test data

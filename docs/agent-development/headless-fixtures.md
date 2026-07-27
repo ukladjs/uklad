@@ -2,7 +2,7 @@
 
 This document specifies the missing acceleration layer for headless Reflex development: an AI agent should be able to reproduce a bug from a known state after every edit/reload without re-running a long setup sequence by hand.
 
-It complements [agent-workflow.md](agent-workflow.md). That document describes the whole task loop; this one focuses on the hot-reload/restart problem inside the headless runtime.
+It complements [agent-workflow.md](workflow.md). That document describes the whole task loop; this one focuses on the hot-reload/restart problem inside the headless runtime.
 
 ---
 
@@ -94,7 +94,7 @@ coeffects
 environment adapters
 ```
 
-A scaffolded project should make that split explicit (✅ the convention ships in [`examples/devtools-playground`](../examples/devtools-playground) — `src/headless.ts` under `pnpm dev:playground:headless`):
+A scaffolded project should make that split explicit (✅ the convention ships in [`examples/devtools-playground`](../../examples/devtools-playground) — `src/headless.ts` under `pnpm dev:playground:headless`):
 
 ```text
 src/
@@ -228,9 +228,7 @@ Headless agent mode should be safe by default:
 ```json
 {
   "stateChanges": [{ "op": "replace", "path": ["selectedCategory"], "value": "food" }],
-  "effectsEmitted": [
-    ["local-storage-set", { "key": "expenses.category", "value": "food" }]
-  ],
+  "effectsEmitted": [["local-storage-set", { "key": "expenses.category", "value": "food" }]],
   "effectErrors": []
 }
 ```
@@ -239,7 +237,7 @@ So the agent can prove "the handler emitted the right effect" without touching t
 
 ### Runtime visibility
 
-✅ *Shipped:* `app_status` reports the active runtime and effect modes, exactly as the app's entry declared them to `enableDevtools`:
+✅ _Shipped:_ `app_status` reports the active runtime and effect modes, exactly as the app's entry declared them to `enableDevtools`:
 
 ```text
 app_status {}
@@ -490,7 +488,7 @@ Options:
 1. **The injected Reflex inspector exposes a traced restore operation.**
 
    ```ts
-   inspector.restoreState(nextState)
+   inspector.restoreState(nextState);
    ```
 
    Reflex owns the internal event or publication-safe primitive; DevTools only
@@ -499,7 +497,7 @@ Options:
 2. **Reflex exports a dev-only helper used by the inspector.**
 
    ```ts
-   restoreStateForDevtools(nextState)
+   restoreStateForDevtools(nextState);
    ```
 
    The inspector calls it after DevTools forwards the restore message.
@@ -616,7 +614,7 @@ State snapshots may contain user data, tokens, or local test secrets. Guardrails
 - Add `snapshot_state`, `list_snapshots`, `delete_snapshot`.
 - Add SDK restore protocol.
 - Add `restore_state`.
-- Include `sessionEpoch` and staleness warnings in every response. *(identity/epoch now ride successful runtime-scoped responses and `get_trace` accepts an expected epoch; consistent error-response propagation and cursor-reset warnings remain open)*
+- Include `sessionEpoch` and staleness warnings in every response. _(identity/epoch now ride successful runtime-scoped responses and `get_trace` accepts an expected epoch; consistent error-response propagation and cursor-reset warnings remain open)_
 - ~~Scaffold `effects.headless.ts` and `coeffects.headless.ts` with safe defaults for common browser APIs.~~ ✅ shipped (reference scaffold in `examples/devtools-playground`)
 - ~~Make `app_status` report `runtime`, `effectMode`, and registered effect adapter modes.~~ ✅ shipped
 

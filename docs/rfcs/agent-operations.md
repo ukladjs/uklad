@@ -126,35 +126,35 @@ effects fail after state commits, or the result connection disappears.
 
 The following is the status as of 2026-07-20.
 
-| Area | Exists now | Missing or misleading |
-| --- | --- | --- |
-| Runtime ownership | Explicit isolated runtimes own state heads, queues, handlers, subscriptions, tracing, timers, modules, inspectors, and a process-local `runtimeInstanceId`. | The operation registry is in-memory only; restart and eviction recovery are not durable. |
-| Event API | `dispatch`, `dispatchSync`, `startOperation`, `dispatchAndWait`, `getOperation`, and runtime-global `flush`. Instance APIs validate event IDs. | Raw event vectors remain a development/test API, not the future command plane. |
-| State | Separate committed/write and published/render heads, monotonic committed/published revisions, tracked-operation patches even with tracing disabled, and owned/frozen state ingress. | Bytes and result artifacts are not yet bounded/redacted at the core-to-wire boundary. |
-| Queue | Per-runtime serial FIFO queue, exact synchronous child parentage for tracked operations, failure isolation, and `dispatchSync` ordering protection. | General event envelopes and explicit causal links from a child to its emitting effect remain future work. |
-| Effects | State commits before effects; malformed/missing tracked effects are structured; promise/delayed effects are detached; uncontracted legacy `void` effects are only `returned`, not externally successful. | No effect catalog, adapter attempt IDs, enforced headless profile, cancellation, or supervised async completion. |
-| Tracing | Event, subscription, render, patches, effects, and normalized error tags; bounded DevTools storage. | Optional 50 ms batches; queued child events lack event parentage; no completion guarantee. |
-| Inspector | Runtime-bound snapshot, trace subscription, raw dispatch/evaluation, and an additive optional operation capability on Inspector v2. | DevTools and MCP have not negotiated or used the capability yet. |
-| DevTools/MCP | Authenticated, read-only by default, bounded, redacted, multi-runtime, session-epoch aware. Same-name root dispatches are correlated by event-array identity. | Root-trace inference is an undocumented identity coupling. Timeout/disconnect is unrecoverable. Results omit cascade, publication, observations, and async disposition. |
-| Headless | Separate adapters are demonstrated; status reports runtime kind, overall effect mode, and per-ID labels. | Labels are arbitrary and informational. The receipt cannot prove which adapter or fixture handled an effect. |
-| Persistence | Instance-aware sync persistence has explicit lifecycle barriers and useful generation/ordering patterns. | It is not an operation ledger; async storage completion is outside `runtime.flush()`. |
+| Area              | Exists now                                                                                                                                                                                               | Missing or misleading                                                                                                                                                   |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runtime ownership | Explicit isolated runtimes own state heads, queues, handlers, subscriptions, tracing, timers, modules, inspectors, and a process-local `runtimeInstanceId`.                                              | The operation registry is in-memory only; restart and eviction recovery are not durable.                                                                                |
+| Event API         | `dispatch`, `dispatchSync`, `startOperation`, `dispatchAndWait`, `getOperation`, and runtime-global `flush`. Instance APIs validate event IDs.                                                           | Raw event vectors remain a development/test API, not the future command plane.                                                                                          |
+| State             | Separate committed/write and published/render heads, monotonic committed/published revisions, tracked-operation patches even with tracing disabled, and owned/frozen state ingress.                      | Bytes and result artifacts are not yet bounded/redacted at the core-to-wire boundary.                                                                                   |
+| Queue             | Per-runtime serial FIFO queue, exact synchronous child parentage for tracked operations, failure isolation, and `dispatchSync` ordering protection.                                                      | General event envelopes and explicit causal links from a child to its emitting effect remain future work.                                                               |
+| Effects           | State commits before effects; malformed/missing tracked effects are structured; promise/delayed effects are detached; uncontracted legacy `void` effects are only `returned`, not externally successful. | No effect catalog, adapter attempt IDs, enforced headless profile, cancellation, or supervised async completion.                                                        |
+| Tracing           | Event, subscription, render, patches, effects, and normalized error tags; bounded DevTools storage.                                                                                                      | Optional 50 ms batches; queued child events lack event parentage; no completion guarantee.                                                                              |
+| Inspector         | Runtime-bound snapshot, trace subscription, raw dispatch/evaluation, and an additive optional operation capability on Inspector v2.                                                                      | DevTools and MCP have not negotiated or used the capability yet.                                                                                                        |
+| DevTools/MCP      | Authenticated, read-only by default, bounded, redacted, multi-runtime, session-epoch aware. Same-name root dispatches are correlated by event-array identity.                                            | Root-trace inference is an undocumented identity coupling. Timeout/disconnect is unrecoverable. Results omit cascade, publication, observations, and async disposition. |
+| Headless          | Separate adapters are demonstrated; status reports runtime kind, overall effect mode, and per-ID labels.                                                                                                 | Labels are arbitrary and informational. The receipt cannot prove which adapter or fixture handled an effect.                                                            |
+| Persistence       | Instance-aware sync persistence has explicit lifecycle barriers and useful generation/ordering patterns.                                                                                                 | It is not an operation ledger; async storage completion is outside `runtime.flush()`.                                                                                   |
 
-| Slice | Current status | Explicitly not claimed yet |
-| --- | --- | --- |
-| Experimental core receipt | Implemented as `schemaVersion: 0`; an immutable operation snapshot is separate from caller-relative delivery/replay data. | Stable RFC v1 wire schema or semantic command result. |
-| Identity, revisions, idempotency | Implemented in one runtime instance with a 256-entry terminal-evicting ledger and root-start `expectedRevision`. | Durable reservation, TTL/tombstone policy, cross-process recovery, or exactly-once behavior. |
-| Headless context | A caller declaration is recorded as `enforced: false`. | Trusted profile selection, adapter provenance, fixtures, or policy enforcement. |
-| Safety limits | Count limits, cloneability checks for tracked input/state, and an incomplete outcome when evidence is truncated. | Byte limits, redaction, authorization, principal quotas, and continuations. |
+| Slice                            | Current status                                                                                                            | Explicitly not claimed yet                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Experimental core receipt        | Implemented as `schemaVersion: 0`; an immutable operation snapshot is separate from caller-relative delivery/replay data. | Stable RFC v1 wire schema or semantic command result.                                        |
+| Identity, revisions, idempotency | Implemented in one runtime instance with a 256-entry terminal-evicting ledger and root-start `expectedRevision`.          | Durable reservation, TTL/tombstone policy, cross-process recovery, or exactly-once behavior. |
+| Headless context                 | A caller declaration is recorded as `enforced: false`.                                                                    | Trusted profile selection, adapter provenance, fixtures, or policy enforcement.              |
+| Safety limits                    | Count limits, cloneability checks for tracked input/state, and an incomplete outcome when evidence is truncated.          | Byte limits, redaction, authorization, principal quotas, and continuations.                  |
 
 ### Document disposition
 
 This RFC is the sole authority for operation identity, completion, receipts,
 lookup, retry, and the migration away from trace-derived completion.
 
-- [`re-frame-agent-priority-roadmap.md`](re-frame-agent-priority-roadmap.md) is superseded for operation design.
-- [`agent-first-priorities.md`](agent-first-priorities.md) remains broad product guidance; its operation sections are superseded here.
-- [`agent-workflow.md`](agent-workflow.md) documents the legacy trace-derived prototype until its examples are migrated.
-- [`devtools-roadmap.md`](devtools-roadmap.md) remains authoritative for non-operation backlog; its trace-derived dispatch/server-mirror proposals are superseded here.
+- [`historical-re-frame-priorities.md`](../agent-development/historical-re-frame-priorities.md) is superseded for operation design.
+- [`priorities.md`](../agent-development/priorities.md) remains broad product guidance; its operation sections are superseded here.
+- [`workflow.md`](../agent-development/workflow.md) documents the legacy trace-derived prototype until its examples are migrated.
+- [`devtools.md`](../roadmaps/devtools.md) remains authoritative for non-operation backlog; its trace-derived dispatch/server-mirror proposals are superseded here.
 - Instance ownership, persistence, and fixture documents remain complementary.
 
 ## Research and prior art
@@ -255,24 +255,24 @@ suppressed.
 
 These names are normative.
 
-| Term | Meaning | Owner and scope |
-| --- | --- | --- |
-| `commandId` | Versioned externally callable semantic contract. Commands are private unless explicitly exposed. | Application contract registry. |
-| `eventId` | Handler/type name at index `0` of an event vector. Repeats are normal. | Application registration. |
-| `requestId` | One MCP/HTTP/WebSocket request and audit interaction. | Transport/gateway; never execution identity. |
-| `idempotencyKey` | Caller-provided retry identity for one semantic input. | Scoped to principal, runtime/command, and documented retention window. |
-| `operationId` | Unique handle for one logical root invocation and its joined descendants. | Core runtime operation ledger; created before enqueue. |
-| `eventInstanceId` | Unique identity for one concrete root or child event occurrence. | Core runtime. Replaces ambiguous uses of `dispatchId` in the new protocol. |
-| `parentEventInstanceId` | Structural parent for an event synchronously dispatched during another event's handling/effects. | Core runtime. |
-| `causedByEffectId` | Effect intent that caused an event, when known. | Core runtime/effect adapter. |
-| `effectId` | Unique intent identity for one emitted effect tuple. | Core runtime, unique within an operation. |
-| `attemptId` | One execution attempt for an effect/task. | Effect/task supervisor. |
-| `stateRevision` | Monotonic revision of the committed write head. | Runtime instance. |
-| `publishedRevision` | Latest revision visible through published subscriptions. | Runtime instance. |
-| `traceId` / `spanId` | Optional diagnostic correlation. | Tracer/exporter; never completion identity. |
-| `runtimeId` | Stable logical routing identity chosen by the application. | Application/runtime configuration. |
-| `runtimeInstanceId` | Unique lifetime of one in-memory runtime/ledger. | Core runtime; changes on restart. |
-| `sessionEpoch` | DevTools connection/storage generation. It may change on reconnect without a runtime restart. | DevTools server. |
+| Term                    | Meaning                                                                                          | Owner and scope                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `commandId`             | Versioned externally callable semantic contract. Commands are private unless explicitly exposed. | Application contract registry.                                             |
+| `eventId`               | Handler/type name at index `0` of an event vector. Repeats are normal.                           | Application registration.                                                  |
+| `requestId`             | One MCP/HTTP/WebSocket request and audit interaction.                                            | Transport/gateway; never execution identity.                               |
+| `idempotencyKey`        | Caller-provided retry identity for one semantic input.                                           | Scoped to principal, runtime/command, and documented retention window.     |
+| `operationId`           | Unique handle for one logical root invocation and its joined descendants.                        | Core runtime operation ledger; created before enqueue.                     |
+| `eventInstanceId`       | Unique identity for one concrete root or child event occurrence.                                 | Core runtime. Replaces ambiguous uses of `dispatchId` in the new protocol. |
+| `parentEventInstanceId` | Structural parent for an event synchronously dispatched during another event's handling/effects. | Core runtime.                                                              |
+| `causedByEffectId`      | Effect intent that caused an event, when known.                                                  | Core runtime/effect adapter.                                               |
+| `effectId`              | Unique intent identity for one emitted effect tuple.                                             | Core runtime, unique within an operation.                                  |
+| `attemptId`             | One execution attempt for an effect/task.                                                        | Effect/task supervisor.                                                    |
+| `stateRevision`         | Monotonic revision of the committed write head.                                                  | Runtime instance.                                                          |
+| `publishedRevision`     | Latest revision visible through published subscriptions.                                         | Runtime instance.                                                          |
+| `traceId` / `spanId`    | Optional diagnostic correlation.                                                                 | Tracer/exporter; never completion identity.                                |
+| `runtimeId`             | Stable logical routing identity chosen by the application.                                       | Application/runtime configuration.                                         |
+| `runtimeInstanceId`     | Unique lifetime of one in-memory runtime/ledger.                                                 | Core runtime; changes on restart.                                          |
+| `sessionEpoch`          | DevTools connection/storage generation. It may change on reconnect without a runtime restart.    | DevTools server.                                                           |
 
 Do not call causal event groups “epochs”; Reflex already uses epoch/session
 language elsewhere. Do not reuse the current DevTools `dispatchId` as an
@@ -329,19 +329,13 @@ The boundaries are intentional:
 The additive event-level API is:
 
 ```ts
-const wait = await runtime.dispatchAndWait(
-  ['cart/checkout', { cartId: 'cart-7' }],
-  {
-    completion: 'cascade-published',
-    timeoutMs: 5_000,
-    idempotencyKey: 'agent-run-42/checkout-cart-7',
-    expectedRevision: 81,
-    observe: [
-      ['cart/status', 'cart-7'],
-      ['orders/latest-id'],
-    ],
-  },
-);
+const wait = await runtime.dispatchAndWait(['cart/checkout', { cartId: 'cart-7' }], {
+  completion: 'cascade-published',
+  timeoutMs: 5_000,
+  idempotencyKey: 'agent-run-42/checkout-cart-7',
+  expectedRevision: 81,
+  observe: [['cart/status', 'cart-7'], ['orders/latest-id']],
+});
 ```
 
 `dispatchAndWait` is deliberately named as an event API. It does not imply that
@@ -639,14 +633,14 @@ Do not reduce the record to one `ok` boolean. Consumers should inspect:
 
 For compatibility, DevTools may derive the old summary:
 
-| Compatibility `outcome` | Derivation |
-| --- | --- |
-| `succeeded` | Operation completed; state/publication succeeded; no required or observed effect failure; no incomplete joined work. |
-| `effects-failed` | State committed/published, but at least one effect failed or was unhandled. |
-| `incomplete` | The requested boundary was reached, but detached, unacknowledged, or truncated work prevents a success claim. |
-| `failed` | Request rejected, a handler/commit/publication failed, or a required child was dropped. |
-| `rejected` | The operation was accepted as a request but did not begin execution because a precondition, idempotency conflict, or capacity rule rejected it. |
-| `unknown` | Only the caller's delivery/wait result is unknown; never stored as terminal runtime truth. |
+| Compatibility `outcome` | Derivation                                                                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `succeeded`             | Operation completed; state/publication succeeded; no required or observed effect failure; no incomplete joined work.                            |
+| `effects-failed`        | State committed/published, but at least one effect failed or was unhandled.                                                                     |
+| `incomplete`            | The requested boundary was reached, but detached, unacknowledged, or truncated work prevents a success claim.                                   |
+| `failed`                | Request rejected, a handler/commit/publication failed, or a required child was dropped.                                                         |
+| `rejected`              | The operation was accepted as a request but did not begin execution because a precondition, idempotency conflict, or capacity rule rejected it. |
+| `unknown`               | Only the caller's delivery/wait result is unknown; never stored as terminal runtime truth.                                                      |
 
 ### Event records and patches
 
@@ -701,20 +695,20 @@ subscription IDs.
 
 ## Failure semantics
 
-| Situation | Runtime truth | Caller guidance |
-| --- | --- | --- |
-| Input/schema/policy rejection | `rejected`; no event enqueued, no state/effects. | Correct the request or obtain authority; do not retry unchanged. |
-| `expectedRevision` mismatch | `rejected` with `REVISION_CONFLICT`. | Re-read semantic state, re-plan, use a new idempotency key only for the new intent. |
-| Handler/interceptor fails before commit | Event `failed`; state `not-attempted`/`failed`. | Fix handler/interceptor or input. |
-| Root commits; child handler fails | Operation `failed` or completed-with-errors; root state remains committed and is published. | Do not assume rollback. Inspect the exact child record. |
-| State commits; effect throws | State `committed`; effect `failed`; compatibility outcome `effects-failed`. | Repair/retry the effect only if its contract and idempotency policy allow it. |
-| Missing/malformed effect | Effect `unavailable`/`failed`, never silent success. | Register/fix the adapter or explicitly allow suppression. |
-| Legacy effect returns a promise | Effect `detached`; `cascade-published` may complete with incomplete external evidence. | Use supervised tasks for authoritative completion. |
-| Queue failure drops work | Every affected event occurrence becomes terminal `dropped`; every operation waiter resolves to a record. | Phase 0 should stop purging unrelated operations entirely. |
-| Runtime disposed | Pending occurrences fail with `RUNTIME_DISPOSED`; no hanging promises. | Start/select a new runtime; do not assume unacknowledged external effects were rolled back. |
-| Wait deadline expires | Operation stays queued/running/completed as applicable; wait result says timed out and includes lookup identity. | Call `getOperation`; never blind-retry with a new key. |
-| Connection lost after send | Caller delivery unknown; runtime truth unchanged. | Recover by `operationId` or the same `idempotencyKey`. |
-| Ledger entry expired | `expired` tombstone where possible; execution truth no longer available. | Retry is safe only if a durable/downstream idempotency contract still covers it. |
+| Situation                               | Runtime truth                                                                                                    | Caller guidance                                                                             |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Input/schema/policy rejection           | `rejected`; no event enqueued, no state/effects.                                                                 | Correct the request or obtain authority; do not retry unchanged.                            |
+| `expectedRevision` mismatch             | `rejected` with `REVISION_CONFLICT`.                                                                             | Re-read semantic state, re-plan, use a new idempotency key only for the new intent.         |
+| Handler/interceptor fails before commit | Event `failed`; state `not-attempted`/`failed`.                                                                  | Fix handler/interceptor or input.                                                           |
+| Root commits; child handler fails       | Operation `failed` or completed-with-errors; root state remains committed and is published.                      | Do not assume rollback. Inspect the exact child record.                                     |
+| State commits; effect throws            | State `committed`; effect `failed`; compatibility outcome `effects-failed`.                                      | Repair/retry the effect only if its contract and idempotency policy allow it.               |
+| Missing/malformed effect                | Effect `unavailable`/`failed`, never silent success.                                                             | Register/fix the adapter or explicitly allow suppression.                                   |
+| Legacy effect returns a promise         | Effect `detached`; `cascade-published` may complete with incomplete external evidence.                           | Use supervised tasks for authoritative completion.                                          |
+| Queue failure drops work                | Every affected event occurrence becomes terminal `dropped`; every operation waiter resolves to a record.         | Phase 0 should stop purging unrelated operations entirely.                                  |
+| Runtime disposed                        | Pending occurrences fail with `RUNTIME_DISPOSED`; no hanging promises.                                           | Start/select a new runtime; do not assume unacknowledged external effects were rolled back. |
+| Wait deadline expires                   | Operation stays queued/running/completed as applicable; wait result says timed out and includes lookup identity. | Call `getOperation`; never blind-retry with a new key.                                      |
+| Connection lost after send              | Caller delivery unknown; runtime truth unchanged.                                                                | Recover by `operationId` or the same `idempotencyKey`.                                      |
+| Ledger entry expired                    | `expired` tombstone where possible; execution truth no longer available.                                         | Retry is safe only if a durable/downstream idempotency contract still covers it.            |
 
 The runtime error model uses stable codes, a phase, a safe message, optional
 details, and explicit retryability:
@@ -903,7 +897,10 @@ interface ReflexInspectorV2 {
   readonly operationApiVersion?: 1;
   readonly runtimeInstanceId?: string;
   startEvent?(event: [string, ...unknown[]], options?: InspectorOperationOptions): OperationHandle;
-  executeEvent?(event: [string, ...unknown[]], options?: InspectorOperationOptions): Promise<OperationWaitResult>;
+  executeEvent?(
+    event: [string, ...unknown[]],
+    options?: InspectorOperationOptions,
+  ): Promise<OperationWaitResult>;
   getOperation?(query: OperationLookup): OperationSnapshot | undefined;
 }
 ```
@@ -1061,24 +1058,24 @@ or reconciliation.
 **Deliverables**
 
 - [x] Own/copy accepted event inputs and state ingress sufficiently that later
-  caller mutation cannot invalidate evidence.
+      caller mutation cannot invalidate evidence.
 - [x] Add committed and published revisions.
 - [x] Make missing/malformed required effects and coeffects structured failures.
 - [x] Prevent `dispatchSync` from overtaking accepted queued work.
 - [x] Isolate queue failure by operation; never purge unrelated work.
 - [x] Ensure successful earlier commits are published even when a later event
-  fails.
+      fails.
 
 **Acceptance criteria**
 
 - [x] Mutation-after-dispatch and mutation-after-restore tests cannot alter queued
-  input or owned state.
+      input or owned state.
 - [x] A missing/throwing coeffect or malformed/missing required effect is visible
-  as failure.
+      as failure.
 - [x] FIFO tests cover queued async followed immediately by sync invocation.
 - [x] One failing operation does not drop another agent/user operation.
 - [x] A failed queue batch publishes every earlier committed revision before its
-  waiter completes.
+      waiter completes.
 
 ### Phase 1 — core synchronous operation spine
 
@@ -1092,23 +1089,23 @@ or reconciliation.
 - [x] Causal pending-count settlement for synchronous dispatch descendants.
 - [x] Patches captured for tracked operations with tracing disabled.
 - [x] Explicit handler, commit, publication, observation, and synchronous effect
-  records.
+      records.
 - [x] Queue-drop and runtime-dispose terminal settlement.
 - [x] Operation/revision tags added to optional traces.
 
 **Acceptance criteria**
 
 - [x] Concurrent identical event IDs receive distinct operation/event-instance
-  IDs and the correct individual result.
+      IDs and the correct individual result.
 - [x] A root plus multi-level/multi-branch child cascade has exact parentage and
-  resolves only after its joined children and publication.
+      resolves only after its joined children and publication.
 - [x] An unrelated interleaved event is absent from the causal event list.
 - [x] A child failure preserves and reports a parent state commit.
 - [x] A synchronous effect failure cannot turn a committed state transition into a
-  handler failure or a false success.
+      handler failure or a false success.
 - [x] Tracing can be disabled throughout with identical receipt semantics.
 - [x] A wait timeout returns a running handle; later lookup returns the terminal
-  record.
+      record.
 - [x] Same idempotency key/input executes once; different input is rejected.
 - [x] Explicit queue purge and runtime disposal settle every affected waiter; an event failure never purges unrelated accepted work.
 - [x] Thenable and delayed legacy effects are reported as detached/excluded.
@@ -1249,18 +1246,18 @@ or reconciliation.
 
 ## Open questions and provisional decisions
 
-| Question | Provisional decision | Revisit when |
-| --- | --- | --- |
-| Exact public event API name | `dispatchAndWait`; it is explicit and additive. Avoid presenting it as the production command API. | Before Phase 1 public release. |
-| Default core timeout | Finite for remote/devtools calls; direct in-process API may allow no timeout. A wait timeout never terminates the operation. | Phase 1 API review. |
-| Default ledger size/TTL | Small bounded runtime-instance ring with terminal-entry eviction and explicit metadata. Never evict running entries silently. | Benchmarks and Phase 2 payload limits. |
-| Whether ordinary `dispatch` creates retained operations | Give every occurrence causal identity internally; retain full records only when requested/policy requires it. | Phase 1 overhead benchmark. |
-| Observation behavior under interleaving | Report actual `observedRevision`; use preconditions or isolated runtimes for stronger assumptions. | Real concurrent-agent scenarios. |
-| Command descriptor library/schema implementation | Keep schema adapter-neutral at the contract boundary; support common validators through adapters. | Phase 4 design. |
-| Durable ledger location | Pluggable application-owned store; persistence package may provide an adapter but should not be mandatory. | Phase 5. |
-| Effect success for `noop`/`suppressed` | A known policy disposition, not real execution; satisfies required work only if the effect contract/profile permits it. | Phase 3 contracts. |
-| Trace schema compatibility | Separate version, additive fields by default, deprecation for rename/removal. | Phase 2/6. |
-| MCP Tasks adoption | Adapter when client/server negotiate it; keep `get_operation` regardless. | MCP task stability and client support. |
+| Question                                                | Provisional decision                                                                                                          | Revisit when                           |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Exact public event API name                             | `dispatchAndWait`; it is explicit and additive. Avoid presenting it as the production command API.                            | Before Phase 1 public release.         |
+| Default core timeout                                    | Finite for remote/devtools calls; direct in-process API may allow no timeout. A wait timeout never terminates the operation.  | Phase 1 API review.                    |
+| Default ledger size/TTL                                 | Small bounded runtime-instance ring with terminal-entry eviction and explicit metadata. Never evict running entries silently. | Benchmarks and Phase 2 payload limits. |
+| Whether ordinary `dispatch` creates retained operations | Give every occurrence causal identity internally; retain full records only when requested/policy requires it.                 | Phase 1 overhead benchmark.            |
+| Observation behavior under interleaving                 | Report actual `observedRevision`; use preconditions or isolated runtimes for stronger assumptions.                            | Real concurrent-agent scenarios.       |
+| Command descriptor library/schema implementation        | Keep schema adapter-neutral at the contract boundary; support common validators through adapters.                             | Phase 4 design.                        |
+| Durable ledger location                                 | Pluggable application-owned store; persistence package may provide an adapter but should not be mandatory.                    | Phase 5.                               |
+| Effect success for `noop`/`suppressed`                  | A known policy disposition, not real execution; satisfies required work only if the effect contract/profile permits it.       | Phase 3 contracts.                     |
+| Trace schema compatibility                              | Separate version, additive fields by default, deprecation for rename/removal.                                                 | Phase 2/6.                             |
+| MCP Tasks adoption                                      | Adapter when client/server negotiate it; keep `get_operation` regardless.                                                     | MCP task stability and client support. |
 
 ## Maintainer decision checklist
 

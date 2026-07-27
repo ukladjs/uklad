@@ -168,7 +168,7 @@ describe('Package Consumption Tests', () => {
         },
       },
     });
-    expect(packageJson.files).toContain('docs');
+    expect(packageJson.files).not.toContain('docs');
     expect(packageJson.peerDependenciesMeta).toEqual({ react: { optional: true } });
   });
 

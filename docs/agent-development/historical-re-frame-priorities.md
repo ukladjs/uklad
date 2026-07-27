@@ -1,6 +1,6 @@
 # Re-frame Feature Priorities for Reflex
 
-> **Status:** Historical planning notes. The active roadmap is [`ROADMAP.md`](../ROADMAP.md); operation design is superseded by [`agent-operation-rfc.md`](agent-operation-rfc.md).
+> **Status:** Historical planning notes. The active roadmap is [`reflex.md`](../roadmaps/reflex.md); operation design is superseded by [`agent-operations.md`](../rfcs/agent-operations.md).
 
 Initial priority list for bringing the most valuable recent re-frame capabilities to Reflex, evaluated from an AI-agent development perspective.
 

@@ -78,20 +78,21 @@ pnpm dev:todomvc
 
 ## Documentation
 
-- [`ROADMAP.md`](ROADMAP.md) — current execution track and release-readiness
-  gates.
-- [`docs/agent-operation-rfc.md`](docs/agent-operation-rfc.md) — canonical
+- [`docs/README.md`](docs/README.md) — documentation index and structure.
+- [`docs/roadmaps/reflex.md`](docs/roadmaps/reflex.md) — current execution track
+  and release-readiness gates.
+- [`docs/rfcs/agent-operations.md`](docs/rfcs/agent-operations.md) — canonical
   proposed direction for authoritative operations and agent-driven runtimes.
-- [`docs/agent-first-priorities.md`](docs/agent-first-priorities.md) — the
-  agent-first prioritization lens.
-- [`docs/agent-workflow.md`](docs/agent-workflow.md) — the current
-  edit → run → inspect → verify workflow.
-- [`ADR-001-REFLEX-FOUNDATION.md`](ADR-001-REFLEX-FOUNDATION.md) — provisional
-  architectural decisions for the redesign.
-- [`docs/reflex-old-roadmap.md`](docs/reflex-old-roadmap.md) — historical
-  roadmap retained for context; it is not the active execution plan.
-- Package-level READMEs and `docs/` directories — implementation details,
-  local development instructions, and package-specific contracts.
+- [`docs/agent-development/priorities.md`](docs/agent-development/priorities.md)
+  — the agent-first prioritization lens.
+- [`docs/agent-development/workflow.md`](docs/agent-development/workflow.md) —
+  the current edit → run → inspect → verify workflow.
+- [`docs/architecture/foundation-adr.md`](docs/architecture/foundation-adr.md)
+  — provisional architectural decisions for the redesign.
+- [`docs/roadmaps/historical-reflex.md`](docs/roadmaps/historical-reflex.md) —
+  historical roadmap retained for context; it is not the active execution plan.
+- Package-level READMEs — short package entry points that link to canonical
+  documentation here.
 
 Security-sensitive behavior for the development tools is documented in
 [`SECURITY.md`](SECURITY.md) and the DevTools package documentation.

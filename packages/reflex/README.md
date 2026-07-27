@@ -133,7 +133,7 @@ access require the explicit `@flexsurfer/reflex/devtools` and
 
 ### Subscription runtime
 
-Reflex settles changed subscription graphs in one STATE-driven topological wave before notifying React. Active snapshots are cache-only, dormant reads are memoized pulls, equality cuts off downstream work, and computed nodes are evicted when their last consumer leaves. The runtime invariants and work budgets are documented in [`docs/subscription-runtime.md`](./docs/subscription-runtime.md).
+Reflex settles changed subscription graphs in one STATE-driven topological wave before notifying React. Active snapshots are cache-only, dormant reads are memoized pulls, equality cuts off downstream work, and computed nodes are evicted when their last consumer leaves. The runtime invariants and work budgets are documented in the [central subscription-runtime documentation](https://github.com/flexsurfer/reflex/blob/main/docs/architecture/subscription-runtime.md).
 
 Side effects (HTTP, storage, timers, navigation) live in **effects/coeffects**, registered by id and emitted from event handlers as data — which is what keeps handlers pure, apps portable across web/mobile/desktop, and behavior verifiable by tools.
 
@@ -155,7 +155,7 @@ Side effects (HTTP, storage, timers, navigation) live in **effects/coeffects**, 
 - [Step-by-Step Tutorial](https://reflex.js.org/docs/quick-start.html)
 - [Best Practices](https://reflex.js.org/docs/best-practices.html)
 - [API Reference](https://reflex.js.org/docs/api-reference.html)
-- [Re-frame parity tradeoffs](./docs/re-frame-parity-tradeoffs.md) - What Reflex gains, pays,
+- [Re-frame parity tradeoffs](https://github.com/flexsurfer/reflex/blob/main/docs/compatibility/re-frame-parity.md) - What Reflex gains, pays,
   and should improve in its JavaScript implementation
 - [AI Reference (llms.txt)](./llms.txt) - Full Reflex guide for AI assistants; use as a fallback/reference, not as always-loaded instructions
 
@@ -173,7 +173,7 @@ Reflex is **re-frame for the JavaScript world**. After many years of building ap
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request or file an issue with questions, suggestions, or ideas. Implementation changes should follow the [code conventions and module ownership rules](./docs/code-conventions.md).
+Contributions are welcome! Please feel free to submit a Pull Request or file an issue with questions, suggestions, or ideas. Implementation changes should follow the [code conventions and module ownership rules](https://github.com/flexsurfer/reflex/blob/main/docs/engineering/code-conventions.md).
 
 ## 📄 License
 

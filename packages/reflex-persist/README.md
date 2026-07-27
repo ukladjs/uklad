@@ -157,7 +157,7 @@ runtime.dispatch([PERSIST_IDS.HYDRATE]);
 
 Internal completion/effect IDs are exported for diagnostics but are not part of `PersistContracts` and must not be dispatched by applications. Library-owned payloads are authenticated at runtime; forged or malformed internal work is rejected without opening the write gate.
 
-For the package [architecture](./docs/architecture.md), safety invariant, and roadmap to async support, see the [reflex-persist RFC](https://github.com/flexsurfer/reflex/blob/main/docs/reflex-persist-rfc.md).
+For the package [architecture](https://github.com/flexsurfer/reflex/blob/main/docs/architecture/reflex-persist.md), safety invariant, and roadmap to async support, see the [reflex-persist RFC](https://github.com/flexsurfer/reflex/blob/main/docs/rfcs/persistence.md).
 
 ## License
 

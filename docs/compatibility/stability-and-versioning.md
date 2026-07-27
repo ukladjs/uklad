@@ -48,7 +48,7 @@ with a direct migration path.
 
 No compatibility promise is made from an arbitrary 0.x release to 1.0 beyond
 the guarantees explicitly listed in the
-[0.x migration guide](migration-0.x-to-1.0.md).
+[0.x migration guidance](../roadmaps/reflex.md).
 
 ## Stable semantic versions
 
@@ -197,4 +197,4 @@ Every release-candidate and stable release includes:
 - deprecation notices and removals, if any.
 
 The architectural ownership and lifecycle contract is defined by the
-[instance-scoped runtime RFC](https://github.com/flexsurfer/reflex/blob/main/docs/runtime-rfc.md).
+[instance-scoped runtime RFC](../rfcs/instance-scoped-runtime.md).

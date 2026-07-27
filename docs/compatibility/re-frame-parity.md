@@ -35,8 +35,8 @@ every mechanism should survive 1.0.
 - **Description:** Each runtime owns one state object. Event handlers receive an
   Immer draft; normal execution uses `produce`, while observed execution uses
   `produceWithPatches` only when patches are requested. See
-  [`runner.ts`](../src/events/runner.ts), [`immer.ts`](../src/core/immer.ts), and
-  [`state.ts`](../src/runtime/state.ts).
+  [`runner.ts`](../../packages/reflex/src/events/runner.ts), [`immer.ts`](../../packages/reflex/src/core/immer.ts), and
+  [`state.ts`](../../packages/reflex/src/runtime/state.ts).
 - **Why:** This approximates re-frame's immutable `app-db` while letting
   JavaScript authors write direct-looking mutations.
 - **Pros:** Structural sharing makes top-level `Object.is` checks cheap; no-op
@@ -59,8 +59,8 @@ every mechanism should survive 1.0.
 - **Description:** Registered subscriptions form a static DAG per serialized
   query. Active graphs update in one topological push wave; dormant graphs use
   a memoized pull; unused computed nodes are evicted. See
-  [`subscription-runtime.ts`](../src/runtime/subscriptions/subscription-runtime.ts)
-  and [`engine.ts`](../src/runtime/subscriptions/engine.ts).
+  [`subscription-runtime.ts`](../../packages/reflex/src/runtime/subscriptions/subscription-runtime.ts)
+  and [`engine.ts`](../../packages/reflex/src/runtime/subscriptions/engine.ts).
 - **Why:** This recreates re-frame's derived reactions without depending on
   React and guarantees that every listener sees a settled generation.
 - **Pros:** Shared dependencies run once, fan-in sees coherent inputs,
@@ -83,8 +83,8 @@ every mechanism should survive 1.0.
   subscriptions use `fast-deep-equal` by default and retain the previous
   result object when equal. A runtime or individual subscription can instead
   use `shallowEqual`, `Object.is`, or a custom comparator. See
-  [`equality.ts`](../src/core/equality.ts) and
-  [`cell.ts`](../src/runtime/subscriptions/cell.ts).
+  [`equality.ts`](../../packages/reflex/src/core/equality.ts) and
+  [`cell.ts`](../../packages/reflex/src/runtime/subscriptions/cell.ts).
 - **Why:** It approximates ClojureScript `=` and allows a compute function to
   allocate an equivalent result without waking React or downstream
   subscriptions.
@@ -107,8 +107,8 @@ every mechanism should survive 1.0.
 - **Description:** A query such as `['todo/by-id', 42]` is cached and rebound in
   React under `JSON.stringify(query)`. Development mode warns about values
   known not to survive that encoding. See
-  [`keys.ts`](../src/runtime/subscriptions/keys.ts) and
-  [`use-subscription.ts`](../src/react/use-subscription.ts).
+  [`keys.ts`](../../packages/reflex/src/runtime/subscriptions/keys.ts) and
+  [`use-subscription.ts`](../../packages/reflex/src/react/use-subscription.ts).
 - **Why:** Re-frame vectors have value semantics and can be map keys. JavaScript
   arrays do not, so Reflex needs a stable primitive key.
 - **Pros:** The key is simple, deterministic for JSON-safe inputs, readable in
@@ -131,9 +131,9 @@ every mechanism should survive 1.0.
   `dispatch()` is called. The current 0.x implementation gives queued and
   delayed work structured-clone ownership; `dispatchSync` consumes its vector
   immediately. See
-  [`event-runtime.ts`](../src/runtime/event-runtime.ts),
-  [`structured-clone.ts`](../src/core/structured-clone.ts), and
-  [`types.ts`](../src/types.ts).
+  [`event-runtime.ts`](../../packages/reflex/src/runtime/event-runtime.ts),
+  [`structured-clone.ts`](../../packages/reflex/src/core/structured-clone.ts), and
+  [`types.ts`](../../packages/reflex/src/types.ts).
 - **Why:** Re-frame events are immutable data values. Agent-authored code can
   follow that contract directly, so copying every event is defensive overhead
   rather than required application logic.
@@ -159,8 +159,8 @@ every mechanism should survive 1.0.
   runs on a later host task. Events added during a run wait for another queue
   cycle; event metadata can pause work until a yield or render boundary.
   `dispatchSync()` is an idle-only escape hatch. See
-  [`router.ts`](../src/events/router.ts) and
-  [`event-runtime.ts`](../src/runtime/event-runtime.ts).
+  [`router.ts`](../../packages/reflex/src/events/router.ts) and
+  [`event-runtime.ts`](../../packages/reflex/src/runtime/event-runtime.ts).
 - **Why:** This follows re-frame's event router, prevents reentrant transitions,
   preserves order, and naturally batches bursts of UI events.
 - **Pros:** State transitions are serialized, one failure does not discard
@@ -182,7 +182,7 @@ every mechanism should survive 1.0.
 - **Description:** Global and event-local interceptors run `before` and `after`
   around a handler through a generic `Context` containing coeffects, effects,
   queue, stack, and transition state. See
-  [`interceptors-executor.ts`](../src/events/interceptors-executor.ts).
+  [`interceptors-executor.ts`](../../packages/reflex/src/events/interceptors-executor.ts).
 - **Why:** This mirrors re-frame and provides one extension point for
   coeffects, policy, logging, validation, and other cross-cutting behavior.
 - **Pros:** Ordering is explicit, behavior is composable, and applications can
@@ -204,9 +204,9 @@ every mechanism should survive 1.0.
 - **Description:** Handlers receive injected environmental inputs and return
   effect tuples. Reflex commits the candidate state before executing effects;
   synchronous failures are isolated, while promises and delayed work are
-  currently detached. See [`execution.ts`](../src/events/execution.ts),
-  [`effect-executor.ts`](../src/events/effect-executor.ts), and
-  [`built-in-effects.ts`](../src/events/built-in-effects.ts).
+  currently detached. See [`execution.ts`](../../packages/reflex/src/events/execution.ts),
+  [`effect-executor.ts`](../../packages/reflex/src/events/effect-executor.ts), and
+  [`built-in-effects.ts`](../../packages/reflex/src/events/built-in-effects.ts).
 - **Why:** This is re-frame's main purity boundary: domain transitions describe
   external work instead of performing it directly.
 - **Pros:** Handlers are portable and easy to test; effect intent is visible to
@@ -229,9 +229,9 @@ every mechanism should survive 1.0.
   `renderState`. Consecutive commits coalesce behind a render-oriented
   scheduler; publication promotes the latest head, diffs top-level keys with
   `Object.is`, settles the DAG, and then notifies `useSyncExternalStore`.
-  `dispatchSync()` publishes inline. See [`state.ts`](../src/runtime/state.ts),
-  [`scheduling.ts`](../src/core/scheduling.ts), and
-  [`use-subscription.ts`](../src/react/use-subscription.ts).
+  `dispatchSync()` publishes inline. See [`state.ts`](../../packages/reflex/src/runtime/state.ts),
+  [`scheduling.ts`](../../packages/reflex/src/core/scheduling.ts), and
+  [`use-subscription.ts`](../../packages/reflex/src/react/use-subscription.ts).
 - **Why:** The design batches renders while ensuring newly mounted and already
   active subscriptions cannot observe different state generations.
 - **Pros:** React sees a coherent snapshot, bursts produce one notification
@@ -253,9 +253,9 @@ every mechanism should survive 1.0.
 - **Description:** Every explicit runtime owns its state, queue, handlers,
   subscription graph, tracing, timers, and registry. IDs are registered
   dynamically; duplicates fail; `registerModule()` records opaque handles for
-  safe reverse-order disposal. See [`runtime.ts`](../src/runtime/runtime.ts),
-  [`registrations.ts`](../src/runtime/registrations.ts), and
-  [`architecture.md`](./architecture.md).
+  safe reverse-order disposal. See [`runtime.ts`](../../packages/reflex/src/runtime/runtime.ts),
+  [`registrations.ts`](../../packages/reflex/src/runtime/registrations.ts), and
+  [`reflex-runtime.md`](../architecture/reflex-runtime.md).
 - **Why:** Dynamic `reg-*` APIs preserve re-frame's module model, while explicit
   runtime ownership fixes the isolation limits of package-global state.
 - **Pros:** SSR requests, tests, widgets, stories, and agent sandboxes can be
@@ -291,6 +291,6 @@ those principles, not the principles themselves.
 
 ## Related documents
 
-- [Reflex architecture](./architecture.md)
-- [Subscription runtime](./subscription-runtime.md)
-- [Foundation ADR](https://github.com/flexsurfer/reflex/blob/main/ADR-001-REFLEX-FOUNDATION.md)
+- [Reflex architecture](../architecture/reflex-runtime.md)
+- [Subscription runtime](../architecture/subscription-runtime.md)
+- [Foundation ADR](../architecture/foundation-adr.md)

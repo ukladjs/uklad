@@ -447,9 +447,9 @@ The provisional status must not continue indefinitely by default.
 
 ## Related documents
 
-- [Reflex architecture](packages/reflex/docs/architecture.md)
-- [Re-frame parity tradeoffs](packages/reflex/docs/re-frame-parity-tradeoffs.md)
-- [Agent-first priorities](docs/agent-first-priorities.md)
-- [Agent operation RFC](docs/agent-operation-rfc.md)
-- [Runtime RFC](docs/runtime-rfc.md)
-- [Stability and versioning](packages/reflex/docs/stability-and-versioning.md)
+- [Reflex architecture](reflex-runtime.md)
+- [Re-frame parity tradeoffs](../compatibility/re-frame-parity.md)
+- [Agent-first priorities](../agent-development/priorities.md)
+- [Agent operation RFC](../rfcs/agent-operations.md)
+- [Runtime RFC](../rfcs/instance-scoped-runtime.md)
+- [Stability and versioning](../compatibility/stability-and-versioning.md)

@@ -1,9 +1,9 @@
 # RFC: `@flexsurfer/reflex-persist` — persistence as Reflex primitives
 
-- **Status:** `0.1.0-beta.1` candidate implemented in [packages/reflex-persist](../packages/reflex-persist) (unpublished) and dogfooded in [examples/todomvc](../examples/todomvc); remaining unchecked release gates below are authoritative
+- **Status:** `0.1.0-beta.1` candidate implemented in [packages/reflex-persist](../../packages/reflex-persist) (unpublished) and dogfooded in [examples/todomvc](../../examples/todomvc); remaining unchecked release gates below are authoritative
 - **Last updated:** 2026-07-19
-- **Depends on:** the instance-scoped runtime ([runtime-rfc.md](runtime-rfc.md)) plus the generic post-handler/effect guarantees shipping in `@flexsurfer/reflex@0.1.27`; Reflex must be published before this beta
-- **Roadmap slot:** Phase 3, "Persistence + versioned migrations" ([ROADMAP.md](../ROADMAP.md))
+- **Depends on:** the instance-scoped runtime ([instance-scoped-runtime.md](instance-scoped-runtime.md)) plus the generic post-handler/effect guarantees shipping in `@flexsurfer/reflex@0.1.27`; Reflex must be published before this beta
+- **Roadmap slot:** Phase 3, "Persistence + versioned migrations" ([Reflex roadmap](../roadmaps/reflex.md))
 
 Two earlier drafts (method-driven, then dispatch-driven with a whole-state envelope and `partialize`) are superseded. An expert review of the second draft surfaced six findings; rather than patch each one, the scope was reset to the actual problem, which dissolves most of them — the rest are tracked under **Beyond `beta.2`** below.
 
@@ -29,7 +29,7 @@ The library expresses its observable work through primitives Reflex already ship
 | event       | `reflex-persist/purge`    | public recovery control; removes configured entries through an effect                                   |
 | event       | `loaded` / `failed`       | authenticated internal completions for the experimental async route; excluded from the public contract  |
 | interceptor | `reflex-persist/writer`   | global `after`: contributes a write effect per configured root the causing event changed                |
-| effect      | `reflex-persist/write`    | serializes one root from the committed state and calls `storage.setItem` — post-commit by construction     |
+| effect      | `reflex-persist/write`    | serializes one root from the committed state and calls `storage.setItem` — post-commit by construction  |
 | effect      | `complete` / `settle`     | authenticated internal lifecycle effects; make handle and raw-dispatch barriers equivalent              |
 | coeffect    | `reflex-persist/snapshot` | catches all synchronous reads and injects a staged success/failure snapshot                             |
 | sub         | `reflex-persist`          | status root: `'idle' \| 'hydrating' \| 'hydrated' \| 'failed'`                                          |
@@ -187,7 +187,7 @@ This release inherits every `beta.1` gate. AsyncStorage becomes supported only a
 
 ## Prototype findings and beta hardening
 
-The spike graduated into the package: its scenarios and beta regressions live in [packages/reflex-persist/src/tests/persist.test.ts](../packages/reflex-persist/src/tests/persist.test.ts), including the Map round trip discovered by TodoMVC. Persistence itself still uses only public Reflex APIs. Beta hardening added generic Reflex guarantees—not persistence hooks—for read-only post-handler `newState`, append-only interceptor effects, module cleanup ordering, and final-effect trace capture.
+The spike graduated into the package: its scenarios and beta regressions live in [packages/reflex-persist/src/tests/persist.test.ts](../../packages/reflex-persist/src/tests/persist.test.ts), including the Map round trip discovered by TodoMVC. Persistence itself still uses only public Reflex APIs. Beta hardening added generic Reflex guarantees—not persistence hooks—for read-only post-handler `newState`, append-only interceptor effects, module cleanup ordering, and final-effect trace capture.
 
 1. Happy-path sync route: one synchronous `dispatchSync` hydrates, overlays roots, migrates, and re-stores migrated keys via post-commit write effects — zero awaits.
 2. Per-key writes: changing one configured key writes exactly one storage entry; unconfigured keys never write.
@@ -204,7 +204,7 @@ Calibration: the suite now establishes beta.1 sync failure atomicity, lifecycle 
 
 - Real state values are not always JSON-safe (TodoMVC's `todos` is a `Map`) — config keys accept per-key `serialize`/`deserialize` transforms.
 - Replacing the hand-rolled persistence deleted the `local-store-todos` coeffect, the `todos-to-local-store` effect, and a storage-effect return from six event handlers; `INIT_APP` became unnecessary. Handlers now never mention storage.
-- Monorepo examples that alias `@flexsurfer/reflex` to source must also alias the `/vanilla` subpath and `@flexsurfer/reflex-persist` itself — otherwise the bundle carries two reflex copies and persistence attaches to the wrong default runtime ([examples/todomvc/vite.config.ts](../examples/todomvc/vite.config.ts)).
+- Monorepo examples that alias `@flexsurfer/reflex` to source must also alias the `/vanilla` subpath and `@flexsurfer/reflex-persist` itself — otherwise the bundle carries two reflex copies and persistence attaches to the wrong default runtime ([examples/todomvc/vite.config.ts](../../examples/todomvc/vite.config.ts)).
 - Verified in-browser: add todo → per-key envelope written; reload → hydrated before first paint; toggle done → stored with zero storage code in the handler.
 - **The watch-based writer shipped with an echo bug**, spotted in the trace log on the first real boot with stored data: hydration changed `todos`, the value watch fired, and a `store` event wrote the just-read snapshot straight back. Value watches lack causality — they see _that_ a key changed, never _why_. The writer became a global interceptor (event identity → hydration skipped by construction), which also moved writes onto the causing event's trace and dropped the extra `store` event and the "keys must be sub ids" requirement.
 

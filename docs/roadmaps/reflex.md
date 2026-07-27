@@ -13,17 +13,17 @@ When items compete, pick the one that feeds the proof or exploits the breakage w
 
 Detailed trackers this document links into:
 
-- [docs/agent-operation-rfc.md](docs/agent-operation-rfc.md) — canonical
+- [docs/rfcs/agent-operations.md](../rfcs/agent-operations.md) — canonical
   architecture and phased delivery plan for authoritative agent operations.
   Its Phases 0–6 are the current execution track and supersede this document's
   older ordering wherever operation receipts, effect supervision, or agent
   safety were previously deferred.
-- [docs/agent-first-priorities.md](docs/agent-first-priorities.md) — agent-first
+- [docs/agent-development/priorities.md](../agent-development/priorities.md) — agent-first
   priority order combining AI-native requirements with human/API work
   re-ranked by its value to agents.
-- [docs/devtools-roadmap.md](docs/devtools-roadmap.md) — DevTools + MCP tool backlog; its non-operation backlog remains authoritative.
-- [docs/reflex-old-roadmap.md](docs/reflex-old-roadmap.md) — previous roadmap; its **agent indexing model** and **Redux/Zustand feature-parity table** remain valid reference material.
-- [docs/agent-workflow.md](docs/agent-workflow.md) — the canonical agent scenario new tools are justified against.
+- [docs/roadmaps/devtools.md](devtools.md) — DevTools + MCP tool backlog; its non-operation backlog remains authoritative.
+- [docs/roadmaps/historical-reflex.md](historical-reflex.md) — previous roadmap; its **agent indexing model** and **Redux/Zustand feature-parity table** remain valid reference material.
+- [docs/agent-development/workflow.md](../agent-development/workflow.md) — the canonical agent scenario new tools are justified against.
 
 The immediate architecture gate is no longer “more trace tooling.” It is the
 core operation spine: exact invocation/event identities, committed and
@@ -33,7 +33,7 @@ Reflex makes a production-grade agent-runtime claim. Persistence,
 productization, and distribution continue in parallel where they do not freeze
 the old trace-derived completion contract.
 
-Operation-spine status: **Phase 0 and Phase 1 of the [agent-operation RFC](docs/agent-operation-rfc.md) are complete in the experimental core slice**, with package and persistence checks passing. Inspector/DevTools/MCP integration, enforced effect profiles, durable idempotency, and supervised async work remain open roadmap phases.
+Operation-spine status: **Phase 0 and Phase 1 of the [agent-operation RFC](../rfcs/agent-operations.md) are complete in the experimental core slice**, with package and persistence checks passing. Inspector/DevTools/MCP integration, enforced effect profiles, durable idempotency, and supervised async work remain open roadmap phases.
 
 ---
 
@@ -42,9 +42,9 @@ Operation-spine status: **Phase 0 and Phase 1 of the [agent-operation RFC](docs/
 The strongest recent work is invisible: local `main` is ahead of the public repository, the website documents the old DevTools API, and the flagship example contains a literal bug. The current milestone is to synchronize and review the source repository; npm publication remains deferred until the redesign is stable.
 
 - [ ] Synchronize website, root/package READMEs, API reference, and examples with the current API (`createReflexInspector`, current DevTools setup) before any package release.
-- [x] Fix the swapped Best Practices / API Reference links in [packages/reflex/README.md](packages/reflex/README.md).
-- [ ] Include `docs/` in the npm tarball or make README links absolute — [package.json `files`](packages/reflex/package.json) currently excludes it while the README links `./docs/subscription-runtime.md`, before any package release.
-- [ ] Remove the leftover `'event2'` string from the TodoMVC save handler ([examples/todomvc/src/events.ts](examples/todomvc/src/events.ts), `SAVE` event) and enable Strict Mode in [examples/todomvc/src/main.tsx](examples/todomvc/src/main.tsx).
+- [x] Fix the swapped Best Practices / API Reference links in [packages/reflex/README.md](../../packages/reflex/README.md).
+- [ ] Decide how the central `docs/` tree should be distributed with future package releases; package tarballs currently contain package code and package-facing READMEs, while deep documentation remains in the monorepo.
+- [ ] Remove the leftover `'event2'` string from the TodoMVC save handler ([examples/todomvc/src/events.ts](../../examples/todomvc/src/events.ts), `SAVE` event) and enable Strict Mode in [examples/todomvc/src/main.tsx](../../examples/todomvc/src/main.tsx).
 - [x] Pin MCP package versions in the shipped agent templates.
 - [ ] Prepare coordinated prerelease versions and release notes after the experimental redesign reaches a release candidate.
 - [ ] Run the full workspace check and packed-package dry runs.
@@ -54,7 +54,7 @@ The strongest recent work is invisible: local `main` is ahead of the public repo
 
 These items do not win an evaluation by themselves, but each removes a common reason for an architecture or security team to reject the framework before evaluating its differentiators.
 
-- [x] **DevTools/MCP security baseline.** The server now uses generated role tokens for HTTP and WebSocket, exact browser-origin and Host checks, loopback-only binding by default, read-only MCP capabilities unless dispatch/restore are granted separately, bounded and schema-validated runtime/control data, application/server redaction hooks, mutation audit records, reconnect-safe runtime sessions, and a fail-closed runtime/DevTools/MCP protocol-version handshake. Principal-scoped capability policy and remote-deployment abuse controls remain explicitly tracked in the [DevTools roadmap](docs/devtools-roadmap.md#p2).
+- [x] **DevTools/MCP security baseline.** The server now uses generated role tokens for HTTP and WebSocket, exact browser-origin and Host checks, loopback-only binding by default, read-only MCP capabilities unless dispatch/restore are granted separately, bounded and schema-validated runtime/control data, application/server redaction hooks, mutation audit records, reconnect-safe runtime sessions, and a fail-closed runtime/DevTools/MCP protocol-version handshake. Principal-scoped capability policy and remote-deployment abuse controls remain explicitly tracked in the [DevTools roadmap](devtools.md#p2).
 - [ ] **Fail-loud dev mode.** The instance API (`runtime.dispatch`, `dispatchSync`, `getSubscriptionValue`, `watchSubscription`, and `useSubscription` through it) now throws on malformed vectors and unregistered ids in every mode. Remaining scope: the legacy facade's root functions still `console.error` and continue — make them throw in development, and add a nearest-match suggestion ("did you mean `todos/add`?") to both surfaces. String IDs are only safe if mistakes surface immediately; this matters double for AI-generated code.
 - [ ] **Release and support baseline.** `SECURITY.md` is present; remaining work includes `CHANGELOG.md`, a support/compatibility matrix, coordinated release automation, npm provenance/trusted publishing, and a documented deprecation policy. Define supported React, React Native, TypeScript, Node/headless, browser, Metro, and Hermes versions.
 - [ ] **Runtime performance baseline.** Add repeatable benchmarks and CI budgets for dispatch throughput, broad and deep subscription graphs, 1k/10k active subscriptions, mount/unmount churn, memory retention, large derived collections under deep versus shallow equality, React render counts, AI-token-frequency updates, Hermes performance, and bundle size.
@@ -62,7 +62,7 @@ These items do not win an evaluation by themselves, but each removes a common re
 
 ## Phase 2 — Instance-scoped runtime (the quarter's architecture project, gates 1.0 RC)
 
-Before this phase, the state and registries were module-level globals ([state.ts](packages/reflex/src/runtime/state.ts), [registry.ts](packages/reflex/src/runtime/registry.ts)). That blocked or complicated SSR/per-request stores, microfrontends, embedded widgets, parallel tests, Storybook isolation — and, most on-thesis, multiple agent sandboxes running side by side. This phase moves those owners behind explicit runtime scopes while preserving the default-runtime facade.
+Before this phase, the state and registries were module-level globals ([state.ts](../../packages/reflex/src/runtime/state.ts), [registry.ts](../../packages/reflex/src/runtime/registry.ts)). That blocked or complicated SSR/per-request stores, microfrontends, embedded widgets, parallel tests, Storybook isolation — and, most on-thesis, multiple agent sandboxes running side by side. This phase moves those owners behind explicit runtime scopes while preserving the default-runtime facade.
 
 Target shape:
 
@@ -102,11 +102,11 @@ This phase begins once the instance API is stable enough that persistence, templ
 - [ ] **`create-reflex-app` scaffolder.** Pin the intended convention: `state.ts` / `events.ts` / `subs.ts` / `effects.ts` / `*-ids.ts`, store-local or typed payload contracts, dev-only inspector wiring, CLAUDE.md/AGENTS.md routers, pinned MCP config, and a `reflex-map` script entry.
 - [ ] **Official Expo reference app, built by agents using the Reflex toolkit.** Include Metro/Hermes CI, AsyncStorage + SecureStore adapters, hydration migrations, background transitions, reconnect handling, and an offline command outbox. Dogfood the workflow in a public demo showing an agent building and verifying the application with metrics on screen.
 - [ ] **Public agent benchmark.** Compare the same tested tasks in Reflex, Zustand, and Redux Toolkit only after the internal harness is stable. Fix model and tool versions, publish prompts and source, use identical acceptance tests and time limits, run multiple repetitions, disclose failures and variance, and make the harness reproducible.
-- [ ] **MCP backlog prioritized by harness data** (tracked in [docs/devtools-roadmap.md](docs/devtools-roadmap.md)): `get_client_logs`, `find_state_changes(path)`, `sinceId` pagination with explicit cursor-reset responses, `reflex-map` static manifest + source locations through MCP, shape mode, snapshot/restore, `explain_event`, deterministic replay, and runtime schema validation for external tool payloads. Predicted winners remain hypotheses until measured.
+- [ ] **MCP backlog prioritized by harness data** (tracked in [docs/roadmaps/devtools.md](devtools.md)): `get_client_logs`, `find_state_changes(path)`, `sinceId` pagination with explicit cursor-reset responses, `reflex-map` static manifest + source locations through MCP, shape mode, snapshot/restore, `explain_event`, deterministic replay, and runtime schema validation for external tool payloads. Predicted winners remain hypotheses until measured.
 
 ## Phase 4 — Supervised async tasks (`@flexsurfer/reflex-tasks`)
 
-Effects return `void` and only synchronous exceptions are caught ([types.ts](packages/reflex/src/types.ts) `EffectHandler`, [effects.ts](packages/reflex/src/events/effects.ts)) — insufficient for LLM streams, tool calls, approvals, reconnects, and concurrent agents. Effects stay declarative data; tasks add supervision. Tasks are built after instance-scoping because each task tree belongs to a runtime instance.
+Effects return `void` and only synchronous exceptions are caught ([types.ts](../../packages/reflex/src/types.ts) `EffectHandler`, [built-in-effects.ts](../../packages/reflex/src/events/built-in-effects.ts)) — insufficient for LLM streams, tool calls, approvals, reconnects, and concurrent agents. Effects stay declarative data; tasks add supervision. Tasks are built after instance-scoping because each task tree belongs to a runtime instance.
 
 Minimal core first:
 

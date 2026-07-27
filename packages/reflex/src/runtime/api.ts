@@ -85,7 +85,7 @@ export interface ReflexRegistrar<TContracts extends ReflexContracts = Permissive
     ) => ContractSubscribeVector<TContracts>[],
     config?: SubConfig,
   ): void;
-  registerInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void;
+  regInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void;
 }
 
 /**

@@ -9,7 +9,7 @@ import {
   regCoeffect,
   regEffect,
   regEvent,
-  registerInterceptor,
+  regInterceptor,
   registerHandler,
 } from './runtime-test-api';
 import { waitForScheduled } from './test-utils';
@@ -739,7 +739,7 @@ describe('regEvent with cofx', () => {
         },
       };
 
-      registerInterceptor(globalInterceptor);
+      regInterceptor(globalInterceptor);
 
       regEvent('test-global-injection', ({ draftState, globalData }) => {
         expect(globalData).toBe('injected-by-global');
@@ -783,8 +783,8 @@ describe('regEvent with cofx', () => {
         },
       };
 
-      registerInterceptor(globalInterceptor1);
-      registerInterceptor(globalInterceptor2);
+      regInterceptor(globalInterceptor1);
+      regInterceptor(globalInterceptor2);
 
       regEvent('test-multiple-globals', ({ draftState, order }) => {
         executionOrder.push('handler');
@@ -832,7 +832,7 @@ describe('regEvent with cofx', () => {
         },
       };
 
-      registerInterceptor(globalInterceptor);
+      regInterceptor(globalInterceptor);
 
       regEvent(
         'test-execution-order',
@@ -871,7 +871,7 @@ describe('regEvent with cofx', () => {
         (draftState as any).secondaryProcessed = true;
       });
 
-      registerInterceptor(globalInterceptor);
+      regInterceptor(globalInterceptor);
 
       regEvent('test-fx-modification', ({ draftState }) => {
         (draftState as any).primaryProcessed = true;
@@ -900,7 +900,7 @@ describe('regEvent with cofx', () => {
       regEffect('observe-committed-counter', () => {
         committedCounter = getState().counter;
       });
-      registerInterceptor({
+      regInterceptor({
         id: 'append-post-commit-effect',
         after: (context: Context) => {
           expect(context.previousState.counter).toBe(0);
@@ -928,7 +928,7 @@ describe('regEvent with cofx', () => {
         },
       };
 
-      registerInterceptor(globalInterceptor);
+      regInterceptor(globalInterceptor);
 
       regEvent(
         'test-global-with-cofx',
@@ -963,7 +963,7 @@ describe('regEvent with cofx', () => {
         },
       };
 
-      registerInterceptor(globalInterceptor);
+      regInterceptor(globalInterceptor);
       clearInterceptors();
 
       regEvent('test-cleared-global', ({ draftState }) => {
@@ -1000,8 +1000,8 @@ describe('regEvent with cofx', () => {
         },
       };
 
-      registerInterceptor(globalInterceptor1);
-      registerInterceptor(globalInterceptor2);
+      regInterceptor(globalInterceptor1);
+      regInterceptor(globalInterceptor2);
       clearInterceptors('clear-this-one');
 
       regEvent('test-selective-clear', ({ draftState, from1, from2 }) => {
@@ -1031,7 +1031,7 @@ describe('regEvent with cofx', () => {
         },
       };
 
-      registerInterceptor(faultyGlobalInterceptor);
+      regInterceptor(faultyGlobalInterceptor);
 
       regEvent('test-global-error', ({ draftState }) => {
         (draftState as any).counter += 1;

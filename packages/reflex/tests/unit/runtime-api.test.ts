@@ -100,7 +100,7 @@ describe('instance-scoped runtime', () => {
       'regEventErrorHandler',
       'regRootSub',
       'regSub',
-      'registerInterceptor',
+      'regInterceptor',
     ]) {
       expect(exposed[adminMethod]).toBeUndefined();
     }
@@ -122,7 +122,7 @@ describe('instance-scoped runtime', () => {
       'regEventErrorHandler',
       'regRootSub',
       'regSub',
-      'registerInterceptor',
+      'regInterceptor',
     ]) {
       expect(exposed[registrarMethod]).toBeUndefined();
     }
@@ -150,7 +150,7 @@ describe('instance-scoped runtime', () => {
     };
 
     runtime.registerModule((registrar) => {
-      registrar.registerInterceptor(interceptor);
+      registrar.regInterceptor(interceptor);
     });
 
     expect(admin(runtime).getInterceptors()).toEqual([interceptor]);

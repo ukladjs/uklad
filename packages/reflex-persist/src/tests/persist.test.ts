@@ -398,7 +398,7 @@ describe('persist', () => {
       keys: ['count'],
     });
     runtime.registerModule((registrar) => {
-      registrar.registerInterceptor({
+      registrar.regInterceptor({
         id: 'block-sync-hydrate-after-handler',
         after: (context) => {
           if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {
@@ -781,7 +781,7 @@ describe('persist', () => {
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
     handle.hydrate();
     runtime.registerModule((registrar) => {
-      registrar.registerInterceptor({
+      registrar.regInterceptor({
         id: 'block-purge-after-handler',
         after: (context) => {
           if (context.coeffects.event[0] === PERSIST_IDS.PURGE) {
@@ -1036,7 +1036,7 @@ describe('persist', () => {
       experimentalAsync: true,
     });
     runtime.registerModule((registrar) => {
-      registrar.registerInterceptor({
+      registrar.regInterceptor({
         id: 'block-hydrate-after-handler',
         after: (context) => {
           if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {

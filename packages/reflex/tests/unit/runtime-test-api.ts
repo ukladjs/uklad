@@ -210,7 +210,7 @@ export function clearSubscriptionHandlers(id?: Id): void {
 export const getEventInterceptors = core.events.getEventInterceptors.bind(core.events);
 export const setEventInterceptors = core.events.setEventInterceptors.bind(core.events);
 
-export const registerInterceptor = core.events.registerInterceptor.bind(core.events);
+export const regInterceptor = core.events.registerInterceptor.bind(core.events);
 export const getInterceptors = core.events.getInterceptors.bind(core.events);
 export const clearInterceptors = core.events.clearInterceptors.bind(core.events);
 export const execute = executeInterceptors.bind(null, core) as (

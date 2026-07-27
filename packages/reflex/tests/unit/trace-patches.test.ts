@@ -17,7 +17,7 @@ import {
   initState,
   regEffect,
   regEvent,
-  registerInterceptor,
+  regInterceptor,
   registerTraceCallback,
   removeTraceCallback,
 } from './runtime-test-api';
@@ -94,7 +94,7 @@ describe('Conditional patch generation', () => {
       collected.push(...traces);
     });
     regEffect('trace-after-effect', () => {});
-    registerInterceptor({
+    regInterceptor({
       id: 'trace-after-interceptor',
       after: (context) => {
         context.effects.push(['trace-after-effect', { key: 'value' }]);

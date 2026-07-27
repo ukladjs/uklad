@@ -317,7 +317,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return dispose;
   }
 
-  registerInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void {
+  regInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void {
     this.assertUsable();
     this.recordRegistration(
       this.#core.events.registerInterceptor(interceptor as unknown as Interceptor),
@@ -447,7 +447,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
       regEventErrorHandler: this.regEventErrorHandler.bind(this),
       regRootSub: this.regRootSub.bind(this),
       regSub: this.regSub.bind(this),
-      registerInterceptor: this.registerInterceptor.bind(this),
+      regInterceptor: this.regInterceptor.bind(this),
     });
   }
 

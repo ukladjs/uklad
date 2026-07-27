@@ -558,7 +558,7 @@ export function persist<TContracts extends ReflexContracts>(
         },
       );
 
-      scope.registerInterceptor({
+      scope.regInterceptor({
         id: PERSIST_IDS.WRITER,
         comment: 'Persists configured roots changed by the causing event.',
         after: (context) => {

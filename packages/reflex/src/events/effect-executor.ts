@@ -2,7 +2,6 @@ import { consoleLog } from '../core/logging';
 import { isEventVector } from '../core/validation';
 import { hasTrackedRuntimeEventCallback, notifyTrackedRuntimeEvent } from '../runtime/probe';
 import { type RuntimeCore } from '../runtime/core';
-import { getRuntimeClientForCore } from '../runtime/runtime';
 import { DISPATCH, DISPATCH_LATER } from './built-in-effects';
 import type { ExecutionEnvelope } from './envelope';
 
@@ -39,7 +38,10 @@ export function executeEffects(
   }
 
   const reporting = hasTrackedRuntimeEventCallback(envelope.tracking, 'effect');
-  const effectRuntime = getRuntimeClientForCore(runtime);
+  const effectRuntime = runtime.effectRuntime;
+  if (!effectRuntime) {
+    throw new Error('[reflex] Runtime effect capability was not initialized.');
+  }
 
   for (const [effectIndex, effect] of effects.entries()) {
     if (

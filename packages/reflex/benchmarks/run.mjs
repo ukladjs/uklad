@@ -1,11 +1,23 @@
 import { performance } from 'node:perf_hooks';
 
 import { createReflexRuntime } from '../dist/vanilla.mjs';
+import { createReflexTestHarness } from '../dist/testing.mjs';
 
 const scope = process.argv[2] ?? 'all';
 const sampleCount = numberFromEnv('REFLEX_BENCH_SAMPLES', 5);
 const globalIterations = process.env.REFLEX_BENCH_ITERATIONS;
 const jsonOutput = process.env.REFLEX_BENCH_JSON === '1';
+
+const BENCH_HARNESSES = new WeakMap();
+
+function getBenchHarness(runtime) {
+  let harness = BENCH_HARNESSES.get(runtime);
+  if (!harness) {
+    harness = createReflexTestHarness(runtime);
+    BENCH_HARNESSES.set(runtime, harness);
+  }
+  return harness;
+}
 
 await main();
 
@@ -45,10 +57,12 @@ function runStateBenchmarks() {
           initialState: { counter: 0 },
           runtimeId: 'bench-state-no-op',
         });
-        runtime.regEvent('bench/no-op', () => {});
+        runtime.registerModule((registrar) => {
+          registrar.regEvent('bench/no-op', () => {});
+        });
         return { runtime };
       },
-      operation: ({ runtime }) => runtime.dispatchSync(['bench/no-op']),
+      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/no-op']),
     }),
     measure({
       name: 'state/small-update',
@@ -58,12 +72,14 @@ function runStateBenchmarks() {
           initialState: { counter: 0 },
           runtimeId: 'bench-state-small-update',
         });
-        runtime.regEvent('bench/increment', ({ draftState }) => {
-          draftState.counter += 1;
+        runtime.registerModule((registrar) => {
+          registrar.regEvent('bench/increment', ({ draftState }) => {
+            draftState.counter += 1;
+          });
         });
         return { runtime };
       },
-      operation: ({ runtime }) => runtime.dispatchSync(['bench/increment']),
+      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/increment']),
     }),
     measure({
       name: 'state/deep-update',
@@ -73,13 +89,15 @@ function runStateBenchmarks() {
           initialState: createDeepState(),
           runtimeId: 'bench-state-deep-update',
         });
-        runtime.regEvent('bench/update-deep', ({ draftState }) => {
-          draftState.profile.preferences.notifications.email.enabled =
-            !draftState.profile.preferences.notifications.email.enabled;
+        runtime.registerModule((registrar) => {
+          registrar.regEvent('bench/update-deep', ({ draftState }) => {
+            draftState.profile.preferences.notifications.email.enabled =
+              !draftState.profile.preferences.notifications.email.enabled;
+          });
         });
         return { runtime };
       },
-      operation: ({ runtime }) => runtime.dispatchSync(['bench/update-deep']),
+      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/update-deep']),
     }),
     measure({
       name: 'state/large-no-op',
@@ -89,10 +107,12 @@ function runStateBenchmarks() {
           initialState: { rows: createRows(10_000) },
           runtimeId: 'bench-state-large-no-op',
         });
-        runtime.regEvent('bench/no-op', () => {});
+        runtime.registerModule((registrar) => {
+          registrar.regEvent('bench/no-op', () => {});
+        });
         return { runtime };
       },
-      operation: ({ runtime }) => runtime.dispatchSync(['bench/no-op']),
+      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/no-op']),
     }),
   ];
 }
@@ -103,28 +123,28 @@ function runSubscriptionBenchmarks() {
       name: 'subscriptions/fan-out-100',
       iterations: iterationsFor('subscriptions', 5_000),
       setup: () => setupFanOut(100, 'bench-sub-fanout-100'),
-      operation: ({ runtime }) => runtime.dispatchSync(['bench/tick']),
+      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/tick']),
       teardown: disposeSubscriptions,
     }),
     measure({
       name: 'subscriptions/fan-out-1000',
       iterations: iterationsFor('subscriptions', 1_000),
       setup: () => setupFanOut(1_000, 'bench-sub-fanout-1000'),
-      operation: ({ runtime }) => runtime.dispatchSync(['bench/tick']),
+      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/tick']),
       teardown: disposeSubscriptions,
     }),
     measure({
       name: 'subscriptions/deep-chain-100',
       iterations: iterationsFor('subscriptions', 5_000),
       setup: () => setupDeepChain(100, 'bench-sub-deep-chain'),
-      operation: ({ runtime }) => runtime.dispatchSync(['bench/tick']),
+      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/tick']),
       teardown: disposeSubscriptions,
     }),
     measure({
       name: 'subscriptions/equality-cutoff-10k',
       iterations: iterationsFor('subscriptions', 2_000),
       setup: () => setupEqualityCutoff(10_000, 'bench-sub-equality-cutoff'),
-      operation: ({ runtime }) => runtime.dispatchSync(['bench/replace-items']),
+      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/replace-items']),
       teardown: disposeSubscriptions,
       validate: ({ downstreamRuns }) => ({
         downstreamRunsDuringMeasurement: downstreamRuns,
@@ -135,7 +155,7 @@ function runSubscriptionBenchmarks() {
       iterations: iterationsFor('subscriptions', 5_000),
       setup: () => setupMountChurn('bench-sub-mount-churn'),
       operation: ({ runtime }) => {
-        const dispose = runtime.watchSubscription(['bench/double'], () => {}, {
+        const dispose = getBenchHarness(runtime).watchSubscription(['bench/double'], () => {}, {
           emitInitial: false,
         });
         dispose();
@@ -275,17 +295,23 @@ function measureMemory({ name, setup, teardown = disposeRuntime }) {
 
 function setupFanOut(width, runtimeId) {
   const runtime = createBenchRuntime(runtimeId);
-  runtime.regRootSub('bench/tick-root', 'tick');
+  runtime.registerModule((registrar) => {
+    registrar.regRootSub('bench/tick-root', 'tick');
+  });
   const disposers = [];
 
   for (let index = 0; index < width; index += 1) {
     const id = `bench/fanout/${index}`;
-    runtime.regSub(
-      id,
-      (tick) => tick + index,
-      () => [['bench/tick-root']],
+    runtime.registerModule((registrar) => {
+      registrar.regSub(
+        id,
+        (tick) => tick + index,
+        () => [['bench/tick-root']],
+      );
+    });
+    disposers.push(
+      getBenchHarness(runtime).watchSubscription([id], () => {}, { emitInitial: false }),
     );
-    disposers.push(runtime.watchSubscription([id], () => {}, { emitInitial: false }));
   }
 
   return { runtime, disposers };
@@ -293,42 +319,54 @@ function setupFanOut(width, runtimeId) {
 
 function setupDeepChain(depth, runtimeId) {
   const runtime = createBenchRuntime(runtimeId);
-  runtime.regRootSub('bench/tick-root', 'tick');
+  runtime.registerModule((registrar) => {
+    registrar.regRootSub('bench/tick-root', 'tick');
+  });
   let previous = 'bench/tick-root';
 
   for (let index = 0; index < depth; index += 1) {
     const id = `bench/deep/${index}`;
     const dependency = previous;
-    runtime.regSub(
-      id,
-      (value) => value + 1,
-      () => [[dependency]],
-    );
+    runtime.registerModule((registrar) => {
+      registrar.regSub(
+        id,
+        (value) => value + 1,
+        () => [[dependency]],
+      );
+    });
     previous = id;
   }
 
-  const disposer = runtime.watchSubscription([previous], () => {}, { emitInitial: false });
+  const disposer = getBenchHarness(runtime).watchSubscription([previous], () => {}, {
+    emitInitial: false,
+  });
   return { runtime, disposers: [disposer] };
 }
 
 function setupEqualityCutoff(itemCount, runtimeId) {
   const runtime = createBenchRuntime(runtimeId, { items: createRows(itemCount) });
   let downstreamRuns = 0;
-  runtime.regRootSub('bench/items-root', 'items');
-  runtime.regSub(
-    'bench/mapped-items',
-    (items) => items.map((item) => item),
-    () => [['bench/items-root']],
-  );
-  runtime.regSub(
-    'bench/item-count',
-    (items) => {
-      downstreamRuns += 1;
-      return items.length;
-    },
-    () => [['bench/mapped-items']],
-  );
-  const disposer = runtime.watchSubscription(['bench/item-count'], () => {}, {
+  runtime.registerModule((registrar) => {
+    registrar.regRootSub('bench/items-root', 'items');
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regSub(
+      'bench/mapped-items',
+      (items) => items.map((item) => item),
+      () => [['bench/items-root']],
+    );
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regSub(
+      'bench/item-count',
+      (items) => {
+        downstreamRuns += 1;
+        return items.length;
+      },
+      () => [['bench/mapped-items']],
+    );
+  });
+  const disposer = getBenchHarness(runtime).watchSubscription(['bench/item-count'], () => {}, {
     emitInitial: false,
   });
 
@@ -346,12 +384,16 @@ function setupEqualityCutoff(itemCount, runtimeId) {
 
 function setupMountChurn(runtimeId) {
   const runtime = createBenchRuntime(runtimeId, { tick: 1 });
-  runtime.regRootSub('bench/tick-root', 'tick');
-  runtime.regSub(
-    'bench/double',
-    (tick) => tick * 2,
-    () => [['bench/tick-root']],
-  );
+  runtime.registerModule((registrar) => {
+    registrar.regRootSub('bench/tick-root', 'tick');
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regSub(
+      'bench/double',
+      (tick) => tick * 2,
+      () => [['bench/tick-root']],
+    );
+  });
   return { runtime, disposers: [] };
 }
 
@@ -360,8 +402,10 @@ function setupEventClone(payload, runtimeId) {
     initialState: { accepted: 0 },
     runtimeId,
   });
-  runtime.regEvent('bench/accept-event', ({ draftState }) => {
-    draftState.accepted += 1;
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('bench/accept-event', ({ draftState }) => {
+      draftState.accepted += 1;
+    });
   });
   return {
     runtime,
@@ -371,11 +415,15 @@ function setupEventClone(payload, runtimeId) {
 
 function createBenchRuntime(runtimeId, initialState = { tick: 0 }) {
   const runtime = createReflexRuntime({ initialState, runtimeId });
-  runtime.regEvent('bench/tick', ({ draftState }) => {
-    draftState.tick += 1;
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('bench/tick', ({ draftState }) => {
+      draftState.tick += 1;
+    });
   });
-  runtime.regEvent('bench/replace-items', ({ draftState }) => {
-    draftState.items = [...draftState.items];
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('bench/replace-items', ({ draftState }) => {
+      draftState.items = [...draftState.items];
+    });
   });
   return runtime;
 }
@@ -390,7 +438,7 @@ function disposeRuntime({ runtime }) {
 }
 
 async function settleRuntime({ runtime }) {
-  await runtime.flush();
+  await getBenchHarness(runtime).flush();
 }
 
 function collectGarbage() {

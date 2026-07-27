@@ -28,6 +28,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { ReflexProvider } from '../../src/react/context';
 import type {
   Context,
+  CoEffectHandler,
   State,
   DefaultAppState,
   EffectHandler,
@@ -96,10 +97,16 @@ export function regEvent<T = DefaultAppState>(
 }
 
 export function regEffect<K extends Id = Id>(id: K, handler: EffectHandler<EffectParams<K>>): void {
-  testRuntime.regEffect(id, handler as any);
+  testRuntime.registerModule((registrar) => {
+    registrar.regEffect(id, handler as any);
+  });
 }
 
-export const regCoeffect = testRuntime.regCoeffect.bind(testRuntime);
+export function regCoeffect<T = DefaultAppState>(id: string, handler: CoEffectHandler<T>): void {
+  testRuntime.registerModule((registrar) => {
+    registrar.regCoeffect(id, handler as any);
+  });
+}
 export const dispatch = core.events.dispatch.bind(core.events);
 export const dispatchSync = core.events.dispatchSync.bind(core.events);
 export function regEventErrorHandler(handler: ErrorHandler): void {

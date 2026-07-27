@@ -1,5 +1,5 @@
 import { createReflexHooks } from '../../src/react';
-import { createReflexRuntimeForTests as createReflexRuntime } from '../../src/runtime/runtime';
+import { createReflexRuntime } from '../../src/vanilla';
 import { createReflexTestHarness } from '../../src/testing';
 import type { ReflexContracts } from '../../src/vanilla';
 
@@ -24,27 +24,37 @@ const runtime = createReflexRuntime<CounterContracts>({
 });
 const testHarness = createReflexTestHarness(runtime);
 
-runtime.regEvent('increment', ({ draftState }, amount) => {
-  draftState.count += amount;
-  return [['log', { message: String(amount) }]];
+runtime.registerModule((registrar) => {
+  registrar.regEvent('increment', ({ draftState }, amount) => {
+    draftState.count += amount;
+    return [['log', { message: String(amount) }]];
+  });
 });
-runtime.regEvent('reset', ({ draftState }) => {
-  draftState.count = 0;
+runtime.registerModule((registrar) => {
+  registrar.regEvent('reset', ({ draftState }) => {
+    draftState.count = 0;
+  });
 });
-runtime.regEffect('log', ({ message }) => {
-  const value: string = message;
-  void value;
-});
-runtime.regRootSub('count', 'count');
-runtime.regSub(
-  'scaled',
-  (count: number, factor: number) => count * factor,
-  (factor) => {
-    const value: number = factor;
+runtime.registerModule((registrar) => {
+  registrar.regEffect('log', ({ message }) => {
+    const value: string = message;
     void value;
-    return [['count']];
-  },
-);
+  });
+});
+runtime.registerModule((registrar) => {
+  registrar.regRootSub('count', 'count');
+});
+runtime.registerModule((registrar) => {
+  registrar.regSub(
+    'scaled',
+    (count: number, factor: number) => count * factor,
+    (factor) => {
+      const value: number = factor;
+      void value;
+      return [['count']];
+    },
+  );
+});
 
 runtime.dispatch(['increment', 2]);
 runtime.dispatch(['reset']);
@@ -59,8 +69,10 @@ runtime.dispatch(['increment', 'two']);
 runtime.dispatch(['missing']);
 // @ts-expect-error Subscription parameters are checked per runtime.
 testHarness.getSubscriptionValue(['scaled', 'three']);
-// @ts-expect-error Effect payloads are checked per runtime.
-runtime.regEffect('log', (value: number) => void value);
+runtime.registerModule((registrar) => {
+  // @ts-expect-error Effect payloads are checked per runtime.
+  registrar.regEffect('log', (value: number) => void value);
+});
 
 const hooks = createReflexHooks<CounterContracts>();
 const hookResult: number = hooks.useSubscription(['scaled', 2]);

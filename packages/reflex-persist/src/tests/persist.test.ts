@@ -170,7 +170,9 @@ describe('persist', () => {
       keys: ['count'],
       onError: (value) => diagnostics.push(value),
     });
-    runtime.regEvent('forge/write', () => [[PERSIST_IDS.WRITE, { key: 'count' }]]);
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('forge/write', () => [[PERSIST_IDS.WRITE, { key: 'count' }]]);
+    });
 
     runtime.dispatchSync(['forge/write']);
 
@@ -208,11 +210,15 @@ describe('persist', () => {
       storage: memory.storage,
       keys: ['todos', 'settings'],
     });
-    runtime.regEvent('todos/add', ({ draftState }, text: string) => {
-      draftState.todos.push(text);
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('todos/add', ({ draftState }, text: string) => {
+        draftState.todos.push(text);
+      });
     });
-    runtime.regEvent('ui/bump', ({ draftState }) => {
-      draftState.ui += 1;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('ui/bump', ({ draftState }) => {
+        draftState.ui += 1;
+      });
     });
 
     handle.hydrate();
@@ -243,8 +249,10 @@ describe('persist', () => {
       ],
       onError: (value) => diagnostics.push(value),
     });
-    runtime.regEvent('settings/change', ({ draftState }) => {
-      draftState.settings = { theme: 'dark' };
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('settings/change', ({ draftState }) => {
+        draftState.settings = { theme: 'dark' };
+      });
     });
 
     handle.hydrate();
@@ -279,8 +287,10 @@ describe('persist', () => {
         },
       ],
     });
-    runtime.regEvent('settings/change', ({ draftState }) => {
-      draftState.settings = { theme: 'dark' };
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('settings/change', ({ draftState }) => {
+        draftState.settings = { theme: 'dark' };
+      });
     });
 
     handle.hydrate();
@@ -297,11 +307,15 @@ describe('persist', () => {
     const memory = createMemoryStorage();
     const runtime = makeRuntime({ value: Number.NaN, ui: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['value'] });
-    runtime.regEvent('ui/bump', ({ draftState }) => {
-      draftState.ui += 1;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('ui/bump', ({ draftState }) => {
+        draftState.ui += 1;
+      });
     });
-    runtime.regEvent('value/delete', ({ draftState }) => {
-      delete (draftState as { value?: number }).value;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('value/delete', ({ draftState }) => {
+        delete (draftState as { value?: number }).value;
+      });
     });
 
     handle.hydrate();
@@ -337,8 +351,10 @@ describe('persist', () => {
         },
       ],
     });
-    runtime.regEvent('todos/add', ({ draftState }, todo: Todo) => {
-      draftState.todos.set(todo.id, todo);
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('todos/add', ({ draftState }, todo: Todo) => {
+        draftState.todos.set(todo.id, todo);
+      });
     });
 
     handle.hydrate();
@@ -381,14 +397,16 @@ describe('persist', () => {
       storage: createMemoryStorage({ 'reflex/count': entry(1, 41) }).storage,
       keys: ['count'],
     });
-    runtime.registerInterceptor({
-      id: 'block-sync-hydrate-after-handler',
-      after: (context) => {
-        if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {
-          throw new Error('expected sync hydration interceptor failure');
-        }
-        return context;
-      },
+    runtime.registerModule((registrar) => {
+      registrar.registerInterceptor({
+        id: 'block-sync-hydrate-after-handler',
+        after: (context) => {
+          if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {
+            throw new Error('expected sync hydration interceptor failure');
+          }
+          return context;
+        },
+      });
     });
     const pending = handle.whenHydrated();
 
@@ -539,8 +557,10 @@ describe('persist', () => {
     const memory = createMemoryStorage({ 'reflex/count': entry(1, 10) });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
-    runtime.regEvent('count/set', ({ draftState }, count: number) => {
-      draftState.count = count;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('count/set', ({ draftState }, count: number) => {
+        draftState.count = count;
+      });
     });
 
     handle.hydrate();
@@ -586,7 +606,9 @@ describe('persist', () => {
     runtime.dispose();
 
     const collisionRuntime = makeRuntime({ count: 0 });
-    collisionRuntime.regEvent(PERSIST_IDS.HYDRATE, () => {});
+    collisionRuntime.registerModule((registrar) => {
+      registrar.regEvent(PERSIST_IDS.HYDRATE, () => {});
+    });
     expect(() => persist(collisionRuntime, { storage: memory.storage, keys: ['count'] })).toThrow(
       'Protocol registration collision',
     );
@@ -616,8 +638,10 @@ describe('persist', () => {
   it('closes the stale write gate across dispose and reattach', async () => {
     const memory = createMemoryStorage();
     const runtime = makeRuntime({ count: 0 });
-    runtime.regEvent('count/bump', ({ draftState }) => {
-      draftState.count += 1;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('count/bump', ({ draftState }) => {
+        draftState.count += 1;
+      });
     });
     const first = persist(runtime, { storage: memory.storage, keys: ['count'] });
     first.hydrate();
@@ -643,8 +667,10 @@ describe('persist', () => {
   it('purges corrupt entries as explicit recovery and reopens writes', async () => {
     const memory = createMemoryStorage({ 'reflex/count': 'CORRUPT_PURGE_SECRET' });
     const runtime = makeRuntime({ count: 0 });
-    runtime.regEvent('count/bump', ({ draftState }) => {
-      draftState.count += 1;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('count/bump', ({ draftState }) => {
+        draftState.count += 1;
+      });
     });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
     handle.hydrate();
@@ -732,8 +758,10 @@ describe('persist', () => {
     const memory = createMemoryStorage();
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
-    runtime.regEvent('boom', () => {
-      throw new Error('expected queue failure');
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('boom', () => {
+        throw new Error('expected queue failure');
+      });
     });
     handle.hydrate();
 
@@ -752,14 +780,16 @@ describe('persist', () => {
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
     handle.hydrate();
-    runtime.registerInterceptor({
-      id: 'block-purge-after-handler',
-      after: (context) => {
-        if (context.coeffects.event[0] === PERSIST_IDS.PURGE) {
-          throw new Error('expected purge interceptor failure');
-        }
-        return context;
-      },
+    runtime.registerModule((registrar) => {
+      registrar.registerInterceptor({
+        id: 'block-purge-after-handler',
+        after: (context) => {
+          if (context.coeffects.event[0] === PERSIST_IDS.PURGE) {
+            throw new Error('expected purge interceptor failure');
+          }
+          return context;
+        },
+      });
     });
 
     const purge = handle.purge();
@@ -854,8 +884,10 @@ describe('persist', () => {
       collected.push(...traces),
     );
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
-    runtime.regEvent('bump', ({ draftState }) => {
-      draftState.count += 1;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('bump', ({ draftState }) => {
+        draftState.count += 1;
+      });
     });
 
     handle.hydrate();
@@ -877,8 +909,10 @@ describe('persist', () => {
     const memory = createMemoryStorage({ 'reflex/count': entry(1, 41) });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
-    runtime.regEvent('bump', ({ draftState }) => {
-      draftState.count += 1;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('bump', ({ draftState }) => {
+        draftState.count += 1;
+      });
     });
 
     handle.hydrate();
@@ -896,8 +930,10 @@ describe('persist', () => {
       initialState: { count: 0 },
       runtimeId: 'persist-explicit-attachment',
     });
-    runtime.regEvent('increment', ({ draftState }) => {
-      (draftState as { count: number }).count += 1;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('increment', ({ draftState }) => {
+        (draftState as { count: number }).count += 1;
+      });
     });
     const memory = createMemoryStorage({ 'reflex/count': entry(1, 40) });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
@@ -921,9 +957,11 @@ describe('persist', () => {
       keys: ['count'],
       experimentalAsync: true,
     });
-    runtime.regEvent('boot', ({ draftState }) => {
-      draftState.count += 1;
-      draftState.ui.ready = true;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('boot', ({ draftState }) => {
+        draftState.count += 1;
+        draftState.ui.ready = true;
+      });
     });
 
     handle.hydrate();
@@ -961,8 +999,10 @@ describe('persist', () => {
 
   it('hydrates when an earlier queue error does not drop an experimental read completion', async () => {
     const runtime = makeRuntime({ count: 0 });
-    runtime.regEvent('boom', () => {
-      throw new Error('expected completion drop');
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('boom', () => {
+        throw new Error('expected completion drop');
+      });
     });
     const storage: AsyncPersistStorage = {
       getItem: async () => {
@@ -995,14 +1035,16 @@ describe('persist', () => {
       keys: ['count'],
       experimentalAsync: true,
     });
-    runtime.registerInterceptor({
-      id: 'block-hydrate-after-handler',
-      after: (context) => {
-        if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {
-          throw new Error('expected hydration interceptor failure');
-        }
-        return context;
-      },
+    runtime.registerModule((registrar) => {
+      registrar.registerInterceptor({
+        id: 'block-hydrate-after-handler',
+        after: (context) => {
+          if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {
+            throw new Error('expected hydration interceptor failure');
+          }
+          return context;
+        },
+      });
     });
 
     handle.hydrate();
@@ -1048,8 +1090,10 @@ describe('persist', () => {
     const memory = createMemoryStorage();
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
-    runtime.regEvent('bump', ({ draftState }) => {
-      draftState.count += 1;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('bump', ({ draftState }) => {
+        draftState.count += 1;
+      });
     });
     handle.hydrate();
     handle.dispose();

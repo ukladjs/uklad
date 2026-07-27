@@ -9,15 +9,21 @@ assert.strictEqual(ReflexProvider, subpathReflexProvider);
 
 const runtime = createReflexRuntime({ initialState: { count: 0 } });
 const testHarness = createReflexTestHarness(runtime);
-runtime.regEvent('inc', ({ draftState }) => {
-  draftState.count += 1;
+runtime.registerModule((registrar) => {
+  registrar.regEvent('inc', ({ draftState }) => {
+    draftState.count += 1;
+  });
 });
-runtime.regRootSub('count', 'count');
-runtime.regSub(
-  'doubled',
-  (count) => count * 2,
-  () => [['count']],
-);
+runtime.registerModule((registrar) => {
+  registrar.regRootSub('count', 'count');
+});
+runtime.registerModule((registrar) => {
+  registrar.regSub(
+    'doubled',
+    (count) => count * 2,
+    () => [['count']],
+  );
+});
 
 testHarness.dispatchSync(['inc']);
 

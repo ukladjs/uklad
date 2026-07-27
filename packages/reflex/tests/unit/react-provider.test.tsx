@@ -10,9 +10,13 @@ import { createReflexRuntimeForTests, type ReflexRuntime } from '../../src/runti
 
 function createValueRuntime(runtimeId: string, value: number) {
   const runtime = createReflexRuntimeForTests({ initialState: { value }, runtimeId });
-  runtime.regRootSub('value', 'value');
-  runtime.regEvent('set', ({ draftState }, nextValue: number) => {
-    draftState.value = nextValue;
+  runtime.registerModule((registrar) => {
+    registrar.regRootSub('value', 'value');
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('set', ({ draftState }, nextValue: number) => {
+      draftState.value = nextValue;
+    });
   });
   return runtime;
 }
@@ -55,7 +59,9 @@ describe('ReflexProvider', () => {
       initialState: { value: 1 },
       runtimeId: 'provider-client-facade',
     });
-    runtime.regRootSub('value', 'value');
+    runtime.registerModule((registrar) => {
+      registrar.regRootSub('value', 'value');
+    });
     const hook = renderHook(() => useReflexRuntime(), {
       wrapper: provider(runtime),
     });

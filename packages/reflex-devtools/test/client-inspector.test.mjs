@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createReflexRuntimeForTests as createReflexRuntime } from '@flexsurfer/reflex/internal';
+import { createReflexRuntime } from '@flexsurfer/reflex';
 import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { enableDevtools, logEvent } from '../dist/client/index.js';
@@ -504,8 +504,10 @@ test('executes a retained operation through a runtime inspector configured in De
     initialState: { count: 0 },
   });
   const testHarness = createReflexTestHarness(runtime);
-  runtime.regEvent('increment', ({ draftState }, amount) => {
-    draftState.count += amount;
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('increment', ({ draftState }, amount) => {
+      draftState.count += amount;
+    });
   });
   let cleanup;
   try {

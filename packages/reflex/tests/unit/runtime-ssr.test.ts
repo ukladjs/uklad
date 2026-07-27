@@ -10,9 +10,13 @@ async function renderRequest(requestId: string, initialValue: number, increment:
     initialState: { requestId, value: initialValue },
     runtimeId: `request-${requestId}`,
   });
-  runtime.regRootSub('value', 'value');
-  runtime.regEvent('increment', ({ draftState }, amount: number) => {
-    draftState.value += amount;
+  runtime.registerModule((registrar) => {
+    registrar.regRootSub('value', 'value');
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('increment', ({ draftState }, amount: number) => {
+      draftState.value += amount;
+    });
   });
   runtime.dispatch(['increment', increment]);
   await runtime.flush();

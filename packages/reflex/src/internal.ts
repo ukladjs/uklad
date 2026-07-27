@@ -1,5 +1,5 @@
 /**
- * Internal adapter for first-party integrations such as reflex-persist.
+ * Internal adapters for first-party integrations and their tests.
  *
  * This entrypoint is intentionally not re-exported from the package root or
  * vanilla API. Application code should use the production runtime client;
@@ -7,6 +7,7 @@
  */
 import { createReflexRuntimeForTests, getRuntimeAdminForTests } from './runtime/runtime';
 
+/** @internal Test-only owner facade with administrative operations attached. */
 export { createReflexRuntimeForTests };
 
 import type { ReflexRuntime } from './runtime/api';

@@ -33,11 +33,17 @@ function createCounterRuntime(runtimeId: string, count: number) {
     runtimeId,
     name: `Runtime ${runtimeId}`,
   });
-  runtime.regRootSub('count', 'count');
-  runtime.regEvent('increment', ({ draftState }, amount) => {
-    draftState.count += amount;
+  runtime.registerModule((registrar) => {
+    registrar.regRootSub('count', 'count');
   });
-  runtime.regEvent('cascade', (_coeffects, amount) => [['dispatch', ['increment', amount]]]);
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('increment', ({ draftState }, amount) => {
+      draftState.count += amount;
+    });
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('cascade', (_coeffects, amount) => [['dispatch', ['increment', amount]]]);
+  });
   return runtime;
 }
 
@@ -88,11 +94,40 @@ describe('instance-scoped runtime', () => {
       'createInspector',
       'enableTracing',
       'getSubscriptionDiagnostics',
+      'regEvent',
+      'regEffect',
+      'regCoeffect',
+      'regEventErrorHandler',
+      'regRootSub',
+      'regSub',
+      'registerInterceptor',
     ]) {
       expect(exposed[adminMethod]).toBeUndefined();
     }
 
     runtime.dispose();
+  });
+
+  it('keeps registration behind registerModule even for the test runtime facade', () => {
+    const testRuntime = createReflexRuntime({
+      initialState: { count: 0, label: 'test-registration-boundary-admin' },
+      runtimeId: 'test-registration-boundary-admin',
+    });
+    const exposed = testRuntime as unknown as Record<string, unknown>;
+
+    for (const registrarMethod of [
+      'regEvent',
+      'regEffect',
+      'regCoeffect',
+      'regEventErrorHandler',
+      'regRootSub',
+      'regSub',
+      'registerInterceptor',
+    ]) {
+      expect(exposed[registrarMethod]).toBeUndefined();
+    }
+
+    testRuntime.dispose();
   });
 
   it('rejects owner-only operations when given the app client facade', () => {
@@ -114,7 +149,9 @@ describe('instance-scoped runtime', () => {
       before: jest.fn((context) => context),
     };
 
-    runtime.registerInterceptor(interceptor);
+    runtime.registerModule((registrar) => {
+      registrar.registerInterceptor(interceptor);
+    });
 
     expect(admin(runtime).getInterceptors()).toEqual([interceptor]);
     expect(core.events.getInterceptors()).toEqual([interceptor]);
@@ -133,11 +170,17 @@ describe('instance-scoped runtime', () => {
       initialState: { count: 0 },
       runtimeId: 'effect-hot-path',
     });
-    runtime.regEvent('warm-up', () => {});
-    runtime.regEffect('save', () => {});
-    runtime.regEvent('save', ({ draftState }) => {
-      draftState.count += 1;
-      return [['save', { source: 'test' }]];
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('warm-up', () => {});
+    });
+    runtime.registerModule((registrar) => {
+      registrar.regEffect('save', () => {});
+    });
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('save', ({ draftState }) => {
+        draftState.count += 1;
+        return [['save', { source: 'test' }]];
+      });
     });
 
     try {
@@ -160,8 +203,10 @@ describe('instance-scoped runtime', () => {
       initialState: { count: 0 },
       runtimeId: 'observer-isolation',
     });
-    runtime.regEvent('increment', ({ draftState }) => {
-      draftState.count += 1;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('increment', ({ draftState }) => {
+        draftState.count += 1;
+      });
     });
     const detach = createReflexInspector(runtime)
       .getOperationRuntime()
@@ -194,8 +239,10 @@ describe('instance-scoped runtime', () => {
       initialState: { count: 0 },
       runtimeId: 'observer-acceptance',
     });
-    runtime.regEvent('increment', ({ draftState }) => {
-      draftState.count += 1;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('increment', ({ draftState }) => {
+        draftState.count += 1;
+      });
     });
     const detach = createReflexInspector(runtime)
       .getOperationRuntime()
@@ -300,8 +347,10 @@ describe('instance-scoped runtime', () => {
 
   it('rejects flush on queue failure and remains usable afterward', async () => {
     const runtime = createCounterRuntime('flush-error', 0);
-    runtime.regEvent('fail', () => {
-      throw new Error('queue failed');
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('fail', () => {
+        throw new Error('queue failed');
+      });
     });
 
     runtime.dispatch(['fail']);
@@ -315,8 +364,10 @@ describe('instance-scoped runtime', () => {
 
   it('reports an unobserved queue failure to the next flush, not a later one', async () => {
     const runtime = createCounterRuntime('flush-pending-error', 0);
-    runtime.regEvent('fail', () => {
-      throw new Error('unobserved queue failure');
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('fail', () => {
+        throw new Error('unobserved queue failure');
+      });
     });
 
     runtime.dispatch(['fail']);
@@ -507,7 +558,9 @@ describe('instance-scoped runtime', () => {
       initialState: { feature: 1, shell: 2 },
       runtimeId: 'unrelated-active-module',
     });
-    runtime.regRootSub('shell', 'shell');
+    runtime.registerModule((registrar) => {
+      registrar.regRootSub('shell', 'shell');
+    });
     const disposeFeature = runtime.registerModule((scope) =>
       scope.regRootSub('feature', 'feature'),
     );

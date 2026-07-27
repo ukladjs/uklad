@@ -74,8 +74,10 @@ describe('Conditional patch generation', () => {
       runtimeId: 'trace-free-hot-path',
       initialState: { value: 0 },
     });
-    runtime.regEvent('set-value', ({ draftState }, value) => {
-      draftState.value = value;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('set-value', ({ draftState }, value) => {
+        draftState.value = value;
+      });
     });
 
     runtime.dispatch(['set-value', 3]);

@@ -9,7 +9,9 @@ import type { EventRegistrationOptions, Trace } from '@flexsurfer/reflex';
 const runtime = reflexVanilla.createReflexRuntime({ initialState: {} });
 const testHarness = reflexTesting.createReflexTestHarness(runtime);
 runtime.dispatch(['legacy/cjs']);
-runtime.regEvent('legacy/cjs', () => undefined);
+runtime.registerModule((registrar) => {
+  registrar.regEvent('legacy/cjs', () => undefined);
+});
 const value: unknown = reflex.useSubscription(['legacy/cjs']);
 const state = testHarness.getState();
 const options: EventRegistrationOptions = { coeffects: [['now']] };

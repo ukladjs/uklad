@@ -268,23 +268,25 @@ export const runtime = createReflexRuntime({
   runtimeId: 'todos',
 });
 
-runtime.regEffect('storage/set_todos', (todos: Todo[]) => {
-  localStorage.setItem('todos', JSON.stringify(todos));
-});
+runtime.registerModule((registrar) => {
+  registrar.regEffect('storage/set_todos', (todos: Todo[]) => {
+    localStorage.setItem('todos', JSON.stringify(todos));
+  });
 
-runtime.regEvent('todos/add', ({ draftState }, text: string) => {
-  const clean = text.trim();
-  if (!clean) return;
-  draftState.todos.push({ id: `todo_${Date.now()}`, text: clean, done: false });
-  return [['storage/set_todos', current(draftState.todos)]];
-});
+  registrar.regEvent('todos/add', ({ draftState }, text: string) => {
+    const clean = text.trim();
+    if (!clean) return;
+    draftState.todos.push({ id: `todo_${Date.now()}`, text: clean, done: false });
+    return [['storage/set_todos', current(draftState.todos)]];
+  });
 
-runtime.regRootSub('todos/list', 'todos');
-runtime.regSub(
-  'todos/open_count',
-  (todos: Todo[]) => todos.filter((todo) => !todo.done).length,
-  () => [['todos/list']],
-);
+  registrar.regRootSub('todos/list', 'todos');
+  registrar.regSub(
+    'todos/open_count',
+    (todos: Todo[]) => todos.filter((todo) => !todo.done).length,
+    () => [['todos/list']],
+  );
+});
 
 // app.tsx
 export function AppRoot() {

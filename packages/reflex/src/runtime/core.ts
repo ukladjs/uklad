@@ -3,6 +3,7 @@ import { StateStore } from './state';
 import { RuntimeRegistry } from './registry';
 import { SubscriptionRuntime } from './subscriptions/subscription-runtime';
 import type { RuntimeProbe } from './probe-types';
+import type { ReflexRuntimeClient } from './api';
 
 /**
  * The instance-owned core state of one Reflex application.
@@ -25,6 +26,8 @@ export interface RuntimeCore {
   readonly registry: RuntimeRegistry;
   readonly events: EventRuntime;
   readonly subscriptions: SubscriptionRuntime;
+  /** Injected after construction so effect handlers receive the stable client facade. */
+  effectRuntime: ReflexRuntimeClient<any> | undefined;
   /** The only optional hot-path instrumentation capability. */
   probe: RuntimeProbe | undefined;
 }
@@ -62,7 +65,7 @@ export function createRuntimeCore(options: RuntimeIdentityOptions = {}): Runtime
   const state = new StateStore(getRuntime);
   const subscriptions = new SubscriptionRuntime(getRuntime);
   const events = new EventRuntime(getRuntime);
-  const runtime: RuntimeCore = {
+  const runtime = {
     identity: Object.freeze({
       runtimeId,
       runtimeInstanceId: `${runtimeId}:instance:${++nextRuntimeInstanceId}`,
@@ -73,7 +76,13 @@ export function createRuntimeCore(options: RuntimeIdentityOptions = {}): Runtime
     subscriptions,
     events,
     probe: undefined,
-  };
+  } as RuntimeCore;
+  Object.defineProperty(runtime, 'effectRuntime', {
+    configurable: false,
+    enumerable: false,
+    value: undefined,
+    writable: true,
+  });
   owner.runtime = runtime;
   return runtime;
 }

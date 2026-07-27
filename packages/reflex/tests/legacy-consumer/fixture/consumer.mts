@@ -8,13 +8,19 @@ import type { ErrorHandler, EventRegistrationOptions, Interceptor } from '@flexs
 const runtime = createReflexRuntime({ initialState: {} });
 const testHarness = createReflexTestHarness(runtime);
 runtime.dispatch(['legacy/esm']);
-runtime.regEvent('legacy/esm', () => undefined);
-runtime.regRootSub('legacy/root', 'legacy/root');
-runtime.regSub(
-  'legacy/doubled',
-  (count: number) => count * 2,
-  () => [['legacy/root']],
-);
+runtime.registerModule((registrar) => {
+  registrar.regEvent('legacy/esm', () => undefined);
+});
+runtime.registerModule((registrar) => {
+  registrar.regRootSub('legacy/root', 'legacy/root');
+});
+runtime.registerModule((registrar) => {
+  registrar.regSub(
+    'legacy/doubled',
+    (count: number) => count * 2,
+    () => [['legacy/root']],
+  );
+});
 
 const value: unknown = useSubscription(['legacy/esm']);
 const state = testHarness.getState();

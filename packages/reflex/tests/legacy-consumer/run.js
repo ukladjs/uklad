@@ -80,7 +80,9 @@ function main() {
          const require = createRequire(import.meta.url);
          assert.throws(() => require.resolve('react'));
          const runtime = createReflexRuntime({ initialState: { count: 0 }, runtimeId: 'packed-vanilla' });
-         runtime.regEvent('increment', ({ draftState }) => { draftState.count += 1; });
+         runtime.registerModule((registrar) => {
+           registrar.regEvent('increment', ({ draftState }) => { draftState.count += 1; });
+         });
          runtime.dispatchSync(['increment']);
          assert.deepEqual(runtime.getState(), { count: 1 });
          runtime.dispose();`,

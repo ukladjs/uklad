@@ -9,7 +9,7 @@
  * Run with `npm run test:types:dist` (requires a fresh `npm run build`);
  * wired into prepublishOnly after the build step.
  */
-import { createReflexRuntimeForTests as createReflexRuntime } from '@flexsurfer/reflex/internal';
+import { createReflexRuntime } from '@flexsurfer/reflex';
 import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import type {
   EventRegistrationOptions,
@@ -53,32 +53,48 @@ testHarness.dispatchSync(['todos/add', 'buy milk']);
 // @ts-expect-error unknown event id
 testHarness.dispatchSync(['todos/oops']);
 
-runtime.regEvent('todos/add', ({ draftState }, title) => {
-  const _title: string = title;
-  const _first: string | undefined = draftState.todos[0]?.title;
-  void _title; void _first;
+runtime.registerModule((registrar) => {
+  registrar.regEvent('todos/add', ({ draftState }, title) => {
+    const _title: string = title;
+    const _first: string | undefined = draftState.todos[0]?.title;
+    void _title; void _first;
+  });
 });
 const registrationOptions: EventRegistrationOptions<{ todos: Todo[] }> = {
   coeffects: [['now']],
   interceptors: [{ id: 'dist-options', before: (context) => context }],
 };
-runtime.regEvent('app/init', () => undefined, registrationOptions);
-// @ts-expect-error unknown state key
-runtime.regEvent('app/init', ({ draftState }) => { draftState.nope = 1; });
+runtime.registerModule((registrar) => {
+  registrar.regEvent('app/init', () => undefined, registrationOptions);
+});
+runtime.registerModule((registrar) => {
+  // @ts-expect-error unknown state key
+  registrar.regEvent('app/init', ({ draftState }) => { draftState.nope = 1; });
+});
 
 // effect tuples are checked, including events embedded in dispatch effects
-runtime.regEvent('app/init', ({ draftState }) => [
-  ['storage/set-todos', draftState.todos],
-  ['dispatch', ['todos/add', 'from effect']]
-]);
-// @ts-expect-error wrong payload inside a dispatch effect
-runtime.regEvent('app/init', () => [['dispatch', ['todos/add', 1]]]);
-// @ts-expect-error undeclared effect id
-runtime.regEvent('app/init', () => [['storage/unknown', 1]]);
-// @ts-expect-error built-in dispatch payload still wins over accidental EffectPayloads declaration
-runtime.regEvent('app/init', () => [['dispatch', 1]]);
-// @ts-expect-error built-in dispatch-later payload still wins over accidental EffectPayloads declaration
-runtime.regEvent('app/init', () => [['dispatch-later', 'not-a-dispatch-later-payload']]);
+runtime.registerModule((registrar) => {
+  registrar.regEvent('app/init', ({ draftState }) => [
+    ['storage/set-todos', draftState.todos],
+    ['dispatch', ['todos/add', 'from effect']]
+  ]);
+});
+runtime.registerModule((registrar) => {
+  // @ts-expect-error wrong payload inside a dispatch effect
+  registrar.regEvent('app/init', () => [['dispatch', ['todos/add', 1]]]);
+});
+runtime.registerModule((registrar) => {
+  // @ts-expect-error undeclared effect id
+  registrar.regEvent('app/init', () => [['storage/unknown', 1]]);
+});
+runtime.registerModule((registrar) => {
+  // @ts-expect-error built-in dispatch payload still wins over accidental EffectPayloads declaration
+  registrar.regEvent('app/init', () => [['dispatch', 1]]);
+});
+runtime.registerModule((registrar) => {
+  // @ts-expect-error built-in dispatch-later payload still wins over accidental EffectPayloads declaration
+  registrar.regEvent('app/init', () => [['dispatch-later', 'not-a-dispatch-later-payload']]);
+});
 
 const todos = testHarness.getSubscriptionValue(['todos/all']);
 const _check: Todo[] = todos;

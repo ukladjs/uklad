@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createReflexRuntimeForTests as createReflexRuntime } from '@flexsurfer/reflex/internal';
+import { createReflexRuntime } from '@flexsurfer/reflex';
 import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { createOperationClient } from '../dist/client/operations/client.js';
@@ -18,8 +18,10 @@ test('reads the canonical coordinator snapshot after dispatch', async () => {
     initialState: { count: 0 },
   });
   const testHarness = createReflexTestHarness(runtime);
-  runtime.regEvent('increment', ({ draftState }, amount) => {
-    draftState.count += amount;
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('increment', ({ draftState }, amount) => {
+      draftState.count += amount;
+    });
   });
 
   try {
@@ -43,9 +45,13 @@ test('retains parent and effect lineage for a dispatch cascade', async () => {
     initialState: { count: 0 },
   });
   const testHarness = createReflexTestHarness(runtime);
-  runtime.regEvent('root', () => [['dispatch', ['child', 3]]]);
-  runtime.regEvent('child', ({ draftState }, amount) => {
-    draftState.count += amount;
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('root', () => [['dispatch', ['child', 3]]]);
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('child', ({ draftState }, amount) => {
+      draftState.count += amount;
+    });
   });
 
   try {
@@ -70,8 +76,10 @@ test('keeps concurrently accepted root operations separate', async () => {
     initialState: { count: 0 },
   });
   const testHarness = createReflexTestHarness(runtime);
-  runtime.regEvent('increment', ({ draftState }, amount) => {
-    draftState.count += amount;
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('increment', ({ draftState }, amount) => {
+      draftState.count += amount;
+    });
   });
 
   try {
@@ -97,10 +105,14 @@ test('records effect evidence through the execution probe', async () => {
     runtimeId: 'operations-effects',
     initialState: { saved: false },
   });
-  runtime.regEffect('save', () => {});
-  runtime.regEvent('save', ({ draftState }) => {
-    draftState.saved = true;
-    return [['save', { source: 'operation-test' }]];
+  runtime.registerModule((registrar) => {
+    registrar.regEffect('save', () => {});
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('save', ({ draftState }) => {
+      draftState.saved = true;
+      return [['save', { source: 'operation-test' }]];
+    });
   });
 
   try {
@@ -146,10 +158,14 @@ test('retains terminal failure and effect-error states', async () => {
     runtimeId: 'operations-failures',
     initialState: { count: 0 },
   });
-  runtime.regEvent('explode', () => {
-    throw new Error('expected failure');
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('explode', () => {
+      throw new Error('expected failure');
+    });
   });
-  runtime.regEvent('unhandled-effect', () => [['not-registered', { retry: false }]]);
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('unhandled-effect', () => [['not-registered', { retry: false }]]);
+  });
 
   try {
     const operations = operationsFor(runtime);
@@ -170,8 +186,10 @@ test('returns a retained failed operation when the runtime is disposed with queu
     runtimeId: 'operations-disposal',
     initialState: { count: 0 },
   });
-  runtime.regEvent('later', ({ draftState }) => {
-    draftState.count += 1;
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('later', ({ draftState }) => {
+      draftState.count += 1;
+    });
   });
 
   try {
@@ -194,8 +212,10 @@ test('decorates an inspector without creating a second operation ledger', async 
     runtimeId: 'operations-inspector',
     initialState: { count: 0 },
   });
-  runtime.regEvent('increment', ({ draftState }) => {
-    draftState.count += 1;
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('increment', ({ draftState }) => {
+      draftState.count += 1;
+    });
   });
 
   try {

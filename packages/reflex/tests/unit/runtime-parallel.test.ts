@@ -11,9 +11,13 @@ describe('parallel runtime isolation', () => {
       initialState: { value: initial },
       runtimeId: `parallel-${runtimeId}`,
     });
-    runtime.regRootSub('value', 'value');
-    runtime.regEvent('increment', ({ draftState }, delta: number) => {
-      draftState.value += delta;
+    runtime.registerModule((registrar) => {
+      registrar.regRootSub('value', 'value');
+    });
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('increment', ({ draftState }, delta: number) => {
+        draftState.value += delta;
+      });
     });
 
     const observed: number[] = [];

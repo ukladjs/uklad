@@ -10,10 +10,14 @@ describe('testing adapter', () => {
       initialState: { count: 0 },
       runtimeId: 'testing-adapter',
     });
-    runtime.regEvent('increment', ({ draftState }, amount: number) => {
-      draftState.count += amount;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('increment', ({ draftState }, amount: number) => {
+        draftState.count += amount;
+      });
     });
-    runtime.regRootSub('count', 'count');
+    runtime.registerModule((registrar) => {
+      registrar.regRootSub('count', 'count');
+    });
 
     const harness = createReflexTestHarness(runtime);
     const eventHandler = harness.getEventHandler('increment');
@@ -41,13 +45,19 @@ describe('testing adapter', () => {
     const harness = createReflexTestHarness(runtime);
     let effectRuntime: unknown;
 
-    runtime.regEvent('start', () => [['complete']]);
-    runtime.regEvent('complete', ({ draftState }) => {
-      draftState.count += 1;
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('start', () => [['complete']]);
     });
-    runtime.regEffect('complete', (_value, client) => {
-      effectRuntime = client;
-      client.dispatch(['complete']);
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('complete', ({ draftState }) => {
+        draftState.count += 1;
+      });
+    });
+    runtime.registerModule((registrar) => {
+      registrar.regEffect('complete', (_value, client) => {
+        effectRuntime = client;
+        client.dispatch(['complete']);
+      });
     });
 
     runtime.dispatch(['start']);

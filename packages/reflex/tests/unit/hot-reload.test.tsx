@@ -17,14 +17,12 @@ import {
   getRuntimeAdminForTests,
   type ReflexRuntime,
 } from '../../src/runtime/runtime';
-import type { ReflexRegistrar } from '../../src/runtime/api';
-
 function runtimeWrapper(runtime: ReflexRuntime): ComponentType<PropsWithChildren> {
   return ({ children }) => createElement(ReflexProvider, { runtime }, children);
 }
 
 describe('Hot Reload System', () => {
-  let runtime: ReflexRuntime & ReflexRegistrar;
+  let runtime: ReflexRuntime;
   let runtimeSequence = 0;
 
   beforeEach(() => {
@@ -167,7 +165,9 @@ describe('Hot Reload System', () => {
 
   describe('setupSubsHotReload', () => {
     it('should provide dispose and accept functions', () => {
-      runtime.regRootSub('value', 'value');
+      runtime.registerModule((registrar) => {
+        registrar.regRootSub('value', 'value');
+      });
       const { dispose, accept } = setupSubsHotReload(runtime);
 
       expect(typeof dispose).toBe('function');
@@ -207,7 +207,9 @@ describe('Hot Reload System', () => {
         initialState: { value: 1 },
         runtimeId: 'explicit-hmr-runtime',
       });
-      runtime.regRootSub('value', 'value');
+      runtime.registerModule((registrar) => {
+        registrar.regRootSub('value', 'value');
+      });
       const unsubscribe = runtime.watchSubscription(['value'], () => {});
       const { dispose } = setupSubsHotReload(runtime);
 
@@ -223,8 +225,12 @@ describe('Hot Reload System', () => {
         initialState: { value: 1, persistStatus: 'idle' },
         runtimeId: 'scoped-hmr-runtime',
       });
-      runtime.regRootSub('value', 'value');
-      runtime.regRootSub('persist-status', 'persistStatus');
+      runtime.registerModule((registrar) => {
+        registrar.regRootSub('value', 'value');
+      });
+      runtime.registerModule((registrar) => {
+        registrar.regRootSub('persist-status', 'persistStatus');
+      });
       const unsubscribe = runtime.watchSubscription(['value'], () => {});
       const { dispose } = setupSubsHotReload(runtime, ['value']);
 
@@ -241,7 +247,9 @@ describe('Hot Reload System', () => {
     it('should work with a complete hot reload workflow', () => {
       const mockCallback = jest.fn();
 
-      runtime.regRootSub('value', 'value');
+      runtime.registerModule((registrar) => {
+        registrar.regRootSub('value', 'value');
+      });
       const { dispose, accept } = setupSubsHotReload(runtime);
       registerHotReloadCallback(runtime, mockCallback);
 

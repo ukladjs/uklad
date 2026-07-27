@@ -37,18 +37,18 @@ Operation-spine status: **Phase 0 and Phase 1 of the [agent-operation RFC](docs/
 
 ---
 
-## Phase 0 — Release integrity (days, do first)
+## Phase 0 — Source and release integrity (days, do first)
 
-The strongest recent work is invisible: local `main` is ahead of the public repository, the website documents the old DevTools API, and the flagship example contains a literal bug. Nothing else pays off until the public artifact matches reality.
+The strongest recent work is invisible: local `main` is ahead of the public repository, the website documents the old DevTools API, and the flagship example contains a literal bug. The current milestone is to synchronize and review the source repository; npm publication remains deferred until the redesign is stable.
 
-- [ ] Synchronize website, root/package READMEs, API reference, and examples with the current API (`createReflexInspector`, current DevTools setup).
-- [ ] Fix the swapped Best Practices / API Reference links in [packages/reflex/README.md](packages/reflex/README.md) (lines 131–132).
-- [ ] Include `docs/` in the npm tarball or make README links absolute — [package.json `files`](packages/reflex/package.json) currently excludes it while the README links `./docs/subscription-runtime.md`.
+- [ ] Synchronize website, root/package READMEs, API reference, and examples with the current API (`createReflexInspector`, current DevTools setup) before any package release.
+- [x] Fix the swapped Best Practices / API Reference links in [packages/reflex/README.md](packages/reflex/README.md).
+- [ ] Include `docs/` in the npm tarball or make README links absolute — [package.json `files`](packages/reflex/package.json) currently excludes it while the README links `./docs/subscription-runtime.md`, before any package release.
 - [ ] Remove the leftover `'event2'` string from the TodoMVC save handler ([examples/todomvc/src/events.ts](examples/todomvc/src/events.ts), `SAVE` event) and enable Strict Mode in [examples/todomvc/src/main.tsx](examples/todomvc/src/main.tsx).
 - [x] Pin MCP package versions in the shipped agent templates.
-- [ ] Prepare coordinated `0.2.0-beta` versions and release notes across the published packages.
+- [ ] Prepare coordinated prerelease versions and release notes after the experimental redesign reaches a release candidate.
 - [ ] Run the full workspace check and packed-package dry runs.
-- [ ] Push the synchronized repository and publish `0.2.0-beta`.
+- [ ] Push the synchronized source repository. Defer npm publication until the framework is ready and the release gates are complete.
 
 ## Phase 1 — Trust and measurement baseline (~1 month, parallelizable)
 
@@ -56,7 +56,7 @@ These items do not win an evaluation by themselves, but each removes a common re
 
 - [x] **DevTools/MCP security baseline.** The server now uses generated role tokens for HTTP and WebSocket, exact browser-origin and Host checks, loopback-only binding by default, read-only MCP capabilities unless dispatch/restore are granted separately, bounded and schema-validated runtime/control data, application/server redaction hooks, mutation audit records, reconnect-safe runtime sessions, and a fail-closed runtime/DevTools/MCP protocol-version handshake. Principal-scoped capability policy and remote-deployment abuse controls remain explicitly tracked in the [DevTools roadmap](docs/devtools-roadmap.md#p2).
 - [ ] **Fail-loud dev mode.** The instance API (`runtime.dispatch`, `dispatchSync`, `getSubscriptionValue`, `watchSubscription`, and `useSubscription` through it) now throws on malformed vectors and unregistered ids in every mode. Remaining scope: the legacy facade's root functions still `console.error` and continue — make them throw in development, and add a nearest-match suggestion ("did you mean `todos/add`?") to both surfaces. String IDs are only safe if mistakes surface immediately; this matters double for AI-generated code.
-- [ ] **Release and support baseline.** Add `SECURITY.md`, `CHANGELOG.md`, a support/compatibility matrix, coordinated release automation, npm provenance/trusted publishing, and a documented deprecation policy. Define supported React, React Native, TypeScript, Node/headless, browser, Metro, and Hermes versions.
+- [ ] **Release and support baseline.** `SECURITY.md` is present; remaining work includes `CHANGELOG.md`, a support/compatibility matrix, coordinated release automation, npm provenance/trusted publishing, and a documented deprecation policy. Define supported React, React Native, TypeScript, Node/headless, browser, Metro, and Hermes versions.
 - [ ] **Runtime performance baseline.** Add repeatable benchmarks and CI budgets for dispatch throughput, broad and deep subscription graphs, 1k/10k active subscriptions, mount/unmount churn, memory retention, large derived collections under deep versus shallow equality, React render counts, AI-token-frequency updates, Hermes performance, and bundle size.
 - [ ] **Internal agent eval baseline.** Run scripted Reflex tasks with MCP connected versus file-tools-only, scored on success rate, turns, tokens, wall time, and deterministic acceptance tests. Use this as the fitness function for DevTools work; do not publish cross-library claims yet.
 

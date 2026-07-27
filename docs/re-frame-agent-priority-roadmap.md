@@ -1,30 +1,32 @@
 # Re-frame Feature Priorities for Reflex
 
+> **Status:** Historical planning notes. The active roadmap is [`ROADMAP.md`](../ROADMAP.md); operation design is superseded by [`agent-operation-rfc.md`](agent-operation-rfc.md).
+
 Initial priority list for bringing the most valuable recent re-frame capabilities to Reflex, evaluated from an AI-agent development perspective.
 
 The priority is not to reproduce every re-frame API. Reflex already has its own strengths—explicit runtime instances, TypeScript contracts, Immer patches, React integration, persistence, and DevTools/MCP integration. The goal is to add the capabilities that make agent-driven development observable, deterministic, safe, and easy to verify.
 
 ## Priority summary
 
-| Priority | Capability | Main outcome |
-| --- | --- | --- |
-| P0 | `dispatchAndSettle()` and structured receipts | One authoritative result for an event and its cascade |
-| P0 | Operation protocol and completion semantics | Make headless dispatch awaitable, attributable, and retry-safe |
-| P0 | Dispatch-scoped effect overrides/stubs | Safe dry-runs and deterministic tests |
-| P0 | Source provenance metadata | Explain where events, subscriptions, and handlers came from |
-| P0 | Causal event epochs | Reconstruct exact parent/child event causality |
-| P0 | Stable trace schema and validation | Make tooling depend on an explicit runtime contract |
-| P1 | Agent-oriented tooling API | Discover capabilities and diagnostics through one stable surface |
-| P1 | Replayable fixtures and scenarios | Reproduce bugs quickly after reloads and edits |
-| P1 | Scoped agent authorization | Limit which events and effects an agent may use |
-| P1 | Structured, machine-readable errors | Let agents select corrective actions reliably |
-| P2 | Subscription lifecycle controls | Control cache lifetime and memory behavior explicitly |
-| P2 | Public live-subscription accessors | Diagnose cache growth and invalidation |
-| P2 | Runtime capability/version discovery | Let agents adapt to the connected runtime |
-| P2 | Duplicate-registration diagnostics | Identify accidental overwrites with source context |
-| P3 | Flows / `regFlow()` | Support persistent derived state and dataflow invariants |
-| P3 | Flow lifecycle and cleanup | Support live/dead derived state with explicit cleanup |
-| P3 | Generic time travel / undo-redo | Add only after replay and effect control are mature |
+| Priority | Capability                                    | Main outcome                                                     |
+| -------- | --------------------------------------------- | ---------------------------------------------------------------- |
+| P0       | `dispatchAndSettle()` and structured receipts | One authoritative result for an event and its cascade            |
+| P0       | Operation protocol and completion semantics   | Make headless dispatch awaitable, attributable, and retry-safe   |
+| P0       | Dispatch-scoped effect overrides/stubs        | Safe dry-runs and deterministic tests                            |
+| P0       | Source provenance metadata                    | Explain where events, subscriptions, and handlers came from      |
+| P0       | Causal event epochs                           | Reconstruct exact parent/child event causality                   |
+| P0       | Stable trace schema and validation            | Make tooling depend on an explicit runtime contract              |
+| P1       | Agent-oriented tooling API                    | Discover capabilities and diagnostics through one stable surface |
+| P1       | Replayable fixtures and scenarios             | Reproduce bugs quickly after reloads and edits                   |
+| P1       | Scoped agent authorization                    | Limit which events and effects an agent may use                  |
+| P1       | Structured, machine-readable errors           | Let agents select corrective actions reliably                    |
+| P2       | Subscription lifecycle controls               | Control cache lifetime and memory behavior explicitly            |
+| P2       | Public live-subscription accessors            | Diagnose cache growth and invalidation                           |
+| P2       | Runtime capability/version discovery          | Let agents adapt to the connected runtime                        |
+| P2       | Duplicate-registration diagnostics            | Identify accidental overwrites with source context               |
+| P3       | Flows / `regFlow()`                           | Support persistent derived state and dataflow invariants         |
+| P3       | Flow lifecycle and cleanup                    | Support live/dead derived state with explicit cleanup            |
+| P3       | Generic time travel / undo-redo               | Add only after replay and effect control are mature              |
 
 ## P0 — foundational agent capabilities
 
@@ -114,7 +116,7 @@ event handler completed
 It should not implicitly mean that arbitrary HTTP requests, timers, WebSocket messages, or other external asynchronous work has completed. The protocol may later support explicit modes such as:
 
 ```ts
-completion: 'event-cascade' | 'required-effects' | 'full-operation'
+completion: 'event-cascade' | 'required-effects' | 'full-operation';
 ```
 
 ### 3. Full causal cascade receipt
@@ -172,7 +174,7 @@ Agent-facing dispatch should support an optional idempotency key for operations 
 
 ```ts
 runtime.dispatchAndSettle(['payment/confirm'], {
-  idempotencyKey: 'payment-confirm-order-7'
+  idempotencyKey: 'payment-confirm-order-7',
 });
 ```
 
@@ -232,10 +234,7 @@ Patches describe the technical state diff, but agents often need to know what th
 
 ```ts
 await runtime.dispatchAndSettle(['expense/add', expense], {
-  observe: [
-    ['expenses/count'],
-    ['expenses/total'],
-  ],
+  observe: [['expenses/count'], ['expenses/total']],
 });
 ```
 
@@ -375,10 +374,7 @@ Provide a way to restore a known state and replay a sequence of events:
 ```ts
 await runtime.replay({
   initialState,
-  events: [
-    ['user/load'],
-    ['user/loaded', user],
-  ],
+  events: [['user/load'], ['user/loaded', user]],
   suppressEffects: true,
 });
 ```

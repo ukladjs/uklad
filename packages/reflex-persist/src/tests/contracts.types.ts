@@ -1,4 +1,5 @@
 import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
 
 import { PERSIST_IDS, memoryStorageAdapter, persist } from '../index';
@@ -22,6 +23,7 @@ type AppWithPersist = PersistContracts<AppContracts>;
 const runtime = createReflexRuntime<AppWithPersist>({
   initialState: { todos: new Map(), ready: false },
 });
+const testHarness = createReflexTestHarness(runtime);
 const handle = persist(runtime, {
   storage: memoryStorageAdapter(),
   keys: [
@@ -35,7 +37,7 @@ const handle = persist(runtime, {
 
 runtime.dispatch([PERSIST_IDS.HYDRATE]);
 runtime.dispatch([PERSIST_IDS.PURGE]);
-const status: PersistStatus = runtime.getSubscriptionValue([PERSIST_IDS.STATUS]);
+const status: PersistStatus = testHarness.getSubscriptionValue([PERSIST_IDS.STATUS]);
 
 const asyncStorage: AsyncPersistStorage = {
   getItem: async () => null,

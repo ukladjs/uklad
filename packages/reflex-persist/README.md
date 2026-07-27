@@ -41,7 +41,8 @@ persistence protocol collisions fail loudly.
 ```ts
 import { PERSIST_IDS } from '@flexsurfer/reflex-persist';
 
-const status = runtime.getSubscriptionValue([PERSIST_IDS.STATUS]);
+// In React, read this with useSubscription([PERSIST_IDS.STATUS]).
+// Non-React reads are intentionally limited to the explicit testing harness.
 // 'idle' | 'hydrating' | 'hydrated' | 'failed'
 
 await persistence.whenHydrated(); // rejects when hydration failed or was disposed
@@ -151,7 +152,7 @@ type AppWithPersist = PersistContracts<AppContracts>;
 
 const runtime = createReflexRuntime<AppWithPersist>({ initialState });
 runtime.dispatch([PERSIST_IDS.HYDRATE]);
-runtime.getSubscriptionValue([PERSIST_IDS.STATUS]);
+// React consumers can read status with useSubscription([PERSIST_IDS.STATUS]).
 ```
 
 Internal completion/effect IDs are exported for diagnostics but are not part of `PersistContracts` and must not be dispatched by applications. Library-owned payloads are authenticated at runtime; forged or malformed internal work is rejected without opening the write gate.

@@ -1,14 +1,14 @@
-import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import type { ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
 import type { PlaygroundContracts } from './state';
 
 /** Install the environment-independent event and effect handlers. */
-export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContracts>): void {
-  runtime.regCoeffect('now', (coeffects) => ({
+export function installPlaygroundEvents(registrar: ReflexRegistrar<PlaygroundContracts>): void {
+  registrar.regCoeffect('now', (coeffects) => ({
     ...coeffects,
     now: Date.now(),
   }));
 
-  runtime.regEvent('increment-counter', (coeffects) => {
+  registrar.regEvent('increment-counter', (coeffects) => {
     const { draftState } = coeffects;
     draftState.counter = draftState.counter + 1;
     draftState.field1 = {};
@@ -17,7 +17,7 @@ export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContrac
     draftState.field1.field4.field3 = 'test2';
   });
 
-  runtime.regEvent('toggle-user', (coeffects, userId: number) => {
+  registrar.regEvent('toggle-user', (coeffects, userId: number) => {
     const { draftState } = coeffects;
     const user = draftState.users.find((u: any) => u.id === userId);
     if (user) {
@@ -25,22 +25,22 @@ export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContrac
     }
   });
 
-  runtime.regEvent('set-loading', (coeffects, isLoading: boolean) => {
+  registrar.regEvent('set-loading', (coeffects, isLoading: boolean) => {
     const { draftState } = coeffects;
     draftState.isLoading = isLoading;
     return [['fake-effect']];
   });
 
-  runtime.regEvent('add-user', (coeffects, newUser: any) => {
+  registrar.regEvent('add-user', (coeffects, newUser: any) => {
     const { draftState } = coeffects;
     draftState.users.push(newUser);
   });
 
-  runtime.regEvent('simulate-error', () => {
+  registrar.regEvent('simulate-error', () => {
     throw new Error('This is a simulated error for testing');
   });
 
-  runtime.regEvent(
+  registrar.regEvent(
     'fake-event',
     ({ now }) => {
       return [['fake-effect', now]];
@@ -48,49 +48,49 @@ export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContrac
     { coeffects: [['now']] },
   );
 
-  runtime.regEvent('test-event-with-bad-params', ({ draftState }, badPayload: any) => {
+  registrar.regEvent('test-event-with-bad-params', ({ draftState }, badPayload: any) => {
     draftState.badPayload = badPayload;
   });
 
-  runtime.regEvent('test-event-with-immer-proxy', ({ draftState }) => {
+  registrar.regEvent('test-event-with-immer-proxy', ({ draftState }) => {
     return [['fake-effect', draftState.immerPayloadTest]];
   });
 
   // Map and Set manipulation events
-  runtime.regEvent('add-user-to-map', ({ draftState }, userId: string, userData: any) => {
+  registrar.regEvent('add-user-to-map', ({ draftState }, userId: string, userData: any) => {
     if (!draftState.userMap) {
       draftState.userMap = new Map();
     }
     draftState.userMap.set(userId, userData);
   });
 
-  runtime.regEvent('remove-user-from-map', ({ draftState }, userId: string) => {
+  registrar.regEvent('remove-user-from-map', ({ draftState }, userId: string) => {
     if (draftState.userMap) {
       draftState.userMap.delete(userId);
     }
   });
 
-  runtime.regEvent('update-user-in-map', ({ draftState }, userId: string, updates: any) => {
+  registrar.regEvent('update-user-in-map', ({ draftState }, userId: string, updates: any) => {
     if (draftState.userMap && draftState.userMap.has(userId)) {
       const user = draftState.userMap.get(userId);
       if (user) Object.assign(user, updates);
     }
   });
 
-  runtime.regEvent('add-permission', ({ draftState }, permission: string) => {
+  registrar.regEvent('add-permission', ({ draftState }, permission: string) => {
     if (!draftState.permissionsSet) {
       draftState.permissionsSet = new Set();
     }
     draftState.permissionsSet.add(permission);
   });
 
-  runtime.regEvent('remove-permission', ({ draftState }, permission: string) => {
+  registrar.regEvent('remove-permission', ({ draftState }, permission: string) => {
     if (draftState.permissionsSet) {
       draftState.permissionsSet.delete(permission);
     }
   });
 
-  runtime.regEvent('toggle-user-role', ({ draftState }, userId: string, newRole: string) => {
+  registrar.regEvent('toggle-user-role', ({ draftState }, userId: string, newRole: string) => {
     if (draftState.nestedCollections?.userPermissions && draftState.nestedCollections?.rolesMap) {
       const rolePermissions = draftState.nestedCollections.rolesMap.get(newRole);
       if (rolePermissions) {
@@ -99,7 +99,7 @@ export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContrac
     }
   });
 
-  runtime.regEvent('create-complex-map-set-structure', ({ draftState }) => {
+  registrar.regEvent('create-complex-map-set-structure', ({ draftState }) => {
     // Create a complex nested structure with Maps and Sets
     const projectsMap = new Map<string, any>();
     projectsMap.set('project-1', {
@@ -138,14 +138,14 @@ export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContrac
   // the handlers only emit/consume the effect contract; whether that hits
   // window.localStorage or an in-memory map is decided by which adapter
   // module the entry point imported (effects.browser.ts vs effects.headless.ts).
-  runtime.regEvent('persist-counter', ({ draftState }) => {
+  registrar.regEvent('persist-counter', ({ draftState }) => {
     return [
       ['local-storage-set', { key: 'test-app.counter', value: draftState.counter }],
       ['set-document-title', `Counter: ${draftState.counter}`],
     ];
   });
 
-  runtime.regEvent(
+  registrar.regEvent(
     'load-counter',
     ({ draftState, localStorageValue }) => {
       if (localStorageValue != null) {
@@ -156,7 +156,7 @@ export function installPlaygroundEvents(runtime: ReflexRuntime<PlaygroundContrac
   );
 
   // Runtime-agnostic effect, registered once for both runtimes
-  runtime.regEffect('fake-effect', (param) => {
+  registrar.regEffect('fake-effect', (param) => {
     console.log('fake-effect', param);
   });
 }

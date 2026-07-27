@@ -1,3 +1,5 @@
+import { isRegistrationCollisionError } from '@flexsurfer/reflex/vanilla';
+import { getRuntimeIntegration } from '@flexsurfer/reflex/internal';
 import type {
   ContractState,
   DefaultReflexContracts,
@@ -9,7 +11,6 @@ import { encodeEnvelope, ignoreThenable, isThenable, stageEntry, type StagedEntr
 import { normalizeOptions } from './config';
 import { PERSIST_IDS } from './ids';
 import {
-  assertProtocolAvailable,
   isCompletionPayload,
   isHydrationSnapshot,
   isPersistDiagnostic,
@@ -72,7 +73,7 @@ export function persist<TContracts extends ReflexContracts>(
 
   const normalized = normalizeOptions(options as unknown as PersistOptions<AnyState>);
   const runtime = targetRuntime as unknown as Runtime;
-  assertProtocolAvailable(runtime, normalized.storage.sync === true);
+  const integration = getRuntimeIntegration(runtime);
 
   const { storage, keyConfigs, version, prefix, migrate, onError } = normalized;
   const isSync = storage.sync === true;
@@ -141,7 +142,7 @@ export function persist<TContracts extends ReflexContracts>(
     const authorization = issueAuthorization();
     authorizedEvents.add(authorization);
     try {
-      runtime.dispatchSync([id, payload, authorization]);
+      integration.dispatchSync([id, payload, authorization]);
     } finally {
       authorizedEvents.delete(authorization);
     }
@@ -178,7 +179,7 @@ export function persist<TContracts extends ReflexContracts>(
     authorizedEvents.add(authorization);
     try {
       runtime.dispatch([id, payload, authorization]);
-      void runtime.flush().catch(() => {
+      void integration.flush().catch(() => {
         if (disposed || !authorizedEvents.delete(authorization)) return;
         onDropped();
       });
@@ -315,7 +316,7 @@ export function persist<TContracts extends ReflexContracts>(
     const config = configByKey.get(key);
     if (!config) return;
 
-    const value = (runtime.getState() as AnyState)[key];
+    const value = integration.getState()[key];
     if (value === undefined) {
       // A missing root means "no stored entry". A serializer returning
       // undefined, in contrast, is an invalid serialization below.
@@ -657,6 +658,9 @@ export function persist<TContracts extends ReflexContracts>(
     } finally {
       cleanup();
     }
+    if (isRegistrationCollisionError(error)) {
+      throw new Error('[reflex-persist] Protocol registration collision.', { cause: error });
+    }
     throw error;
   }
 
@@ -669,7 +673,7 @@ export function persist<TContracts extends ReflexContracts>(
       }
       if (isSync) {
         try {
-          runtime.dispatchSync([PERSIST_IDS.HYDRATE]);
+          integration.dispatchSync([PERSIST_IDS.HYDRATE]);
         } catch (error) {
           failDroppedHydrationCompletion();
           throw error;
@@ -679,7 +683,7 @@ export function persist<TContracts extends ReflexContracts>(
         queuedHydrationRequests.add(request);
         try {
           runtime.dispatch([PERSIST_IDS.HYDRATE, request]);
-          void runtime.flush().catch(() => {
+          void integration.flush().catch(() => {
             if (disposed || !queuedHydrationRequests.delete(request)) return;
             failDroppedHydrationCompletion();
           });
@@ -715,7 +719,7 @@ export function persist<TContracts extends ReflexContracts>(
       });
       try {
         runtime.dispatch([PERSIST_IDS.PURGE, request]);
-        void runtime.flush().catch(() => {
+        void integration.flush().catch(() => {
           if (disposed || waiter!.accepted) return;
           const index = purgeWaiters.indexOf(waiter!);
           if (index < 0) return;

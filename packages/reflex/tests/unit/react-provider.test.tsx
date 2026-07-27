@@ -4,12 +4,12 @@
 import { cleanup, render, renderHook, act } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 
-import { ReflexProvider } from '../../src/react/context';
+import { ReflexProvider, useReflexRuntime } from '../../src/react/context';
 import { useSubscription } from '../../src/react/use-subscription';
-import { createReflexRuntime, type ReflexRuntime } from '../../src/runtime/runtime';
+import { createReflexRuntimeForTests, type ReflexRuntime } from '../../src/runtime/runtime';
 
 function createValueRuntime(runtimeId: string, value: number) {
-  const runtime = createReflexRuntime({ initialState: { value }, runtimeId });
+  const runtime = createReflexRuntimeForTests({ initialState: { value }, runtimeId });
   runtime.regRootSub('value', 'value');
   runtime.regEvent('set', ({ draftState }, nextValue: number) => {
     draftState.value = nextValue;
@@ -48,6 +48,39 @@ describe('ReflexProvider', () => {
     secondHook.unmount();
     first.dispose();
     second.dispose();
+  });
+
+  it('provides a distinct runtime-enforced client facade', () => {
+    const runtime = createReflexRuntimeForTests({
+      initialState: { value: 1 },
+      runtimeId: 'provider-client-facade',
+    });
+    runtime.regRootSub('value', 'value');
+    const hook = renderHook(() => useReflexRuntime(), {
+      wrapper: provider(runtime),
+    });
+    const client = hook.result.current as unknown as Record<string, unknown>;
+
+    expect(hook.result.current).not.toBe(runtime);
+    expect(Object.isFrozen(hook.result.current)).toBe(true);
+    expect(client.dispatch).toBeInstanceOf(Function);
+    expect(client.dispatchSync).toBeUndefined();
+    expect(client.debounceAndDispatch).toBeInstanceOf(Function);
+    expect(client.throttleAndDispatch).toBeInstanceOf(Function);
+    expect(client.getSubscriptionValue).toBeUndefined();
+    for (const ownerMethod of [
+      'getState',
+      'flush',
+      'watchSubscription',
+      'regEvent',
+      'registerModule',
+      'dispose',
+    ]) {
+      expect(client[ownerMethod]).toBeUndefined();
+    }
+
+    hook.unmount();
+    runtime.dispose();
   });
 
   it('uses the nearest nested provider and rebinds when the provider changes', () => {

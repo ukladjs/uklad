@@ -9,8 +9,8 @@ import type {
   ContractSubscriptionVector,
   ReflexContracts,
 } from '../contracts';
-import { subscribeForRender } from '../runtime/runtime';
-import type { ReflexRuntime } from '../runtime/api';
+import { getSubscriptionValueForInternalUse, subscribeForRender } from '../runtime/runtime';
+import type { ReflexRuntimeClient } from '../runtime/api';
 import type { Id, SubParams, SubPayloads, SubResult, SubscribeVector, SubVector } from '../types';
 import type { ReflexHooks } from './types';
 
@@ -53,7 +53,7 @@ export function createReflexHooks<TContracts extends ReflexContracts>(): ReflexH
 }
 
 function useRuntimeSubscription<T>(
-  runtime: ReflexRuntime<any>,
+  runtime: ReflexRuntimeClient<any>,
   subVector: SubVector,
   componentName: string,
 ): T {
@@ -63,7 +63,7 @@ function useRuntimeSubscription<T>(
     () => ({
       subscribe: (onStoreChange: () => void) =>
         subscribeForRender(runtime, subVector as never, onStoreChange, componentName),
-      getSnapshot: (): T => runtime.getSubscriptionValue(subVector as never) as T,
+      getSnapshot: (): T => getSubscriptionValueForInternalUse(runtime, subVector as never) as T,
     }),
     // The canonical serialized key deliberately represents subVector identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps

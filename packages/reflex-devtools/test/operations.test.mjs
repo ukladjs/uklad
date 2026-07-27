@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createReflexRuntime } from '@flexsurfer/reflex';
+import { createReflexRuntimeForTests as createReflexRuntime } from '@flexsurfer/reflex/internal';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
+import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { createOperationClient } from '../dist/client/operations/client.js';
 import { OperationCoordinator } from '../dist/client/operations/coordinator.js';
 import { createOperationInspector } from '../dist/client/operations/inspector.js';
 
 function operationsFor(runtime) {
-  return createOperationClient(runtime.createInspector().getOperationRuntime());
+  return createOperationClient(createReflexInspector(runtime).getOperationRuntime());
 }
 
 test('reads the canonical coordinator snapshot after dispatch', async () => {
@@ -15,6 +17,7 @@ test('reads the canonical coordinator snapshot after dispatch', async () => {
     runtimeId: 'operations-test',
     initialState: { count: 0 },
   });
+  const testHarness = createReflexTestHarness(runtime);
   runtime.regEvent('increment', ({ draftState }, amount) => {
     draftState.count += amount;
   });
@@ -23,7 +26,7 @@ test('reads the canonical coordinator snapshot after dispatch', async () => {
     const operations = operationsFor(runtime);
     const { operation } = await operations.dispatchAndWait(['increment', 2]);
 
-    assert.equal(runtime.getState().count, 2);
+    assert.equal(testHarness.getState().count, 2);
     assert.equal(operation.status, 'completed');
     assert.equal(operation.eventInstanceIds.length, 1);
     assert.deepEqual(operation.committedRevisions, [1]);
@@ -39,6 +42,7 @@ test('retains parent and effect lineage for a dispatch cascade', async () => {
     runtimeId: 'operations-cascade',
     initialState: { count: 0 },
   });
+  const testHarness = createReflexTestHarness(runtime);
   runtime.regEvent('root', () => [['dispatch', ['child', 3]]]);
   runtime.regEvent('child', ({ draftState }, amount) => {
     draftState.count += amount;
@@ -49,7 +53,7 @@ test('retains parent and effect lineage for a dispatch cascade', async () => {
     const [root, child] = operation.events;
 
     assert.equal(operation.status, 'completed');
-    assert.equal(runtime.getState().count, 3);
+    assert.equal(testHarness.getState().count, 3);
     assert.equal(root.status, 'completed');
     assert.equal(child.status, 'completed');
     assert.equal(child.parentEventInstanceId, root.eventInstanceId);
@@ -65,6 +69,7 @@ test('keeps concurrently accepted root operations separate', async () => {
     runtimeId: 'operations-concurrent',
     initialState: { count: 0 },
   });
+  const testHarness = createReflexTestHarness(runtime);
   runtime.regEvent('increment', ({ draftState }, amount) => {
     draftState.count += amount;
   });
@@ -76,7 +81,7 @@ test('keeps concurrently accepted root operations separate', async () => {
       operations.dispatchAndWait(['increment', 10]),
     ]);
 
-    assert.equal(runtime.getState().count, 11);
+    assert.equal(testHarness.getState().count, 11);
     assert.notEqual(first.operation.operationId, second.operation.operationId);
     assert.equal(first.operation.events.length, 1);
     assert.equal(second.operation.events.length, 1);
@@ -194,7 +199,7 @@ test('decorates an inspector without creating a second operation ledger', async 
   });
 
   try {
-    const inspector = createOperationInspector(runtime.createInspector());
+    const inspector = createOperationInspector(createReflexInspector(runtime));
     const { operation } = await inspector.executeEvent(['increment']);
 
     assert.equal(operation.status, 'completed');

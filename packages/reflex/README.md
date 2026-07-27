@@ -125,9 +125,11 @@ Each runtime owns its state, event queue, handlers, subscription graph,
 tracing, and inspector. Create one per browser root, SSR request, embedded
 widget, story, test, or agent sandbox whenever those worlds must be isolated.
 
-There is no package-global runtime. React hooks require a `ReflexProvider`, and
-all registration, dispatch, inspection, persistence, and lifecycle work goes
-through the runtime your application explicitly created.
+There is no package-global runtime. React hooks require a `ReflexProvider` and
+receive a dispatch/subscription-only client facade. Registration, persistence,
+and lifecycle work go through the runtime owner; inspection and focused test
+access require the explicit `@flexsurfer/reflex/devtools` and
+`@flexsurfer/reflex/testing` subpaths.
 
 ### Subscription runtime
 

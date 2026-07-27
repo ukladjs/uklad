@@ -1,9 +1,15 @@
 import type { ReflexContracts } from '../../src/contracts';
 import {
-  createReflexRuntime,
+  clearRuntimeSubsForHotReload,
+  createReflexRuntime as createProductionRuntime,
+  createReflexRuntimeForTests as createReflexRuntime,
+  getRuntimeClient,
+  getRuntimeAdminForTests,
   getRuntimeCoreForTests,
+  type ReflexRuntime,
   type RuntimeEventHandler,
 } from '../../src/runtime/runtime';
+import { createReflexInspector } from '../../src/devtools';
 import { waitForScheduled } from './test-utils';
 
 import type { Interceptor } from '../../src/types';
@@ -35,6 +41,10 @@ function createCounterRuntime(runtimeId: string, count: number) {
   return runtime;
 }
 
+function admin<TContracts extends ReflexContracts>(runtime: ReflexRuntime<TContracts>) {
+  return getRuntimeAdminForTests(runtime);
+}
+
 describe('instance-scoped runtime', () => {
   it('eagerly owns one stable set of typed core services', () => {
     const runtime = createCounterRuntime('stable-core', 0);
@@ -62,6 +72,40 @@ describe('instance-scoped runtime', () => {
     runtime.dispose();
   });
 
+  it('exposes a frozen production facade without admin or diagnostic controls', () => {
+    const runtime = createProductionRuntime({
+      initialState: { count: 0, label: 'production-facade' },
+      runtimeId: 'production-facade',
+    });
+    const exposed = runtime as unknown as Record<string, unknown>;
+
+    expect(Object.isFrozen(runtime)).toBe(true);
+    for (const adminMethod of [
+      'getHandlers',
+      'clearHandlers',
+      'restoreState',
+      'dispatchSync',
+      'createInspector',
+      'enableTracing',
+      'getSubscriptionDiagnostics',
+    ]) {
+      expect(exposed[adminMethod]).toBeUndefined();
+    }
+
+    runtime.dispose();
+  });
+
+  it('rejects owner-only operations when given the app client facade', () => {
+    const runtime = createCounterRuntime('owner-capability', 0);
+    const client = getRuntimeClient(runtime);
+
+    expect(() => clearRuntimeSubsForHotReload(client as never)).toThrow(
+      'setupSubsHotReload requires a runtime created by createReflexRuntime()',
+    );
+
+    runtime.dispose();
+  });
+
   it('owns global interceptors in the event runtime', () => {
     const runtime = createCounterRuntime('runtime-interceptors', 0);
     const core = getRuntimeCoreForTests(runtime);
@@ -72,7 +116,7 @@ describe('instance-scoped runtime', () => {
 
     runtime.registerInterceptor(interceptor);
 
-    expect(runtime.getInterceptors()).toEqual([interceptor]);
+    expect(admin(runtime).getInterceptors()).toEqual([interceptor]);
     expect(core.events.getInterceptors()).toEqual([interceptor]);
     expect(Object.hasOwn(core.registry, 'globalInterceptors')).toBe(false);
     expect('registerGlobalInterceptor' in core.registry).toBe(false);
@@ -119,8 +163,7 @@ describe('instance-scoped runtime', () => {
     runtime.regEvent('increment', ({ draftState }) => {
       draftState.count += 1;
     });
-    const detach = runtime
-      .createInspector()
+    const detach = createReflexInspector(runtime)
       .getOperationRuntime()
       .observeExecution({
         accept: () => ({ operationId: 'test-operation', value: {} }),
@@ -154,8 +197,7 @@ describe('instance-scoped runtime', () => {
     runtime.regEvent('increment', ({ draftState }) => {
       draftState.count += 1;
     });
-    const detach = runtime
-      .createInspector()
+    const detach = createReflexInspector(runtime)
       .getOperationRuntime()
       .observeExecution({
         accept: () => {
@@ -176,8 +218,7 @@ describe('instance-scoped runtime', () => {
       await runtime.flush();
       expect(runtime.getState().count).toBe(1);
       expect(() =>
-        runtime
-          .createInspector()
+        createReflexInspector(runtime)
           .getOperationRuntime()
           .dispatch(['increment'] as never),
       ).toThrow('operation dispatch could not be accepted');
@@ -222,8 +263,8 @@ describe('instance-scoped runtime', () => {
     expect(firstValues).toEqual([1, 3]);
     expect(secondValues).toEqual([10, 15]);
 
-    const firstInspector = first.createInspector();
-    const secondInspector = second.createInspector();
+    const firstInspector = createReflexInspector(first);
+    const secondInspector = createReflexInspector(second);
     expect(firstInspector).toMatchObject({
       apiVersion: 2,
       runtimeId: 'first',
@@ -238,9 +279,9 @@ describe('instance-scoped runtime', () => {
     expect(secondInspector.getSnapshot().state).toBe(second.getState());
 
     unwatchFirst();
-    first.clearHandlers();
-    expect(first.getHandlers().event.increment).toBeUndefined();
-    expect(second.getHandlers().event.increment).toBeDefined();
+    admin(first).clearHandlers();
+    expect(admin(first).getHandlers().event.increment).toBeUndefined();
+    expect(admin(second).getHandlers().event.increment).toBeDefined();
 
     unwatchSecond();
     first.dispose();
@@ -293,14 +334,14 @@ describe('instance-scoped runtime', () => {
     const runtime = createCounterRuntime('restore', 0);
 
     runtime.dispatch(['increment', 1]);
-    expect(() => runtime.restoreState({ count: 20, label: 'bad-order' })).toThrow(
+    expect(() => admin(runtime).restoreState({ count: 20, label: 'bad-order' })).toThrow(
       'while an event is pending',
     );
     await runtime.flush();
 
     const values: number[] = [];
     const unwatch = runtime.watchSubscription(['count'], (value) => values.push(value));
-    runtime.restoreState({ count: 20, label: 'restored' });
+    admin(runtime).restoreState({ count: 20, label: 'restored' });
 
     expect(runtime.getState()).toEqual({ count: 20, label: 'restored' });
     expect(values).toEqual([1, 20]);
@@ -337,7 +378,7 @@ describe('instance-scoped runtime', () => {
         throw new Error('initial listener failed');
       }),
     ).toThrow('initial listener failed');
-    expect(() => runtime.clearSubs()).not.toThrow();
+    expect(() => admin(runtime).clearSubs()).not.toThrow();
     runtime.dispose();
   });
 
@@ -353,13 +394,13 @@ describe('instance-scoped runtime', () => {
     ).toThrow('initialState must be a non-null, non-array object');
 
     const runtime = createCounterRuntime('restore-validation', 3);
-    expect(() => (runtime.restoreState as (value: unknown) => void)(null)).toThrow(
+    expect(() => (admin(runtime).restoreState as (value: unknown) => void)(null)).toThrow(
       'restoreState nextState must be a non-null, non-array object',
     );
-    expect(() => (runtime.restoreState as (value: unknown) => void)([])).toThrow(
+    expect(() => (admin(runtime).restoreState as (value: unknown) => void)([])).toThrow(
       'restoreState nextState must be a non-null, non-array object',
     );
-    expect(() => (runtime.restoreState as (value: unknown) => void)(1)).toThrow(
+    expect(() => (admin(runtime).restoreState as (value: unknown) => void)(1)).toThrow(
       'restoreState nextState must be a non-null, non-array object',
     );
     expect(runtime.getState()).toEqual({ count: 3, label: 'restore-validation' });
@@ -399,7 +440,7 @@ describe('instance-scoped runtime', () => {
 
   it('rejects duplicate registrations and supports dispose-then-register HMR', () => {
     const runtime = createCounterRuntime('modules', 0);
-    const builtInDispatchEffect = runtime.getHandlers().fx.dispatch;
+    const builtInDispatchEffect = admin(runtime).getHandlers().fx.dispatch;
     const sharedHandler: RuntimeEventHandler<CounterContracts, 'module-increment'> = ({
       draftState,
     }) => {
@@ -419,12 +460,12 @@ describe('instance-scoped runtime', () => {
         scope.regEffect('dispatch', () => {});
       }),
     ).toThrow("Registration 'dispatch' is already registered");
-    expect(runtime.getHandlers().fx.dispatch).toBe(builtInDispatchEffect);
+    expect(admin(runtime).getHandlers().fx.dispatch).toBe(builtInDispatchEffect);
 
     runtime.dispatchSync(['module-increment', 999]);
     expect(runtime.getState().count).toBe(1);
     disposeFirst();
-    expect(runtime.getHandlers().event['module-increment']).toBeUndefined();
+    expect(admin(runtime).getHandlers().event['module-increment']).toBeUndefined();
 
     const disposeReplacement = runtime.registerModule((scope) => {
       scope.regEvent('module-increment', sharedHandler);
@@ -433,8 +474,8 @@ describe('instance-scoped runtime', () => {
     expect(runtime.getState().count).toBe(2);
     disposeReplacement();
     disposeReplacement();
-    expect(runtime.getHandlers().event['module-increment']).toBeUndefined();
-    expect(runtime.getHandlers().fx.dispatch).toBe(builtInDispatchEffect);
+    expect(admin(runtime).getHandlers().event['module-increment']).toBeUndefined();
+    expect(admin(runtime).getHandlers().fx.dispatch).toBe(builtInDispatchEffect);
     runtime.dispose();
   });
 
@@ -457,7 +498,7 @@ describe('instance-scoped runtime', () => {
     unwatch();
     expect(() => disposeFeature()).not.toThrow();
     expect(cleanedUp).toBe(true);
-    expect(runtime.getHandlers().sub.value).toBeUndefined();
+    expect(admin(runtime).getHandlers().sub.value).toBeUndefined();
     runtime.dispose();
   });
 
@@ -473,8 +514,8 @@ describe('instance-scoped runtime', () => {
     const unwatchShell = runtime.watchSubscription(['shell'], () => {});
 
     expect(() => disposeFeature()).not.toThrow();
-    expect(runtime.getHandlers().sub.feature).toBeUndefined();
-    expect(runtime.getHandlers().sub.shell).toBeDefined();
+    expect(admin(runtime).getHandlers().sub.feature).toBeUndefined();
+    expect(admin(runtime).getHandlers().sub.shell).toBeDefined();
     expect(runtime.getSubscriptionValue(['shell'])).toBe(2);
 
     unwatchShell();
@@ -486,10 +527,10 @@ describe('instance-scoped runtime', () => {
     const second = createCounterRuntime('trace-second', 0);
     const firstTraces: Array<{ id: number; tags?: Record<string, unknown> }> = [];
     const secondTraces: Array<{ id: number; tags?: Record<string, unknown> }> = [];
-    const removeFirst = first.createInspector().subscribeTraces((traces) => {
+    const removeFirst = createReflexInspector(first).subscribeTraces((traces) => {
       firstTraces.push(...traces);
     });
-    const removeSecond = second.createInspector().subscribeTraces((traces) => {
+    const removeSecond = createReflexInspector(second).subscribeTraces((traces) => {
       secondTraces.push(...traces);
     });
 
@@ -517,7 +558,7 @@ describe('instance-scoped runtime', () => {
 
   it('terminally disposes an explicit runtime', () => {
     const runtime = createCounterRuntime('disposed', 0);
-    const inspector = runtime.createInspector();
+    const inspector = createReflexInspector(runtime);
     const removeTraceListener = inspector.subscribeTraces(() => {});
     runtime.dispose();
     runtime.dispose();
@@ -537,7 +578,7 @@ describe('instance-scoped runtime', () => {
   it('disposing one runtime leaves other runtime state and inspectors usable', () => {
     const disposed = createCounterRuntime('dispose-first', 1);
     const surviving = createCounterRuntime('dispose-second', 10);
-    const survivingInspector = surviving.createInspector();
+    const survivingInspector = createReflexInspector(surviving);
 
     disposed.dispose();
 

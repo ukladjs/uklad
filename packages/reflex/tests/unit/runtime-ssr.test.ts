@@ -3,7 +3,7 @@ import { renderToString } from 'react-dom/server';
 
 import { ReflexProvider } from '../../src/react/context';
 import { useSubscription } from '../../src/react/use-subscription';
-import { createReflexRuntime } from '../../src/runtime/runtime';
+import { createReflexRuntimeForTests as createReflexRuntime } from '../../src/runtime/runtime';
 
 async function renderRequest(requestId: string, initialValue: number, increment: number) {
   const runtime = createReflexRuntime({

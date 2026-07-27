@@ -12,7 +12,9 @@ The supported runtime entrypoints are:
 - `@flexsurfer/reflex/vanilla` — runtime creation, non-React APIs, and their
   public types;
 - `@flexsurfer/reflex/react` — the provider, hooks, and React hot-reload
-  helpers.
+  helpers;
+- `@flexsurfer/reflex/devtools` — explicit development inspection adapters;
+- `@flexsurfer/reflex/testing` — explicit test-only runtime adapters.
 
 Only exports reachable through a package's documented `exports` map are
 public. Source paths, generated chunks, files under `dist`, and undocumented

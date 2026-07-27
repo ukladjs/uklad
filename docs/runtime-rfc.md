@@ -66,7 +66,12 @@ const runtime = createReflexRuntime<Contracts>({
 
 `runtimeId` is immutable and identifies the runtime in DevTools and reconnects for the lifetime of the application runtime. Callers that need identity to survive reloads supply it; otherwise Reflex generates a process-unique ID. Simultaneously connected runtimes must use distinct IDs; reusing an ID deliberately means “this is the next session of the same runtime” and supersedes its prior DevTools connection. `name` is an immutable human-readable label and defaults to the ID.
 
-Runtime methods are the instance equivalents of the legacy functions: state access and restore, event/effect/coeffect/subscription registration, dispatch, subscription evaluation and watching, global interceptors, equality, tracing, registry diagnostics, reset, module installation, and inspector creation.
+The production runtime exposes state reads, dispatch, subscriptions, registration,
+module installation, scheduling helpers, and disposal. Feature modules receive a
+registration-only capability; they do not receive the owning runtime. State
+restore, tracing, registry inspection, resets, diagnostics, and inspector
+creation live behind the separate `@flexsurfer/reflex/devtools` and testing
+adapters.
 
 ### Store-local contracts
 
@@ -91,7 +96,7 @@ The contract is compile-time only. Runtime validation and externally supplied sc
 
 ### Feature registration
 
-`runtime.registerModule(feature)` executes a synchronous installer and returns an idempotent disposer. Registrations made through the supplied runtime during installation are owned by that installation. An optional feature cleanup runs before definitions are detached so it can release module-owned watchers and other resources. Disposal then removes only registrations that still refer to that installation; it never clears unrelated or newer handlers.
+`runtime.registerModule(feature)` executes a synchronous installer and returns an idempotent disposer. Registrations made through the supplied registration-only capability during installation are owned by that installation. An optional feature cleanup runs before definitions are detached so it can release module-owned watchers and other resources. Disposal then removes only registrations that still refer to that installation; it never clears unrelated or newer handlers.
 
 Module installers cannot call `registerModule` recursively. Compose installers as ordinary synchronous functions inside one module installation when a feature has submodules; this keeps registration ownership unambiguous.
 
@@ -103,19 +108,39 @@ Framework effects cannot be overridden through ordinary registration.
 
 A subscription definition cannot be removed while one of its graphs is active. Applications must unmount/unwatch consumers before disposing the feature; Reflex fails loudly instead of leaving a partially detached graph. Repeated disposal is a no-op. These rules make route-level lazy loading and dispose-then-install HMR deterministic.
 
-### Headless reads and watches
+### Subscription reads and watches
 
-`runtime.getSubscriptionValue(query)` performs a memoized non-React read. `runtime.watchSubscription(query, listener, options?)` activates the same subscription graph used by React and returns an idempotent unsubscribe function. The default is to emit the current value synchronously; `{ emitInitial: false }` observes changes only. The listener receives `(value, previousValue)`.
+React owns subscription reads and watches through the provider binding. Non-React
+reads and watches are intentionally restricted to the explicit testing adapter;
+they are not part of the production runtime client.
 
 ### Unknown ids fail loudly
 
-Instance entry points throw on malformed vectors and unregistered ids: `dispatch` and `dispatchSync` reject an event id with no registered handler, and `getSubscriptionValue` / `watchSubscription` reject an unregistered subscription id. String ids are only safe when mistakes surface immediately; the instance API has no 0.x compatibility constraint, so it is strict from its first release. The compatibility facade's root functions keep the lenient console-error behavior. `useSubscription` reads through the provider runtime's instance API and therefore adopts the strict behavior, including for the default runtime. Events already accepted into the queue stay lenient: a handler removed between dispatch and processing logs and drops that event only.
+Instance entry points throw on malformed vectors and unregistered ids: `dispatch`
+rejects an event id with no registered handler. The testing/admin harness's
+`dispatchSync` has the same validation. String ids are
+only safe when mistakes surface immediately; the instance API has no 0.x
+compatibility constraint, so it is strict from its first release. The
+compatibility facade's root functions keep the lenient console-error behavior.
+`useSubscription` uses the provider binding and therefore adopts the strict
+behavior. Events already accepted into the queue stay lenient: a handler
+removed between dispatch and processing logs and drops that event only.
 
 ### Restore and flush
 
-`runtime.restoreState(nextState)` replaces both state heads and synchronously publishes changed roots. It is rejected while event work is pending or being handled, and during subscription computation or listener delivery. Await `runtime.flush()` before restoring after asynchronous dispatch. Restore does not run event handlers or effects.
+The development/testing admin adapter can replace both state heads through
+`restoreState(nextState)` and synchronously publish changed roots. It is rejected
+while event work is pending or being handled, and during subscription computation
+or listener delivery. Await the testing harness's `flush()` before restoring
+after asynchronous dispatch. Restore does not run event handlers or effects.
 
-`await runtime.flush()` is the explicit quiescence boundary for headless code and tests. It waits until events already accepted by the runtime (including events synchronously enqueued by their effects) leave the queue, then promotes the latest committed state generation and completes listener delivery. It does not wait for future work such as `dispatch-later`, arbitrary effect promises, or events dispatched after the flush call. `dispatchSync` remains a synchronous handle-and-publish boundary.
+The testing harness's `flush()` is the explicit quiescence boundary for tests. It
+waits until events already accepted by the runtime (including events
+synchronously enqueued by their effects) leave the queue, then promotes the
+latest committed state generation and completes listener delivery. It does not
+wait for future work such as `dispatch-later`, arbitrary effect promises, or
+events dispatched after the flush call. `dispatchSync` remains a synchronous
+handle-and-publish boundary.
 
 ### React binding
 
@@ -125,7 +150,7 @@ Instance entry points throw on malformed vectors and unregistered ids: `dispatch
 
 Creation installs fresh framework built-ins (`dispatch`, `dispatch-later`, `now`, `random`, and the default event error handler) into that instance only. `clearHandlers` restores those built-ins and removes user definitions in the target instance. Clearing subscriptions remains illegal while an active graph exists. `restoreState` is the supported state-restoration primitive; `initState` remains the compatibility/bootstrap name on the default runtime.
 
-`runtime.dispose()` terminally releases instance-owned watches, module installations, delayed dispatches and rate-limit timers, event-queue waiters, tracing timers/callbacks, handlers, and subscription definitions. It is idempotent. Applications must first unmount or unsubscribe consumers that were created outside the runtime's own `watchSubscription` API; disposal fails loudly while such a subscription graph remains active and can be retried after the consumer releases it. Later instance and inspector read/control operations fail as disposed; previously returned cleanup functions remain safe idempotent no-ops. The compatibility `defaultRuntime` is process-owned and cannot be disposed.
+`runtime.dispose()` terminally releases instance-owned watches, module installations, delayed dispatches and rate-limit timers, event-queue waiters, tracing timers/callbacks, handlers, and subscription definitions. It is idempotent. Applications must first unmount consumers before disposal; disposal fails loudly while such a subscription graph remains active and can be retried after the consumer releases it. Later instance and inspector read/control operations fail as disposed; previously returned cleanup functions remain safe idempotent no-ops. The compatibility `defaultRuntime` is process-owned and cannot be disposed.
 
 ## Entrypoints
 
@@ -137,7 +162,10 @@ Creation installs fresh framework built-ins (`dispatch`, `dispatch-later`, `now`
 
 The named functions at the package root delegate to one exported `defaultRuntime`. They retain their current signatures, global augmentation behavior, scheduling, and built-ins. The default runtime has ID `default` and name `Default runtime`. This facade is a migration bridge, not a second implementation.
 
-Legacy and instance calls deliberately interoperate when they target `defaultRuntime`; for example, a legacy `regEvent` is visible through `defaultRuntime.createInspector()`. Separate runtimes never observe or mutate those registrations.
+Legacy and instance calls deliberately interoperate when they target
+`defaultRuntime`; development inspection is created explicitly with
+`createReflexInspector(defaultRuntime)` from the DevTools entrypoint. Separate
+runtimes never observe or mutate those registrations.
 
 ## SSR and hydration
 

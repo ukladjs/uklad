@@ -1,5 +1,29 @@
 import type { Id } from '../types';
 
+export const REGISTRATION_COLLISION_CODE = 'REFLEX_REGISTRATION_COLLISION';
+
+/** Stable duplicate-registration error exposed to package integrations. */
+export class RegistrationCollisionError extends Error {
+  readonly code: typeof REGISTRATION_COLLISION_CODE = REGISTRATION_COLLISION_CODE;
+  readonly registrationId: string;
+
+  constructor(id: Id) {
+    super(`[reflex] Registration '${String(id)}' is already registered.`);
+    this.name = 'RegistrationCollisionError';
+    this.registrationId = String(id);
+  }
+}
+
+/** Recognize collision errors across duplicated package copies and realms. */
+export function isRegistrationCollisionError(value: unknown): value is RegistrationCollisionError {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'code' in value &&
+    value.code === REGISTRATION_COLLISION_CODE
+  );
+}
+
 export interface RegistrationHandle {
   /** True only while this handle identifies the installed registration. */
   readonly active: boolean;
@@ -117,7 +141,7 @@ export class RegistrationStore<T> {
   }
 
   private throwDuplicate(id: Id): never {
-    throw new Error(`[reflex] Registration '${String(id)}' is already registered.`);
+    throw new RegistrationCollisionError(id);
   }
 }
 

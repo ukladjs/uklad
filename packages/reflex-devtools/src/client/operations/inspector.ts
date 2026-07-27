@@ -46,7 +46,7 @@ function assertOperationRuntime(
 ) {
   if (!runtime) {
     throw new Error(
-      '[Reflex Devtools] operations requires runtime.createInspector() to expose operation support.',
+      '[Reflex Devtools] operations requires the supplied inspector to expose operation support.',
     );
   }
   if (inspector.runtimeId !== runtime.runtimeId) {

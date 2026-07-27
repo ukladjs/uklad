@@ -6,7 +6,10 @@ import { createElement, type ReactNode } from 'react';
 
 import { ReflexProvider } from '../../src/react/context';
 import { useSubscription } from '../../src/react/use-subscription';
-import { createReflexRuntime } from '../../src/runtime/runtime';
+import {
+  createReflexRuntimeForTests as createReflexRuntime,
+  getRuntimeAdminForTests,
+} from '../../src/runtime/runtime';
 
 const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80));
 
@@ -18,8 +21,9 @@ describe('React subscription tracing', () => {
     runtime.regEvent('set-value', ({ draftState }, value: number) => {
       draftState.value = value;
     });
-    runtime.enableTracing();
-    runtime.registerTraceCallback('react-render-trace', (batch) => traces.push(...batch));
+    const admin = getRuntimeAdminForTests(runtime);
+    admin.enableTracing();
+    admin.registerTraceCallback('react-render-trace', (batch) => traces.push(...batch));
 
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(ReflexProvider, { runtime }, children);
@@ -36,8 +40,8 @@ describe('React subscription tracing', () => {
     expect(traces.some((trace) => trace.opType === 'watch')).toBe(false);
 
     hook.unmount();
-    runtime.removeTraceCallback('react-render-trace');
-    runtime.disableTracing();
+    admin.removeTraceCallback('react-render-trace');
+    admin.disableTracing();
     runtime.dispose();
   });
 });

@@ -1762,7 +1762,7 @@ export class DevtoolsServer {
         code: 'OPERATION_CAPABILITY_UNAVAILABLE',
         error:
           'This runtime does not expose the operation snapshot capability. ' +
-          'Enable DevTools with enableDevtools(runtime, { operations: true }).',
+          'Enable DevTools with enableDevtools(createReflexInspector(runtime), { operations: true }).',
         ...this.runtimeResponseIdentity(runtime),
       });
       return;

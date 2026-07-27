@@ -22,7 +22,6 @@ export type {
 } from './client/index.js';
 export type {
   ReflexHandlerKeys,
-  ReflexDevtoolsRuntime,
   ReflexInspector,
   ReflexInspectorSnapshot,
   ReflexSubscriptionDiagnostic,

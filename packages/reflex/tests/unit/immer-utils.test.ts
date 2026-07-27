@@ -1,5 +1,9 @@
 import { enableMapSet, original, current } from '../../src/core/immer';
-import { createReflexRuntime, getRuntimeCoreForTests } from '../../src/runtime/runtime';
+import {
+  createReflexRuntimeForTests as createReflexRuntime,
+  getRuntimeAdminForTests,
+  getRuntimeCoreForTests,
+} from '../../src/runtime/runtime';
 import isEqualEs6 from 'fast-deep-equal/es6/index.js';
 
 const getEqualityCheck = (runtime: Parameters<typeof getRuntimeCoreForTests>[0]) =>
@@ -13,7 +17,7 @@ describe('immer-utils', () => {
         runtimeId: 'map-set-explicit-runtime',
       });
       const customRuntimeEquality = () => true;
-      runtime.setEqualityCheck(customRuntimeEquality);
+      getRuntimeAdminForTests(runtime).setEqualityCheck(customRuntimeEquality);
 
       enableMapSet();
 
@@ -37,7 +41,7 @@ describe('immer-utils', () => {
         runtimeId: 'map-set-custom-runtime',
       });
       const customEquality = () => true;
-      runtime.setEqualityCheck(customEquality);
+      getRuntimeAdminForTests(runtime).setEqualityCheck(customEquality);
 
       enableMapSet();
 

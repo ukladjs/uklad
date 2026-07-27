@@ -9,7 +9,8 @@
  * Run with `npm run test:types:dist` (requires a fresh `npm run build`);
  * wired into prepublishOnly after the build step.
  */
-import { createReflexRuntime } from '@flexsurfer/reflex';
+import { createReflexRuntimeForTests as createReflexRuntime } from '@flexsurfer/reflex/internal';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import type {
   EventRegistrationOptions,
   ReflexContracts,
@@ -37,6 +38,7 @@ interface TestContracts extends ReflexContracts {
 }
 
 const runtime = createReflexRuntime<TestContracts>({ initialState: { todos: [] as Todo[] } });
+const testHarness = createReflexTestHarness(runtime);
 runtime.dispatch(['todos/add', 'buy milk']);
 runtime.dispatch(['app/init']);
 // @ts-expect-error unknown event id
@@ -47,9 +49,9 @@ runtime.dispatch(['todos/add', 1]);
 runtime.dispatch(['todos/add']);
 
 // dispatchSync shares the dispatch typing
-runtime.dispatchSync(['todos/add', 'buy milk']);
+testHarness.dispatchSync(['todos/add', 'buy milk']);
 // @ts-expect-error unknown event id
-runtime.dispatchSync(['todos/oops']);
+testHarness.dispatchSync(['todos/oops']);
 
 runtime.regEvent('todos/add', ({ draftState }, title) => {
   const _title: string = title;
@@ -78,13 +80,13 @@ runtime.regEvent('app/init', () => [['dispatch', 1]]);
 // @ts-expect-error built-in dispatch-later payload still wins over accidental EffectPayloads declaration
 runtime.regEvent('app/init', () => [['dispatch-later', 'not-a-dispatch-later-payload']]);
 
-const todos = runtime.getSubscriptionValue(['todos/all']);
+const todos = testHarness.getSubscriptionValue(['todos/all']);
 const _check: Todo[] = todos;
 void _check;
 // @ts-expect-error unknown sub id
 useSubscription(['todos/nope']);
 
-const state = runtime.getState();
+const state = testHarness.getState();
 const _all: Todo[] = state.todos;
 void _all;
 

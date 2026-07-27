@@ -1,5 +1,6 @@
 import { createReflexHooks } from '../../src/react';
-import { createReflexRuntime } from '../../src/vanilla';
+import { createReflexRuntimeForTests as createReflexRuntime } from '../../src/runtime/runtime';
+import { createReflexTestHarness } from '../../src/testing';
 import type { ReflexContracts } from '../../src/vanilla';
 
 interface CounterContracts extends ReflexContracts {
@@ -21,6 +22,7 @@ const runtime = createReflexRuntime<CounterContracts>({
   initialState: { count: 0 },
   runtimeId: 'typed-counter',
 });
+const testHarness = createReflexTestHarness(runtime);
 
 runtime.regEvent('increment', ({ draftState }, amount) => {
   draftState.count += amount;
@@ -46,8 +48,8 @@ runtime.regSub(
 
 runtime.dispatch(['increment', 2]);
 runtime.dispatch(['reset']);
-const count: number = runtime.getSubscriptionValue(['count']);
-const scaled: number = runtime.getSubscriptionValue(['scaled', 3]);
+const count: number = testHarness.getSubscriptionValue(['count']);
+const scaled: number = testHarness.getSubscriptionValue(['scaled', 3]);
 void count;
 void scaled;
 
@@ -56,7 +58,7 @@ runtime.dispatch(['increment', 'two']);
 // @ts-expect-error Unknown events are rejected by a non-empty event contract.
 runtime.dispatch(['missing']);
 // @ts-expect-error Subscription parameters are checked per runtime.
-runtime.getSubscriptionValue(['scaled', 'three']);
+testHarness.getSubscriptionValue(['scaled', 'three']);
 // @ts-expect-error Effect payloads are checked per runtime.
 runtime.regEffect('log', (value: number) => void value);
 
@@ -67,7 +69,7 @@ void hookResult;
 hooks.useSubscription(['scaled', 'two']);
 
 const inferred = createReflexRuntime({ initialState: { ready: true } });
-const ready: boolean = inferred.getState().ready;
+const ready: boolean = createReflexTestHarness(inferred).getState().ready;
 void ready;
 
 // @ts-expect-error Runtime states must be top-level object records.

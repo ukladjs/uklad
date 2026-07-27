@@ -34,7 +34,7 @@ export interface ReflexInspectorSnapshot {
 }
 
 /**
- * Structural boundary implemented by `runtime.createInspector()` in Reflex.
+ * Structural boundary returned by `createReflexInspector(runtime)` in Reflex.
  *
  * DevTools deliberately owns this small protocol instead of importing the
  * Reflex runtime, so package resolution can never make it inspect another
@@ -58,9 +58,4 @@ export interface ReflexInspector {
   readonly runtimeInstanceId?: string;
   executeEvent?(event: [string, ...any[]]): Promise<unknown>;
   getOperation?(operationId: string): unknown;
-}
-
-/** A Reflex runtime capable of creating an inspector for DevTools. */
-export interface ReflexDevtoolsRuntime {
-  createInspector(): ReflexInspector;
 }

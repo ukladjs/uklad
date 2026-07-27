@@ -1,4 +1,4 @@
-import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import type { ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
 import type { PlaygroundContracts } from './state';
 import { memoryStorage } from './headless-env';
 
@@ -9,8 +9,8 @@ export const coeffectModes = {
   'local-storage-get': 'memory',
 } as const;
 
-export function installHeadlessCoeffects(runtime: ReflexRuntime<PlaygroundContracts>): void {
-  runtime.regCoeffect('local-storage-get', (cofx, key: string) => {
+export function installHeadlessCoeffects(registrar: ReflexRegistrar<PlaygroundContracts>): void {
+  registrar.regCoeffect('local-storage-get', (cofx, key: string) => {
     cofx.localStorageValue = memoryStorage.get(key) ?? null;
     return cofx;
   });

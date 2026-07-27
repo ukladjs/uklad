@@ -1,4 +1,4 @@
-import { createReflexRuntime } from '../../src/runtime/runtime';
+import { createReflexRuntimeForTests as createReflexRuntime } from '../../src/runtime/runtime';
 
 describe('parallel runtime isolation', () => {
   it.concurrent.each([

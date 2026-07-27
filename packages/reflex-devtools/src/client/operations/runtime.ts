@@ -1,4 +1,4 @@
-/** Structural operation port supplied by `runtime.createInspector()`. */
+/** Structural operation port supplied by a runtime-bound Reflex inspector. */
 export type OperationEventVector = [string, ...any[]];
 
 export interface DevtoolsExecutionObserver {

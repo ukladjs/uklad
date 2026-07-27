@@ -17,7 +17,9 @@ import { todoRuntime } from './runtime';
 enableMapSet();
 if (import.meta.env.DEV) {
   void import('@flexsurfer/reflex-devtools').then(({ enableDevtools }) => {
-    enableDevtools(todoRuntime);
+    void import('@flexsurfer/reflex/devtools').then(({ createReflexInspector }) => {
+      enableDevtools(createReflexInspector(todoRuntime));
+    });
   });
 }
 

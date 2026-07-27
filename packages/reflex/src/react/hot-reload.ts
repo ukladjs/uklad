@@ -2,8 +2,9 @@ import { createElement, Fragment, useCallback, useSyncExternalStore } from 'reac
 import type { ReactElement, ReactNode } from 'react';
 
 import { consoleLog } from '../core/logging';
-import { clearRuntimeSubsForHotReload } from '../runtime/runtime';
-import type { ReflexRuntime } from '../runtime/api';
+import { clearRuntimeSubsForHotReload, getRuntimeClientForInternalUse } from '../runtime/runtime';
+import type { ReflexRuntime, ReflexRuntimeClient } from '../runtime/api';
+import type { ReflexContracts } from '../contracts';
 import { useReflexRuntime } from './context';
 
 import type { Id } from '../types';
@@ -18,8 +19,8 @@ interface HotReloadState {
 const hotReloadStates = new WeakMap<object, HotReloadState>();
 
 /** Register a callback for one explicit runtime and return an unregister function. */
-export function registerHotReloadCallback(
-  runtime: ReflexRuntime<any>,
+export function registerHotReloadCallback<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntimeClient<TContracts>,
   callback: HotReloadCallback,
 ): () => void {
   const callbacks = getHotReloadState(runtime).callbacks;
@@ -28,7 +29,9 @@ export function registerHotReloadCallback(
 }
 
 /** Invoke callbacks for one explicit runtime. */
-export function triggerHotReload(runtime: ReflexRuntime<any>): void {
+export function triggerHotReload<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntimeClient<TContracts>,
+): void {
   consoleLog('log', '[reflex] Triggering hot reload callbacks');
   const state = getHotReloadState(runtime);
   state.version++;
@@ -42,7 +45,9 @@ export function triggerHotReload(runtime: ReflexRuntime<any>): void {
 }
 
 /** Remove callbacks for one explicit runtime. */
-export function clearHotReloadCallbacks(runtime: ReflexRuntime<any>): void {
+export function clearHotReloadCallbacks<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntimeClient<TContracts>,
+): void {
   getHotReloadState(runtime).callbacks.clear();
 }
 
@@ -61,8 +66,8 @@ export function useHotReloadKey(): string {
  * Create bundler-agnostic HMR hooks scoped to one runtime. Pass the owning
  * module's subscription IDs to preserve unrelated definitions.
  */
-export function setupSubsHotReload(
-  runtime: ReflexRuntime<any>,
+export function setupSubsHotReload<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntime<TContracts>,
   subscriptionIds?: readonly Id[],
 ): {
   dispose: () => void;
@@ -86,16 +91,19 @@ export function HotReloadWrapper({ children }: { children: ReactNode }): ReactEl
   return createElement(Fragment, { key }, children);
 }
 
-function getHotReloadState(runtime: ReflexRuntime<any>): HotReloadState {
-  let state = hotReloadStates.get(runtime);
+function getHotReloadState<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntimeClient<TContracts>,
+): HotReloadState {
+  const client = getRuntimeClientForInternalUse(runtime);
+  let state = hotReloadStates.get(client);
   if (!state) {
     state = { callbacks: new Set(), version: 0 };
-    hotReloadStates.set(runtime, state);
+    hotReloadStates.set(client, state);
   }
   return state;
 }
 
-function useHotReloadVersion(): readonly [ReflexRuntime<any>, number] {
+function useHotReloadVersion(): readonly [ReflexRuntimeClient<any>, number] {
   const runtime = useReflexRuntime();
   const subscribe = useCallback(
     (callback: HotReloadCallback) => registerHotReloadCallback(runtime, callback),

@@ -4,7 +4,10 @@
  * plain produce and no patch tags exist anywhere.
  */
 import { waitForScheduled } from './test-utils';
-import { createReflexRuntime, getRuntimeCoreForTests } from '../../src/runtime/runtime';
+import {
+  createReflexRuntimeForTests as createReflexRuntime,
+  getRuntimeCoreForTests,
+} from '../../src/runtime/runtime';
 import {
   clearInterceptors,
   disableTracing,

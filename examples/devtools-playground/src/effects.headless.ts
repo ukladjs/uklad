@@ -1,4 +1,4 @@
-import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import type { ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
 import type { PlaygroundContracts } from './state';
 import { memoryStorage } from './headless-env';
 
@@ -15,12 +15,12 @@ export const effectModes = {
   'set-document-title': 'noop',
 } as const;
 
-export function installHeadlessEffects(runtime: ReflexRuntime<PlaygroundContracts>): void {
-  runtime.regEffect('local-storage-set', ({ key, value }: { key: string; value: unknown }) => {
+export function installHeadlessEffects(registrar: ReflexRegistrar<PlaygroundContracts>): void {
+  registrar.regEffect('local-storage-set', ({ key, value }: { key: string; value: unknown }) => {
     memoryStorage.set(key, JSON.stringify(value));
   });
 
-  runtime.regEffect('set-document-title', () => {
+  registrar.regEffect('set-document-title', () => {
     // no-op: there is no document; the emitted effect is still observable
   });
 }

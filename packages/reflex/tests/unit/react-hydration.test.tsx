@@ -8,13 +8,17 @@ import { renderToString } from 'react-dom/server';
 
 import { ReflexProvider } from '../../src/react/context';
 import { useSubscription } from '../../src/react/use-subscription';
-import { createReflexRuntime, type ReflexRuntime } from '../../src/runtime/runtime';
+import {
+  createReflexRuntimeForTests as createReflexRuntime,
+  type ReflexRuntime,
+} from '../../src/runtime/runtime';
+import type { ReflexRegistrar } from '../../src/runtime/api';
 
 function ValueView() {
   return createElement('span', null, String(useSubscription<number>(['value'])));
 }
 
-function installValueFeature(runtime: ReflexRuntime<any>) {
+function installValueFeature(runtime: ReflexRuntime<any> & ReflexRegistrar<any>) {
   runtime.regRootSub('value', 'value');
   runtime.regEvent('set', ({ draftState }, value: number) => {
     draftState.value = value;

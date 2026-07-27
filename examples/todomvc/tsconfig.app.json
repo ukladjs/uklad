@@ -10,6 +10,8 @@
 
     "paths": {
       "@flexsurfer/reflex": ["../../packages/reflex/src/index.ts"],
+      "@flexsurfer/reflex/devtools": ["../../packages/reflex/src/devtools.ts"],
+      "@flexsurfer/reflex/testing": ["../../packages/reflex/src/testing.ts"],
       "@flexsurfer/reflex-persist": ["../../packages/reflex-persist/src/index.ts"],
       "@flexsurfer/reflex-devtools": ["../../packages/reflex-devtools/src/index.ts"]
     },

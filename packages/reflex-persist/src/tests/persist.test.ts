@@ -1,4 +1,6 @@
-import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex/vanilla';
+import { enableMapSet } from '@flexsurfer/reflex/vanilla';
+import { createReflexRuntimeForTests as createReflexRuntime } from '@flexsurfer/reflex/internal';
+import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import type { Trace } from '@flexsurfer/reflex/vanilla';
 import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
 
@@ -795,21 +797,11 @@ describe('persist', () => {
     handle.hydrate();
     await handle.whenHydrated();
 
-    const originalDispatch = runtime.dispatch.bind(runtime);
-    let observePurged!: () => void;
-    const purgedQueued = new Promise<void>((resolve) => {
-      observePurged = resolve;
-    });
-    runtime.dispatch = ((event) => {
-      originalDispatch(event);
-      if (event[0] === PERSIST_IDS.PURGED) observePurged();
-    }) as typeof runtime.dispatch;
-
     const first = handle.purge();
     await runtime.flush();
     expect(removals).toHaveLength(1);
     removals[0]!.resolve();
-    await purgedQueued;
+    await first;
 
     const second = handle.purge();
     let secondSettled = false;
@@ -858,8 +850,9 @@ describe('persist', () => {
     const memory = createMemoryStorage({ 'reflex/count': entry(1, 41) });
     const runtime = makeRuntime({ count: 0 });
     const collected: Trace[] = [];
-    runtime.enableTracing();
-    runtime.registerTraceCallback('persist-test', (traces) => collected.push(...traces));
+    const removeTraceListener = createReflexInspector(runtime).subscribeTraces((traces) =>
+      collected.push(...traces),
+    );
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
     runtime.regEvent('bump', ({ draftState }) => {
       draftState.count += 1;
@@ -875,7 +868,7 @@ describe('persist', () => {
       PERSIST_IDS.WRITE,
       { key: 'count' },
     ]);
-    runtime.removeTraceCallback('persist-test');
+    removeTraceListener();
     handle.dispose();
     runtime.dispose();
   });
@@ -889,14 +882,11 @@ describe('persist', () => {
     });
 
     handle.hydrate();
-    const getCommittedState = jest.spyOn(runtime, 'getState');
     runtime.dispatchSync(['bump']);
 
-    // The writer compares context.previousState and context.newState. The single
-    // runtime read belongs to WRITE after do-fx committed the new generation.
-    expect(getCommittedState).toHaveBeenCalledTimes(1);
+    // The writer compares context.previousState and context.newState. The
+    // persisted value must reflect the committed generation.
     expect(memory.data.get('reflex/count')).toBe(entry(1, 42));
-    getCommittedState.mockRestore();
     handle.dispose();
     runtime.dispose();
   });

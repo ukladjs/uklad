@@ -16,10 +16,9 @@ import type {
   WatchSubscriptionListener,
   WatchSubscriptionOptions,
 } from '../contracts';
-import type { TraceCallback } from '../core/tracing-types';
-import type { ReflexInspector } from '../inspector-types';
 import type { HandlerRegistry } from './handler-types';
 import type { SubscriptionDiagnostic } from './subscriptions/types';
+import type { TraceCallback } from '../core/tracing-types';
 import type {
   CoEffectHandler,
   CoEffects,
@@ -45,18 +44,24 @@ export interface RuntimeStateRevisions {
   readonly publishedRevision: number;
 }
 
-export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveReflexContracts> {
+/**
+ * The capability made available to React descendants and other app-level
+ * consumers. It deliberately excludes registration, reset, inspection, and
+ * terminal lifecycle operations.
+ */
+export interface ReflexRuntimeClient<
+  TContracts extends ReflexContracts = PermissiveReflexContracts,
+> {
   readonly runtimeId: string;
-  readonly runtimeInstanceId: string;
   readonly runtimeName: string;
 
-  getState(): ContractState<TContracts>;
-  getStateRevisions(): RuntimeStateRevisions;
-  restoreState(nextState: ContractState<TContracts>): void;
   dispatch(event: ContractDispatchVector<TContracts>): void;
-  dispatchSync(event: ContractDispatchVector<TContracts>): void;
-  flush(): Promise<void>;
+  debounceAndDispatch(event: ContractDispatchVector<TContracts>, durationMs: number): void;
+  throttleAndDispatch(event: ContractDispatchVector<TContracts>, durationMs: number): void;
+}
 
+/** Registration-only capability passed to feature modules. */
+export interface ReflexRegistrar<TContracts extends ReflexContracts = PermissiveReflexContracts> {
   regEvent<TId extends string>(
     id: TId,
     handler: RuntimeEventHandler<TContracts, TId>,
@@ -64,7 +69,10 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
   ): void;
   regEffect<TId extends string>(
     id: TId,
-    handler: (value: ContractEffectParams<TContracts, TId>) => void,
+    handler: (
+      value: ContractEffectParams<TContracts, TId>,
+      runtime: ReflexRuntimeClient<TContracts>,
+    ) => void,
   ): void;
   regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void;
   regEventErrorHandler(handler: ErrorHandler): void;
@@ -77,7 +85,31 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
     ) => ContractSubscribeVector<TContracts>[],
     config?: SubConfig,
   ): void;
+  registerInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void;
+}
 
+/**
+ * Production runtime owned by the application root. Administrative and
+ * development-only operations are intentionally absent from this surface.
+ */
+export interface ReflexRuntime<
+  TContracts extends ReflexContracts = PermissiveReflexContracts,
+> extends ReflexRuntimeClient<TContracts> {
+  readonly runtimeInstanceId: string;
+
+  registerModule(module: ReflexModule<ReflexRegistrar<TContracts>>): ReflexDisposer;
+  dispose(): void;
+}
+
+/** Internal administrative view used only by testing and DevTools adapters. */
+export interface ReflexRuntimeAdmin<
+  TContracts extends ReflexContracts = PermissiveReflexContracts,
+> {
+  getState(): ContractState<TContracts>;
+  flush(): Promise<void>;
+  dispatchSync(event: ContractDispatchVector<TContracts>): void;
+  getStateRevisions(): RuntimeStateRevisions;
+  restoreState(nextState: ContractState<TContracts>): void;
   getSubscriptionValue<TId extends ContractSubscriptionId<TContracts>>(
     query: ContractSubscriptionVector<TContracts, TId>,
   ): ContractSubscriptionResult<TContracts, TId>;
@@ -86,29 +118,18 @@ export interface ReflexRuntime<TContracts extends ReflexContracts = PermissiveRe
     listener: WatchSubscriptionListener<ContractSubscriptionResult<TContracts, TId>>,
     options?: WatchSubscriptionOptions,
   ): ReflexDisposer;
-
-  registerInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void;
   getInterceptors(): Interceptor<ContractState<TContracts>>[];
   clearInterceptors(id?: string): void;
   setEqualityCheck(equalityCheck: EqualityCheckFn): void;
   getEqualityCheck(): EqualityCheckFn;
-
   enableTracing(): void;
   disableTracing(): void;
   enableTracePrint(): void;
   registerTraceCallback(key: string, callback: TraceCallback): void;
   removeTraceCallback(key: string): void;
-
-  debounceAndDispatch(event: ContractDispatchVector<TContracts>, durationMs: number): void;
-  throttleAndDispatch(event: ContractDispatchVector<TContracts>, durationMs: number): void;
-
   getHandlers(): HandlerRegistry;
   clearHandlers(): void;
   clearSubs(): void;
   clearSubscriptionCache(key?: string): void;
   getSubscriptionDiagnostics(): readonly SubscriptionDiagnostic[];
-
-  registerModule(module: ReflexModule<ReflexRuntime<TContracts>>): ReflexDisposer;
-  createInspector(): ReflexInspector;
-  dispose(): void;
 }

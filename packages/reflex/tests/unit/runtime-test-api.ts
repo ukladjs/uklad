@@ -16,7 +16,10 @@ import {
 } from '../../src/runtime/tracing';
 import { execute as executeInterceptors } from '../../src/events/interceptors-executor';
 import { createReflexInspector as createInspectorInternal } from '../../src/inspector';
-import { createReflexRuntime, getRuntimeCoreForTests } from '../../src/runtime/runtime';
+import {
+  createReflexRuntimeForTests as createReflexRuntime,
+  getRuntimeCoreForTests,
+} from '../../src/runtime/runtime';
 import type { RegistrationStore } from '../../src/runtime/registrations';
 import { createElement } from 'react';
 

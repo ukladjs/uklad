@@ -2,8 +2,8 @@ import type { Showing, Todo, TodoId, Todos } from './state';
 import { EVENT_IDS } from './event-ids';
 import { todoRuntime } from './runtime';
 
-const disposeEvents = todoRuntime.registerModule((scope) => {
-  scope.regEvent(
+const disposeEvents = todoRuntime.registerModule((registrar) => {
+  registrar.regEvent(
     EVENT_IDS.ADD_TODO,
     ({ draftState, now }, title: string) => {
       // The injected clock keeps ID creation deterministic and testable.
@@ -18,25 +18,25 @@ const disposeEvents = todoRuntime.registerModule((scope) => {
     { coeffects: [['now']] },
   );
 
-  scope.regEvent(EVENT_IDS.TOGGLE_DONE, ({ draftState }, id: TodoId) => {
+  registrar.regEvent(EVENT_IDS.TOGGLE_DONE, ({ draftState }, id: TodoId) => {
     const todo = draftState.todos.get(id);
     if (todo) {
       todo.done = !todo.done;
     }
   });
 
-  scope.regEvent(EVENT_IDS.DELETE_TODO, ({ draftState }, id: TodoId) => {
+  registrar.regEvent(EVENT_IDS.DELETE_TODO, ({ draftState }, id: TodoId) => {
     draftState.todos.delete(id);
   });
 
-  scope.regEvent(EVENT_IDS.SAVE, ({ draftState }, id: TodoId, newTitle: string) => {
+  registrar.regEvent(EVENT_IDS.SAVE, ({ draftState }, id: TodoId, newTitle: string) => {
     const todo = draftState.todos.get(id);
     if (todo) {
       todo.title = newTitle.trim() + 'event2';
     }
   });
 
-  scope.regEvent(EVENT_IDS.COMPLETE_ALL_TOGGLE, ({ draftState }) => {
+  registrar.regEvent(EVENT_IDS.COMPLETE_ALL_TOGGLE, ({ draftState }) => {
     const todosArray = Array.from((draftState.todos as Todos).values()) as Todo[];
     const allComplete = todosArray.length > 0 && todosArray.every((todo) => todo.done);
 
@@ -45,7 +45,7 @@ const disposeEvents = todoRuntime.registerModule((scope) => {
     });
   });
 
-  scope.regEvent(EVENT_IDS.CLEAR_COMPLETED, ({ draftState }) => {
+  registrar.regEvent(EVENT_IDS.CLEAR_COMPLETED, ({ draftState }) => {
     const todosArray = Array.from((draftState.todos as Todos).entries()) as [TodoId, Todo][];
     todosArray.forEach(([id, todo]) => {
       if (todo.done) {
@@ -54,7 +54,7 @@ const disposeEvents = todoRuntime.registerModule((scope) => {
     });
   });
 
-  scope.regEvent(EVENT_IDS.SET_SHOWING, ({ draftState }, showing: Showing) => {
+  registrar.regEvent(EVENT_IDS.SET_SHOWING, ({ draftState }, showing: Showing) => {
     draftState.showing = showing;
   });
 });

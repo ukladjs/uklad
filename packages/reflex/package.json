@@ -52,6 +52,36 @@
         "types": "./dist/react.d.cts",
         "default": "./dist/react.cjs"
       }
+    },
+    "./devtools": {
+      "import": {
+        "types": "./dist/devtools.d.mts",
+        "default": "./dist/devtools.mjs"
+      },
+      "require": {
+        "types": "./dist/devtools.d.cts",
+        "default": "./dist/devtools.cjs"
+      }
+    },
+    "./testing": {
+      "import": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
+      },
+      "require": {
+        "types": "./dist/testing.d.cts",
+        "default": "./dist/testing.cjs"
+      }
+    },
+    "./internal": {
+      "import": {
+        "types": "./dist/internal.d.mts",
+        "default": "./dist/internal.mjs"
+      },
+      "require": {
+        "types": "./dist/internal.d.cts",
+        "default": "./dist/internal.cjs"
+      }
     }
   },
   "files": [

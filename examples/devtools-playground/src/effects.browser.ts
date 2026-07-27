@@ -1,4 +1,4 @@
-import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import type { ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
 import type { PlaygroundContracts } from './state';
 
 // Browser adapters: real side effects against real browser APIs.
@@ -11,12 +11,12 @@ export const effectModes = {
   'set-document-title': 'real',
 } as const;
 
-export function installBrowserEffects(runtime: ReflexRuntime<PlaygroundContracts>): void {
-  runtime.regEffect('local-storage-set', ({ key, value }: { key: string; value: unknown }) => {
+export function installBrowserEffects(registrar: ReflexRegistrar<PlaygroundContracts>): void {
+  registrar.regEffect('local-storage-set', ({ key, value }: { key: string; value: unknown }) => {
     window.localStorage.setItem(key, JSON.stringify(value));
   });
 
-  runtime.regEffect('set-document-title', (title: string) => {
+  registrar.regEffect('set-document-title', (title: string) => {
     document.title = title;
   });
 }

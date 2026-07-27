@@ -1,4 +1,5 @@
 import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
 import { PERSIST_IDS, memoryStorageAdapter, persist } from '@flexsurfer/reflex-persist';
 import type { PersistContracts, PersistStatus } from '@flexsurfer/reflex-persist';
@@ -10,6 +11,7 @@ interface AppContracts extends ReflexContracts {
 
 type Contracts = PersistContracts<AppContracts>;
 const runtime = createReflexRuntime<Contracts>({ initialState: { count: 0 } });
+const testHarness = createReflexTestHarness(runtime);
 const handle = persist(runtime, {
   storage: memoryStorageAdapter(),
   keys: [{ key: 'count', serialize: (count) => count, deserialize: Number }],
@@ -17,7 +19,7 @@ const handle = persist(runtime, {
 
 runtime.dispatch([PERSIST_IDS.HYDRATE]);
 runtime.dispatch([PERSIST_IDS.PURGE]);
-const status: PersistStatus = runtime.getSubscriptionValue([PERSIST_IDS.STATUS]);
+const status: PersistStatus = testHarness.getSubscriptionValue([PERSIST_IDS.STATUS]);
 
 void status;
 handle.dispose();

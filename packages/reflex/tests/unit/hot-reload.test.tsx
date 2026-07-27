@@ -12,14 +12,19 @@ import {
   useHotReloadKey,
   setupSubsHotReload,
 } from '../../src/react/hot-reload';
-import { createReflexRuntime, type ReflexRuntime } from '../../src/runtime/runtime';
+import {
+  createReflexRuntimeForTests as createReflexRuntime,
+  getRuntimeAdminForTests,
+  type ReflexRuntime,
+} from '../../src/runtime/runtime';
+import type { ReflexRegistrar } from '../../src/runtime/api';
 
 function runtimeWrapper(runtime: ReflexRuntime): ComponentType<PropsWithChildren> {
   return ({ children }) => createElement(ReflexProvider, { runtime }, children);
 }
 
 describe('Hot Reload System', () => {
-  let runtime: ReflexRuntime;
+  let runtime: ReflexRuntime & ReflexRegistrar;
   let runtimeSequence = 0;
 
   beforeEach(() => {
@@ -169,7 +174,7 @@ describe('Hot Reload System', () => {
       expect(typeof accept).toBe('function');
 
       dispose();
-      expect(runtime.getHandlers().sub.value).toBeUndefined();
+      expect(getRuntimeAdminForTests(runtime).getHandlers().sub.value).toBeUndefined();
 
       const mockCallback = jest.fn();
       registerHotReloadCallback(runtime, mockCallback);
@@ -207,7 +212,7 @@ describe('Hot Reload System', () => {
       const { dispose } = setupSubsHotReload(runtime);
 
       expect(() => dispose()).not.toThrow();
-      expect(runtime.getHandlers().sub.value).toBeUndefined();
+      expect(getRuntimeAdminForTests(runtime).getHandlers().sub.value).toBeUndefined();
 
       unsubscribe();
       runtime.dispose();
@@ -224,8 +229,8 @@ describe('Hot Reload System', () => {
       const { dispose } = setupSubsHotReload(runtime, ['value']);
 
       expect(() => dispose()).not.toThrow();
-      expect(runtime.getHandlers().sub.value).toBeUndefined();
-      expect(runtime.getHandlers().sub['persist-status']).toBeDefined();
+      expect(getRuntimeAdminForTests(runtime).getHandlers().sub.value).toBeUndefined();
+      expect(getRuntimeAdminForTests(runtime).getHandlers().sub['persist-status']).toBeDefined();
 
       unsubscribe();
       runtime.dispose();
@@ -241,7 +246,7 @@ describe('Hot Reload System', () => {
       registerHotReloadCallback(runtime, mockCallback);
 
       dispose();
-      expect(runtime.getHandlers().sub.value).toBeUndefined();
+      expect(getRuntimeAdminForTests(runtime).getHandlers().sub.value).toBeUndefined();
 
       accept({ newModule: true });
       expect(mockCallback).toHaveBeenCalledTimes(1);

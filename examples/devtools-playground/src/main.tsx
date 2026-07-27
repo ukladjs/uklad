@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex/vanilla';
+import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { ReflexProvider } from '@flexsurfer/reflex/react';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 import './index.css';
@@ -24,7 +25,7 @@ browserRuntime.registerModule(installPlaygroundSubscriptions);
 browserRuntime.registerModule(installBrowserEffects);
 browserRuntime.registerModule(installBrowserCoeffects);
 
-enableDevtools(browserRuntime, {
+enableDevtools(createReflexInspector(browserRuntime), {
   operations: true,
   runtime: 'browser',
   effectMode: 'real',

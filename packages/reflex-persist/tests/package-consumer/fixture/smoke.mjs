@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import { persist } from '@flexsurfer/reflex-persist';
 
 const entries = new Map([['packed/count', JSON.stringify({ v: 1, data: 41 })]]);
@@ -11,15 +12,18 @@ const storage = {
   removeItem: (key) => entries.delete(key),
 };
 const runtime = createReflexRuntime({ initialState: { count: 0 } });
+const testHarness = createReflexTestHarness(runtime);
 const handle = persist(runtime, { storage, prefix: 'packed', keys: ['count'] });
-runtime.regEvent('increment', ({ draftState }) => {
-  draftState.count += 1;
+runtime.registerModule((registrar) => {
+  registrar.regEvent('increment', ({ draftState }) => {
+    draftState.count += 1;
+  });
 });
 
 handle.hydrate();
-runtime.dispatchSync(['increment']);
+testHarness.dispatchSync(['increment']);
 
-assert.equal(runtime.getState().count, 42);
+assert.equal(testHarness.getState().count, 42);
 assert.equal(entries.get('packed/count'), JSON.stringify({ v: 1, data: 42 }));
 handle.dispose();
 runtime.dispose();

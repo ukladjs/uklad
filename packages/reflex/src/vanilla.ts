@@ -7,6 +7,7 @@ export { createReflexRuntime } from './runtime/runtime';
 export { DISPATCH, DISPATCH_LATER } from './events/built-in-effects';
 export { shallowEqual } from './core/equality';
 export { current, enableMapSet, original } from './core/immer';
+export { isRegistrationCollisionError } from './runtime/registrations';
 
 export type {
   ContractAllEffectPayloads,
@@ -41,11 +42,14 @@ export type {
   WatchSubscriptionOptions,
 } from './contracts';
 export type {
+  ReflexRegistrar,
   ReflexRuntime,
+  ReflexRuntimeClient,
   RuntimeEventHandler,
-  RuntimeStateRevisions,
   RuntimeSubscriptionHandler,
 } from './runtime/api';
+/** Structural diagnostic data retained as a type-only compatibility export. */
+export type { SubscriptionDiagnostic } from './runtime/subscriptions/types';
 export type {
   AppState,
   CoEffectHandler,
@@ -56,6 +60,7 @@ export type {
   DispatchLaterEffect,
   DispatchVector,
   EffectHandler,
+  EffectRuntimeContext,
   EffectParams,
   EffectPayloads,
   Effects,
@@ -79,8 +84,6 @@ export type {
   SubscribeVector,
   SubVector,
 } from './types';
-export type { HandlerRegistry } from './runtime/handler-types';
-export type { SubscriptionDiagnostic } from './runtime/subscriptions/types';
 export type {
   Trace,
   TraceCallback,

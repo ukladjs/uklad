@@ -85,10 +85,11 @@ If you're not using the agent toolkit plugin, the setup the skill automates is f
 2. **Enable it in development** (app entry point; adjust the env guard for non-Vite apps):
    ```typescript
    import { enableDevtools } from '@flexsurfer/reflex-devtools';
+   import { createReflexInspector } from '@flexsurfer/reflex/devtools';
    import { runtime } from './state/runtime';
 
    if (import.meta.env.DEV) {
-     enableDevtools(runtime);
+     enableDevtools(createReflexInspector(runtime));
    }
    ```
 
@@ -158,6 +159,7 @@ runtime's inspector:
 
 ```ts
 import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
 const runtime = createReflexRuntime({
@@ -170,7 +172,7 @@ runtime.registerModule(installSubscriptions);
 runtime.registerModule(installHeadlessEffects);
 runtime.registerModule(installHeadlessCoeffects);
 
-enableDevtools(runtime);
+enableDevtools(createReflexInspector(runtime));
 ```
 
 Run the entry under `tsx watch` (or `vite-node --watch`).
@@ -189,6 +191,7 @@ then connect its own inspector:
 
 ```ts
 import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 
 const runtime = createReflexRuntime({
@@ -197,7 +200,7 @@ const runtime = createReflexRuntime({
   name: 'Checkout widget',
 });
 
-enableDevtools(runtime);
+enableDevtools(createReflexInspector(runtime));
 ```
 
 The dashboard selector changes the active runtime and replaces its retained
@@ -247,9 +250,10 @@ npm install --save-dev @flexsurfer/reflex-devtools
 ```typescript
 // app entry point
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
+import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { runtime } from './state/runtime';
 
-enableDevtools(runtime); // defaults to 127.0.0.1:4000
+enableDevtools(createReflexInspector(runtime)); // defaults to 127.0.0.1:4000
 ```
 
 ```json
@@ -275,7 +279,7 @@ server. A headless runtime does not send an Origin header and needs no entry.
 ### Client (`enableDevtools`)
 
 ```typescript
-const disableDevtools = enableDevtools(runtime, {
+const disableDevtools = enableDevtools(createReflexInspector(runtime), {
   serverUrl: '127.0.0.1:4000',
 });
 
@@ -315,7 +319,7 @@ Enable authoritative `dispatch_and_wait` snapshots on the same DevTools call;
 no additional package or inspector wrapper is required:
 
 ```ts
-enableDevtools(runtime, {
+enableDevtools(createReflexInspector(runtime), {
   operations: true,
 });
 ```
@@ -336,13 +340,14 @@ import {
   DEFAULT_SENSITIVE_KEYS,
   enableDevtools,
 } from '@flexsurfer/reflex-devtools';
+import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { runtime } from './state/runtime';
 
 const redact = createKeyRedactor({
   keys: [...DEFAULT_SENSITIVE_KEYS, /^email$/i, /^phone$/i, /^dateOfBirth$/i],
 });
 
-enableDevtools(runtime, {
+enableDevtools(createReflexInspector(runtime), {
   redaction: {
     state: redact,
     trace: redact,

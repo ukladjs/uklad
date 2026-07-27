@@ -29,7 +29,7 @@ Rules:
 - Create an explicit runtime in `runtime.ts` with `createReflexRuntime({ initialState })`.
 - Express feature registrations as `runtime.registerModule((scope) => { ... })`; keep and invoke its disposer for lazy loading/HMR.
 - Mount React below `<ReflexProvider runtime={runtime}>`. The package-root API remains available only as the single-runtime compatibility facade.
-- Instance methods (`runtime.dispatch`, `dispatchSync`, `getSubscriptionValue`, `watchSubscription`, and `useSubscription` through them) throw on unregistered event/subscription ids — register before dispatching or subscribing.
+- Instance `runtime.dispatch` and effect-context dispatch throw on unregistered event ids — register before dispatching. `dispatchSync` is restricted to the testing/admin harness. React `useSubscription` reads through the provider binding and throws on unregistered subscription ids.
 - If `events.ts` or `subs.ts` grows too large, split by feature, keep shared/global state separate.
 
 ## 2) State Shape
@@ -49,7 +49,7 @@ Rules:
 - Return effect tuples for side effects.
 - When sending mutated draft data to effects, always use `current(...)`.
 - Prefer deterministic coeffects (time/id/random/env) instead of direct globals for testability.
-- `dispatch` is async (queued; on the next animation-frame flush the subscription graph settles and listeners run synchronously inside that scheduled flush task). `dispatchSync` commits and notifies subscribers before returning — use it only where that timing is load-bearing (controlled inputs bound to state state). Never call `dispatchSync` from inside an event handler (it throws) — return a `['dispatch', ...]` effect instead. Calling plain `dispatch` from inside a handler warns in dev for the same reason: emit follow-up events through the `['dispatch', ...]` effect.
+- `dispatch` is async (queued; on the next animation-frame flush the subscription graph settles and listeners run synchronously inside that scheduled flush task). The testing/admin harness's `dispatchSync` commits and notifies subscribers before returning — use it only where that timing is load-bearing. Never call `dispatchSync` from inside an event handler (it throws) — return a `['dispatch', ...]` effect instead. Calling plain `dispatch` from inside a handler warns in dev for the same reason: emit follow-up events through the `['dispatch', ...]` effect.
 
 Event naming:
 - Keep exported constant keys in `UPPER_SNAKE_CASE`.
@@ -109,8 +109,9 @@ Enable in your app entry point (`main.tsx`) before dispatching any events:
 
 ```ts
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
+import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 
-enableDevtools(runtime);  // exact runtime identity and tracing owner
+enableDevtools(createReflexInspector(runtime));  // explicit development adapter
 
 ```
 
@@ -122,18 +123,21 @@ For every new feature:
 - Event tests: mutation correctness + emitted effect tuples.
 - Subscription tests: derived outputs from fixed state fixtures.
 
-Events and subscriptions are pure functions. In explicit-runtime code, install the feature on a fresh runtime per test and extract a handler from `runtime.getHandlers()` when a focused unit test is useful. Package-root `getHandler` is the compatibility-facade equivalent.
+Events and subscriptions are pure functions. In explicit-runtime code, install the feature on a fresh runtime per test. Handler lookup belongs to the test harness; the production runtime deliberately does not expose its live registry.
 
 ### Testing Events
 
-Use `runtime.getHandlers().event[EVENT_ID]` to get the raw handler after installing the feature. Build a mock `coeffects` object with `draftState` (and any injected coeffects), call the handler, then assert mutations on `draftState` and the returned effect tuples.
+Use the test harness's read-only handler lookup to get the raw handler after installing the feature. Build a mock `coeffects` object with `draftState` (and any injected coeffects), call the handler, then assert mutations on `draftState` and the returned effect tuples.
 
 ```ts
 import type { EventHandler, CoEffects } from '@flexsurfer/reflex';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import './events'; // side-effect import registers handlers
 
+const testHarness = createReflexTestHarness(runtime);
+
 it('ADD_TODO should add a todo and persist', () => {
-  const handler = runtime.getHandlers().event[EVENT_IDS.ADD_TODO] as EventHandler;
+  const handler = testHarness.getEventHandler(EVENT_IDS.ADD_TODO) as EventHandler;
 
   const mockSTATE = { todos: [], showing: 'all' };
   const coeffects = {
@@ -153,7 +157,7 @@ it('ADD_TODO should add a todo and persist', () => {
 });
 
 it('ADD_TODO should ignore empty input', () => {
-  const handler = runtime.getHandlers().event[EVENT_IDS.ADD_TODO] as EventHandler;
+  const handler = testHarness.getEventHandler(EVENT_IDS.ADD_TODO) as EventHandler;
 
   const mockSTATE = { todos: [], showing: 'all' };
   const coeffects = { event: [EVENT_IDS.ADD_TODO, '  '], draftState: mockSTATE, now: 1 } as CoEffects;
@@ -170,10 +174,13 @@ Computed subscriptions: call `handler(inputFromParentSub1, inputFromParentSub2, 
 
 ```ts
 import type { SubHandler, SubDepsHandler } from '@flexsurfer/reflex';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import './subs';
 
+const testHarness = createReflexTestHarness(runtime);
+
 it('OPEN_COUNT computed sub counts active todos', () => {
-  const handler = runtime.getHandlers().sub[SUB_IDS.TODOS_OPEN_COUNT] as SubHandler;
+  const handler = testHarness.getSubscriptionHandler(SUB_IDS.TODOS_OPEN_COUNT) as SubHandler;
   const todos = [
     { id: 1, title: 'A', done: false },
     { id: 2, title: 'B', done: true },
@@ -323,8 +330,8 @@ What this changes:
 - `dispatch([EVENT_IDS.TODOS_ADD, title])` — id must be declared, payload must match the tuple. Also applies to `debounceAndDispatch`/`throttleAndDispatch`.
 - `regEvent(EVENT_IDS.TODOS_ADD, ({ draftState }, title) => ...)` — handler params are inferred from `EventPayloads` and `draftState` from `AppState`, with no generics. Avoid the explicit state generic (`regEvent<MyState>(id, ...)`): it disables param inference — augment `AppState` instead, or annotate coeffects inline (`({ draftState }: CoEffects<MyState>, title) => ...`). Undeclared ids stay permissive in `regEvent`.
 - Effect tuples returned from handlers are checked against `EffectPayloads`: declared ids with matching payloads only. The built-in `'dispatch'` and `'dispatch-later'` effects are always included, their ids are reserved and cannot be overridden by `EffectPayloads`, and their event vectors are checked against `EventPayloads` — so `return [['dispatch', [EVENT_IDS.X, payload]]]` gets the same checking as a direct `dispatch`. `regEffect` infers the handler's value param from the map.
-- `useSubscription([SUB_IDS.TODO_BY_ID, id])` — params checked, result type inferred (no explicit generic needed). Same for `getSubscriptionValue`. `regSub` checks the computeFn return type against the declared result.
-- `initState(...)` is checked against `AppState`; `getState()` returns it.
+- `useSubscription([SUB_IDS.TODO_BY_ID, id])` — params checked and result type inferred (no explicit generic needed). `regSub` checks the computeFn return type against the declared result.
+- `createReflexTestHarness(runtime)` exposes state reads, flush, and non-React subscription inspection for tests.
 
 Rules:
 - Event/sub payloads must be tuples; use `[]` for no params. Use labeled tuple members (`[title: string]`) — they double as documentation. Effect payloads are single values; use `void` for effects with no payload.

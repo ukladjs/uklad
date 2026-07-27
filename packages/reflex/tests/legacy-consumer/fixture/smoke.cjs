@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const reflex = require('@flexsurfer/reflex');
 const reflexReact = require('@flexsurfer/reflex/react');
 const reflexVanilla = require('@flexsurfer/reflex/vanilla');
+const reflexTesting = require('@flexsurfer/reflex/testing');
 
 assert.strictEqual(typeof reflex.createReflexRuntime, 'function');
 assert.strictEqual(typeof reflex.useSubscription, 'function');
@@ -11,6 +12,7 @@ assert.strictEqual(reflex.defaultRuntime, undefined);
 assert.strictEqual(reflex.ReflexProvider, reflexReact.ReflexProvider);
 
 const runtime = reflex.createReflexRuntime({ initialState: { count: 0 } });
+const testHarness = reflexTesting.createReflexTestHarness(runtime);
 runtime.regEvent('inc', ({ draftState }) => {
   draftState.count += 1;
 });
@@ -21,10 +23,10 @@ runtime.regSub(
   () => [['count']],
 );
 
-runtime.dispatchSync(['inc']);
+testHarness.dispatchSync(['inc']);
 
-assert.strictEqual(runtime.getState().count, 1);
-assert.strictEqual(runtime.getSubscriptionValue(['count']), 1);
-assert.strictEqual(runtime.getSubscriptionValue(['doubled']), 2);
+assert.strictEqual(testHarness.getState().count, 1);
+assert.strictEqual(testHarness.getSubscriptionValue(['count']), 1);
+assert.strictEqual(testHarness.getSubscriptionValue(['doubled']), 2);
 
 console.log('[explicit] CommonJS runtime smoke passed');

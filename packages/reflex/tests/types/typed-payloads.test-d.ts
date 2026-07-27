@@ -7,11 +7,9 @@
  * Consumers of the published package augment '@flexsurfer/reflex' instead of
  * the relative path used here (see tests/types/dist for that variant).
  */
-import {
-  createReflexHooks,
-  createReflexRuntime,
-  useSubscription as useUntypedSubscription,
-} from '../../src/index';
+import { createReflexHooks, useSubscription as useUntypedSubscription } from '../../src/index';
+import { createReflexRuntimeForTests as createReflexRuntime } from '../../src/runtime/runtime';
+import { createReflexTestHarness } from '../../src/testing';
 import type {
   CoEffects,
   DefaultReflexContracts,
@@ -51,6 +49,7 @@ declare module '../../src/types' {
 const runtime = createReflexRuntime<DefaultReflexContracts>({
   initialState: { todos: [] },
 });
+const testHarness = createReflexTestHarness(runtime);
 const { useSubscription } = createReflexHooks<DefaultReflexContracts>();
 
 // ---- dispatch --------------------------------------------------------
@@ -75,12 +74,12 @@ runtime.throttleAndDispatch(['app/init'], 100);
 runtime.debounceAndDispatch(['todos/typo'], 100);
 
 // dispatchSync shares the dispatch typing
-runtime.dispatchSync(['todos/add', 'buy milk']);
-runtime.dispatchSync(['app/init']);
+testHarness.dispatchSync(['todos/add', 'buy milk']);
+testHarness.dispatchSync(['app/init']);
 // @ts-expect-error unknown event id is rejected once EventPayloads is augmented
-runtime.dispatchSync(['todos/typo', 'x']);
+testHarness.dispatchSync(['todos/typo', 'x']);
 // @ts-expect-error wrong payload type
-runtime.dispatchSync(['todos/add', 42]);
+testHarness.dispatchSync(['todos/add', 42]);
 
 // ---- regEvent --------------------------------------------------------
 
@@ -192,15 +191,11 @@ runtime.regEffect('undeclared-effect', (anything: number) => {
 
 // ---- getState / initState --------------------------------------------
 
-const state = runtime.getState();
+const state = testHarness.getState();
 const _all: Todo[] = state.todos;
 void _all;
 
-runtime.restoreState({ todos: [] });
-// @ts-expect-error initial state must match the augmented AppState
-runtime.restoreState({});
-
-const legacyState = legacyRuntime.getState();
+const legacyState = createReflexTestHarness(legacyRuntime).getState();
 const _s2: string = legacyState.anything;
 void _s2;
 
@@ -227,10 +222,10 @@ useSubscription(['todos/by-id']);
 
 // ---- getSubscriptionValue --------------------------------------------
 
-const all: Todo[] = runtime.getSubscriptionValue(['todos/all']);
+const all: Todo[] = testHarness.getSubscriptionValue(['todos/all']);
 void all;
 // @ts-expect-error unknown sub id
-runtime.getSubscriptionValue(['subs/typo']);
+testHarness.getSubscriptionValue(['subs/typo']);
 
 // ---- regSub ----------------------------------------------------------
 

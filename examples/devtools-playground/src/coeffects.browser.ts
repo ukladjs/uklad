@@ -1,4 +1,4 @@
-import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import type { ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
 import type { PlaygroundContracts } from './state';
 
 // Browser coeffect adapters: read real browser state into the event's
@@ -9,8 +9,8 @@ export const coeffectModes = {
   'local-storage-get': 'real',
 } as const;
 
-export function installBrowserCoeffects(runtime: ReflexRuntime<PlaygroundContracts>): void {
-  runtime.regCoeffect('local-storage-get', (cofx, key: string) => {
+export function installBrowserCoeffects(registrar: ReflexRegistrar<PlaygroundContracts>): void {
+  registrar.regCoeffect('local-storage-get', (cofx, key: string) => {
     cofx.localStorageValue = window.localStorage.getItem(key);
     return cofx;
   });

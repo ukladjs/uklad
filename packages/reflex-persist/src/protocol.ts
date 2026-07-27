@@ -1,10 +1,6 @@
-import type { DefaultReflexContracts, ReflexRuntime } from '@flexsurfer/reflex/vanilla';
-
 import type { StagedEntry } from './codec';
 import { PERSIST_IDS } from './ids';
 import type { PersistDiagnostic, PersistKeyConfig, PersistStatus } from './types';
-
-type Runtime = ReflexRuntime<DefaultReflexContracts>;
 
 export type RawByKey = Record<string, string | null>;
 export type TerminalStatus = Extract<PersistStatus, 'hydrated' | 'failed'>;
@@ -20,45 +16,6 @@ export interface CompletionPayload {
 
 export interface PurgeCompletionPayload extends CompletionPayload {
   readonly diagnostics: readonly PersistDiagnostic[];
-}
-
-/** Reject an attachment when it would overwrite an existing Reflex registration. */
-export function assertProtocolAvailable(runtime: Runtime, includeSnapshot: boolean): void {
-  const handlers = runtime.getHandlers();
-  const collisions: string[] = [];
-  const eventIds = [
-    PERSIST_IDS.ATTACH,
-    PERSIST_IDS.HYDRATE,
-    PERSIST_IDS.LOADED,
-    PERSIST_IDS.FAILED,
-    PERSIST_IDS.PURGE,
-    PERSIST_IDS.PURGED,
-  ];
-  const effectIds = [
-    PERSIST_IDS.READ,
-    PERSIST_IDS.WRITE,
-    PERSIST_IDS.REMOVE,
-    PERSIST_IDS.COMPLETE,
-    PERSIST_IDS.COMPLETE_PURGE,
-    PERSIST_IDS.SETTLE,
-    PERSIST_IDS.REJECT_PURGE,
-    PERSIST_IDS.REPORT,
-  ];
-
-  for (const id of eventIds) if (handlers.event[id] !== undefined) collisions.push(`event:${id}`);
-  for (const id of effectIds) if (handlers.fx[id] !== undefined) collisions.push(`effect:${id}`);
-  if (includeSnapshot && handlers.cofx[PERSIST_IDS.SNAPSHOT] !== undefined) {
-    collisions.push(`coeffect:${PERSIST_IDS.SNAPSHOT}`);
-  }
-  if (handlers.sub[PERSIST_IDS.STATUS] !== undefined) {
-    collisions.push(`subscription:${PERSIST_IDS.STATUS}`);
-  }
-  if (runtime.getInterceptors().some(({ id }) => id === PERSIST_IDS.WRITER)) {
-    collisions.push(`interceptor:${PERSIST_IDS.WRITER}`);
-  }
-  if (collisions.length > 0) {
-    throw new Error(`[reflex-persist] Protocol registration collision: ${collisions.join(', ')}.`);
-  }
 }
 
 export function isPersistDiagnostic(

@@ -17,6 +17,15 @@ export default defineConfig({
       '@flexsurfer/reflex/react': fileURLToPath(
         new URL('../../packages/reflex/src/react.ts', import.meta.url),
       ),
+      '@flexsurfer/reflex/devtools': fileURLToPath(
+        new URL('../../packages/reflex/src/devtools.ts', import.meta.url),
+      ),
+      '@flexsurfer/reflex/testing': fileURLToPath(
+        new URL('../../packages/reflex/src/testing.ts', import.meta.url),
+      ),
+      '@flexsurfer/reflex/internal': fileURLToPath(
+        new URL('../../packages/reflex/src/internal.ts', import.meta.url),
+      ),
       '@flexsurfer/reflex': fileURLToPath(
         new URL('../../packages/reflex/src/index.ts', import.meta.url),
       ),

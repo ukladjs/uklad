@@ -122,7 +122,16 @@ export type Effects = ([keyof EffectPayloads] extends [never]
       [K in keyof AllEffectPayloads]: EffectTupleFor<K, AllEffectPayloads[K]>;
     }[keyof AllEffectPayloads])[];
 
-export type EffectHandler<V = any> = (value: V) => void;
+/** Runtime capability supplied to custom effect handlers. */
+export interface EffectRuntimeContext {
+  readonly runtimeId: string;
+  readonly runtimeName: string;
+  dispatch(event: DispatchVector): void;
+  debounceAndDispatch(event: DispatchVector, durationMs: number): void;
+  throttleAndDispatch(event: DispatchVector, durationMs: number): void;
+}
+
+export type EffectHandler<V = any> = (value: V, runtime: EffectRuntimeContext) => void;
 
 export interface CoEffects<T = DefaultAppState> {
   event: EventVector;

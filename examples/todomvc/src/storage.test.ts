@@ -1,4 +1,5 @@
 import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import { persist } from '@flexsurfer/reflex-persist';
 import type { SyncPersistStorage } from '@flexsurfer/reflex-persist';
 import { describe, expect, it } from 'vitest';
@@ -41,27 +42,31 @@ describe('TodoMVC persistence integration', () => {
     };
 
     const firstRuntime = createReflexRuntime({ initialState: { todos: new Map() as Todos } });
+    const firstTestHarness = createReflexTestHarness(firstRuntime);
     const first = persist(firstRuntime, { storage, keys: [keyConfig] });
-    firstRuntime.regEvent('todos/add', ({ draftState }, todo: Todo) => {
-      draftState.todos.set(todo.id, todo);
+    firstRuntime.registerModule((registrar) => {
+      registrar.regEvent('todos/add', ({ draftState }, todo: Todo) => {
+        draftState.todos.set(todo.id, todo);
+      });
     });
 
     first.hydrate();
-    expect(firstRuntime.getState().todos.get(1)?.title).toBe('stored');
+    expect(firstTestHarness.getState().todos.get(1)?.title).toBe('stored');
 
     firstRuntime.dispatch(['todos/add', { id: 2, title: 'new', done: false }]);
-    await firstRuntime.flush();
+    await firstTestHarness.flush();
     expect(writes).toBe(1);
     first.dispose();
     firstRuntime.dispose();
 
     const reloadRuntime = createReflexRuntime({ initialState: { todos: new Map() as Todos } });
+    const reloadTestHarness = createReflexTestHarness(reloadRuntime);
     const reload = persist(reloadRuntime, { storage, keys: [keyConfig] });
     reload.hydrate();
 
     expect(writes).toBe(1);
-    expect(reloadRuntime.getState().todos).toBeInstanceOf(Map);
-    expect(Array.from(reloadRuntime.getState().todos.values())).toEqual([
+    expect(reloadTestHarness.getState().todos).toBeInstanceOf(Map);
+    expect(Array.from(reloadTestHarness.getState().todos.values())).toEqual([
       { id: 1, title: 'stored', done: false },
       { id: 2, title: 'new', done: false },
     ]);

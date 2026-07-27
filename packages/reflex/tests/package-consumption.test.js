@@ -14,6 +14,7 @@ const expectedRuntimeExports = [
   'createReflexRuntime',
   'current',
   'enableMapSet',
+  'isRegistrationCollisionError',
   'original',
   'ReflexProvider',
   'registerHotReloadCallback',
@@ -31,6 +32,7 @@ const expectedVanillaRuntimeExports = [
   'createReflexRuntime',
   'current',
   'enableMapSet',
+  'isRegistrationCollisionError',
   'original',
   'shallowEqual',
 ].sort();
@@ -89,7 +91,7 @@ describe('Package Consumption Tests', () => {
   test('Built package files exist', () => {
     const distDir = path.join(__dirname, '../dist');
 
-    for (const entrypoint of ['index', 'vanilla', 'react']) {
+    for (const entrypoint of ['index', 'vanilla', 'react', 'devtools', 'testing', 'internal']) {
       expect(fs.existsSync(path.join(distDir, `${entrypoint}.mjs`))).toBe(true);
       expect(fs.existsSync(path.join(distDir, `${entrypoint}.cjs`))).toBe(true);
       expect(fs.existsSync(path.join(distDir, `${entrypoint}.d.mts`))).toBe(true);
@@ -135,6 +137,36 @@ describe('Package Consumption Tests', () => {
           default: './dist/react.cjs',
         },
       },
+      './devtools': {
+        import: {
+          types: './dist/devtools.d.mts',
+          default: './dist/devtools.mjs',
+        },
+        require: {
+          types: './dist/devtools.d.cts',
+          default: './dist/devtools.cjs',
+        },
+      },
+      './testing': {
+        import: {
+          types: './dist/testing.d.mts',
+          default: './dist/testing.mjs',
+        },
+        require: {
+          types: './dist/testing.d.cts',
+          default: './dist/testing.cjs',
+        },
+      },
+      './internal': {
+        import: {
+          types: './dist/internal.d.mts',
+          default: './dist/internal.mjs',
+        },
+        require: {
+          types: './dist/internal.d.cts',
+          default: './dist/internal.cjs',
+        },
+      },
     });
     expect(packageJson.files).toContain('docs');
     expect(packageJson.peerDependenciesMeta).toEqual({ react: { optional: true } });
@@ -158,14 +190,20 @@ describe('Package Consumption Tests', () => {
     const indexUrl = pathToFileURL(path.join(distDir, 'index.mjs')).href;
     const vanillaUrl = pathToFileURL(path.join(distDir, 'vanilla.mjs')).href;
     const reactUrl = pathToFileURL(path.join(distDir, 'react.mjs')).href;
+    const devtoolsUrl = pathToFileURL(path.join(distDir, 'devtools.mjs')).href;
+    const testingUrl = pathToFileURL(path.join(distDir, 'testing.mjs')).href;
     const script = `
       const root = await import(${JSON.stringify(indexUrl)});
       const vanilla = await import(${JSON.stringify(vanillaUrl)});
       const react = await import(${JSON.stringify(reactUrl)});
+      const devtools = await import(${JSON.stringify(devtoolsUrl)});
+      const testing = await import(${JSON.stringify(testingUrl)});
       process.stdout.write(JSON.stringify({
         vanillaKeys: Object.keys(vanilla).sort(),
         reactKeys: Object.keys(react).sort(),
         sameProvider: root.ReflexProvider === react.ReflexProvider,
+        devtoolsKeys: Object.keys(devtools).sort(),
+        testingKeys: Object.keys(testing).sort(),
       }));
     `;
     const result = JSON.parse(
@@ -178,6 +216,8 @@ describe('Package Consumption Tests', () => {
       vanillaKeys: expectedVanillaRuntimeExports,
       reactKeys: expectedReactRuntimeExports,
       sameProvider: true,
+      devtoolsKeys: ['createReflexInspector'],
+      testingKeys: ['createReflexTestHarness'],
     });
   });
 
@@ -195,10 +235,14 @@ describe('Package Consumption Tests', () => {
     const root = require(path.join(distDir, 'index.cjs'));
     const vanilla = require(path.join(distDir, 'vanilla.cjs'));
     const react = require(path.join(distDir, 'react.cjs'));
+    const devtools = require(path.join(distDir, 'devtools.cjs'));
+    const testing = require(path.join(distDir, 'testing.cjs'));
 
     expect(Object.keys(vanilla).sort()).toEqual(expectedVanillaRuntimeExports);
     expect(Object.keys(react).sort()).toEqual(expectedReactRuntimeExports);
     expect(root.ReflexProvider).toBe(react.ReflexProvider);
+    expect(Object.keys(devtools).sort()).toEqual(['createReflexInspector']);
+    expect(Object.keys(testing).sort()).toEqual(['createReflexTestHarness']);
   });
 
   test('Node with unset NODE_ENV warns when CJS and ESM initialize separate runtimes', () => {

@@ -23,7 +23,6 @@ import { acquireOperationInspector } from './operations/inspector.js';
 import type {
   ReflexInspector,
   ReflexInspectorSnapshot,
-  ReflexDevtoolsRuntime,
   ReflexTrace,
 } from './types.js';
 
@@ -31,7 +30,6 @@ export type {
   ReflexHandlerKeys,
   ReflexInspector,
   ReflexInspectorSnapshot,
-  ReflexDevtoolsRuntime,
   ReflexSubscriptionDiagnostic,
   ReflexTrace,
   ReflexTraceCallback,
@@ -1172,16 +1170,6 @@ function isLoopbackHostname(hostname: string): boolean {
       && Number(octet) <= 255);
 }
 
-function assertRuntime(runtime: ReflexDevtoolsRuntime): void {
-  const candidate = runtime as Partial<ReflexDevtoolsRuntime> | null | undefined;
-  if (typeof candidate?.createInspector !== 'function') {
-    throw new Error(
-      '[Reflex Devtools] enableDevtools() requires a Reflex runtime as its first argument. ' +
-      'Call enableDevtools(runtime, config).',
-    );
-  }
-}
-
 function assertInspector(inspector: ReflexInspector): void {
   const candidate = inspector as Partial<ReflexInspector> | null | undefined;
   const hasMethods =
@@ -1196,7 +1184,7 @@ function assertInspector(inspector: ReflexInspector): void {
 
   if (candidate?.apiVersion !== 2 || !hasMethods || !hasIdentity) {
     throw new Error(
-      '[Reflex Devtools] runtime.createInspector() must return a compatible Reflex inspector.',
+      '[Reflex Devtools] The supplied inspector must implement the compatible Reflex inspector protocol.',
     );
   }
 }
@@ -1209,15 +1197,13 @@ function validRuntimeIdentityText(value: unknown, maxLength: number): value is s
 }
 
 export function enableDevtools(
-  runtime: ReflexDevtoolsRuntime,
+  inspector: ReflexInspector,
   config?: DevtoolsConfig,
 ): () => void;
 export function enableDevtools(
-  runtime: ReflexDevtoolsRuntime,
+  inspector: ReflexInspector,
   config: DevtoolsConfig = {},
 ): () => void {
-  assertRuntime(runtime);
-  const inspector = runtime.createInspector();
   assertInspector(inspector);
 
   const operationAttachment = config.operations && config.enabled !== false

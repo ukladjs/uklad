@@ -1,4 +1,8 @@
-import { RegistrationStore } from '../../src/runtime/registrations';
+import {
+  isRegistrationCollisionError,
+  REGISTRATION_COLLISION_CODE,
+  RegistrationStore,
+} from '../../src/runtime/registrations';
 
 describe('RegistrationStore', () => {
   it('rejects duplicate ids and keeps stale handles from releasing a later registration', () => {
@@ -7,9 +11,18 @@ describe('RegistrationStore', () => {
     const secondHandler = () => 'second';
     const first = registrations.register('shared', firstHandler);
 
-    expect(() => registrations.register('shared', secondHandler)).toThrow(
-      "Registration 'shared' is already registered",
-    );
+    let collision: unknown;
+    try {
+      registrations.register('shared', secondHandler);
+    } catch (error) {
+      collision = error;
+    }
+    expect(isRegistrationCollisionError(collision)).toBe(true);
+    expect(collision).toMatchObject({
+      code: REGISTRATION_COLLISION_CODE,
+      registrationId: 'shared',
+      message: expect.stringContaining("Registration 'shared' is already registered"),
+    });
 
     registrations.clear('shared');
     const second = registrations.register('shared', secondHandler);

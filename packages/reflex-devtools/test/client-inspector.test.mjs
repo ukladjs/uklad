@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createReflexRuntime } from '@flexsurfer/reflex';
+import { createReflexRuntimeForTests as createReflexRuntime } from '@flexsurfer/reflex/internal';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
+import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { enableDevtools, logEvent } from '../dist/client/index.js';
 
 const waitForTurn = () => new Promise((resolve) => setImmediate(resolve));
@@ -166,11 +168,7 @@ function createFakeInspector(
 
   return {
     inspector,
-    runtime: {
-      createInspector() {
-        return inspector;
-      },
-    },
+    runtime: inspector,
     dispatches,
     evaluations,
     get snapshotCount() {
@@ -284,23 +282,22 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
   try {
     assert.throws(
       () => enableDevtools({ serverUrl: 'localhost:4000' }),
-      /requires a Reflex runtime/,
+      /supplied inspector must implement/,
     );
-    assert.throws(() => enableDevtools(fake.inspector), /requires a Reflex runtime/);
     assert.throws(
       () => enableDevtools({ createInspector: () => ({ ...fake.inspector, apiVersion: 1 }) }),
-      /runtime\.createInspector\(\) must return/,
+      /supplied inspector must implement/,
     );
     assert.throws(
       () => enableDevtools({ createInspector: () => ({ ...fake.inspector, runtimeName: '' }) }),
-      /runtime\.createInspector\(\) must return/,
+      /supplied inspector must implement/,
     );
     assert.throws(
       () =>
         enableDevtools({
           createInspector: () => ({ ...fake.inspector, runtimeId: ' runtime-test' }),
         }),
-      /runtime\.createInspector\(\) must return/,
+      /supplied inspector must implement/,
     );
     assert.throws(
       () =>
@@ -458,7 +455,7 @@ test('enables canonical operation snapshots through the DevTools configuration',
     const unsupported = createFakeInspector();
     assert.throws(
       () => enableDevtools(unsupported.runtime, { operations: true }),
-      /requires runtime\.createInspector\(\) to expose operation support/,
+      /requires the supplied inspector to expose operation support/,
     );
   } finally {
     cleanup?.();
@@ -506,12 +503,13 @@ test('executes a retained operation through a runtime inspector configured in De
     runtimeId: 'configured-operations',
     initialState: { count: 0 },
   });
+  const testHarness = createReflexTestHarness(runtime);
   runtime.regEvent('increment', ({ draftState }, amount) => {
     draftState.count += amount;
   });
   let cleanup;
   try {
-    cleanup = enableDevtools(runtime, { operations: true });
+    cleanup = enableDevtools(createReflexInspector(runtime), { operations: true });
     await waitForTurn();
     await waitForTurn();
     const socket = FakeWebSocket.instances[0];
@@ -524,10 +522,10 @@ test('executes a retained operation through a runtime inspector configured in De
         params: [2],
       },
     });
-    await runtime.flush();
+    await testHarness.flush();
     await waitForTurn();
 
-    assert.equal(runtime.getState().count, 2);
+    assert.equal(testHarness.getState().count, 2);
     const result = socket.sent.find((event) => event.type === 'reflex-operation-result')?.payload;
     assert.equal(result?.dispatchId, 'configured-operation-1');
     assert.equal(result?.result.operation.status, 'completed');

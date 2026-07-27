@@ -2,11 +2,13 @@
 // subscription cycle against the packed tarball, not the repo sources.
 import assert from 'node:assert';
 import { ReflexProvider, createReflexRuntime } from '@flexsurfer/reflex';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import { ReflexProvider as subpathReflexProvider } from '@flexsurfer/reflex/react';
 
 assert.strictEqual(ReflexProvider, subpathReflexProvider);
 
 const runtime = createReflexRuntime({ initialState: { count: 0 } });
+const testHarness = createReflexTestHarness(runtime);
 runtime.regEvent('inc', ({ draftState }) => {
   draftState.count += 1;
 });
@@ -17,10 +19,10 @@ runtime.regSub(
   () => [['count']],
 );
 
-runtime.dispatchSync(['inc']);
+testHarness.dispatchSync(['inc']);
 
-assert.strictEqual(runtime.getState().count, 1);
-assert.strictEqual(runtime.getSubscriptionValue(['count']), 1);
-assert.strictEqual(runtime.getSubscriptionValue(['doubled']), 2);
+assert.strictEqual(testHarness.getState().count, 1);
+assert.strictEqual(testHarness.getSubscriptionValue(['count']), 1);
+assert.strictEqual(testHarness.getSubscriptionValue(['doubled']), 2);
 
 console.log('[explicit] ESM runtime smoke passed');

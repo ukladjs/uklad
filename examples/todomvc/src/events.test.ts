@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { CoEffects, EventHandler } from '@flexsurfer/reflex';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 
 import type { TodoState } from './state';
 import { EVENT_IDS } from './event-ids';
@@ -8,7 +9,8 @@ import { todoRuntime } from './runtime';
 
 import './events';
 
-const getEventHandler = (id: string) => todoRuntime.getHandlers().event[id];
+const testHarness = createReflexTestHarness(todoRuntime);
+const getEventHandler = (id: string) => testHarness.getEventHandler(id);
 
 // Persistence is handled by @flexsurfer/reflex-persist (see storage.ts), so
 // handlers return no storage effects — they only mutate the draft state.

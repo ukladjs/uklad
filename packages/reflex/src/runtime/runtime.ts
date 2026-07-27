@@ -18,7 +18,6 @@ import {
   removeTraceCallback,
 } from './tracing';
 import { defaultErrorHandler } from '../events/runner';
-import { createReflexInspector } from '../inspector';
 import {
   createRuntimeCore,
   isRuntimeDisposed,
@@ -34,12 +33,14 @@ import {
 } from './validation';
 
 import type { TraceCallback } from '../core/tracing-types';
-import type { ReflexInspector } from '../inspector-types';
 import type { HandlerRegistry } from './handler-types';
 import type { RegistrationHandle } from './registrations';
 import type { SubscriptionDiagnostic } from './subscriptions/types';
 import type {
   ReflexRuntime,
+  ReflexRuntimeAdmin,
+  ReflexRuntimeClient,
+  ReflexRegistrar,
   RuntimeEventHandler,
   RuntimeStateRevisions,
   RuntimeSubscriptionHandler,
@@ -56,7 +57,10 @@ import type {
 } from '../types';
 
 export type {
+  ReflexRegistrar,
   ReflexRuntime,
+  ReflexRuntimeAdmin,
+  ReflexRuntimeClient,
   RuntimeEventHandler,
   RuntimeStateRevisions,
   RuntimeSubscriptionHandler,
@@ -67,6 +71,10 @@ interface ModuleInstallation {
   cleanup: ReflexDisposer | undefined;
   disposed: boolean;
 }
+
+const RUNTIME_IMPLEMENTATIONS = new WeakMap<object, ReflexRuntimeImplementation<any>>();
+const RUNTIME_OWNERS = new WeakSet<object>();
+const RUNTIME_CLIENTS_BY_CORE = new WeakMap<RuntimeCore, ReflexRuntimeClient<any>>();
 
 type StateInferredContracts<TState extends Record<string, any>> = ReflexContracts & {
   readonly state: TState;
@@ -82,6 +90,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   private readonly installations = new Set<ModuleInstallation>();
   private readonly watches = new Set<ReflexDisposer>();
   private readonly renderSubscriptions = new Set<ReflexDisposer>();
+  private clientRuntime: ReflexRuntimeClient<TContracts> | undefined;
 
   constructor(core: RuntimeCore, initialState: ContractState<TContracts>) {
     assertStateRecord(initialState, 'initialState');
@@ -91,8 +100,29 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     core.state.initialize<ContractState<TContracts>>(initialState);
   }
 
-  static getCoreForTests(runtime: ReflexRuntimeImplementation<any>): RuntimeCore {
-    return runtime.#core;
+  getCoreForInternalUse(): RuntimeCore {
+    return this.#core;
+  }
+
+  createPublicRuntime(): ReflexRuntime<TContracts> {
+    const client = this.getClientForInternalUse();
+    return Object.freeze({
+      ...client,
+      runtimeInstanceId: this.runtimeInstanceId,
+      registerModule: this.registerModule.bind(this),
+      dispose: this.dispose.bind(this),
+    }) as ReflexRuntime<TContracts>;
+  }
+
+  getClientForInternalUse(): ReflexRuntimeClient<TContracts> {
+    this.clientRuntime ??= Object.freeze({
+      runtimeId: this.runtimeId,
+      runtimeName: this.runtimeName,
+      dispatch: this.dispatch.bind(this),
+      debounceAndDispatch: this.debounceAndDispatch.bind(this),
+      throttleAndDispatch: this.throttleAndDispatch.bind(this),
+    }) as ReflexRuntimeClient<TContracts>;
+    return this.clientRuntime!;
   }
 
   get runtimeId(): string {
@@ -155,7 +185,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     this.recordRegistration(this.#core.events.registerEvent(id, handler as any, options));
   }
 
-  regEffect(id: Id, handler: (value: any) => void): void {
+  regEffect(id: Id, handler: (value: any, runtime: ReflexRuntimeClient<any>) => void): void {
     this.assertUsable();
     this.recordRegistration(this.#core.registry.fx.register(id, handler));
   }
@@ -376,7 +406,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return this.#core.subscriptions.diagnostics();
   }
 
-  registerModule(module: ReflexModule<ReflexRuntime<TContracts>>): ReflexDisposer {
+  registerModule(module: ReflexModule<ReflexRegistrar<TContracts>>): ReflexDisposer {
     this.assertUsable();
     if (this.activeInstallation) {
       throw new Error('[reflex] registerModule installers cannot be nested.');
@@ -389,7 +419,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     };
     this.activeInstallation = installation;
     try {
-      const cleanup = module(this as unknown as ReflexRuntime<TContracts>);
+      const cleanup = module(this.createRegistrar());
       if (cleanup) installation.cleanup = cleanup;
       this.installations.add(installation);
     } catch (error) {
@@ -403,9 +433,16 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return () => this.disposeInstallation(installation);
   }
 
-  createInspector(): ReflexInspector {
-    this.assertUsable();
-    return createReflexInspector(this.#core);
+  private createRegistrar(): ReflexRegistrar<TContracts> {
+    return Object.freeze({
+      regEvent: this.regEvent.bind(this),
+      regEffect: this.regEffect.bind(this),
+      regCoeffect: this.regCoeffect.bind(this),
+      regEventErrorHandler: this.regEventErrorHandler.bind(this),
+      regRootSub: this.regRootSub.bind(this),
+      regSub: this.regSub.bind(this),
+      registerInterceptor: this.registerInterceptor.bind(this),
+    });
   }
 
   dispose(): void {
@@ -482,25 +519,156 @@ export function createReflexRuntime<TState extends Record<string, any>>(
 ): ReflexRuntime<StateInferredContracts<TState>>;
 export function createReflexRuntime(options: CreateReflexRuntimeOptions<any>): ReflexRuntime<any> {
   const core = createRuntimeCore(options);
-  return new ReflexRuntimeImplementation(
-    core,
-    options.initialState,
-  ) as unknown as ReflexRuntime<any>;
+  const implementation = new ReflexRuntimeImplementation(core, options.initialState);
+  const runtime = implementation.createPublicRuntime();
+  const client = implementation.getClientForInternalUse();
+  RUNTIME_IMPLEMENTATIONS.set(runtime, implementation);
+  RUNTIME_IMPLEMENTATIONS.set(client, implementation);
+  RUNTIME_OWNERS.add(runtime);
+  RUNTIME_CLIENTS_BY_CORE.set(core, client);
+  return runtime;
+}
+
+/** @internal Test-only owner facade with administrative operations attached. */
+export function createReflexRuntimeForTests<
+  TContracts extends ReflexContracts,
+  TState extends ContractState<TContracts> = ContractState<TContracts>,
+>(
+  options: NonArrayRuntimeOptions<TState>,
+): ReflexRuntime<TContracts> & ReflexRegistrar<TContracts> & ReflexRuntimeAdmin<TContracts>;
+export function createReflexRuntimeForTests<TState extends Record<string, any>>(
+  options: NonArrayRuntimeOptions<TState>,
+): ReflexRuntime<StateInferredContracts<TState>> &
+  ReflexRegistrar<StateInferredContracts<TState>> &
+  ReflexRuntimeAdmin<StateInferredContracts<TState>>;
+export function createReflexRuntimeForTests(
+  options: CreateReflexRuntimeOptions<any>,
+): ReflexRuntime<any> & ReflexRegistrar<any> & ReflexRuntimeAdmin<any> {
+  const owner = createReflexRuntime(options);
+  const implementation = getRuntimeOwnerImplementation(
+    owner,
+    '[reflex] Expected a runtime created by createReflexRuntime().',
+  );
+  const testRuntime = Object.freeze({
+    ...owner,
+    regEvent: implementation.regEvent.bind(implementation),
+    regEffect: implementation.regEffect.bind(implementation),
+    regCoeffect: implementation.regCoeffect.bind(implementation),
+    regEventErrorHandler: implementation.regEventErrorHandler.bind(implementation),
+    regRootSub: implementation.regRootSub.bind(implementation),
+    regSub: implementation.regSub.bind(implementation),
+    registerInterceptor: implementation.registerInterceptor.bind(implementation),
+    getState: implementation.getState.bind(implementation),
+    flush: implementation.flush.bind(implementation),
+    dispatchSync: implementation.dispatchSync.bind(implementation),
+    getStateRevisions: implementation.getStateRevisions.bind(implementation),
+    restoreState: implementation.restoreState.bind(implementation),
+    getSubscriptionValue: implementation.getSubscriptionValue.bind(implementation),
+    watchSubscription: implementation.watchSubscription.bind(implementation),
+    getInterceptors: implementation.getInterceptors.bind(implementation),
+    clearInterceptors: implementation.clearInterceptors.bind(implementation),
+    setEqualityCheck: implementation.setEqualityCheck.bind(implementation),
+    getEqualityCheck: implementation.getEqualityCheck.bind(implementation),
+    enableTracing: implementation.enableTracing.bind(implementation),
+    disableTracing: implementation.disableTracing.bind(implementation),
+    enableTracePrint: implementation.enableTracePrint.bind(implementation),
+    registerTraceCallback: implementation.registerTraceCallback.bind(implementation),
+    removeTraceCallback: implementation.removeTraceCallback.bind(implementation),
+    getHandlers: implementation.getHandlers.bind(implementation),
+    clearHandlers: implementation.clearHandlers.bind(implementation),
+    clearSubs: implementation.clearSubs.bind(implementation),
+    clearSubscriptionCache: implementation.clearSubscriptionCache.bind(implementation),
+    getSubscriptionDiagnostics: implementation.getSubscriptionDiagnostics.bind(implementation),
+  });
+  RUNTIME_IMPLEMENTATIONS.set(testRuntime, implementation);
+  RUNTIME_OWNERS.add(testRuntime);
+  return testRuntime as unknown as ReflexRuntime<any> &
+    ReflexRegistrar<any> &
+    ReflexRuntimeAdmin<any>;
 }
 
 /** @internal Test-only access for focused engine subsystem tests. */
-export function getRuntimeCoreForTests(runtime: ReflexRuntime<any>): RuntimeCore {
-  return ReflexRuntimeImplementation.getCoreForTests(
-    getRuntimeImplementation(
-      runtime,
-      '[reflex] Expected a runtime created by createReflexRuntime().',
-    ),
-  );
+export function getRuntimeCoreForTests<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntime<TContracts>,
+): RuntimeCore {
+  return getRuntimeOwnerImplementation(
+    runtime,
+    '[reflex] Expected a runtime created by createReflexRuntime().',
+  ).getCoreForInternalUse();
+}
+
+/** @internal Administrative access used by testing and development adapters. */
+export function getRuntimeAdminForTests<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntime<TContracts>,
+): ReflexRuntimeAdmin<TContracts> {
+  return getRuntimeOwnerImplementation(
+    runtime,
+    '[reflex] Expected a runtime created by createReflexRuntime().',
+  ) as unknown as ReflexRuntimeAdmin<TContracts>;
+}
+
+/** @internal Core access used by the separate DevTools entrypoint. */
+export function getRuntimeCoreForDevtools(runtime: object): RuntimeCore {
+  return getRuntimeOwnerImplementation(
+    runtime,
+    '[reflex] DevTools require a runtime created by createReflexRuntime().',
+  ).getCoreForInternalUse();
+}
+
+/** @internal Return the stable app-consumer facade for a runtime owner. */
+export function getRuntimeClient<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntime<TContracts>,
+): ReflexRuntimeClient<TContracts> {
+  return getRuntimeOwnerImplementation(
+    runtime,
+    '[reflex] ReflexProvider requires a runtime created by createReflexRuntime().',
+  ).getClientForInternalUse() as ReflexRuntimeClient<TContracts>;
+}
+
+/** @internal Normalize an owner or client facade to the stable client identity. */
+export function getRuntimeClientForInternalUse<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntimeClient<TContracts>,
+): ReflexRuntimeClient<TContracts> {
+  return getRuntimeImplementation(
+    runtime,
+    '[reflex] Expected a runtime created by createReflexRuntime().',
+  ).getClientForInternalUse() as ReflexRuntimeClient<TContracts>;
+}
+
+/** @internal Resolve the effect capability associated with one runtime core. */
+export function getRuntimeClientForCore(runtime: RuntimeCore): ReflexRuntimeClient<any> {
+  const client = RUNTIME_CLIENTS_BY_CORE.get(runtime);
+  if (!client) throw new Error('[reflex] Expected a runtime created by createReflexRuntime().');
+  return client;
+}
+
+/** @internal Subscription access used by the React binding without widening its client API. */
+export function getSubscriptionValueForInternalUse<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntimeClient<TContracts>,
+  query: ContractSubscribeVector<TContracts>,
+): unknown {
+  return getRuntimeImplementation(
+    runtime,
+    '[reflex] Expected a runtime created by createReflexRuntime().',
+  ).getSubscriptionValue(query as SubVector);
+}
+
+/** @internal Subscription access used by the React binding without widening its client API. */
+export function watchSubscriptionForInternalUse<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntimeClient<TContracts>,
+  query: ContractSubscribeVector<TContracts>,
+  listener: WatchSubscriptionListener<any>,
+  options?: WatchSubscriptionOptions,
+): ReflexDisposer {
+  return getRuntimeImplementation(
+    runtime,
+    '[reflex] Expected a runtime created by createReflexRuntime().',
+  ).watchSubscription(query as SubVector, listener, options);
 }
 
 /** @internal Register the React binding as a render listener. */
 export function subscribeForRender(
-  runtime: ReflexRuntime<any>,
+  runtime: ReflexRuntimeClient<any>,
   query: ContractSubscribeVector<any>,
   listener: () => void,
   componentName?: string,
@@ -512,22 +680,29 @@ export function subscribeForRender(
 }
 
 /** @internal Clear one explicit runtime's subscriptions for an imminent HMR remount. */
-export function clearRuntimeSubsForHotReload(
-  runtime: ReflexRuntime<any>,
+export function clearRuntimeSubsForHotReload<TContracts extends ReflexContracts>(
+  runtime: ReflexRuntime<TContracts>,
   subscriptionIds?: readonly Id[],
 ): void {
-  getRuntimeImplementation(
+  getRuntimeOwnerImplementation(
     runtime,
     '[reflex] setupSubsHotReload requires a runtime created by createReflexRuntime().',
   ).clearSubsForHotReload(subscriptionIds);
 }
 
-function getRuntimeImplementation(
-  runtime: ReflexRuntime<any>,
+function getRuntimeOwnerImplementation(
+  runtime: object,
   errorMessage: string,
 ): ReflexRuntimeImplementation<any> {
-  if (!(runtime instanceof ReflexRuntimeImplementation)) {
-    throw new Error(errorMessage);
-  }
-  return runtime;
+  if (!RUNTIME_OWNERS.has(runtime)) throw new Error(errorMessage);
+  return getRuntimeImplementation(runtime, errorMessage);
+}
+
+function getRuntimeImplementation(
+  runtime: object,
+  errorMessage: string,
+): ReflexRuntimeImplementation<any> {
+  const implementation = RUNTIME_IMPLEMENTATIONS.get(runtime);
+  if (!implementation) throw new Error(errorMessage);
+  return implementation;
 }

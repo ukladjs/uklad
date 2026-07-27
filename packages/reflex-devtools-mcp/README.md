@@ -117,9 +117,10 @@ The bridge needs a DevTools server with a connected app to talk to. In the proje
 2. **Enable it in development** (app entry point):
   ```typescript
    import { enableDevtools } from '@flexsurfer/reflex-devtools';
+   import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 
    if (import.meta.env.DEV) {
-     enableDevtools(runtime, {
+     enableDevtools(createReflexInspector(runtime), {
        operations: true,
      });
    }
@@ -262,7 +263,7 @@ Retrieve the current application state state — scoped by path whenever possibl
 ### 5. `dispatch_and_wait`
 
 The preferred development action for a runtime enabled with
-`enableDevtools(runtime, { operations: true })`. It waits for the root event and all joined
+`enableDevtools(createReflexInspector(runtime), { operations: true })`. It waits for the root event and all joined
 synchronous descendants and returns the DevTools-owned operation snapshot. The
 snapshot includes operation identity/status, event lineage, committed and
 published revisions, pending work, and errors. It is authoritative even when
@@ -367,6 +368,7 @@ Reflex's state layer is React-free, so the app an agent drives does not need a b
 // resolves dependencies through vite aliases)
 import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
+import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { headlessModule } from './module.headless';
 
 const runtime = createReflexRuntime({
@@ -376,7 +378,7 @@ const runtime = createReflexRuntime({
 });
 runtime.registerModule(headlessModule); // events, subs, and Node-safe adapters
 
-enableDevtools(runtime, {
+enableDevtools(createReflexInspector(runtime), {
   operations: true,
   // runtime: 'headless' is auto-detected (no window)
   effectMode: 'safe',

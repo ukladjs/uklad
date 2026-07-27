@@ -3,13 +3,15 @@
 import reflex = require('@flexsurfer/reflex');
 import reflexReact = require('@flexsurfer/reflex/react');
 import reflexVanilla = require('@flexsurfer/reflex/vanilla');
+import reflexTesting = require('@flexsurfer/reflex/testing');
 import type { EventRegistrationOptions, Trace } from '@flexsurfer/reflex';
 
 const runtime = reflexVanilla.createReflexRuntime({ initialState: {} });
+const testHarness = reflexTesting.createReflexTestHarness(runtime);
 runtime.dispatch(['legacy/cjs']);
 runtime.regEvent('legacy/cjs', () => undefined);
 const value: unknown = reflex.useSubscription(['legacy/cjs']);
-const state = runtime.getState();
+const state = testHarness.getState();
 const options: EventRegistrationOptions = { coeffects: [['now']] };
 const trace: Trace | undefined = undefined;
 

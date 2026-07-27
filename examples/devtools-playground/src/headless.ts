@@ -17,6 +17,8 @@
  * run the same file under tsx instead.
  */
 import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex/vanilla';
+import { createReflexInspector } from '@flexsurfer/reflex/devtools';
+import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 import { coeffectModes, installHeadlessCoeffects } from './coeffects.headless';
 import { createInitialState, type PlaygroundContracts } from './state';
@@ -43,9 +45,12 @@ headlessRuntime.registerModule(installHeadlessCoeffects);
 // active explicitly. It makes the headless playground exercise the same
 // publication path a mounted counter panel would use, and lets
 // dispatch_and_wait demonstrate its settled subscription evidence.
-headlessRuntime.watchSubscription(['counter'], () => {});
+createReflexTestHarness<PlaygroundContracts>(headlessRuntime).watchSubscription(
+  ['counter'],
+  () => {},
+);
 
-enableDevtools(headlessRuntime, {
+enableDevtools(createReflexInspector(headlessRuntime), {
   serverUrl,
   operations: true,
   // runtime: 'headless' is auto-detected (no window); declare the

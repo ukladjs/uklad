@@ -143,13 +143,14 @@ function collectChangedRoots(
   oldState: any,
   newState: any,
 ): SubscriptionNode<any>[] {
+  // Walk the root subscriptions rather than the state keys: only a key with a
+  // root subscription can produce a dirty root, and there are usually far
+  // fewer of those than there are state keys. Iterating the state instead
+  // would allocate two key arrays and a Set on every publication to reach the
+  // same answer.
   const dirtyRoots: SubscriptionNode<any>[] = [];
-  const keys = new Set([...Object.keys(oldState), ...Object.keys(newState)]);
-  for (const key of keys) {
-    if (Object.is(oldState[key], newState[key])) continue;
-
-    const subId = runtime.subscriptions.getRootId(key);
-    if (subId === undefined) continue;
+  for (const [sourceKey, subId] of runtime.subscriptions.rootSubIdBySource) {
+    if (Object.is(oldState[sourceKey], newState[sourceKey])) continue;
 
     const subscription = runtime.subscriptions.getCached(getRootSubKey(subId));
     if (subscription) dirtyRoots.push(subscription);

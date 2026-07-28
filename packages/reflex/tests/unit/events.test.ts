@@ -760,6 +760,31 @@ describe('regEvent with cofx', () => {
       expect(state.processedByGlobal).toBe(true);
     });
 
+    it('should resolve global interceptors at dispatch time for registered events', async () => {
+      const seenValues: unknown[] = [];
+
+      regEvent('test-dynamic-global', ({ dynamicValue }) => {
+        seenValues.push(dynamicValue);
+      });
+
+      addInterceptor({
+        id: 'dynamic-global',
+        before: (context: InterceptorContext) => {
+          context.coeffects.dynamicValue = 'enabled';
+          return context;
+        },
+      });
+
+      dispatch(['test-dynamic-global']);
+      await waitForScheduled();
+
+      clearInterceptors('dynamic-global');
+      dispatch(['test-dynamic-global']);
+      await waitForScheduled();
+
+      expect(seenValues).toEqual(['enabled', undefined]);
+    });
+
     it('should execute multiple global interceptors in order', async () => {
       const executionOrder: string[] = [];
 

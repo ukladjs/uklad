@@ -15,6 +15,7 @@ import { EventQueue, getEventScheduler } from '../events/router';
 import { registerBuiltInEffects } from '../events/built-in-effects';
 import { executeEventEnvelope } from '../events/execution';
 import { isInterceptor } from '../events/interceptors-executor';
+import { createEventHandlerInterceptor } from '../events/runner';
 
 import type { ExecutionEnvelope } from '../events/envelope';
 import type { RegistrationHandle } from './registrations';
@@ -33,6 +34,14 @@ const EMPTY_INTERCEPTORS: readonly Interceptor[] = Object.freeze([]);
 interface RuntimeEventDefinition {
   readonly handler: EventHandler<any, any>;
   readonly interceptors: readonly Interceptor[];
+  /**
+   * The complete chain this event executes, built once at registration.
+   *
+   * Composing it per dispatch would allocate the array, the handler
+   * interceptor, and its closure on every event, none of which vary between
+   * dispatches of the same definition.
+   */
+  readonly chain: Interceptor[];
 }
 
 /** Runtime-owned event orchestration: queueing, dispatch, execution, and rate limits. */
@@ -52,20 +61,12 @@ export class EventRuntime {
   readonly debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   readonly throttledEventIds: Set<string> = new Set();
   readonly throttleTimers: Set<ReturnType<typeof setTimeout>> = new Set();
-  readonly injectGlobalInterceptors: InternalInterceptor;
   private readonly getRuntime: () => RuntimeCore;
   private readonly globalInterceptors = new RegistrationStore<Interceptor>();
   private readonly eventDefinitions = new Map<string, RuntimeEventDefinition>();
 
   constructor(getRuntime: () => RuntimeCore) {
     this.getRuntime = getRuntime;
-    this.injectGlobalInterceptors = {
-      id: 'inject-global-interceptors',
-      before(context) {
-        context.queue = [...getRuntime().events.getInterceptors(), ...context.queue];
-        return context;
-      },
-    };
     this.queue = new EventQueue<ExecutionEnvelope>(
       (envelope) => this.execute(envelope),
       (envelopes, reason, error) => {
@@ -89,7 +90,7 @@ export class EventRuntime {
   ): RegistrationHandle {
     const interceptors = this.buildEventInterceptors(id, options);
     const registration = this.getRuntime().registry.event.register(id, handler);
-    this.eventDefinitions.set(id, createEventDefinition(handler, interceptors));
+    this.eventDefinitions.set(id, createEventDefinition(this.getRuntime(), handler, interceptors));
     return createRegistrationHandle({
       isActive: () => registration.active,
       release: (): boolean => {
@@ -97,7 +98,10 @@ export class EventRuntime {
         const currentHandler = this.getRuntime().registry.event.get(id);
         if (currentHandler === undefined) this.eventDefinitions.delete(id);
         else
-          this.eventDefinitions.set(id, createEventDefinition(currentHandler, EMPTY_INTERCEPTORS));
+          this.eventDefinitions.set(
+            id,
+            createEventDefinition(this.getRuntime(), currentHandler, EMPTY_INTERCEPTORS),
+          );
         return true;
       },
     });
@@ -114,7 +118,10 @@ export class EventRuntime {
   setEventInterceptors(id: string, interceptors: readonly Interceptor[]): void {
     const handler = this.getRuntime().registry.event.get(id);
     if (handler !== undefined)
-      this.eventDefinitions.set(id, createEventDefinition(handler, interceptors));
+      this.eventDefinitions.set(
+        id,
+        createEventDefinition(this.getRuntime(), handler, interceptors),
+      );
   }
 
   clearEventDefinitions(id?: string): void {
@@ -124,6 +131,10 @@ export class EventRuntime {
 
   registerInterceptor(interceptor: Interceptor): RegistrationHandle {
     return this.globalInterceptors.register(interceptor.id, interceptor);
+  }
+
+  get hasGlobalInterceptors(): boolean {
+    return this.globalInterceptors.size > 0;
   }
 
   getInterceptors(): Interceptor[] {
@@ -336,12 +347,16 @@ function getInjectCofxInterceptor(
 }
 
 function createEventDefinition(
+  runtime: RuntimeCore,
   handler: EventHandler<any, any>,
   interceptors: readonly Interceptor[],
 ): RuntimeEventDefinition {
+  const ownedInterceptors =
+    interceptors.length === 0 ? EMPTY_INTERCEPTORS : Object.freeze([...interceptors]);
   return Object.freeze({
     handler,
-    interceptors: interceptors.length === 0 ? EMPTY_INTERCEPTORS : Object.freeze([...interceptors]),
+    interceptors: ownedInterceptors,
+    chain: [...ownedInterceptors, createEventHandlerInterceptor(runtime, handler)],
   });
 }
 

@@ -55,13 +55,7 @@ export function runEvent(runtime: RuntimeCore, event: EventVector): EventRunResu
     });
   }
 
-  const interceptors = [
-    runtime.events.injectGlobalInterceptors,
-    ...definition.interceptors,
-    createEventHandlerInterceptor(runtime, definition.handler),
-  ];
-
-  const context = execute(runtime, event, interceptors) as Context & {
+  const context = execute(runtime, event, definition.chain) as Context & {
     readonly runtimePatches?: readonly Patch[];
     readonly runtimeReversePatches?: readonly Patch[];
   };
@@ -84,7 +78,7 @@ export function runEvent(runtime: RuntimeCore, event: EventVector): EventRunResu
   });
 }
 
-function createEventHandlerInterceptor(
+export function createEventHandlerInterceptor(
   runtime: RuntimeCore,
   handler: EventHandler<any>,
 ): InternalInterceptor {

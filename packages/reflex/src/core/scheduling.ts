@@ -46,6 +46,54 @@ export function scheduleAfterRender(callback: () => void): void {
  * React Native uses `setImmediate`, browsers use `MessageChannel`, and other
  * environments fall back to a zero-delay timer.
  */
+/**
+ * @internal Build the browser tick scheduler over one lazily created channel.
+ *
+ * A channel per call would allocate two ports and a message for every queue
+ * cycle. One shared channel plus a FIFO gives the same ordering, because ports
+ * deliver in post order and each `postMessage` drains exactly one callback.
+ *
+ * The channel factory is a parameter so this path can be exercised where
+ * `setImmediate` exists — deleting that global to reach it is not an option,
+ * since the test runner itself depends on it.
+ */
+export function createMessageChannelScheduler(
+  createChannel: () => MessageChannel,
+): (callback: () => void) => void {
+  let port: MessagePort | undefined;
+  const pending: Array<() => void> = [];
+  let cursor = 0;
+
+  const drainOne = (): void => {
+    const callback = pending[cursor];
+    // Release the reference immediately; a long-lived queue must not retain
+    // callbacks it has already run.
+    pending[cursor++] = noop;
+    if (cursor >= pending.length) {
+      pending.length = 0;
+      cursor = 0;
+    }
+    callback?.();
+  };
+
+  return (callback: () => void): void => {
+    if (port === undefined) {
+      const channel = createChannel();
+      channel.port1.onmessage = drainOne;
+      port = channel.port2;
+    }
+    pending.push(callback);
+    port.postMessage(undefined);
+  };
+}
+
+function noop(): void {}
+
+const scheduleViaMessageChannel =
+  typeof MessageChannel === 'undefined'
+    ? undefined
+    : createMessageChannelScheduler(() => new MessageChannel());
+
 export function scheduleNextTick(callback: () => void): void {
   const setImmediate = (globalThis as { setImmediate?: (task: () => void) => void }).setImmediate;
   if (typeof setImmediate === 'function') {
@@ -53,10 +101,8 @@ export function scheduleNextTick(callback: () => void): void {
     return;
   }
 
-  if (typeof MessageChannel !== 'undefined') {
-    const { port1, port2 } = new MessageChannel();
-    port1.onmessage = () => callback();
-    port2.postMessage(undefined);
+  if (scheduleViaMessageChannel !== undefined) {
+    scheduleViaMessageChannel(callback);
     return;
   }
 

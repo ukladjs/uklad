@@ -67,6 +67,11 @@ export class RegistrationStore<T> {
   private readonly entries = new Map<string, RegistrationEntry<T>>();
   private readonly systemValues = new Map<string, T>();
 
+  /** Number of installed registrations, including system baselines. */
+  get size(): number {
+    return this.entries.size;
+  }
+
   get(id: Id): T | undefined {
     return this.values[id];
   }

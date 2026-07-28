@@ -38,7 +38,7 @@ export function execute(
   event: EventVector,
   interceptors: Interceptor[],
 ): Context {
-  const context = createContext(event, interceptors, runtime.state.get<State>());
+  const context = createContext(runtime, event, interceptors, runtime.state.get<State>());
   const errorHandler: ErrorHandler | undefined = runtime.registry.error.get('event-handler');
 
   if (!errorHandler) {
@@ -190,6 +190,7 @@ function changeDirection(context: Context): Context {
 }
 
 function createContext(
+  runtime: RuntimeCore,
   event: EventVector,
   interceptors: Interceptor[],
   previousState: State,
@@ -199,12 +200,20 @@ function createContext(
     draftState: {},
   };
 
+  // Global interceptors are resolved here rather than baked into the event's
+  // chain, because they can be added or removed after the event was
+  // registered. Composing them directly saves the chain an injector entry,
+  // which every event would otherwise pay for in both phases.
+  const globalInterceptors = runtime.events.hasGlobalInterceptors
+    ? runtime.events.getInterceptors()
+    : undefined;
+
   return {
     coeffects,
     previousState,
     effects: [],
     invalidEffects: [],
-    queue: [...interceptors],
+    queue: globalInterceptors ? [...globalInterceptors, ...interceptors] : [...interceptors],
     stack: [],
     originalException: false,
   };

@@ -1,5 +1,3 @@
-import type { DefaultAppState, EffectPayloads, EventPayloads, SubPayloads } from './types';
-
 /**
  * Store-local type contract consumed by an explicit Reflex runtime.
  *
@@ -35,17 +33,31 @@ export interface PermissiveReflexContracts extends ReflexContracts {
 }
 
 /**
- * Contract derived from the legacy module-augmentation anchors.
+ * The ambient contract for an application that owns a single runtime.
  *
- * Its sections point at the existing module-augmentation anchors. Empty
- * payload maps are normalized to permissive maps by the extraction helpers.
+ * Augment it once, next to the id files, and the package-level entry points
+ * that cannot receive an explicit type argument — `useSubscription` above all,
+ * because a React context type is fixed when the context is created — check
+ * against it:
+ *
+ * ```ts
+ * declare module '@flexsurfer/reflex' {
+ *   interface DefaultContracts {
+ *     state: TodoState;
+ *     events: { 'todos/add': [title: string] };
+ *     subscriptions: { 'todos/all': { params: []; result: Todo[] } };
+ *   }
+ * }
+ * ```
+ *
+ * It is a `ReflexContracts`, not a parallel system: the same declaration can be
+ * passed explicitly to `createReflexRuntime<T>()` or `createReflexHooks<T>()`.
+ * Applications that own several runtimes should do exactly that instead, since
+ * one ambient default cannot describe two different runtimes.
+ *
+ * While unaugmented every section is absent, so the API stays permissive.
  */
-export interface DefaultReflexContracts extends ReflexContracts {
-  readonly state: DefaultAppState;
-  readonly events: EventPayloads;
-  readonly effects: EffectPayloads;
-  readonly subscriptions: SubPayloads;
-}
+export interface DefaultContracts extends ReflexContracts {}
 
 /** Options shared by `createReflexRuntime` implementations. */
 export interface CreateReflexRuntimeOptions<TState extends Record<string, any>> {

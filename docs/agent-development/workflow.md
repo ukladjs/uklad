@@ -37,7 +37,7 @@ What the agent must _not_ need to do: read `events.ts` / `subs.ts` end-to-end. O
 
 The agent writes, in order: the state key (`selectedCategory: null`), event ids, handlers (`expenses/set-category`, extend `expenses/add` with a category), sub ids and subs (`expenses/visible`, `expenses/category-total`), the persistence effect wiring, and the two components.
 
-**No MCP is used in this phase, and that is by design.** The verification signal here is `tsc` against the typed payload maps (`EventPayloads` / `SubPayloads` / `AppState`): a wrong payload, a typo'd id in `dispatch`, a mis-shaped sub result — all become compile errors, the cheapest feedback there is. Roughly 70% of the agent's total effort on this task happens in this phase, which is why the scaffolder, the typed maps, and the static manifest matter more to overall context cost than any runtime tool.
+**No MCP is used in this phase, and that is by design.** The verification signal here is `tsc` against the runtime's declared `ReflexContracts`: a wrong payload, a typo'd id in `dispatch`, a mis-shaped sub result — all become compile errors, the cheapest feedback there is. Roughly 70% of the agent's total effort on this task happens in this phase, which is why the scaffolder, the declared contract, and the static manifest matter more to overall context cost than any runtime tool.
 
 The MCP earns its keep in everything that follows.
 

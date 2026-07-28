@@ -21,7 +21,6 @@ import type { RegistrationHandle } from './registrations';
 import type { RuntimeProbeParent } from './probe-types';
 import type {
   Context,
-  DispatchVector,
   EventHandler,
   EventRegistrationOptions,
   EventVector,
@@ -138,7 +137,7 @@ export class EventRuntime {
     executeEventEnvelope(this.getRuntime(), envelope);
   }
 
-  dispatch(event: DispatchVector, requireTrackedOperation = false): ExecutionEnvelope | undefined {
+  dispatch(event: EventVector, requireTrackedOperation = false): ExecutionEnvelope | undefined {
     const runtime = this.getRuntime();
     if (isRuntimeDisposed(runtime)) return;
     if (!isEventVector(event)) {
@@ -171,7 +170,7 @@ export class EventRuntime {
    * that keeps mutating what it dispatched fails at the mutation site rather
    * than silently changing what the handler later receives.
    */
-  dispatchOwned(event: DispatchVector): void {
+  dispatchOwned(event: EventVector): void {
     if (!isEventVector(event)) {
       this.dispatch(event);
       return;
@@ -179,7 +178,7 @@ export class EventRuntime {
     this.dispatch(freezeDispatchedEvent(event));
   }
 
-  dispatchSync(event: DispatchVector): void {
+  dispatchSync(event: EventVector): void {
     const runtime = this.getRuntime();
     assertRuntimeUsable(runtime);
     if (!isEventVector(event)) {
@@ -238,7 +237,7 @@ export class EventRuntime {
     this.delayedEffectTimers.clear();
   }
 
-  debounce(event: DispatchVector, durationMs: number): void {
+  debounce(event: EventVector, durationMs: number): void {
     const acceptedEvent = freezeDispatchedEvent(event);
     const eventId = acceptedEvent[0];
     this.clearRateLimit(eventId);
@@ -249,7 +248,7 @@ export class EventRuntime {
     this.debounceTimers.set(eventId, timeout);
   }
 
-  throttle(event: DispatchVector, durationMs: number): void {
+  throttle(event: EventVector, durationMs: number): void {
     const acceptedEvent = freezeDispatchedEvent(event);
     const eventId = acceptedEvent[0];
     if (this.throttledEventIds.has(eventId)) return;

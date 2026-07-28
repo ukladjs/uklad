@@ -2,7 +2,7 @@ import { consoleLog } from '../core/logging';
 import { isEventVector } from '../core/validation';
 import { type RuntimeCore } from '../runtime/core';
 
-import type { DispatchLaterEffect, DispatchVector, EventVector } from '../types';
+import type { DispatchLaterEffect, EventVector } from '../types';
 
 export const DISPATCH_LATER = 'dispatch-later';
 export const DISPATCH = 'dispatch';
@@ -10,7 +10,7 @@ export const DISPATCH = 'dispatch';
 /** @internal Install built-in dispatch effects in one runtime. */
 export function registerBuiltInEffects(
   runtime: RuntimeCore,
-  dispatchEvent: (event: DispatchVector) => void,
+  dispatchEvent: (event: EventVector) => void,
 ): void {
   runtime.registry.fx.registerSystem(DISPATCH_LATER, (value: DispatchLaterEffect) => {
     dispatchLater(runtime, value, dispatchEvent);
@@ -25,14 +25,14 @@ export function registerBuiltInEffects(
       );
       return;
     }
-    dispatchEvent(value as DispatchVector);
+    dispatchEvent(value as EventVector);
   });
 }
 
 function dispatchLater(
   runtime: RuntimeCore,
   effect: unknown,
-  dispatchEvent: (event: DispatchVector) => void,
+  dispatchEvent: (event: EventVector) => void,
 ): void {
   if (typeof effect !== 'object' || effect === null) {
     consoleLog('error', '[reflex] ignoring bad dispatch-later value:', effect);
@@ -52,7 +52,7 @@ function dispatchLater(
   const timeout = setTimeout(
     () => {
       timers.delete(timeout);
-      dispatchEvent(event as DispatchVector);
+      dispatchEvent(event as EventVector);
     },
     Math.max(0, ms),
   );

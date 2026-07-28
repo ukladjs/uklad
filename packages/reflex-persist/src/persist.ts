@@ -2,7 +2,7 @@ import { isRegistrationCollisionError } from '@flexsurfer/reflex/vanilla';
 import { getRuntimeIntegration } from '@flexsurfer/reflex/internal';
 import type {
   ContractState,
-  DefaultReflexContracts,
+  PermissiveReflexContracts,
   ReflexContracts,
   ReflexRuntime,
 } from '@flexsurfer/reflex/vanilla';
@@ -37,7 +37,7 @@ import type {
   SyncPersistStorage,
 } from './types';
 
-type Runtime = ReflexRuntime<DefaultReflexContracts>;
+type Runtime = ReflexRuntime<PermissiveReflexContracts>;
 type PersistEffect = [id: string] | [id: string, value: unknown];
 type LifecycleState = PersistStatus | 'disposed';
 

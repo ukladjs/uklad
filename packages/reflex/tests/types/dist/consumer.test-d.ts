@@ -2,7 +2,7 @@
  * Compile-time regression test against the BUILT package types
  * (dist/index.d.mts), resolved as '@flexsurfer/reflex' via a paths mapping —
  * exactly how a consumer sees it. This guards the augmentation contract:
- * tsup's dts rollup must keep EventPayloads/SubPayloads/AppState declared (not
+ * tsup's dts rollup must keep DefaultContracts declared (not
  * just re-exported) in the entry module, or `declare module
  * '@flexsurfer/reflex'` stops merging.
  *
@@ -88,11 +88,11 @@ runtime.registerModule((registrar) => {
   registrar.regEvent('app/init', () => [['storage/unknown', 1]]);
 });
 runtime.registerModule((registrar) => {
-  // @ts-expect-error built-in dispatch payload still wins over accidental EffectPayloads declaration
+  // @ts-expect-error built-in dispatch payload still wins over an accidental effect declaration
   registrar.regEvent('app/init', () => [['dispatch', 1]]);
 });
 runtime.registerModule((registrar) => {
-  // @ts-expect-error built-in dispatch-later payload still wins over accidental EffectPayloads declaration
+  // @ts-expect-error built-in dispatch-later payload still wins over an accidental effect declaration
   registrar.regEvent('app/init', () => [['dispatch-later', 'not-a-dispatch-later-payload']]);
 });
 

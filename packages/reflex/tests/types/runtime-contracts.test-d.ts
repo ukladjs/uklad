@@ -1,7 +1,7 @@
 import { createReflexHooks } from '../../src/react';
 import { createReflexRuntime } from '../../src/vanilla';
 import { createReflexTestHarness } from '../../src/testing';
-import type { ContractSubscribeVector, ReflexContracts } from '../../src/vanilla';
+import type { ReflexContracts } from '../../src/vanilla';
 
 interface CounterContracts extends ReflexContracts {
   state: { count: number };
@@ -144,7 +144,9 @@ graph.registerModule((registrar) => {
 graph.registerModule((registrar) => {
   registrar.regSub(
     'visible',
-    () => [['todos'], ['showing']].slice(0, 1) as ContractSubscribeVector<GraphContracts>[],
+    // A widening annotation an application could write itself, with no
+    // package-internal helper type involved.
+    () => [['todos'], ['showing']].slice(0, 1) as [id: 'todos'][],
     (values) => values[0] as Todo[],
   );
 });

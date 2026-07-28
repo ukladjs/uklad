@@ -78,7 +78,7 @@ For compile-checked dispatch payloads, declare the typed payload maps (section 1
 - Subscriptions must return data shaped and ready for direct view consumption — all filtering, sorting, formatting, and joining should happen in the subscription layer, not in React components.
 - Move heavy computations to events (precompute once, read many); avoid repeated expensive derivations in hot subscriptions.
 - Computed subs gate update propagation with deep equality by default — O(result size) per recompute. For subs returning large derived collections, pass a cheaper check: `regSub(id, depsFn, computeFn, { equalityCheck: shallowEqual })` (`shallowEqual` is exported from reflex). Immer's structural sharing keeps unchanged rows identical, so a shallow element-by-element check is usually enough.
-- For typed `useSubscription` params and results, declare `SubPayloads` (section 12).
+- For typed `useSubscription` params and results, declare a runtime contract (section 12).
 
 ## 6) React Component Contract
 
@@ -299,45 +299,61 @@ export function AppRoot() {
 const todos = useSubscription<Todo[]>(['todos/list']);
 runtime.dispatch(['todos/add', 'Buy milk']);
 ```
-## 12) Typed Payload Maps (opt-in compile-time checking)
+## 12) Typed Contracts (opt-in compile-time checking)
 
-Reflex ships four empty, augmentable interfaces: `EventPayloads` (event id → params tuple), `SubPayloads` (sub id → `{ params; result }`), `EffectPayloads` (effect id → payload type), and `AppState` (the state shape). While unaugmented, the whole API stays untyped and everything above works as written. Declaring them turns `tsc` into a wiring verifier — typo'd ids, wrong payloads, wrong subscription usage, invalid effect tuples, and unknown state keys become compile errors.
+A contract is one `ReflexContracts` declaration describing the runtime's state, event payloads, effect payloads, and subscriptions. Declaring it turns `tsc` into a wiring verifier — typo'd ids, wrong payloads, wrong subscription usage, invalid effect tuples, and unknown state keys become compile errors. While undeclared, the whole API stays permissive and everything above works as written.
 
-Declare them once, next to the ids files (e.g. `src/state/payload-maps.d.ts`):
+Declare it next to the ids files (e.g. `src/contracts.ts`) and pass it to the runtime:
 
 ```ts
-import type { Todo, Showing } from './state';
+import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
+import type { Showing, Todo, TodoState } from './state';
+import { EVENT_IDS } from './event-ids';
+import { SUB_IDS } from './sub-ids';
 
-declare module '@flexsurfer/reflex' {
-  interface EventPayloads {
-    'app/init': [];
-    'todos/add': [title: string];
-    'todos/toggle': [id: string];
-  }
-  interface SubPayloads {
-    'todos/list': { params: []; result: Todo[] };
-    'todos/by_id': { params: [id: string]; result: Todo | undefined };
-  }
-  interface EffectPayloads {
+export interface AppContracts extends ReflexContracts {
+  state: TodoState;
+  events: {
+    [EVENT_IDS.TODOS_ADD]: [title: string];
+    [EVENT_IDS.TODOS_TOGGLE]: [id: string];
+  };
+  effects: {
     'storage/set_todos': Todo[];
-    'ui/scroll_top': void; // no payload → the tuple is just ['ui/scroll_top']
-  }
-  interface AppState {
-    todos: Todo[];
-    showing: Showing;
-    // or reuse an existing type: interface AppState extends MyStateShape {}
-  }
+    'ui/scroll_top': void; // no payload -> the tuple is just ['ui/scroll_top']
+  };
+  subscriptions: {
+    [SUB_IDS.TODOS_LIST]: { params: []; result: Todo[] };
+    [SUB_IDS.TODO_BY_ID]: { params: [id: string]; result: Todo | undefined };
+  };
 }
+
+export const runtime = createReflexRuntime<AppContracts>({ initialState: createState() });
+export const { useSubscription } = createReflexHooks<AppContracts>();
 ```
+
+Using the id constants as computed keys keeps one source of truth: an id cannot drift between its declaration, its registration, and its call sites.
+
+Every section is optional — adopt them one at a time; a missing or empty section stays permissive.
 
 What this changes:
 - `dispatch([EVENT_IDS.TODOS_ADD, title])` — id must be declared, payload must match the tuple. Also applies to `debounceAndDispatch`/`throttleAndDispatch`.
-- `regEvent(EVENT_IDS.TODOS_ADD, ({ draftState }, title) => ...)` — handler params are inferred from `EventPayloads` and `draftState` from `AppState`, with no generics. Avoid the explicit state generic (`regEvent<MyState>(id, ...)`): it disables param inference — augment `AppState` instead, or annotate coeffects inline (`({ draftState }: CoEffects<MyState>, title) => ...`). Undeclared ids stay permissive in `regEvent`.
-- Effect tuples returned from handlers are checked against `EffectPayloads`: declared ids with matching payloads only. The built-in `'dispatch'` and `'dispatch-later'` effects are always included, their ids are reserved and cannot be overridden by `EffectPayloads`, and their event vectors are checked against `EventPayloads` — so `return [['dispatch', [EVENT_IDS.X, payload]]]` gets the same checking as a direct `dispatch`. `regEffect` infers the handler's value param from the map.
-- `useSubscription([SUB_IDS.TODO_BY_ID, id])` — params checked and result type inferred (no explicit generic needed). `regSub` checks the computeFn return type against the declared result.
+- `regEvent(EVENT_IDS.TODOS_ADD, ({ draftState }, title) => ...)` — handler params and `draftState` are inferred, with no generics. Undeclared ids stay permissive in `regEvent`.
+- Effect tuples returned from handlers are checked: declared ids with matching payloads only. The built-in `'dispatch'` and `'dispatch-later'` effects are always available, their ids are reserved, and their event vectors are checked against the event map — so `return [['dispatch', [EVENT_IDS.X, payload]]]` gets the same checking as a direct `dispatch`. `regEffect` infers the handler's value param.
+- `regSub(id, depsFn, computeFn)` — dependency values are inferred from `depsFn` and the result is checked against the declared result type.
+- `useSubscription([SUB_IDS.TODO_BY_ID, id])` — params checked and result inferred, no explicit generic.
 - `createReflexTestHarness(runtime)` exposes state reads, flush, and non-React subscription inspection for tests.
 
+Single-runtime apps: the package-level `useSubscription` cannot take a type argument, because a React context type is fixed at creation. Bind it once by augmenting the ambient anchor, which is the same `ReflexContracts` shape:
+
+```ts
+declare module '@flexsurfer/reflex' {
+  interface DefaultContracts extends AppContracts {}
+}
+```
+
+Apps owning several runtimes should skip the anchor and use `createReflexHooks<AppContracts>()` per runtime, since one ambient default cannot describe two runtimes.
+
 Rules:
-- Event/sub payloads must be tuples; use `[]` for no params. Use labeled tuple members (`[title: string]`) — they double as documentation. Effect payloads are single values; use `void` for effects with no payload.
-- Once `EventPayloads` is declared, every dispatched event id must be in it (undeclared ids fail to compile on `dispatch`). Same for `SubPayloads` and subscription ids, and for `EffectPayloads` and effect tuples returned from handlers. Keep the maps complete — they double as the app's API manifest.
+- Event and subscription params must be tuples; use `[]` for no params. Use labeled tuple members (`[title: string]`) — they double as documentation. Effect payloads are single values; use `void` for effects with no payload.
+- Once a section is declared it is closed: every id used against that surface must appear in it. Keep the maps complete — they double as the app's API manifest.
 - Keep the maps in sync with the ids files: one entry per id, same naming.

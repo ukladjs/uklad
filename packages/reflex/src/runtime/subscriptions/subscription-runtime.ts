@@ -17,7 +17,6 @@ import type {
   SubConfig,
   SubDepsHandler,
   SubHandler,
-  SubResult,
   SubVector,
 } from '../../types';
 
@@ -83,7 +82,7 @@ export class SubscriptionRuntime {
   register<R = any, K extends Id = Id>(
     id: K,
     depsFn: (...params: any[]) => SubVector[],
-    computeFn: (values: any[], ...params: any[]) => SubResult<K, R>,
+    computeFn: (values: any[], ...params: any[]) => R,
     config?: SubConfig,
   ): RegistrationHandle | undefined {
     this.prepareRegistration(id);

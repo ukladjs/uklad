@@ -9,32 +9,18 @@ export { shallowEqual } from './core/equality';
 export { current, enableMapSet, original } from './core/immer';
 export { isRegistrationCollisionError } from './runtime/registrations';
 
+// The contract surface is deliberately small. `ReflexContracts` is what an
+// application declares; `DefaultContracts` is the ambient single-runtime
+// binding. The remaining `Contract*` helpers are extraction machinery used to
+// build the runtime signatures — they stay internal to the package, and are
+// exported here only where a downstream package composes contracts of its own.
 export type {
-  ContractAllEffectPayloads,
-  ContractState,
-  ContractDispatchLaterEffect,
-  ContractDispatchVector,
-  ContractEffectId,
-  ContractEffectParams,
-  ContractEffectPayloads,
-  ContractEffects,
-  ContractEffectVector,
-  ContractEventId,
-  ContractEventParams,
   ContractEventPayloads,
-  ContractEventVector,
-  ContractSubscribeVector,
-  ContractSubscriptionId,
-  ContractSubscriptionParams,
+  ContractState,
   ContractSubscriptionPayloads,
-  ContractSubscriptionResult,
-  ContractSubscriptionVector,
   CreateReflexRuntimeOptions,
-  DefaultReflexContracts,
-  PermissiveEffectPayloads,
-  PermissiveEventPayloads,
+  DefaultContracts,
   PermissiveReflexContracts,
-  PermissiveSubscriptionPayloads,
   ReflexContracts,
   ReflexDisposer,
   ReflexModule,
@@ -51,24 +37,19 @@ export type {
 /** Structural diagnostic data retained as a type-only compatibility export. */
 export type { SubscriptionDiagnostic } from './runtime/subscriptions/types';
 export type {
-  AppState,
   CoEffectHandler,
   CoEffects,
   Context,
   State,
   DefaultAppState,
   DispatchLaterEffect,
-  DispatchVector,
+  EffectVector,
   EffectHandler,
   EffectRuntimeContext,
-  EffectParams,
-  EffectPayloads,
   Effects,
   EqualityCheckFn,
   ErrorHandler,
   EventHandler,
-  EventParams,
-  EventPayloads,
   EventRegistrationOptions,
   EventVector,
   Id,
@@ -78,10 +59,6 @@ export type {
   SubConfig,
   SubDepsHandler,
   SubHandler,
-  SubParams,
-  SubPayloads,
-  SubResult,
-  SubscribeVector,
   SubVector,
 } from './types';
 export type {

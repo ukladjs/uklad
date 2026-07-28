@@ -4,14 +4,16 @@ import { getSubVectorKey } from '../runtime/subscriptions/keys';
 import { useReflexRuntime } from './context';
 
 import type {
+  ContractSubscribeVector,
   ContractSubscriptionId,
   ContractSubscriptionResult,
   ContractSubscriptionVector,
+  DefaultContracts,
   ReflexContracts,
 } from '../contracts';
 import { getSubscriptionValueForInternalUse, subscribeForRender } from '../runtime/runtime';
 import type { ReflexRuntimeClient } from '../runtime/api';
-import type { Id, SubParams, SubPayloads, SubResult, SubscribeVector, SubVector } from '../types';
+import type { SubVector } from '../types';
 import type { ReflexHooks } from './types';
 
 export type { ReflexHooks } from './types';
@@ -21,12 +23,20 @@ export type { ReflexHooks } from './types';
  *
  * A changed serialized vector or provider runtime rebinds the external store.
  * A provider is required so every hook reads from an explicit runtime owner.
+ *
+ * This entry point checks against the ambient `DefaultContracts`, because a
+ * React context type is fixed when the context is created and so cannot carry
+ * a per-runtime contract. Applications owning more than one runtime should use
+ * `createReflexHooks<TContracts>()` instead.
  */
-export function useSubscription<K extends keyof SubPayloads & Id>(
-  subVector: [K, ...SubParams<K>],
+export function useSubscription<TId extends ContractSubscriptionId<DefaultContracts>>(
+  query: ContractSubscriptionVector<DefaultContracts, TId>,
   componentName?: string,
-): SubResult<K>;
-export function useSubscription<T>(subVector: SubscribeVector, componentName?: string): T;
+): ContractSubscriptionResult<DefaultContracts, TId>;
+export function useSubscription<T>(
+  query: ContractSubscribeVector<DefaultContracts>,
+  componentName?: string,
+): T;
 export function useSubscription<T>(
   subVector: SubVector,
   componentName: string = 'react component',

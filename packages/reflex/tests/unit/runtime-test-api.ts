@@ -32,7 +32,6 @@ import type {
   State,
   DefaultAppState,
   EffectHandler,
-  EffectParams,
   EqualityCheckFn,
   ErrorHandler,
   EventHandler,
@@ -40,7 +39,6 @@ import type {
   Id,
   Interceptor,
   SubConfig,
-  SubResult,
   SubVector,
 } from '../../src/types';
 import type { HandlerRegistry } from '../../src/runtime/handler-types';
@@ -96,7 +94,7 @@ export function regEvent<T = DefaultAppState>(
   core.events.registerEvent(id, handler, options);
 }
 
-export function regEffect<K extends Id = Id>(id: K, handler: EffectHandler<EffectParams<K>>): void {
+export function regEffect<K extends Id = Id>(id: K, handler: EffectHandler<any>): void {
   testRuntime.registerModule((registrar) => {
     registrar.regEffect(id, handler as any);
   });
@@ -118,7 +116,7 @@ export function regSub<R = any, K extends Id = Id>(
   depsFn: (...params: any[]) => SubVector[],
   // `any` rather than `any[]`, so cases may annotate the dependency list as an
   // exact tuple (`([value]: [number]) => …`) without fighting assignability.
-  computeFn: (values: any, ...params: any[]) => SubResult<K, R>,
+  computeFn: (values: any, ...params: any[]) => R,
   config?: SubConfig,
 ): void {
   core.subscriptions.register(id, depsFn, computeFn, config);

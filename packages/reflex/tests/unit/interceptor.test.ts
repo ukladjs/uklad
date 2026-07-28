@@ -6,13 +6,13 @@ import {
   handlerRegistry,
   registerHandler,
 } from './runtime-test-api';
-import type { Interceptor, Context, EventVector } from '../../src/types';
+import type { Context, Interceptor, InterceptorContext, EventVector } from '../../src/types';
 
 function createTestInterceptor(
   id: string,
   options: {
-    before?: (context: Context) => Context;
-    after?: (context: Context) => Context;
+    before?: (context: InterceptorContext) => InterceptorContext;
+    after?: (context: InterceptorContext) => InterceptorContext;
     comment?: string;
   } = {},
 ): Interceptor {
@@ -250,8 +250,9 @@ describe('interceptor', () => {
           // newState stays unset until the event handler interceptor
           // runs; patches exist only as trace tags, not on context
           expect(ctx.newState).toBeUndefined();
-          expect(ctx.queue).toEqual([]);
-          expect(ctx.stack).toEqual([interceptor]);
+          // Pipeline bookkeeping is internal; this suite drives the executor.
+          expect((ctx as Context).queue).toEqual([]);
+          expect((ctx as Context).stack).toEqual([interceptor]);
 
           return ctx;
         },

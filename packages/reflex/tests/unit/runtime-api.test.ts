@@ -97,10 +97,10 @@ describe('instance-scoped runtime', () => {
       'regEvent',
       'regEffect',
       'regCoeffect',
-      'regEventErrorHandler',
+      'setEventErrorHandler',
       'regRootSub',
       'regSub',
-      'regInterceptor',
+      'addInterceptor',
     ]) {
       expect(exposed[adminMethod]).toBeUndefined();
     }
@@ -119,13 +119,17 @@ describe('instance-scoped runtime', () => {
       'regEvent',
       'regEffect',
       'regCoeffect',
-      'regEventErrorHandler',
       'regRootSub',
       'regSub',
-      'regInterceptor',
     ]) {
       expect(exposed[registrarMethod]).toBeUndefined();
     }
+
+    // The two runtime-wide hooks are administrative, not registrar methods:
+    // they apply to every event regardless of which module installed them, so
+    // they are reachable on the admin facade and nowhere else.
+    expect(typeof exposed.addInterceptor).toBe('function');
+    expect(typeof exposed.setEventErrorHandler).toBe('function');
 
     testRuntime.dispose();
   });
@@ -149,9 +153,7 @@ describe('instance-scoped runtime', () => {
       before: jest.fn((context) => context),
     };
 
-    runtime.registerModule((registrar) => {
-      registrar.regInterceptor(interceptor);
-    });
+    admin(runtime).addInterceptor(interceptor);
 
     expect(admin(runtime).getInterceptors()).toEqual([interceptor]);
     expect(core.events.getInterceptors()).toEqual([interceptor]);

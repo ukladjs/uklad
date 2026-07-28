@@ -12,7 +12,7 @@ import type {
   Effects,
   EventHandler,
   EventVector,
-  Interceptor,
+  InternalInterceptor,
   ReflexError,
 } from '../types';
 
@@ -87,7 +87,7 @@ export function runEvent(runtime: RuntimeCore, event: EventVector): EventRunResu
 function createEventHandlerInterceptor(
   runtime: RuntimeCore,
   handler: EventHandler<any>,
-): Interceptor {
+): InternalInterceptor {
   return {
     id: 'fx-handler',
     before(context: Context) {

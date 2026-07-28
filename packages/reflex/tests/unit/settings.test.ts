@@ -2,10 +2,10 @@ import {
   clearInterceptors,
   getEqualityCheck,
   getInterceptors,
-  regInterceptor,
+  addInterceptor,
   setEqualityCheck,
 } from './runtime-test-api';
-import type { Interceptor, Context, EqualityCheckFn } from '../../src/types';
+import type { Interceptor, InterceptorContext, EqualityCheckFn } from '../../src/types';
 
 beforeEach(() => {
   clearInterceptors();
@@ -14,15 +14,15 @@ beforeEach(() => {
 describe('Global Interceptors', () => {
   const createTestInterceptor = (id: string): Interceptor => ({
     id,
-    before: (context: Context) => context,
-    after: (context: Context) => context,
+    before: (context: InterceptorContext) => context,
+    after: (context: InterceptorContext) => context,
   });
 
-  describe('regInterceptor', () => {
+  describe('addInterceptor', () => {
     it('should register a new global interceptor', () => {
       const interceptor = createTestInterceptor('test-1');
 
-      regInterceptor(interceptor);
+      addInterceptor(interceptor);
 
       const globals = getInterceptors();
       expect(globals).toHaveLength(1);
@@ -33,8 +33,8 @@ describe('Global Interceptors', () => {
       const interceptor1 = createTestInterceptor('test-1');
       const interceptor2 = createTestInterceptor('test-2');
 
-      regInterceptor(interceptor1);
-      regInterceptor(interceptor2);
+      addInterceptor(interceptor1);
+      addInterceptor(interceptor2);
 
       const globals = getInterceptors();
       expect(globals).toHaveLength(2);
@@ -47,9 +47,9 @@ describe('Global Interceptors', () => {
       const interceptor2 = createTestInterceptor('test-2');
       const interceptor1Updated = { ...createTestInterceptor('test-1'), comment: 'updated' };
 
-      regInterceptor(interceptor1);
-      regInterceptor(interceptor2);
-      expect(() => regInterceptor(interceptor1Updated)).toThrow(
+      addInterceptor(interceptor1);
+      addInterceptor(interceptor2);
+      expect(() => addInterceptor(interceptor1Updated)).toThrow(
         "Registration 'test-1' is already registered",
       );
 
@@ -68,7 +68,7 @@ describe('Global Interceptors', () => {
 
     it('should return copy of interceptors array', () => {
       const interceptor = createTestInterceptor('test-1');
-      regInterceptor(interceptor);
+      addInterceptor(interceptor);
 
       const globals1 = getInterceptors();
       const globals2 = getInterceptors();
@@ -83,8 +83,8 @@ describe('Global Interceptors', () => {
       const interceptor1 = createTestInterceptor('test-1');
       const interceptor2 = createTestInterceptor('test-2');
 
-      regInterceptor(interceptor1);
-      regInterceptor(interceptor2);
+      addInterceptor(interceptor1);
+      addInterceptor(interceptor2);
       expect(getInterceptors()).toHaveLength(2);
 
       clearInterceptors();
@@ -96,9 +96,9 @@ describe('Global Interceptors', () => {
       const interceptor2 = createTestInterceptor('test-2');
       const interceptor3 = createTestInterceptor('test-3');
 
-      regInterceptor(interceptor1);
-      regInterceptor(interceptor2);
-      regInterceptor(interceptor3);
+      addInterceptor(interceptor1);
+      addInterceptor(interceptor2);
+      addInterceptor(interceptor3);
       expect(getInterceptors()).toHaveLength(3);
 
       clearInterceptors('test-2');
@@ -110,7 +110,7 @@ describe('Global Interceptors', () => {
 
     it('should handle clearing non-existent interceptor ID gracefully', () => {
       const interceptor1 = createTestInterceptor('test-1');
-      regInterceptor(interceptor1);
+      addInterceptor(interceptor1);
 
       clearInterceptors('non-existent');
 

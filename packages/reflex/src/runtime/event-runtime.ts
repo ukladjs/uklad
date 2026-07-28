@@ -25,6 +25,7 @@ import type {
   EventRegistrationOptions,
   EventVector,
   Interceptor,
+  InternalInterceptor,
 } from '../types';
 
 const EMPTY_INTERCEPTORS: readonly Interceptor[] = Object.freeze([]);
@@ -51,7 +52,7 @@ export class EventRuntime {
   readonly debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   readonly throttledEventIds: Set<string> = new Set();
   readonly throttleTimers: Set<ReturnType<typeof setTimeout>> = new Set();
-  readonly injectGlobalInterceptors: Interceptor;
+  readonly injectGlobalInterceptors: InternalInterceptor;
   private readonly getRuntime: () => RuntimeCore;
   private readonly globalInterceptors = new RegistrationStore<Interceptor>();
   private readonly eventDefinitions = new Map<string, RuntimeEventDefinition>();
@@ -307,7 +308,11 @@ export class EventRuntime {
 }
 
 /** Create a coeffect interceptor bound to one runtime. */
-function getInjectCofxInterceptor(runtime: RuntimeCore, id: string, value?: any): Interceptor {
+function getInjectCofxInterceptor(
+  runtime: RuntimeCore,
+  id: string,
+  value?: any,
+): InternalInterceptor {
   return {
     id: `inject-${id}`,
     before(context: Context): Context {

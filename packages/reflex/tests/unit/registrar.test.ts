@@ -1,5 +1,5 @@
 import type {
-  Context,
+  InterceptorContext,
   EventHandler,
   Interceptor,
   SubDepsHandler,
@@ -82,7 +82,7 @@ describe('handler registry', () => {
     const eventId = 'event-with-interceptors';
     const interceptor: Interceptor = {
       id: 'metadata',
-      before: (context: Context) => context,
+      before: (context: InterceptorContext) => context,
     };
     registerHandler(handlerRegistry.event, eventId, () => undefined);
     setEventInterceptors(eventId, [interceptor]);
@@ -96,7 +96,7 @@ describe('handler registry', () => {
   it('owns an immutable interceptor list after registration', () => {
     const interceptor: Interceptor = {
       id: 'immutable-metadata',
-      before: (context: Context) => context,
+      before: (context: InterceptorContext) => context,
     };
     const registered = [interceptor];
 

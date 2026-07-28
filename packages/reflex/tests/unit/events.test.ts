@@ -1,4 +1,10 @@
-import type { CoEffects, EventRegistrationOptions, Interceptor, Context } from '../../src/types';
+import type {
+  CoEffects,
+  EventRegistrationOptions,
+  Context,
+  Interceptor,
+  InterceptorContext,
+} from '../../src/types';
 import {
   clearInterceptors,
   dispatch,
@@ -9,7 +15,7 @@ import {
   regCoeffect,
   regEffect,
   regEvent,
-  regInterceptor,
+  addInterceptor,
   registerHandler,
 } from './runtime-test-api';
 import { waitForScheduled } from './test-utils';
@@ -732,14 +738,14 @@ describe('regEvent with cofx', () => {
 
       const globalInterceptor: Interceptor = {
         id: 'test-global',
-        before: (context: Context) => {
+        before: (context: InterceptorContext) => {
           globalInterceptorCalled = true;
           context.coeffects.globalData = 'injected-by-global';
           return context;
         },
       };
 
-      regInterceptor(globalInterceptor);
+      addInterceptor(globalInterceptor);
 
       regEvent('test-global-injection', ({ draftState, globalData }) => {
         expect(globalData).toBe('injected-by-global');
@@ -759,12 +765,12 @@ describe('regEvent with cofx', () => {
 
       const globalInterceptor1: Interceptor = {
         id: 'global-1',
-        before: (context: Context) => {
+        before: (context: InterceptorContext) => {
           executionOrder.push('global-1-before');
           context.coeffects.order = ['global-1'];
           return context;
         },
-        after: (context: Context) => {
+        after: (context: InterceptorContext) => {
           executionOrder.push('global-1-after');
           return context;
         },
@@ -772,19 +778,19 @@ describe('regEvent with cofx', () => {
 
       const globalInterceptor2: Interceptor = {
         id: 'global-2',
-        before: (context: Context) => {
+        before: (context: InterceptorContext) => {
           executionOrder.push('global-2-before');
           context.coeffects.order.push('global-2');
           return context;
         },
-        after: (context: Context) => {
+        after: (context: InterceptorContext) => {
           executionOrder.push('global-2-after');
           return context;
         },
       };
 
-      regInterceptor(globalInterceptor1);
-      regInterceptor(globalInterceptor2);
+      addInterceptor(globalInterceptor1);
+      addInterceptor(globalInterceptor2);
 
       regEvent('test-multiple-globals', ({ draftState, order }) => {
         executionOrder.push('handler');
@@ -810,11 +816,11 @@ describe('regEvent with cofx', () => {
 
       const globalInterceptor: Interceptor = {
         id: 'global-first',
-        before: (context: Context) => {
+        before: (context: InterceptorContext) => {
           executionOrder.push('global-before');
           return context;
         },
-        after: (context: Context) => {
+        after: (context: InterceptorContext) => {
           executionOrder.push('global-after');
           return context;
         },
@@ -822,17 +828,17 @@ describe('regEvent with cofx', () => {
 
       const customInterceptor: Interceptor = {
         id: 'custom-second',
-        before: (context: Context) => {
+        before: (context: InterceptorContext) => {
           executionOrder.push('custom-before');
           return context;
         },
-        after: (context: Context) => {
+        after: (context: InterceptorContext) => {
           executionOrder.push('custom-after');
           return context;
         },
       };
 
-      regInterceptor(globalInterceptor);
+      addInterceptor(globalInterceptor);
 
       regEvent(
         'test-execution-order',
@@ -859,7 +865,7 @@ describe('regEvent with cofx', () => {
     it('should allow global interceptors to modify effects', async () => {
       const globalInterceptor: Interceptor = {
         id: 'global-fx-modifier',
-        after: (context: Context) => {
+        after: (context: InterceptorContext) => {
           context.effects.push(['dispatch', ['secondary-event']]);
           return context;
         },
@@ -871,7 +877,7 @@ describe('regEvent with cofx', () => {
         (draftState as any).secondaryProcessed = true;
       });
 
-      regInterceptor(globalInterceptor);
+      addInterceptor(globalInterceptor);
 
       regEvent('test-fx-modification', ({ draftState }) => {
         (draftState as any).primaryProcessed = true;
@@ -900,9 +906,9 @@ describe('regEvent with cofx', () => {
       regEffect('observe-committed-counter', () => {
         committedCounter = getState().counter;
       });
-      regInterceptor({
+      addInterceptor({
         id: 'append-post-commit-effect',
-        after: (context: Context) => {
+        after: (context: InterceptorContext) => {
           expect(context.previousState.counter).toBe(0);
           expect(context.newState?.counter).toBe(1);
           context.effects.push(['observe-committed-counter']);
@@ -922,13 +928,13 @@ describe('regEvent with cofx', () => {
     it('should work with cofx and global interceptors together', async () => {
       const globalInterceptor: Interceptor = {
         id: 'global-with-cofx',
-        before: (context: Context) => {
+        before: (context: InterceptorContext) => {
           context.coeffects.globalValue = 'from-global';
           return context;
         },
       };
 
-      regInterceptor(globalInterceptor);
+      addInterceptor(globalInterceptor);
 
       regEvent(
         'test-global-with-cofx',
@@ -957,13 +963,13 @@ describe('regEvent with cofx', () => {
 
       const globalInterceptor: Interceptor = {
         id: 'to-be-cleared',
-        before: (context: Context) => {
+        before: (context: InterceptorContext) => {
           globalInterceptorCalled = true;
           return context;
         },
       };
 
-      regInterceptor(globalInterceptor);
+      addInterceptor(globalInterceptor);
       clearInterceptors();
 
       regEvent('test-cleared-global', ({ draftState }) => {
@@ -984,7 +990,7 @@ describe('regEvent with cofx', () => {
 
       const globalInterceptor1: Interceptor = {
         id: 'keep-this-one',
-        before: (context: Context) => {
+        before: (context: InterceptorContext) => {
           interceptor1Called = true;
           context.coeffects.from1 = 'interceptor1';
           return context;
@@ -993,15 +999,15 @@ describe('regEvent with cofx', () => {
 
       const globalInterceptor2: Interceptor = {
         id: 'clear-this-one',
-        before: (context: Context) => {
+        before: (context: InterceptorContext) => {
           interceptor2Called = true;
           context.coeffects.from2 = 'interceptor2';
           return context;
         },
       };
 
-      regInterceptor(globalInterceptor1);
-      regInterceptor(globalInterceptor2);
+      addInterceptor(globalInterceptor1);
+      addInterceptor(globalInterceptor2);
       clearInterceptors('clear-this-one');
 
       regEvent('test-selective-clear', ({ draftState, from1, from2 }) => {
@@ -1031,7 +1037,7 @@ describe('regEvent with cofx', () => {
         },
       };
 
-      regInterceptor(faultyGlobalInterceptor);
+      addInterceptor(faultyGlobalInterceptor);
 
       regEvent('test-global-error', ({ draftState }) => {
         (draftState as any).counter += 1;

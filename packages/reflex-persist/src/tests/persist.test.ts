@@ -397,16 +397,14 @@ describe('persist', () => {
       storage: createMemoryStorage({ 'reflex/count': entry(1, 41) }).storage,
       keys: ['count'],
     });
-    runtime.registerModule((registrar) => {
-      registrar.regInterceptor({
-        id: 'block-sync-hydrate-after-handler',
-        after: (context) => {
-          if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {
-            throw new Error('expected sync hydration interceptor failure');
-          }
-          return context;
-        },
-      });
+    runtime.addInterceptor({
+      id: 'block-sync-hydrate-after-handler',
+      after: (context) => {
+        if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {
+          throw new Error('expected sync hydration interceptor failure');
+        }
+        return context;
+      },
     });
     const pending = handle.whenHydrated();
 
@@ -780,16 +778,14 @@ describe('persist', () => {
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
     handle.hydrate();
-    runtime.registerModule((registrar) => {
-      registrar.regInterceptor({
-        id: 'block-purge-after-handler',
-        after: (context) => {
-          if (context.coeffects.event[0] === PERSIST_IDS.PURGE) {
-            throw new Error('expected purge interceptor failure');
-          }
-          return context;
-        },
-      });
+    runtime.addInterceptor({
+      id: 'block-purge-after-handler',
+      after: (context) => {
+        if (context.coeffects.event[0] === PERSIST_IDS.PURGE) {
+          throw new Error('expected purge interceptor failure');
+        }
+        return context;
+      },
     });
 
     const purge = handle.purge();
@@ -1035,16 +1031,14 @@ describe('persist', () => {
       keys: ['count'],
       experimentalAsync: true,
     });
-    runtime.registerModule((registrar) => {
-      registrar.regInterceptor({
-        id: 'block-hydrate-after-handler',
-        after: (context) => {
-          if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {
-            throw new Error('expected hydration interceptor failure');
-          }
-          return context;
-        },
-      });
+    runtime.addInterceptor({
+      id: 'block-hydrate-after-handler',
+      after: (context) => {
+        if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {
+          throw new Error('expected hydration interceptor failure');
+        }
+        return context;
+      },
     });
 
     handle.hydrate();

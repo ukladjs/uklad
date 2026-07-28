@@ -76,7 +76,6 @@ export interface ReflexRegistrar<TContracts extends ReflexContracts = Permissive
     ) => void,
   ): void;
   regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void;
-  regEventErrorHandler(handler: ErrorHandler): void;
   regRootSub<TId extends string>(id: TId, sourceKey: string): void;
   /**
    * Register a computed subscription.
@@ -107,7 +106,6 @@ export interface ReflexRegistrar<TContracts extends ReflexContracts = Permissive
     ) => ContractSubscriptionResult<TContracts, TId>,
     config?: SubConfig,
   ): void;
-  regInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void;
 }
 
 /**
@@ -140,8 +138,21 @@ export interface ReflexRuntimeAdmin<
     listener: WatchSubscriptionListener<ContractSubscriptionResult<TContracts, TId>>,
     options?: WatchSubscriptionOptions,
   ): ReflexDisposer;
+  /**
+   * Append a hook around every event's transition.
+   *
+   * Not `reg*`: interceptors form an ordered chain rather than an id-keyed
+   * handler table, and they are runtime-wide rather than scoped to the module
+   * that added them. Remove one by its id with `removeInterceptor`.
+   */
+  addInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void;
+  /** Remove a previously added interceptor by its id. */
+  removeInterceptor(id: string): void;
+  /** Replace the runtime's handling of an unrecovered event-pipeline failure. */
+  setEventErrorHandler(handler: ErrorHandler): void;
+  /** Restore the built-in handler, which logs the failure and rethrows it. */
+  clearEventErrorHandler(): void;
   getInterceptors(): Interceptor<ContractState<TContracts>>[];
-  clearInterceptors(id?: string): void;
   setEqualityCheck(equalityCheck: EqualityCheckFn): void;
   getEqualityCheck(): EqualityCheckFn;
   enableTracing(): void;

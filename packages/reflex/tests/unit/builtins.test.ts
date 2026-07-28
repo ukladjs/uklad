@@ -5,7 +5,7 @@ import {
   getHandler,
   handlerRegistry,
   regEffect,
-  regEventErrorHandler,
+  setEventErrorHandler,
 } from './runtime-test-api';
 
 describe('framework handler lifecycle', () => {
@@ -33,7 +33,7 @@ describe('framework handler lifecycle', () => {
 
   it('restores the default error handler after clearing a user override', () => {
     const override = () => undefined;
-    regEventErrorHandler(override);
+    setEventErrorHandler(override);
     expect(getHandler(handlerRegistry.error, 'event-handler')).toBe(override);
 
     handlerRegistry.error.clear('event-handler');

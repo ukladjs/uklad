@@ -22,13 +22,13 @@ RuntimeCore
 The four mandatory services always exist. `probe` is the only optional
 hot-path capability and is `undefined` in an uninstrumented runtime.
 
-| Owner                 | State and policy it owns                                                                                          |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `StateStore`          | Live and published state heads, flush scheduling, and primitive committed/published revisions                     |
-| `RuntimeRegistry`     | Handler stores, immutable event definitions, global interceptors, system baselines, and registration identities   |
-| `EventRuntime`        | Event queue, execution guards, current effect lineage, dispatch timers, rate limits, and global injection         |
-| `SubscriptionRuntime` | Definitions, root indexes, canonical cache, reverse edges, provisional leases, equality options, and graph engine |
-| `RuntimeProbe`        | Optional passive execution facts requested by tracing or DevTools; it owns no application semantics               |
+| Owner                 | State and policy it owns                                                                                                                           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `StateStore`          | Live and published state heads, flush scheduling, and primitive committed/published revisions                                                      |
+| `RuntimeRegistry`     | Id-keyed handler stores, system baselines, and registration identities                                                                             |
+| `EventRuntime`        | Event queue, execution guards, current effect lineage, dispatch timers, rate limits, immutable event definitions, and the global interceptor chain |
+| `SubscriptionRuntime` | Definitions, root indexes, canonical cache, reverse edges, provisional leases, equality options, and graph engine                                  |
+| `RuntimeProbe`        | Optional passive execution facts requested by tracing or DevTools; it owns no application semantics                                                |
 
 `runtime/api.ts` owns the public runtime contract. `runtime/runtime.ts`
 implements that façade: it validates public input, delegates to the owning
@@ -79,13 +79,31 @@ records, or trace objects. The queue uses a head index instead of repeated
 
 ### Event definitions
 
-`RuntimeRegistry` stores an event handler and its interceptor list as one
-immutable `RuntimeEventDefinition`. Event IDs are unique: registering an ID
-that is already present throws. HMR and feature replacement must dispose or
-clear the old definition before registering the new one.
+`EventRuntime` stores an event handler and its interceptor list as one
+immutable `RuntimeEventDefinition`; `RuntimeRegistry` holds the handler itself
+under its id. Event IDs are unique: registering an ID that is already present
+throws. HMR and feature replacement must dispose or clear the old definition
+before registering the new one.
 
-Global interceptors are registry-owned. `EventRuntime` owns the interceptor
-that injects the registry's current global list into a running chain.
+`EventRuntime` also owns the global interceptor chain, plus the interceptor
+that injects it into a running chain. `RuntimeRegistry` is deliberately limited
+to id-keyed handler namespaces, so an ordered chain does not belong in it.
+
+### What the handler catalog reports
+
+`ReflexHandlerKeys` — the projection behind the inspector snapshot and the
+DevTools `get_handlers` tool — lists `event`, `fx`, `cofx`, and `sub` only.
+
+Global interceptors and the event error handler are intentionally absent. They
+are runtime-wide policy rather than addressable application behaviour: nothing
+dispatches or subscribes to them, so they do not belong in a catalog whose
+purpose is to answer "what can I call on this runtime?". They are reached
+through the administrative surface instead — `addInterceptor`,
+`removeInterceptor`, `getInterceptors`, `setEventErrorHandler`, and
+`clearEventErrorHandler`.
+
+`subDeps` is likewise omitted: it is the dependency half of a subscription
+already listed under `sub`.
 
 ### Commit and effect ordering
 

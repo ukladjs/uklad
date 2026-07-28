@@ -203,11 +203,16 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     );
   }
 
-  regEventErrorHandler(handler: ErrorHandler): void {
+  setEventErrorHandler(handler: ErrorHandler): void {
     this.assertUsable();
-    this.recordRegistration(
-      this.#core.registry.error.registerSystemOverride('event-handler', handler),
-    );
+    this.#core.registry.error.registerSystemOverride('event-handler', handler);
+  }
+
+  clearEventErrorHandler(): void {
+    this.assertUsable();
+    // The store keeps the system baseline registered at construction, so
+    // clearing the override restores it rather than leaving no handler.
+    this.#core.registry.error.clear('event-handler');
   }
 
   regRootSub(id: Id, sourceKey: string): void {
@@ -317,11 +322,9 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return dispose;
   }
 
-  regInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void {
+  addInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void {
     this.assertUsable();
-    this.recordRegistration(
-      this.#core.events.registerInterceptor(interceptor as unknown as Interceptor),
-    );
+    this.#core.events.registerInterceptor(interceptor as unknown as Interceptor);
   }
 
   getInterceptors(): Interceptor<ContractState<TContracts>>[] {
@@ -331,7 +334,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     >[];
   }
 
-  clearInterceptors(id?: string): void {
+  removeInterceptor(id: string): void {
     this.assertUsable();
     this.#core.events.clearInterceptors(id);
   }
@@ -413,6 +416,13 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   }
 
   registerModule(module: ReflexModule<ReflexRegistrar<TContracts>>): ReflexDisposer {
+    return this.installModule(module, () => this.createRegistrar());
+  }
+
+  private installModule<TRegistrar>(
+    module: ReflexModule<TRegistrar>,
+    createRegistrar: () => TRegistrar,
+  ): ReflexDisposer {
     this.assertUsable();
     if (this.activeInstallation) {
       throw new Error('[reflex] registerModule installers cannot be nested.');
@@ -425,7 +435,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     };
     this.activeInstallation = installation;
     try {
-      const cleanup = module(this.createRegistrar());
+      const cleanup = module(createRegistrar());
       if (cleanup) installation.cleanup = cleanup;
       this.installations.add(installation);
     } catch (error) {
@@ -444,10 +454,8 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
       regEvent: this.regEvent.bind(this),
       regEffect: this.regEffect.bind(this),
       regCoeffect: this.regCoeffect.bind(this),
-      regEventErrorHandler: this.regEventErrorHandler.bind(this),
       regRootSub: this.regRootSub.bind(this),
       regSub: this.regSub.bind(this),
-      regInterceptor: this.regInterceptor.bind(this),
     });
   }
 
@@ -562,8 +570,11 @@ export function createReflexRuntimeForTests(
     restoreState: implementation.restoreState.bind(implementation),
     getSubscriptionValue: implementation.getSubscriptionValue.bind(implementation),
     watchSubscription: implementation.watchSubscription.bind(implementation),
+    addInterceptor: implementation.addInterceptor.bind(implementation),
+    setEventErrorHandler: implementation.setEventErrorHandler.bind(implementation),
+    clearEventErrorHandler: implementation.clearEventErrorHandler.bind(implementation),
     getInterceptors: implementation.getInterceptors.bind(implementation),
-    clearInterceptors: implementation.clearInterceptors.bind(implementation),
+    removeInterceptor: implementation.removeInterceptor.bind(implementation),
     setEqualityCheck: implementation.setEqualityCheck.bind(implementation),
     getEqualityCheck: implementation.getEqualityCheck.bind(implementation),
     enableTracing: implementation.enableTracing.bind(implementation),

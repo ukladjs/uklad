@@ -5,6 +5,7 @@ import type { RuntimeCore } from '../runtime/core';
 import type {
   CoEffects,
   Context,
+  InterceptorContext,
   State,
   ErrorHandler,
   EventVector,
@@ -123,6 +124,23 @@ function mergeErrorData(error: ReflexError, data: Partial<InterceptorErrorData>)
   });
 }
 
+/**
+ * An extension sees only `InterceptorContext`, so a hook that rebuilds the
+ * object it was handed can legitimately return one without the pipeline's
+ * bookkeeping. Restore it rather than losing the traversal.
+ */
+function restorePipelineState(context: Context, result: InterceptorContext): Context {
+  const returned = result as Context;
+  if (returned === context) return context;
+  if (returned.queue !== undefined && returned.stack !== undefined) return returned;
+  return {
+    ...context,
+    ...returned,
+    queue: returned.queue ?? context.queue,
+    stack: returned.stack ?? context.stack,
+  };
+}
+
 function invokeInterceptor(
   context: Context,
   interceptor: Interceptor,
@@ -132,11 +150,11 @@ function invokeInterceptor(
   if (!interceptorFunction) return context;
 
   if (context.originalException) {
-    return interceptorFunction(context);
+    return restorePipelineState(context, interceptorFunction(context));
   }
 
   try {
-    return interceptorFunction(context);
+    return restorePipelineState(context, interceptorFunction(context));
   } catch (error: unknown) {
     throw toReflexError(error, interceptor, direction);
   }

@@ -64,7 +64,16 @@ export type CoEffectHandler<T = DefaultAppState> = (
 
 // Interceptor pipeline and errors
 
-export interface Context<T = Record<string, any>> {
+/**
+ * What an interceptor may observe and contribute.
+ *
+ * This is the whole public interceptor surface. The pipeline's own bookkeeping
+ * — the remaining queue, the traversed stack, error routing — is deliberately
+ * absent, so the before/after execution model can be replaced without breaking
+ * extensions built on this type.
+ */
+export interface InterceptorContext<T = Record<string, any>> {
+  /** The event being handled, plus any injected coeffects. */
   coeffects: CoEffects<T>;
   /**
    * The state generation captured before this event's interceptor chain
@@ -73,13 +82,18 @@ export interface Context<T = Record<string, any>> {
   readonly previousState: State<T>;
   /** The shared effect list. Interceptors may append entries but must not replace it. */
   readonly effects: Effects;
-  /** Invalid legacy effect values retained for the post-commit executor to report. */
-  readonly invalidEffects?: readonly unknown[];
   /**
    * The final state generation produced by the event handler; unset until it
    * runs. Interceptors may observe it but must not replace it.
    */
   readonly newState?: State<T>;
+}
+
+/** @internal The full pipeline context, including execution bookkeeping. */
+export interface Context<T = Record<string, any>> extends InterceptorContext<T> {
+  coeffects: CoEffects<T>;
+  /** Invalid legacy effect values retained for the post-commit executor to report. */
+  readonly invalidEffects?: readonly unknown[];
   queue: Interceptor<T>[];
   stack: Interceptor<T>[];
   originalException: boolean;
@@ -87,11 +101,26 @@ export interface Context<T = Record<string, any>> {
   readonly executionError?: unknown;
 }
 
+/**
+ * A cross-cutting hook around an event's state transition.
+ *
+ * Interceptors are an extension point for libraries and infrastructure —
+ * persistence, logging, instrumentation — not a tool for application logic.
+ * They are added through the runtime's administrative surface rather than the
+ * registrar an application module receives; feature code belongs in events,
+ * effects, and coeffects, which stay analysable one handler at a time.
+ */
 export interface Interceptor<T = Record<string, any>> {
   id: string;
-  before?: (context: Context<T>) => Context<T>;
-  after?: (context: Context<T>) => Context<T>;
+  before?: (context: InterceptorContext<T>) => InterceptorContext<T>;
+  after?: (context: InterceptorContext<T>) => InterceptorContext<T>;
   comment?: string;
+}
+
+/** @internal Interceptor owned by the runtime, able to drive the pipeline. */
+export interface InternalInterceptor<T = Record<string, any>> extends Interceptor<T> {
+  before?: (context: any) => any;
+  after?: (context: any) => any;
 }
 
 export type InterceptorDirection = 'before' | 'after';

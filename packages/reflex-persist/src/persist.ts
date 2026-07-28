@@ -558,7 +558,9 @@ export function persist<TContracts extends ReflexContracts>(
         },
       );
 
-      scope.regInterceptor({
+      // Runtime-wide rather than module-scoped, so this module's cleanup
+      // removes it by id along with everything else registered here.
+      integration.addInterceptor({
         id: PERSIST_IDS.WRITER,
         comment: 'Persists configured roots changed by the causing event.',
         after: (context) => {
@@ -646,7 +648,10 @@ export function persist<TContracts extends ReflexContracts>(
         reportDiagnostic(authorizedPayload);
       });
 
-      return cleanup;
+      return () => {
+        integration.removeInterceptor(PERSIST_IDS.WRITER);
+        cleanup();
+      };
     });
 
     // Publish a fresh attachment-scoped gate. This closes writes even when a

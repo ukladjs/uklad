@@ -66,6 +66,10 @@ For compile-checked dispatch payloads, declare the typed payload maps (section 1
 - Put all I/O here: localStorage, HTTP, timers, analytics, navigation.
 - Effects should be small, defensive, and fail-soft (log, do not crash app state flow).
 
+- Interceptors are not application tooling. They exist for libraries and infrastructure (persistence, logging, telemetry), are an administrative capability rather than a registrar method, and are deliberately absent from the registrar `registerModule` hands you. Cross-cutting application behaviour belongs in coeffects (inputs) and effects (outputs), which stay readable one handler at a time.
+- Naming convention: `reg*` installs a handler under an id (`regEvent`, `regEffect`, `regCoeffect`, `regRootSub`, `regSub`). The runtime-wide hooks are named for what they do instead — `addInterceptor`/`removeInterceptor` maintain an ordered chain, `setEventErrorHandler`/`clearEventErrorHandler` replace and restore a singleton (clearing restores the built-in handler, which logs and rethrows).
+- `get_handlers` lists `event`, `fx`, `cofx`, and `sub` only. Interceptors and the event error handler are runtime-wide policy, not addressable behaviour, so they never appear there — do not expect to discover them that way.
+
 ## 5) Subscriptions `regRootSub` and `regSub`
 
 - Define direct top-level state subscriptions first with `regRootSub(id, "pathKey")`.

@@ -8,7 +8,7 @@ import {
   initState,
   regEffect,
   regEvent,
-  regEventErrorHandler,
+  setEventErrorHandler,
   registerTraceCallback,
   removeTraceCallback,
 } from './runtime-test-api';
@@ -39,7 +39,7 @@ describe('Error tracing', () => {
   });
 
   it('attaches handler exceptions to the event trace', async () => {
-    regEventErrorHandler(() => {}); // silent: keep the queue alive for other assertions
+    setEventErrorHandler(() => {}); // silent: keep the queue alive for other assertions
 
     regEvent('trace-boom', () => {
       throw new Error('boom!');
@@ -64,7 +64,7 @@ describe('Error tracing', () => {
   });
 
   it('attaches interceptor exceptions with the failing interceptor id', async () => {
-    regEventErrorHandler(() => {});
+    setEventErrorHandler(() => {});
 
     regEvent('trace-interceptor-boom', () => {}, {
       interceptors: [
@@ -104,7 +104,7 @@ describe('Error tracing', () => {
   });
 
   it('attaches failed effects to the event trace', async () => {
-    regEventErrorHandler(() => {});
+    setEventErrorHandler(() => {});
 
     regEffect('exploding-effect', () => {
       throw new Error('effect failed');

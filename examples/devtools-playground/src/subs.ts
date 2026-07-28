@@ -19,18 +19,18 @@ export function installPlaygroundSubscriptions(registrar: ReflexRegistrar<Playgr
 
   registrar.regSub(
     'user-by-id',
-    (users, id) => {
-      randomBlockingDelay();
-      return users.find((u: any) => u.id === id);
-    },
     () => [['users']],
+    ([users], id) => {
+      randomBlockingDelay();
+      return users.find((user) => user.id === id);
+    },
   );
 
   registrar.regSub(
     'nestedCollections-comp',
-    (nestedCollections) => {
+    () => [['nestedCollections']],
+    ([nestedCollections]) => {
       return nestedCollections;
     },
-    () => [['nestedCollections']],
   );
 }

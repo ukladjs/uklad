@@ -20,8 +20,8 @@ runtime.registerModule((registrar) => {
 runtime.registerModule((registrar) => {
   registrar.regSub(
     'doubled',
-    (count) => count * 2,
     () => [['count']],
+    ([count]) => count * 2,
   );
 });
 

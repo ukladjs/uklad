@@ -1,11 +1,11 @@
 import { useCallback } from 'react';
-import { useReflexRuntime, useSubscription } from '@flexsurfer/reflex/react';
+import { usePlaygroundRuntime, useSubscription } from '../hooks';
 
 function CounterPanel() {
-  const runtime = useReflexRuntime();
-  const counter = useSubscription<number>(['counter'], 'CounterPanel');
-  const effectDispatchCount = useSubscription<number>(['effectDispatchCount'], 'CounterPanel');
-  const isLoading = useSubscription<boolean>(['isLoading'], 'CounterPanel');
+  const runtime = usePlaygroundRuntime();
+  const counter = useSubscription(['counter'], 'CounterPanel');
+  const effectDispatchCount = useSubscription(['effectDispatchCount'], 'CounterPanel');
+  const isLoading = useSubscription(['isLoading'], 'CounterPanel');
 
   const handleIncrement = useCallback(() => runtime.dispatch(['increment-counter']), [runtime]);
 

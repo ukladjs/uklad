@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-import { useSubscription } from '@flexsurfer/reflex';
-
 import type { Showing, Todo } from './state';
 import { EVENT_IDS } from './event-ids';
 import { SUB_IDS } from './sub-ids';
-import { dispatch } from './runtime';
+// Hooks bound to TodoContracts: subscription ids, params, and results are all
+// checked, so call sites need no inline generics.
+import { dispatch, useSubscription } from './runtime';
 
 interface TodoInputProps {
   title?: string;
@@ -108,7 +108,7 @@ const TodoItem: React.FC<TodoItemProps> = React.memo(({ todo }) => {
 });
 
 const VisibleTodos: React.FC = () => {
-  const visibleTodos = useSubscription<Todo[]>([SUB_IDS.VISIBLE_TODOS], 'VisibleTodos');
+  const visibleTodos = useSubscription([SUB_IDS.VISIBLE_TODOS], 'VisibleTodos');
 
   return (
     <ul id="todo-list">
@@ -120,7 +120,7 @@ const VisibleTodos: React.FC = () => {
 };
 
 const TaskList: React.FC = () => {
-  const allComplete = useSubscription<boolean>([SUB_IDS.ALL_COMPLETE], 'TaskList');
+  const allComplete = useSubscription([SUB_IDS.ALL_COMPLETE], 'TaskList');
 
   return (
     <section id="main">
@@ -137,11 +137,8 @@ const TaskList: React.FC = () => {
 };
 
 const FooterControls: React.FC = () => {
-  const [active, done] = useSubscription<[number, number]>(
-    [SUB_IDS.FOOTER_COUNTS],
-    'FooterControls',
-  );
-  const showing = useSubscription<Showing>([SUB_IDS.SHOWING], 'FooterControls');
+  const [active, done] = useSubscription([SUB_IDS.FOOTER_COUNTS], 'FooterControls');
+  const showing = useSubscription([SUB_IDS.SHOWING], 'FooterControls');
 
   const filterLink = (filterKw: Showing, text: string) => (
     <a

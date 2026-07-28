@@ -65,11 +65,11 @@ describe('Reflex inspector', () => {
     regRootSub('count', 'count');
     regSub(
       'double-count',
-      (count: number) => {
+      () => [['count']],
+      ([count]: [number]) => {
         computedRuns++;
         return count * 2;
       },
-      () => [['count']],
     );
 
     const inspector = createReflexInspector();

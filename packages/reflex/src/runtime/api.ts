@@ -5,6 +5,7 @@ import type {
   ContractEventParams,
   ContractState,
   ContractSubscribeVector,
+  ContractSubscriptionDependencyValues,
   ContractSubscriptionId,
   ContractSubscriptionParams,
   ContractSubscriptionResult,
@@ -77,12 +78,33 @@ export interface ReflexRegistrar<TContracts extends ReflexContracts = Permissive
   regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void;
   regEventErrorHandler(handler: ErrorHandler): void;
   regRootSub<TId extends string>(id: TId, sourceKey: string): void;
-  regSub<TId extends string>(
+  /**
+   * Register a computed subscription.
+   *
+   * Arguments follow evaluation order: `dependencies` resolves first, and
+   * `compute` then receives those dependency values as one array in the same
+   * order, followed by the subscription's own parameters.
+   *
+   * ```ts
+   * regSub('todos/visible',
+   *   (limit) => [['todos/all'], ['ui/showing']],
+   *   ([todos, showing], limit) => …);
+   * ```
+   *
+   * Both argument groups are inferred from the dependency tuple, so reordering
+   * dependencies is a compile-time error rather than a silent argument swap,
+   * and adding a dependency never shifts a parameter's position.
+   */
+  regSub<
+    TId extends string,
+    const TDependencies extends readonly ContractSubscribeVector<TContracts>[],
+  >(
     id: TId,
-    compute: RuntimeSubscriptionHandler<TContracts, TId>,
-    dependencies: (
+    dependencies: (...params: ContractSubscriptionParams<TContracts, TId>) => TDependencies,
+    compute: (
+      values: ContractSubscriptionDependencyValues<TContracts, TDependencies>,
       ...params: ContractSubscriptionParams<TContracts, TId>
-    ) => ContractSubscribeVector<TContracts>[],
+    ) => ContractSubscriptionResult<TContracts, TId>,
     config?: SubConfig,
   ): void;
   regInterceptor(interceptor: Interceptor<ContractState<TContracts>>): void;

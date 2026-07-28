@@ -1,10 +1,10 @@
-import { useReflexRuntime, useSubscription } from '@flexsurfer/reflex/react';
+import { usePlaygroundRuntime, useSubscription } from '../hooks';
 
 function CollectionsPanel() {
-  const runtime = useReflexRuntime();
-  const userMap = useSubscription<Map<string, any>>(['userMap'], 'CollectionsPanel');
-  const permissionsSet = useSubscription<Set<string>>(['permissionsSet'], 'CollectionsPanel');
-  const nestedCollections = useSubscription<any>(['nestedCollections-comp'], 'CollectionsPanel');
+  const runtime = usePlaygroundRuntime();
+  const userMap = useSubscription(['userMap'], 'CollectionsPanel');
+  const permissionsSet = useSubscription(['permissionsSet'], 'CollectionsPanel');
+  const nestedCollections = useSubscription(['nestedCollections-comp'], 'CollectionsPanel');
 
   const addUserToMap = () => {
     const userId = `user-${Date.now()}`;

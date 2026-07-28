@@ -136,12 +136,14 @@ The picker works, the list filters, but the _total_ doesn't change when the cate
 // subs.ts — the dependency on the selected category is missing
 regSub(
   SUB_IDS.CATEGORY_TOTAL,
-  (expenses, selected) => sum(expenses, selected),
-  () => [[SUB_IDS.EXPENSES]],
-); // ← forgot SUB_IDS.SELECTED_CATEGORY
+  () => [[SUB_IDS.EXPENSES]], // ← forgot SUB_IDS.SELECTED_CATEGORY
+  ([expenses]) => sum(expenses, readSelectedCategory()),
+);
 ```
 
 Note what makes this valuable as _the_ canonical bug: the handler is pure and correct (unit tests pass), the dispatch response is perfect (state committed exactly as intended), tsc is silent. **The defect exists only in the runtime dependency graph** — precisely the thing an agent cannot see from source and patches alone.
+
+A runtime that declares a `subscriptions` contract now catches the narrower version of this mistake, where the compute function simply takes more arguments than the dependency list and the subscription's own parameters supply. What stays invisible to the compiler — and is what this scenario exercises — is a compute function that reads a value it never declared as a dependency, so the graph never recomputes it.
 
 ---
 

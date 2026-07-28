@@ -22,13 +22,13 @@ regRootSub('settings', 'settings');
 regRootSub('dispatchModalOpenState', 'dispatchModalOpenState');
 
 // Settings
-regSub('showRenders', (settings) => settings.showRenders, () => [['settings']]);
-regSub('showBadges', (settings) => settings.showBadges, () => [['settings']]);
-regSub('showParams', (settings) => settings.showParams, () => [['settings']]);
-regSub('showTimestamps', (settings) => settings.showTimestamps, () => [['settings']]);
+regSub('showRenders', () => [['settings']], ([settings]) => settings.showRenders);
+regSub('showBadges', () => [['settings']], ([settings]) => settings.showBadges);
+regSub('showParams', () => [['settings']], ([settings]) => settings.showParams);
+regSub('showTimestamps', () => [['settings']], ([settings]) => settings.showTimestamps);
 
 // Filtered traces - filter by text and toggle visibility of render traces
-regSub('filteredTraces', (traces, filter, showRenders) => {
+regSub('filteredTraces', () => [['traces'], ['filter'], ['showRenders']], ([traces, filter, showRenders]) => {
     const hasTextFilter = filter && filter.trim() !== '';
     const filterLower = hasTextFilter ? filter.toLowerCase().trim() : '';
 
@@ -58,4 +58,4 @@ regSub('filteredTraces', (traces, filter, showRenders) => {
 
         return false;
     });
-}, () => [['traces'], ['filter'], ['showRenders']]);
+});

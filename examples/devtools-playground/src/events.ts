@@ -23,21 +23,21 @@ export function installPlaygroundEvents(registrar: ReflexRegistrar<PlaygroundCon
     draftState.effectDispatchCount += 1;
   });
 
-  registrar.regEvent('toggle-user', (coeffects, userId: number) => {
+  registrar.regEvent('toggle-user', (coeffects, userId) => {
     const { draftState } = coeffects;
-    const user = draftState.users.find((u: any) => u.id === userId);
+    const user = draftState.users.find((candidate) => candidate.id === userId);
     if (user) {
       user.active = !user.active;
     }
   });
 
-  registrar.regEvent('set-loading', (coeffects, isLoading: boolean) => {
+  registrar.regEvent('set-loading', (coeffects, isLoading) => {
     const { draftState } = coeffects;
     draftState.isLoading = isLoading;
     return [['fake-effect']];
   });
 
-  registrar.regEvent('add-user', (coeffects, newUser: any) => {
+  registrar.regEvent('add-user', (coeffects, newUser) => {
     const { draftState } = coeffects;
     draftState.users.push(newUser);
   });
@@ -63,40 +63,40 @@ export function installPlaygroundEvents(registrar: ReflexRegistrar<PlaygroundCon
   });
 
   // Map and Set manipulation events
-  registrar.regEvent('add-user-to-map', ({ draftState }, userId: string, userData: any) => {
+  registrar.regEvent('add-user-to-map', ({ draftState }, userId, userData) => {
     if (!draftState.userMap) {
       draftState.userMap = new Map();
     }
     draftState.userMap.set(userId, userData);
   });
 
-  registrar.regEvent('remove-user-from-map', ({ draftState }, userId: string) => {
+  registrar.regEvent('remove-user-from-map', ({ draftState }, userId) => {
     if (draftState.userMap) {
       draftState.userMap.delete(userId);
     }
   });
 
-  registrar.regEvent('update-user-in-map', ({ draftState }, userId: string, updates: any) => {
+  registrar.regEvent('update-user-in-map', ({ draftState }, userId, updates) => {
     if (draftState.userMap && draftState.userMap.has(userId)) {
       const user = draftState.userMap.get(userId);
       if (user) Object.assign(user, updates);
     }
   });
 
-  registrar.regEvent('add-permission', ({ draftState }, permission: string) => {
+  registrar.regEvent('add-permission', ({ draftState }, permission) => {
     if (!draftState.permissionsSet) {
       draftState.permissionsSet = new Set();
     }
     draftState.permissionsSet.add(permission);
   });
 
-  registrar.regEvent('remove-permission', ({ draftState }, permission: string) => {
+  registrar.regEvent('remove-permission', ({ draftState }, permission) => {
     if (draftState.permissionsSet) {
       draftState.permissionsSet.delete(permission);
     }
   });
 
-  registrar.regEvent('toggle-user-role', ({ draftState }, userId: string, newRole: string) => {
+  registrar.regEvent('toggle-user-role', ({ draftState }, userId, newRole) => {
     if (draftState.nestedCollections?.userPermissions && draftState.nestedCollections?.rolesMap) {
       const rolePermissions = draftState.nestedCollections.rolesMap.get(newRole);
       if (rolePermissions) {

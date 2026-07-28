@@ -68,14 +68,15 @@ For compile-checked dispatch payloads, declare the typed payload maps (section 1
 ## 5) Subscriptions `regRootSub` and `regSub`
 
 - Define direct top-level state subscriptions first with `regRootSub(id, "pathKey")`.
-- Define computed subscriptions with `regSub(id, computeFn, depsFn)`.
+- Define computed subscriptions with `regSub(id, depsFn, computeFn)` — arguments follow evaluation order.
+- `computeFn` receives the dependency values as one array, in the order `depsFn` returns them, then the subscription's own params: `regSub(id, () => [['a'], ['b']], ([a, b], param) => ...)`. Adding a dependency therefore never shifts a param's position, and a reordered dependency list is a type error rather than a silent argument swap.
 - Build derived subscriptions from other subscriptions only.
 - Use parameterized subscriptions for by-id and section-specific queries.
 - Subscription params must be plain JSON-serializable values (ids, strings, numbers). Never pass `Map`/`Set`/`RegExp`, functions, `undefined`, Symbols, BigInt, `NaN`/`Infinity`, or circular structures as params (at any nesting depth) — subscription caching and re-subscription key on `JSON.stringify(subVector)`, so such params collide, go stale, or throw (reflex warns in dev).
 - Keep subscriptions deterministic and lightweight.
 - Subscriptions must return data shaped and ready for direct view consumption — all filtering, sorting, formatting, and joining should happen in the subscription layer, not in React components.
 - Move heavy computations to events (precompute once, read many); avoid repeated expensive derivations in hot subscriptions.
-- Computed subs gate update propagation with deep equality by default — O(result size) per recompute. For subs returning large derived collections, pass a cheaper check: `regSub(id, computeFn, depsFn, { equalityCheck: shallowEqual })` (`shallowEqual` is exported from reflex). Immer's structural sharing keeps unchanged rows identical, so a shallow element-by-element check is usually enough.
+- Computed subs gate update propagation with deep equality by default — O(result size) per recompute. For subs returning large derived collections, pass a cheaper check: `regSub(id, depsFn, computeFn, { equalityCheck: shallowEqual })` (`shallowEqual` is exported from reflex). Immer's structural sharing keeps unchanged rows identical, so a shallow element-by-element check is usually enough.
 - For typed `useSubscription` params and results, declare `SubPayloads` (section 12).
 
 ## 6) React Component Contract
@@ -219,7 +220,7 @@ Find code by exact-match grep, never by browsing:
 
 Read only the handler, trust the contract:
 - Event handlers are pure: inputs = coeffects + event params, outputs = `draftState` mutations + returned effect tuples. Nothing outside the function body changes its behavior, so reading the one function is sufficient to understand or safely modify it.
-- Subscription `computeFn` inputs are exactly the parent sub values declared in `depsFn` — the data-flow graph is declared, not inferred.
+- Subscription `computeFn` receives exactly the parent sub values declared in `depsFn`, as one array in declaration order — the data-flow graph is declared, not inferred.
 - Views only subscribe/dispatch/render. Changing state logic never requires reading component code, and changing markup never requires reading handlers.
 
 Bounded file sets for common tasks:
@@ -283,8 +284,8 @@ runtime.registerModule((registrar) => {
   registrar.regRootSub('todos/list', 'todos');
   registrar.regSub(
     'todos/open_count',
-    (todos: Todo[]) => todos.filter((todo) => !todo.done).length,
     () => [['todos/list']],
+    ([todos]: [Todo[]]) => todos.filter((todo) => !todo.done).length,
   );
 });
 

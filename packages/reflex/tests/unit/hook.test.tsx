@@ -20,15 +20,15 @@ describe('React Hooks', () => {
   regRootSub('user', 'user');
   regSub(
     'user-name',
-    (user) => user?.name,
     () => [['user']],
+    ([user]) => user?.name,
   );
   regRootSub('user-email-str', 'userEmail');
   regRootSub('todos', 'todos');
   regSub(
     'todos-count',
-    (todos) => (todos || []).length,
     () => [['todos']],
+    ([todos]) => (todos || []).length,
   );
 
   beforeEach(() => {
@@ -123,10 +123,10 @@ describe('React Hooks', () => {
     it('should handle subscription with parameters', () => {
       regSub(
         'todo-by-id',
-        (todos, id) => {
+        () => [['todos']],
+        ([todos], id) => {
           return (todos || []).find((todo: any) => todo.id === id);
         },
-        () => [['todos']],
       );
 
       const { result } = renderHook(() => useSubscription(['todo-by-id', 1]), {
@@ -143,11 +143,11 @@ describe('React Hooks', () => {
     it('should handle subscription with deps parameters', () => {
       regSub(
         'todo-name-by-id',
-        (todo) => {
-          return todo?.text || null;
-        },
         (id) => {
           return [['todo-by-id', id]];
+        },
+        ([todo]) => {
+          return todo?.text || null;
         },
       );
 
@@ -322,10 +322,10 @@ describe('React Hooks', () => {
     it('should re-subscribe when subscription parameters change', async () => {
       regSub(
         'todo-text-by-id',
-        (todos, id) => {
+        () => [['todos']],
+        ([todos], id) => {
           return (todos || []).find((todo: any) => todo.id === id)?.text ?? null;
         },
-        () => [['todos']],
       );
 
       initState({
@@ -400,13 +400,13 @@ describe('React Hooks', () => {
       regRootSub('cons-base', 'cons-base');
       regSub(
         'cons-x10',
-        (v: number) => v * 10,
         () => [['cons-base']],
+        ([v]: [number]) => v * 10,
       );
       regSub(
         'cons-x100',
-        (v: number) => v * 100,
         () => [['cons-base']],
+        ([v]: [number]) => v * 100,
       );
 
       initState({ 'cons-base': 1 });

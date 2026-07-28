@@ -20,23 +20,23 @@ describe('Dev warnings for non-serializable subscription params', () => {
   regRootSub('warn-items', 'warn-items');
   regSub(
     'warn-by-filter',
-    (items) => items,
     () => [['warn-items']],
+    ([items]) => items,
   );
   regSub(
     'warn-by-query',
-    (items) => items,
     () => [['warn-items']],
+    ([items]) => items,
   );
   regSub(
     'warn-hook-circular',
-    (items) => items,
     () => [['warn-items']],
+    ([items]) => items,
   );
   regSub(
     'warn-hook-bigint',
-    (items) => items,
     () => [['warn-items']],
+    ([items]) => items,
   );
 
   const warnCallsContaining = (fragment: string) =>

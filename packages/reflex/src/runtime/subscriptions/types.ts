@@ -13,7 +13,8 @@ export interface SubscriptionSpec<T> {
   key: string;
   query: SubVector;
   kind: SubscriptionKind;
-  compute: (...dependencyValues: any[]) => T;
+  /** Receives one array holding every dependency value in declaration order. */
+  compute: (dependencyValues: any[]) => T;
   dependencies: SubscriptionNode<any>[];
   equalityCheck: EqualityCheckFn;
   onActive: () => void;

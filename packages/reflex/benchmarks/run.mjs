@@ -305,8 +305,8 @@ function setupFanOut(width, runtimeId) {
     runtime.registerModule((registrar) => {
       registrar.regSub(
         id,
-        (tick) => tick + index,
         () => [['bench/tick-root']],
+        ([tick]) => tick + index,
       );
     });
     disposers.push(
@@ -330,8 +330,8 @@ function setupDeepChain(depth, runtimeId) {
     runtime.registerModule((registrar) => {
       registrar.regSub(
         id,
-        (value) => value + 1,
         () => [[dependency]],
+        ([value]) => value + 1,
       );
     });
     previous = id;
@@ -352,18 +352,18 @@ function setupEqualityCutoff(itemCount, runtimeId) {
   runtime.registerModule((registrar) => {
     registrar.regSub(
       'bench/mapped-items',
-      (items) => items.map((item) => item),
       () => [['bench/items-root']],
+      ([items]) => items.map((item) => item),
     );
   });
   runtime.registerModule((registrar) => {
     registrar.regSub(
       'bench/item-count',
-      (items) => {
+      () => [['bench/mapped-items']],
+      ([items]) => {
         downstreamRuns += 1;
         return items.length;
       },
-      () => [['bench/mapped-items']],
     );
   });
   const disposer = getBenchHarness(runtime).watchSubscription(['bench/item-count'], () => {}, {
@@ -390,8 +390,8 @@ function setupMountChurn(runtimeId) {
   runtime.registerModule((registrar) => {
     registrar.regSub(
       'bench/double',
-      (tick) => tick * 2,
       () => [['bench/tick-root']],
+      ([tick]) => tick * 2,
     );
   });
   return { runtime, disposers: [] };

@@ -1,7 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { enableMapSet, HotReloadWrapper, ReflexProvider } from '@flexsurfer/reflex';
+import { enableMapSet } from '@flexsurfer/reflex/vanilla';
+import { HotReloadWrapper, ReflexProvider } from '@flexsurfer/reflex/react';
 
 import TodoApp from './views';
 

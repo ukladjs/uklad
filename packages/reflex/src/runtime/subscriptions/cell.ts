@@ -4,6 +4,9 @@ import { mergeRuntimeProbeSpan, withRuntimeProbeSpan } from '../probe';
 import type { SubscriptionEngine } from './engine';
 import type { SubscriptionListenerRegistration, SubscriptionSpec } from './types';
 
+/** Root cells have no dependencies, so they always receive this empty list. */
+const NO_DEPENDENCY_VALUES: any[] = [];
+
 /** Cached value and lifecycle state for one node in a subscription graph. */
 export class SubscriptionCell<T> {
   readonly engine: SubscriptionEngine;
@@ -55,7 +58,7 @@ export class SubscriptionCell<T> {
   }
 
   refreshRoot(): boolean {
-    return this.runComputation(() => this.spec.compute());
+    return this.runComputation(() => this.spec.compute(NO_DEPENDENCY_VALUES));
   }
 
   refreshComputed(force: boolean = false): boolean {
@@ -76,7 +79,7 @@ export class SubscriptionCell<T> {
     if (failedDependency) return this.setError(failedDependency.error);
 
     return this.runComputation(() =>
-      this.spec.compute(...this.dependencies.map((dependency) => dependency.value)),
+      this.spec.compute(this.dependencies.map((dependency) => dependency.value)),
     );
   }
 

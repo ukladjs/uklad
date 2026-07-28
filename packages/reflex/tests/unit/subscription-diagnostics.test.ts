@@ -16,27 +16,27 @@ describe('subscription diagnostics', () => {
   regRootSub('diagnostic-source', 'diagnostic-source');
   regSub(
     'diagnostic-double',
-    (value: number) => {
+    () => [['diagnostic-source']],
+    ([value]: [number]) => {
       computedRuns++;
       return value * 2;
     },
-    () => [['diagnostic-source']],
   );
   regSub(
     'diagnostic-maybe-error',
-    (value: number) => {
+    () => [['diagnostic-source']],
+    ([value]: [number]) => {
       if (value < 0) throw new Error('diagnostic failure');
       return value;
     },
-    () => [['diagnostic-source']],
   );
   regSub(
     'diagnostic-unprintable-error',
-    (value: number) => {
+    () => [['diagnostic-source']],
+    ([value]: [number]) => {
       if (value < 0) throw Object.create(null);
       return value;
     },
-    () => [['diagnostic-source']],
   );
 
   beforeEach(() => {

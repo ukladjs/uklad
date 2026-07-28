@@ -103,7 +103,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
           [3, { id: 3, title: 'Todo 3', done: false }],
         ]);
 
-        const result = handler(todos, 'all');
+        const result = handler([todos, 'all']);
 
         expect(result).toHaveLength(3);
         expect(result).toEqual([
@@ -122,7 +122,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
           [3, { id: 3, title: 'Todo 3', done: false }],
         ]);
 
-        const result = handler(todos, 'active');
+        const result = handler([todos, 'active']);
 
         expect(result).toHaveLength(2);
         expect(result).toEqual([
@@ -140,7 +140,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
           [3, { id: 3, title: 'Todo 3', done: true }],
         ]);
 
-        const result = handler(todos, 'done');
+        const result = handler([todos, 'done']);
 
         expect(result).toHaveLength(2);
         expect(result).toEqual([
@@ -152,14 +152,14 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
       it('should return empty array when todos is null or undefined', () => {
         const handler = testHarness.getSubscriptionHandler(SUB_IDS.VISIBLE_TODOS) as SubHandler;
 
-        expect(handler(null, 'all')).toEqual([]);
-        expect(handler(undefined, 'all')).toEqual([]);
+        expect(handler([null, 'all'])).toEqual([]);
+        expect(handler([undefined, 'all'])).toEqual([]);
       });
 
       it('should return empty array when todos is empty', () => {
         const handler = testHarness.getSubscriptionHandler(SUB_IDS.VISIBLE_TODOS) as SubHandler;
 
-        const result = handler(new Map(), 'all');
+        const result = handler([new Map(), 'all']);
         expect(result).toEqual([]);
       });
     });
@@ -175,7 +175,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
           [3, { id: 3, title: 'Todo 3', done: true }],
         ]);
 
-        const result = handler(todos);
+        const result = handler([todos]);
         expect(result).toBe(true);
       });
 
@@ -188,7 +188,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
           [3, { id: 3, title: 'Todo 3', done: true }],
         ]);
 
-        const result = handler(todos);
+        const result = handler([todos]);
         expect(result).toBe(false);
       });
 
@@ -200,14 +200,14 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
           [2, { id: 2, title: 'Todo 2', done: false }],
         ]);
 
-        const result = handler(todos);
+        const result = handler([todos]);
         expect(result).toBe(false);
       });
 
       it('should return false when todos is empty', () => {
         const handler = testHarness.getSubscriptionHandler(SUB_IDS.ALL_COMPLETE) as SubHandler;
 
-        const result = handler(new Map());
+        const result = handler([new Map()]);
         expect(result).toBe(false);
       });
 
@@ -216,7 +216,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
 
         const todos = new Map([[1, { id: 1, title: 'Single Todo', done: true }]]);
 
-        const result = handler(todos);
+        const result = handler([todos]);
         expect(result).toBe(true);
       });
 
@@ -225,7 +225,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
 
         const todos = new Map([[1, { id: 1, title: 'Single Todo', done: false }]]);
 
-        const result = handler(todos);
+        const result = handler([todos]);
         expect(result).toBe(false);
       });
 
@@ -253,7 +253,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
           [5, { id: 5, title: 'Todo 5', done: false }],
         ]);
 
-        const result = handler(todos);
+        const result = handler([todos]);
         expect(result).toEqual([3, 2]); // [active, done]
       });
 
@@ -266,7 +266,7 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
           [3, { id: 3, title: 'Todo 3', done: false }],
         ]);
 
-        const result = handler(todos);
+        const result = handler([todos]);
         expect(result).toEqual([3, 0]); // [active, done]
       });
 
@@ -278,14 +278,14 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
           [2, { id: 2, title: 'Todo 2', done: true }],
         ]);
 
-        const result = handler(todos);
+        const result = handler([todos]);
         expect(result).toEqual([0, 2]); // [active, done]
       });
 
       it('should return zero counts when todos is empty', () => {
         const handler = testHarness.getSubscriptionHandler(SUB_IDS.FOOTER_COUNTS) as SubHandler;
 
-        const result = handler(new Map());
+        const result = handler([new Map()]);
         expect(result).toEqual([0, 0]); // [active, done]
       });
 
@@ -296,8 +296,8 @@ describe('TodoMVC Subscription Handlers (Pure Functions)', () => {
 
         const doneTodos = new Map([[1, { id: 1, title: 'Single Done', done: true }]]);
 
-        expect(handler(activeTodos)).toEqual([1, 0]);
-        expect(handler(doneTodos)).toEqual([0, 1]);
+        expect(handler([activeTodos])).toEqual([1, 0]);
+        expect(handler([doneTodos])).toEqual([0, 1]);
       });
 
       it('should have correct dependencies', () => {

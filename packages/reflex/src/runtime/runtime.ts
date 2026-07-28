@@ -218,15 +218,15 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   regSub(
     id: Id,
+    dependencies: (...params: any[]) => readonly ContractSubscribeVector<TContracts>[],
     compute: RuntimeSubscriptionHandler<TContracts, any>,
-    dependencies: (...params: any[]) => ContractSubscribeVector<TContracts>[],
     config?: SubConfig,
   ): void {
     this.assertUsable();
     const registration = this.#core.subscriptions.register(
       id,
-      compute as any,
       dependencies as any,
+      compute as any,
       config,
     );
     if (registration) this.recordRegistration(registration);

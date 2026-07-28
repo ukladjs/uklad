@@ -18,44 +18,44 @@ describe('Subscription registry lifecycle', () => {
   regRootSub('sweep-todos', 'sweep-todos');
   regSub(
     'sweep-count',
-    (todos) => (todos || []).length,
     () => [['sweep-todos']],
+    ([todos]) => (todos || []).length,
   );
   regSub(
     'sweep-cycle-a',
-    (value) => value,
     () => [['sweep-cycle-b']],
+    ([value]) => value,
   );
   regSub(
     'sweep-cycle-b',
-    (value) => value,
     () => [['sweep-cycle-a']],
+    ([value]) => value,
   );
   regSub(
     'sweep-missing-parent',
-    (value) => value,
     () => [['sweep-missing-child']],
+    ([value]) => value,
   );
-  regSub('sweep-invalid-deps', () => 1, (() => undefined) as any);
+  regSub('sweep-invalid-deps', (() => undefined) as any, () => 1);
   regSub(
     'sweep-lease-a',
-    (todos) => todos.length,
     () => [['sweep-todos']],
+    ([todos]) => todos.length,
   );
   regSub(
     'sweep-lease-b',
-    (value) => value + 1,
     () => [['sweep-lease-a']],
+    ([value]) => value + 1,
   );
   regSub(
     'sweep-lease-c',
-    (value) => value + 1,
     () => [['sweep-lease-b']],
+    ([value]) => value + 1,
   );
   regSub(
     'sweep-override',
-    () => 1,
     () => [],
+    () => 1,
   );
 
   const countKey = JSON.stringify(['sweep-count']);
@@ -176,8 +176,8 @@ describe('Subscription registry lifecycle', () => {
     it('requires clearing before registering a subscription id again', () => {
       regSub(
         'sweep-config-reset',
-        () => 1,
         () => [],
+        () => 1,
         { equalityCheck: Object.is },
       );
       expect(getSubConfig('sweep-config-reset')?.equalityCheck).toBe(Object.is);
@@ -185,16 +185,16 @@ describe('Subscription registry lifecycle', () => {
       expect(() =>
         regSub(
           'sweep-config-reset',
-          () => 2,
           () => [],
+          () => 2,
         ),
       ).toThrow("Registration 'sweep-config-reset' is already registered");
 
       clearSubscriptionHandlers('sweep-config-reset');
       regSub(
         'sweep-config-reset',
-        () => 2,
         () => [],
+        () => 2,
       );
 
       expect(getSubConfig('sweep-config-reset')).toBeUndefined();
@@ -217,8 +217,8 @@ describe('Subscription registry lifecycle', () => {
       expect(() =>
         regSub(
           'sweep-override',
-          () => 2,
           () => [],
+          () => 2,
         ),
       ).toThrow("Registration 'sweep-override' is already registered");
       expect(getSubscriptionValue(['sweep-override'])).toBe(1);
@@ -228,15 +228,15 @@ describe('Subscription registry lifecycle', () => {
       const depth = 3000;
       regSub(
         'sweep-deep-0',
-        (value) => value,
         () => [['sweep-todos']],
+        ([value]) => value,
       );
       for (let index = 1; index <= depth; index++) {
         const previous = `sweep-deep-${index - 1}`;
         regSub(
           `sweep-deep-${index}`,
-          (value) => value,
           () => [[previous]],
+          ([value]) => value,
         );
       }
 

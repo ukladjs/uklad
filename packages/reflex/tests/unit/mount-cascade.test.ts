@@ -25,18 +25,18 @@ describe('Mount recompute cascades', () => {
   regRootSub('mc-items', 'mc-items');
   regSub(
     'mc-sorted',
-    (items: any[]) => {
+    () => [['mc-items']],
+    ([items]: [any[]]) => {
       sortCount++;
       return [...(items || [])].sort((a, b) => a.order - b.order);
     },
-    () => [['mc-items']],
   );
   regSub(
     'mc-by-id',
-    (sorted: any[], id: number) => {
+    () => [['mc-sorted']],
+    ([sorted]: [any[]], id: number) => {
       return sorted.find((item) => item.id === id);
     },
-    () => [['mc-sorted']],
   );
 
   beforeEach(() => {

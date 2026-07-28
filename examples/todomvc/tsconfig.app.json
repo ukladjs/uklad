@@ -8,10 +8,16 @@
     "types": ["vite/client"],
     "skipLibCheck": true,
 
+    // Must mirror the aliases in vite.config.ts. Any entrypoint left unmapped
+    // resolves to the built dist instead of source, which yields a second copy
+    // of the runtime types that cannot be inferred against the first.
     "paths": {
       "@flexsurfer/reflex": ["../../packages/reflex/src/index.ts"],
+      "@flexsurfer/reflex/vanilla": ["../../packages/reflex/src/vanilla.ts"],
+      "@flexsurfer/reflex/react": ["../../packages/reflex/src/react.ts"],
       "@flexsurfer/reflex/devtools": ["../../packages/reflex/src/devtools.ts"],
       "@flexsurfer/reflex/testing": ["../../packages/reflex/src/testing.ts"],
+      "@flexsurfer/reflex/internal": ["../../packages/reflex/src/internal.ts"],
       "@flexsurfer/reflex-persist": ["../../packages/reflex-persist/src/index.ts"],
       "@flexsurfer/reflex-devtools": ["../../packages/reflex-devtools/src/index.ts"]
     },

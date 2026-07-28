@@ -1,11 +1,11 @@
 import { useCallback } from 'react';
-import { useReflexRuntime, useSubscription } from '@flexsurfer/reflex/react';
+import { usePlaygroundRuntime, useSubscription } from '../hooks';
 import UserItem from './UserItem';
 
 function UsersPanel() {
-  const runtime = useReflexRuntime();
-  const users = useSubscription<any[]>(['users'], 'UsersPanel');
-  const isLoading = useSubscription<boolean>(['isLoading'], 'UsersPanel');
+  const runtime = usePlaygroundRuntime();
+  const users = useSubscription(['users'], 'UsersPanel');
+  const isLoading = useSubscription(['isLoading'], 'UsersPanel');
 
   const handleUserToggle = useCallback(
     (userId: number) => {

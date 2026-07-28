@@ -39,7 +39,10 @@ function computed<T>(
     key,
     query: [key],
     kind: 'computed',
-    compute,
+    // The engine hands a computed cell one array of dependency values; these
+    // cases read better spread, so the adaptation lives here rather than in
+    // every assertion below.
+    compute: (values: any[]) => compute(...values),
     dependencies,
     equalityCheck,
     onActive: hooks.onActive ?? (() => {}),

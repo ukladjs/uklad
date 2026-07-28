@@ -28,75 +28,75 @@ describe('Subscription cache contract', () => {
   regRootSub('cache-items', 'cache-items');
   regSub(
     'cache-count',
-    (items: number[]) => (items || []).length,
     () => [['cache-items']],
+    ([items]: [number[]]) => (items || []).length,
   );
   regSub(
     'cache-even-items',
-    (items: number[]) => (items || []).filter((item) => item % 2 === 0),
     () => [['cache-items']],
+    ([items]: [number[]]) => (items || []).filter((item) => item % 2 === 0),
   );
   regSub(
     'cache-even-count',
-    (items: number[]) => items.length,
     () => [['cache-even-items']],
+    ([items]: [number[]]) => items.length,
   );
   regRootSub('cache-revive-source', 'cache-revive-source');
   regSub(
     'cache-revive-double',
-    (value: number) => value * 2,
     () => [['cache-revive-source']],
+    ([value]: [number]) => value * 2,
   );
   regSub(
     'cache-default-mapped',
-    (items: number[]) => {
+    () => [['cache-items']],
+    ([items]: [number[]]) => {
       mappedRuns++;
       return items.map((item) => item);
     },
-    () => [['cache-items']],
   );
   regSub(
     'cache-default-length',
-    (items: number[]) => {
+    () => [['cache-default-mapped']],
+    ([items]: [number[]]) => {
       lengthRuns++;
       return items.length;
     },
-    () => [['cache-default-mapped']],
   );
   regRootSub('cache-selected', 'cache-selected');
   regSub(
     'cache-selected-value',
-    (selected: string | undefined) => {
+    () => [['cache-selected']],
+    ([selected]: [string | undefined]) => {
       selectedRuns++;
       return selected;
     },
-    () => [['cache-selected']],
   );
   regRootSub('cache-shared-source', 'cache-shared-source');
   regSub(
     'cache-shared-dependency',
-    (value: number) => value * 2,
     () => [['cache-shared-source']],
+    ([value]: [number]) => value * 2,
   );
   regSub(
     'cache-dormant-parent',
-    (value: number) => value + 1,
     () => [['cache-shared-dependency']],
+    ([value]: [number]) => value + 1,
   );
   regSub(
     'cache-live-sibling',
-    (value: number) => value + 10,
     () => [['cache-shared-dependency']],
+    ([value]: [number]) => value + 10,
   );
   regSub(
     'cache-param-select',
-    (value: number, offset: number) => value + offset,
     () => [['cache-shared-source']],
+    ([value]: [number], offset: number) => value + offset,
   );
   regSub(
     'cache-param-parent',
-    (value: number) => value * 10,
     (offset: number) => [['cache-param-select', offset]],
+    ([value]: [number]) => value * 10,
   );
 
   regEvent('cache-add-item', ({ draftState }, item: number) => {
@@ -282,8 +282,8 @@ describe('Subscription cache contract', () => {
     regRootSub(sourceId, sourceId);
     regSub(
       derivedId,
-      (value: number) => value * 2,
       () => [[sourceId]],
+      ([value]: [number]) => value * 2,
     );
     initState({ [sourceId]: 2 });
     expect(getSubscriptionValue([derivedId])).toBe(4);
@@ -302,8 +302,8 @@ describe('Subscription cache contract', () => {
     regRootSub(sourceId, sourceId);
     regSub(
       derivedId,
-      (value: number) => value * 2,
       () => [[sourceId]],
+      ([value]: [number]) => value * 2,
     );
     initState({ [sourceId]: 1 });
 
@@ -315,8 +315,8 @@ describe('Subscription cache contract', () => {
     regRootSub(sourceId, sourceId);
     regSub(
       derivedId,
-      (value: number) => value * 3,
       () => [[sourceId]],
+      ([value]: [number]) => value * 3,
     );
     const replacement = getOrCreateSubscription([derivedId])!;
     const unsubscribeReplacement = subscribeToSubscription(replacement, () => {});

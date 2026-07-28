@@ -34,8 +34,8 @@ describe('Subscription flush', () => {
   regRootSub('flush-other', 'flush-other');
   regSub(
     'flush-double',
-    (counter) => counter * 2,
     () => [['flush-counter']],
+    ([counter]) => counter * 2,
   );
 
   regEvent('flush-inc', ({ draftState }) => {

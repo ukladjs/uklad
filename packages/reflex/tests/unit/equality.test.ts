@@ -52,14 +52,14 @@ describe('per-sub equalityCheck config with shallowEqual', () => {
   regRootSub('se-items', 'se-items');
   regSub(
     'se-mapped',
-    (items: number[]) => items.map((n) => n),
     () => [['se-items']],
+    ([items]: [number[]]) => items.map((n) => n),
     { equalityCheck: shallowEqual },
   );
   regSub(
     'se-always-changed',
-    (items: number[]) => items.length,
     () => [['se-items']],
+    ([items]: [number[]]) => items.length,
     { equalityCheck: () => false },
   );
 
@@ -105,8 +105,8 @@ describe('per-sub equalityCheck config with shallowEqual', () => {
   it('should warn and use the global comparator for an invalid JS equalityCheck', () => {
     regSub(
       'se-invalid-equality',
-      (items: number[]) => items.map((item) => item),
       () => [['se-items']],
+      ([items]: [number[]]) => items.map((item) => item),
       { equalityCheck: false } as any,
     );
     const subscription = getOrCreateSubscription(['se-invalid-equality'])!;

@@ -21,11 +21,11 @@ export function installBrowserEffects(registrar: ReflexRegistrar<PlaygroundContr
     console.log('fake-effect', param);
   });
 
-  registrar.regEffect('local-storage-set', ({ key, value }: { key: string; value: unknown }) => {
+  registrar.regEffect('local-storage-set', ({ key, value }) => {
     window.localStorage.setItem(key, JSON.stringify(value));
   });
 
-  registrar.regEffect('set-document-title', (title: string) => {
+  registrar.regEffect('set-document-title', (title) => {
     document.title = title;
   });
 }

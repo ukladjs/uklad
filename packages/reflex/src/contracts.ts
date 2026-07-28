@@ -214,6 +214,31 @@ export type ContractSubscriptionVector<
 /** Subscription vectors accepted by public query entry points. */
 export type ContractSubscribeVector<TContracts> = ContractSubscriptionVector<TContracts>;
 
+/** Result produced by one declared dependency vector. */
+type DependencyValue<TContracts, TDependency> = TDependency extends readonly [
+  infer TId extends string,
+  ...unknown[],
+]
+  ? ContractSubscriptionResult<TContracts, TId>
+  : any;
+
+/**
+ * The dependency values a `regSub` compute function receives, as one tuple in
+ * declaration order.
+ *
+ * `TDependencies` is inferred from the dependency function's returned tuple, so
+ * reordering dependencies changes the compute signature and surfaces as a type
+ * error at the registration site. A dependency list the compiler cannot see as
+ * a fixed tuple — built with `map`, `slice`, or a widening annotation — stays a
+ * plain array instead of failing to compile.
+ */
+export type ContractSubscriptionDependencyValues<
+  TContracts,
+  TDependencies extends readonly unknown[],
+> = {
+  -readonly [TIndex in keyof TDependencies]: DependencyValue<TContracts, TDependencies[TIndex]>;
+};
+
 /** Idempotent cleanup returned by watches and module installation. */
 export type ReflexDisposer = () => void;
 

@@ -115,11 +115,13 @@ export function regEventErrorHandler(handler: ErrorHandler): void {
 
 export function regSub<R = any, K extends Id = Id>(
   id: K,
-  computeFn: (...values: any[]) => SubResult<K, R>,
   depsFn: (...params: any[]) => SubVector[],
+  // `any` rather than `any[]`, so cases may annotate the dependency list as an
+  // exact tuple (`([value]: [number]) => …`) without fighting assignability.
+  computeFn: (values: any, ...params: any[]) => SubResult<K, R>,
   config?: SubConfig,
 ): void {
-  core.subscriptions.register(id, computeFn, depsFn, config);
+  core.subscriptions.register(id, depsFn, computeFn, config);
 }
 
 export function regRootSub<K extends Id = Id>(id: K, sourceKey: string): void {

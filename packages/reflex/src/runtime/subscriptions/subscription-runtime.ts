@@ -82,15 +82,15 @@ export class SubscriptionRuntime {
 
   register<R = any, K extends Id = Id>(
     id: K,
-    computeFn: (...values: any[]) => SubResult<K, R>,
     depsFn: (...params: any[]) => SubVector[],
+    computeFn: (values: any[], ...params: any[]) => SubResult<K, R>,
     config?: SubConfig,
   ): RegistrationHandle | undefined {
     this.prepareRegistration(id);
     if (typeof computeFn !== 'function' || typeof depsFn !== 'function') {
       consoleLog(
         'error',
-        `[reflex] Subscription '${id}' must specify both computeFn and depsFn. Register direct state subscriptions with regRootSub().`,
+        `[reflex] Subscription '${id}' must specify both depsFn and computeFn. Register direct state subscriptions with regRootSub().`,
       );
       return undefined;
     }
@@ -227,10 +227,12 @@ export class SubscriptionRuntime {
         key,
         query,
         kind,
-        compute: (...dependencyValues) =>
+        // The dependency list is passed through as one array, so a recomputation
+        // allocates it once instead of re-spreading it into every call frame.
+        compute:
           params.length > 0
-            ? computeFn(...dependencyValues, ...params)
-            : computeFn(...dependencyValues),
+            ? (dependencyValues: any[]) => computeFn(dependencyValues, ...params)
+            : (dependencyValues: any[]) => computeFn(dependencyValues),
         dependencies,
         equalityCheck,
         onActive: () => this.unmarkProvisional(key, subscription),

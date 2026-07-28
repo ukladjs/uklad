@@ -19,8 +19,8 @@ describe('dispatchSync', () => {
   regRootSub('ds-counter', 'ds-counter');
   regSub(
     'ds-double',
-    (counter) => counter * 2,
     () => [['ds-counter']],
+    ([counter]) => counter * 2,
   );
 
   regEvent('ds-inc', ({ draftState }) => {

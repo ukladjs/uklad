@@ -25,7 +25,7 @@ export function installHeadlessEffects(registrar: ReflexRegistrar<PlaygroundCont
     console.log('fake-effect', param);
   });
   
-  registrar.regEffect('local-storage-set', ({ key, value }: { key: string; value: unknown }) => {
+  registrar.regEffect('local-storage-set', ({ key, value }) => {
     memoryStorage.set(key, JSON.stringify(value));
   });
 

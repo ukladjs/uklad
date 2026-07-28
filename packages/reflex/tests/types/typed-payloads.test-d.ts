@@ -278,16 +278,16 @@ testHarness.getSubscriptionValue(['subs/typo']);
 runtime.registerModule((registrar) => {
   registrar.regSub(
     'todos/all',
-    (): Todo[] => [],
     () => [],
+    (): Todo[] => [],
   );
 });
 runtime.registerModule((registrar) => {
   registrar.regSub(
     'todos/all',
+    () => [],
     // @ts-expect-error computeFn result must match the declared sub result
     (): number => 42,
-    () => [],
   );
 });
 
@@ -310,7 +310,7 @@ runtime.registerModule((registrar) => {
 legacyRuntime.registerModule((registrar) => {
   registrar.regSub(
     'legacy-sorted',
-    () => [] as Todo[],
     () => [],
+    () => [] as Todo[],
   );
 });

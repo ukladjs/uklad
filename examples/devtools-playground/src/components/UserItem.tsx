@@ -1,11 +1,5 @@
 import React from 'react';
-import { useSubscription } from '@flexsurfer/reflex/react';
-
-interface User {
-  id: number;
-  name: string;
-  active: boolean;
-}
+import { useSubscription } from '../hooks';
 
 interface UserItemProps {
   userId: number;
@@ -13,7 +7,9 @@ interface UserItemProps {
 }
 
 const UserItem: React.FC<UserItemProps> = ({ userId, onToggle }) => {
-  const user = useSubscription<User>(['user-by-id', userId], 'UserItem');
+  // A parameterized subscription: `userId` is checked against the declared
+  // params, and `user` is inferred as PlaygroundUser | undefined.
+  const user = useSubscription(['user-by-id', userId], 'UserItem');
   if (!user) return null;
   return (
     <div

@@ -1,7 +1,7 @@
 import { createReflexHooks } from '../../src/react';
 import { createReflexRuntime } from '../../src/vanilla';
 import { createReflexTestHarness } from '../../src/testing';
-import type { ReflexContracts } from '../../src/vanilla';
+import type { ContractSubscribeVector, ReflexContracts } from '../../src/vanilla';
 
 interface CounterContracts extends ReflexContracts {
   state: { count: number };
@@ -47,12 +47,105 @@ runtime.registerModule((registrar) => {
 runtime.registerModule((registrar) => {
   registrar.regSub(
     'scaled',
-    (count: number, factor: number) => count * factor,
     (factor) => {
       const value: number = factor;
       void value;
       return [['count']];
     },
+    ([count], factor) => count * factor,
+  );
+});
+
+// ---- regSub dependency inference -------------------------------------
+// `compute` receives the dependency values as one array, in declaration order,
+// followed by the subscription's own parameters. All of it is inferred from the
+// dependency function's returned tuple.
+
+interface GraphContracts extends ReflexContracts {
+  state: { todos: Todo[]; showing: Showing };
+  subscriptions: {
+    todos: { params: []; result: Todo[] };
+    showing: { params: []; result: Showing };
+    visible: { params: []; result: Todo[] };
+    byId: { params: [id: number]; result: Todo | undefined };
+  };
+}
+
+interface Todo {
+  id: number;
+  done: boolean;
+}
+type Showing = 'all' | 'active' | 'done';
+
+const graph = createReflexRuntime<GraphContracts>({
+  initialState: { todos: [], showing: 'all' },
+  runtimeId: 'typed-graph',
+});
+
+// Dependency values are inferred without annotations.
+graph.registerModule((registrar) => {
+  registrar.regSub(
+    'visible',
+    () => [['todos'], ['showing']],
+    ([todos, showing]) => (showing === 'all' ? todos : todos.filter((todo) => todo.done)),
+  );
+});
+
+// Reordering dependencies is a compile-time error rather than a silent swap.
+graph.registerModule((registrar) => {
+  registrar.regSub(
+    'visible',
+    () => [['showing'], ['todos']],
+    // @ts-expect-error deps resolve to [Showing, Todo[]], not [Todo[], Showing].
+    ([todos, showing]: [Todo[], Showing]) => (showing === 'all' ? todos : []),
+  );
+});
+
+// Subscription parameters follow the dependency array, and keep their position
+// no matter how many dependencies are declared.
+graph.registerModule((registrar) => {
+  registrar.regSub(
+    'byId',
+    () => [['todos']],
+    ([todos], id) => todos.find((todo) => todo.id === id),
+  );
+});
+graph.registerModule((registrar) => {
+  registrar.regSub(
+    'byId',
+    () => [['todos'], ['showing']],
+    ([todos, showing], id) =>
+      showing === 'all' ? todos.find((todo) => todo.id === id) : undefined,
+  );
+});
+
+// Dependency inference survives a dependency function that takes parameters.
+graph.registerModule((registrar) => {
+  registrar.regSub(
+    'byId',
+    (id) => (id > 0 ? [['todos'], ['showing']] : [['todos'], ['showing']]),
+    ([todos, showing], id) =>
+      showing === 'all' ? todos.find((todo) => todo.id === id) : undefined,
+  );
+});
+
+// Unknown dependency ids are rejected.
+graph.registerModule((registrar) => {
+  registrar.regSub(
+    'visible',
+    // @ts-expect-error 'missing' is not a declared subscription id.
+    () => [['missing']],
+    ([todos]) => todos as Todo[],
+  );
+});
+
+// A dependency list the compiler cannot see as a fixed tuple stays a plain
+// array instead of failing to compile.
+graph.registerModule((registrar) => {
+  registrar.regSub(
+    'visible',
+    () => [['todos'], ['showing']].slice(0, 1) as ContractSubscribeVector<GraphContracts>[],
+    (values) => values[0] as Todo[],
   );
 });
 

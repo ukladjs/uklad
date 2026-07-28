@@ -2,7 +2,7 @@ import { IS_DEV } from '../core/environment';
 import { consoleLog } from '../core/logging';
 import { isEventVector } from '../core/validation';
 import { isRuntimeDisposed, type RuntimeCore } from './core';
-import { cloneStructuredValue } from '../core/structured-clone';
+import { freezeDispatchedEvent } from '../core/event-freeze';
 import { createRegistrationHandle, RegistrationStore } from './registrations';
 import { assertRuntimeUsable } from './validation';
 import {
@@ -28,7 +28,6 @@ import type {
   Interceptor,
 } from '../types';
 
-type ScheduledEventVector = EventVector & { meta?: Partial<Record<'flush' | 'yield', boolean>> };
 const EMPTY_INTERCEPTORS: readonly Interceptor[] = Object.freeze([]);
 
 interface RuntimeEventDefinition {
@@ -165,12 +164,19 @@ export class EventRuntime {
     return envelope;
   }
 
+  /**
+   * Accept an event from application code or from a dispatch effect.
+   *
+   * The event becomes runtime-owned here. Development freezes it so a caller
+   * that keeps mutating what it dispatched fails at the mutation site rather
+   * than silently changing what the handler later receives.
+   */
   dispatchOwned(event: DispatchVector): void {
     if (!isEventVector(event)) {
       this.dispatch(event);
       return;
     }
-    this.dispatch(cloneAcceptedEvent(event));
+    this.dispatch(freezeDispatchedEvent(event));
   }
 
   dispatchSync(event: DispatchVector): void {
@@ -233,7 +239,7 @@ export class EventRuntime {
   }
 
   debounce(event: DispatchVector, durationMs: number): void {
-    const acceptedEvent = cloneRateLimitedEvent(event);
+    const acceptedEvent = freezeDispatchedEvent(event);
     const eventId = acceptedEvent[0];
     this.clearRateLimit(eventId);
     const timeout = setTimeout(() => {
@@ -244,7 +250,7 @@ export class EventRuntime {
   }
 
   throttle(event: DispatchVector, durationMs: number): void {
-    const acceptedEvent = cloneRateLimitedEvent(event);
+    const acceptedEvent = freezeDispatchedEvent(event);
     const eventId = acceptedEvent[0];
     if (this.throttledEventIds.has(eventId)) return;
     this.throttledEventIds.add(eventId);
@@ -333,30 +339,6 @@ function createEventDefinition(
     handler,
     interceptors: interceptors.length === 0 ? EMPTY_INTERCEPTORS : Object.freeze([...interceptors]),
   });
-}
-
-function cloneAcceptedEvent(event: DispatchVector): DispatchVector {
-  try {
-    const clonedEvent = cloneStructuredValue(event) as DispatchVector;
-    const metadata = (event as ScheduledEventVector).meta;
-    if (metadata !== undefined)
-      (clonedEvent as ScheduledEventVector).meta = cloneStructuredValue(metadata);
-    return clonedEvent;
-  } catch (error: unknown) {
-    throw new Error('[reflex] event input must be structured-cloneable so the runtime owns it.', {
-      cause: error,
-    });
-  }
-}
-
-function cloneRateLimitedEvent(event: DispatchVector): DispatchVector {
-  try {
-    return cloneStructuredValue(event);
-  } catch (error: unknown) {
-    throw new Error('[reflex] Rate-limited dispatch payloads must be structured-cloneable.', {
-      cause: error,
-    });
-  }
 }
 
 function createExecutionEnvelope(runtime: RuntimeCore, event: EventVector): ExecutionEnvelope {

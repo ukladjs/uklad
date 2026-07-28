@@ -1,7 +1,7 @@
 import { produce, produceWithPatches, type Draft, type Patch } from 'immer';
 
 import { IS_DEV } from '../core/environment';
-import { ensurePatchesEnabled } from '../core/immer';
+import { containsDraft, ensurePatchesEnabled, snapshotDrafts } from '../core/immer';
 import { consoleLog } from '../core/logging';
 import { type RuntimeCore } from '../runtime/core';
 import { execute } from './interceptors-executor';
@@ -101,6 +101,9 @@ function createEventHandlerInterceptor(
         runtime.events.runningHandlerEventId = event[0];
         try {
           effects = handler(coeffects, ...params) ?? [];
+          // Still inside the recipe, so any draft the handler passed along is
+          // live and can be snapshotted. After `produce` returns it is revoked.
+          effects = snapshotDrafts(effects) as Effects;
         } finally {
           runtime.events.runningHandlerEventId = null;
         }
@@ -119,15 +122,15 @@ function createEventHandlerInterceptor(
         newState = produce(context.previousState as State, recipe);
       }
 
-      if (IS_DEV) {
-        try {
-          JSON.stringify(effects);
-        } catch {
-          consoleLog(
-            'warn',
-            `[reflex] Effects ${effects} contain Proxy (probably an Immer draft). Use current() for draftState values.`,
-          );
-        }
+      // Anything still holding a draft here is a shape snapshotDrafts()
+      // deliberately did not walk — inside a collection, or nested deeper than
+      // a few plain objects. Never interpolate the effects themselves: such a
+      // draft is revoked by now and stringifying it would throw.
+      if (IS_DEV && containsDraft(effects)) {
+        consoleLog(
+          'warn',
+          `[reflex] Effects returned by '${String(event[0])}' still contain an Immer draft nested inside a collection or deeply nested object, which the runtime does not unwrap automatically. Drafts are revoked once the handler returns, so the effect handler would receive a dead value. Wrap that value in current() before returning it.`,
+        );
       }
 
       if (!Array.isArray(effects)) {

@@ -53,8 +53,8 @@ REFLEX_BENCH_JSON=1 node packages/reflex/benchmarks/run.mjs > benchmark.json
 | Subscriptions | `deep-chain-100`               | Topological propagation through a deep dependency chain.                            |
 | Subscriptions | `equality-cutoff-10k`          | A new root array whose mapped output is deep-equal, so downstream work should stop. |
 | Subscriptions | `mount-churn`                  | Repeated activation, initial evaluation, and release of one computed query.         |
-| Events        | `clone-small`                  | `runtime.dispatch()` ownership cost for a small structured-cloneable payload.       |
-| Events        | `clone-10k-rows`               | Event ownership cost for a 10,000-row payload; queue draining is untimed.           |
+| Events        | `dispatch-small`               | `runtime.dispatch()` ownership cost for a small payload.                            |
+| Events        | `dispatch-10k-rows`            | Event ownership cost for a 10,000-row payload; queue draining is untimed.           |
 | Memory        | `state-10k-rows`               | Heap retained by a runtime holding a 10,000-row state.                              |
 | Memory        | `subscriptions-fan-out-1000`   | Heap retained by 1,000 active computed subscriptions.                               |
 | Memory        | `subscriptions-deep-chain-100` | Heap retained by a 100-node active dependency chain.                                |
@@ -74,8 +74,11 @@ preventing downstream recomputation.
   they increase work and can produce unnecessary React notifications.
 - Mount-churn results describe lifecycle cost, not steady-state publication
   cost; compare them separately.
-- Event clone results measure dispatch ownership and enqueueing. They do not
-  include event handler execution because queue draining happens after timing.
+- Event dispatch results measure ownership and enqueueing. They do not include
+  event handler execution because queue draining happens after timing. Outside
+  development the runtime neither copies nor freezes the payload, so these
+  should stay flat as payload size grows; development additionally deep-freezes
+  the event, which is proportional to payload size.
 - Memory results are retained heap deltas after an explicit GC. Run with
   `--expose-gc`; without it, GC availability is reported as false and values
   are much noisier.

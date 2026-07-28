@@ -47,7 +47,8 @@ Rules:
 - Avoid unnecessary object/array recreation (`{...obj}`, `[...arr]`) when no actual change is needed.
 - Never perform async/API/localStorage work directly in events.
 - Return effect tuples for side effects.
-- When sending mutated draft data to effects, always use `current(...)`.
+- Draft values returned inside an effect payload are snapshotted automatically: `return [['storage/set', draftState.todos]]` is safe, and so is a draft on a field of a small wrapper object. The runtime deliberately does not unwrap a draft nested inside an array/Map/Set or several objects deep — development warns when one gets through, and those need an explicit `current(...)`.
+- A dispatched event and its payload belong to the runtime from the `dispatch` call onward. The event runs on a later task, so mutating a value after dispatching it changes what the handler eventually sees. Dispatch values the caller will not touch again; development deep-freezes dispatched events so a violation throws at the mutation site instead of corrupting the event silently. This applies to `debounceAndDispatch`/`throttleAndDispatch` too.
 - Prefer deterministic coeffects (time/id/random/env) instead of direct globals for testability.
 - `dispatch` is async (queued; on the next animation-frame flush the subscription graph settles and listeners run synchronously inside that scheduled flush task). The testing/admin harness's `dispatchSync` commits and notifies subscribers before returning — use it only where that timing is load-bearing. Never call `dispatchSync` from inside an event handler (it throws) — return a `['dispatch', ...]` effect instead. Calling plain `dispatch` from inside a handler warns in dev for the same reason: emit follow-up events through the `['dispatch', ...]` effect.
 

@@ -168,17 +168,20 @@ function runSubscriptionBenchmarks() {
 async function runEventBenchmarks() {
   return [
     await measureAsync({
-      name: 'events/clone-small',
+      name: 'events/dispatch-small',
       iterations: iterationsFor('events', 20_000),
       setup: () =>
-        setupEventClone({ id: 42, title: 'benchmark', flags: [true, false] }, 'bench-event-small'),
+        setupEventDispatch(
+          { id: 42, title: 'benchmark', flags: [true, false] },
+          'bench-event-small',
+        ),
       operation: ({ runtime, event }) => runtime.dispatch(event),
       settle: settleRuntime,
     }),
     await measureAsync({
-      name: 'events/clone-10k-rows',
+      name: 'events/dispatch-10k-rows',
       iterations: iterationsFor('events', 1_000),
-      setup: () => setupEventClone({ rows: createRows(10_000) }, 'bench-event-10k'),
+      setup: () => setupEventDispatch({ rows: createRows(10_000) }, 'bench-event-10k'),
       operation: ({ runtime, event }) => runtime.dispatch(event),
       settle: settleRuntime,
     }),
@@ -397,7 +400,7 @@ function setupMountChurn(runtimeId) {
   return { runtime, disposers: [] };
 }
 
-function setupEventClone(payload, runtimeId) {
+function setupEventDispatch(payload, runtimeId) {
   const runtime = createReflexRuntime({
     initialState: { accepted: 0 },
     runtimeId,

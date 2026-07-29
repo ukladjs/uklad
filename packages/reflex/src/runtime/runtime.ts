@@ -27,6 +27,7 @@ import {
 import { detachRuntimeProbes, notifyRuntimeProbe } from './probe';
 import {
   assertDispatchableEvent,
+  assertRateLimitDuration,
   assertRegisteredSubscription,
   assertRuntimeUsable,
   assertStateRecord,
@@ -376,11 +377,15 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   debounceAndDispatch(event: ContractDispatchVector<TContracts>, durationMs: number): void {
     this.assertUsable();
+    assertDispatchableEvent(this.#core, event, 'debounceAndDispatch');
+    assertRateLimitDuration(durationMs, 'debounceAndDispatch');
     this.#core.events.debounce(event as any, durationMs);
   }
 
   throttleAndDispatch(event: ContractDispatchVector<TContracts>, durationMs: number): void {
     this.assertUsable();
+    assertDispatchableEvent(this.#core, event, 'throttleAndDispatch');
+    assertRateLimitDuration(durationMs, 'throttleAndDispatch');
     this.#core.events.throttle(event as any, durationMs);
   }
 

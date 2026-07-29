@@ -1,7 +1,9 @@
 import {
   clear,
   clearAll,
+  clearEventHandlers,
   debounceAndDispatch,
+  regEvent,
   testEventRuntime,
   throttleAndDispatch,
 } from './runtime-test-api';
@@ -9,12 +11,24 @@ import type { EventVector } from '../../src/types';
 
 let mockDispatch: jest.SpiedFunction<typeof testEventRuntime.dispatch>;
 
+/** Both rate-limited entry points reject unregistered ids, so declare them up front. */
+const RATE_LIMITED_EVENT_IDS = [
+  'test-event',
+  'event1',
+  'event2',
+  'event3',
+  'debounce-event',
+  'throttle-event',
+  'mixed-event',
+] as const;
+
 describe('debounce', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.clearAllTimers();
     jest.useFakeTimers();
     clearAll();
+    for (const id of RATE_LIMITED_EVENT_IDS) regEvent(id, () => []);
     mockDispatch = jest.spyOn(testEventRuntime, 'dispatch').mockImplementation();
   });
 
@@ -23,6 +37,7 @@ describe('debounce', () => {
     mockDispatch.mockRestore();
     jest.useRealTimers();
     clearAll();
+    for (const id of RATE_LIMITED_EVENT_IDS) clearEventHandlers(id);
   });
 
   describe('clear', () => {
@@ -204,6 +219,59 @@ describe('debounce', () => {
 
       throttleAndDispatch(event, 0);
       expect(mockDispatch).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('validation', () => {
+    it.each([
+      ['debounceAndDispatch', debounceAndDispatch],
+      ['throttleAndDispatch', throttleAndDispatch],
+    ])('%s rejects malformed event vectors', (api, rateLimitedDispatch) => {
+      for (const bad of ['test-event', [], [42], null, undefined]) {
+        expect(() => rateLimitedDispatch(bad as any, 100)).toThrow(
+          `[reflex] ${api} expects a non-empty event vector starting with an event id string.`,
+        );
+      }
+      expect(mockDispatch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['debounceAndDispatch', debounceAndDispatch],
+      ['throttleAndDispatch', throttleAndDispatch],
+    ])('%s rejects unregistered event ids', (_api, rateLimitedDispatch) => {
+      expect(() => rateLimitedDispatch(['never-registered', 1] as any, 100)).toThrow(
+        /No event handler registered for 'never-registered'/,
+      );
+      expect(mockDispatch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['debounceAndDispatch', debounceAndDispatch],
+      ['throttleAndDispatch', throttleAndDispatch],
+    ])('%s rejects non-finite and negative durations', (api, rateLimitedDispatch) => {
+      const event: EventVector = ['test-event'];
+
+      for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -1, '100', undefined]) {
+        expect(() => rateLimitedDispatch(event, bad as any)).toThrow(
+          `[reflex] ${api} expects a finite, non-negative duration in milliseconds, received ${String(bad)}.`,
+        );
+      }
+      expect(mockDispatch).not.toHaveBeenCalled();
+
+      // A rejected call must not leave a timer behind either.
+      jest.advanceTimersByTime(1000);
+      expect(mockDispatch).not.toHaveBeenCalled();
+    });
+
+    it('rejects a duration bad enough to defeat the debounce window', () => {
+      const event: EventVector = ['test-event'];
+
+      expect(() => debounceAndDispatch(event, Number.NaN)).toThrow();
+
+      // Without validation, setTimeout(NaN) fires on the next tick and the
+      // "debounced" event lands immediately.
+      jest.advanceTimersByTime(0);
+      expect(mockDispatch).not.toHaveBeenCalled();
     });
   });
 

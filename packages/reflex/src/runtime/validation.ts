@@ -20,11 +20,14 @@ export function assertRuntimeUsable(runtime: RuntimeCore): void {
   }
 }
 
+/** Public entry points that accept an event vector under strict validation. */
+type DispatchApi = 'dispatch' | 'dispatchSync' | 'debounceAndDispatch' | 'throttleAndDispatch';
+
 /** Validate an event accepted by the strict instance API. */
 export function assertDispatchableEvent(
   runtime: RuntimeCore,
   event: unknown,
-  api: 'dispatch' | 'dispatchSync',
+  api: DispatchApi,
 ): void {
   if (!isEventVector(event)) {
     throw new Error(
@@ -34,6 +37,24 @@ export function assertDispatchableEvent(
   if (!runtime.registry.event.has(event[0])) {
     throw new Error(
       `[reflex] No event handler registered for '${event[0]}' in runtime '${runtime.identity.runtimeId}'. Register it with regEvent() before dispatching.`,
+    );
+  }
+}
+
+/**
+ * Validate a rate-limit window accepted by the strict instance API.
+ *
+ * `setTimeout` silently coerces `NaN`, `Infinity`, and negative delays to a
+ * near-immediate firing, which turns a bad duration into a debounce or throttle
+ * that quietly does nothing. Reject those at the call site instead.
+ */
+export function assertRateLimitDuration(
+  durationMs: unknown,
+  api: 'debounceAndDispatch' | 'throttleAndDispatch',
+): asserts durationMs is number {
+  if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) {
+    throw new Error(
+      `[reflex] ${api} expects a finite, non-negative duration in milliseconds, received ${String(durationMs)}.`,
     );
   }
 }

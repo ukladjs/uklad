@@ -65,6 +65,15 @@ pnpm check
 pnpm test
 ```
 
+`pnpm check` is the deterministic development check and does not install
+packages from the registry. Fresh-install consumer tests are intentionally
+separate because they require network access and an empty npm cache:
+
+```sh
+pnpm check:package # packed-package consumers only; requires registry access
+pnpm check:all     # development checks, then packed-package consumers
+```
+
 Useful local development commands include:
 
 ```sh

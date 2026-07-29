@@ -1,10 +1,11 @@
-import { afterEach, test } from 'node:test';
+import { afterEach, test as nodeTest } from 'node:test';
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
 import WebSocket from 'ws';
 
 import { DevtoolsServer } from '../dist/server/index.js';
 import { reflexReplacer } from '../dist/serialization.js';
+import { loopbackListenSkipReason } from '../../../scripts/test/loopback-listen.mjs';
 
 const activeServers = new Set();
 const activeSockets = new Set();
@@ -13,6 +14,12 @@ const sessionsByWsUrl = new Map();
 
 const PROTOCOL_VERSION = '2';
 const WS_PROTOCOL = 'reflex-devtools.v2';
+const LOOPBACK_LISTEN_SKIP = await loopbackListenSkipReason();
+
+// All but one test in this file start a loopback server.
+function test(name, fn) {
+  return nodeTest(name, { skip: LOOPBACK_LISTEN_SKIP }, fn);
+}
 
 afterEach(async () => {
   for (const socket of activeSockets) {
@@ -926,7 +933,7 @@ test('an unlisted loopback browser origin cannot bootstrap or take over the runt
   assert.equal(body.code, 'ORIGIN_NOT_ALLOWED');
 });
 
-test('non-loopback binding is refused without an explicit remote security configuration', () => {
+nodeTest('non-loopback binding is refused without an explicit remote security configuration', () => {
   assert.throws(
     () => new DevtoolsServer({ port: 0, host: '0.0.0.0' }),
     /Refusing non-loopback host/,

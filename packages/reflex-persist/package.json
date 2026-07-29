@@ -49,14 +49,15 @@
     "lint": "eslint --max-warnings=0 src tests tsdown.config.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run typecheck:compat && pnpm run typecheck:test && pnpm run build && pnpm run test:package && pnpm run test",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run typecheck:compat && pnpm run typecheck:test && pnpm run build && pnpm run test",
+    "check:package": "pnpm run test:package",
     "clean": "node ../../scripts/clean.mjs dist coverage",
     "test": "jest --passWithNoTests",
     "test:unit": "jest --passWithNoTests",
     "test:ci": "jest --passWithNoTests --coverage --silent",
     "test:package": "node tests/package-consumer/run.mjs",
     "prepack": "pnpm run build",
-    "prepublishOnly": "pnpm run check && pnpm run test:ci"
+    "prepublishOnly": "pnpm run check && pnpm run check:package && pnpm run test:ci"
   },
   "devDependencies": {
     "@arethetypeswrong/core": "0.18.5",

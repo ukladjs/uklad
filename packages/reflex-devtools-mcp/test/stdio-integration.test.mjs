@@ -1,11 +1,12 @@
 import { createServer } from 'node:http';
 import process from 'node:process';
-import { test } from 'node:test';
+import { test as nodeTest } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { loopbackListenSkipReason } from '../../../scripts/test/loopback-listen.mjs';
 
 const CLI_PATH = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
 const PROTOCOL_VERSION = 2;
@@ -14,6 +15,12 @@ const CLIENT_HEADER = 'x-reflex-client';
 const SESSION_TOKEN = 'fake-mcp-session-token';
 const RUNTIME_ID = 'integration-runtime';
 const RUNTIME_NAME = 'Integration runtime';
+const LOOPBACK_LISTEN_SKIP = await loopbackListenSkipReason();
+
+// Every test in this file starts a loopback server.
+function test(name, fn) {
+  return nodeTest(name, { skip: LOOPBACK_LISTEN_SKIP }, fn);
+}
 
 function parseToolResult(result) {
   assert.equal(result.content?.[0]?.type, 'text');

@@ -1,4 +1,3 @@
-import { createServer } from 'node:http';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -25,18 +24,17 @@ function parseToolResult(result) {
   return JSON.parse(result.content[0].text);
 }
 
-async function readJson(req) {
-  let raw = '';
-  for await (const chunk of req) raw += chunk;
-  return raw ? JSON.parse(raw) : {};
-}
-
-function sendJson(res, status, body, protocolVersion = REFLEX_DEVTOOLS_PROTOCOL_VERSION) {
-  res.writeHead(status, {
-    'Content-Type': 'application/json',
-    'Reflex-DevTools-Protocol-Version': String(protocolVersion),
+function jsonResponse(
+  body,
+  { status = 200, protocolVersion = REFLEX_DEVTOOLS_PROTOCOL_VERSION } = {},
+) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Reflex-DevTools-Protocol-Version': String(protocolVersion),
+    },
   });
-  res.end(JSON.stringify(body));
 }
 
 test('app_status reports a healthy headless session without hints', async () => {
@@ -649,59 +647,53 @@ test('DevToolsAPIClient sends runtimeId in read queries and mutation bodies', as
 });
 
 test('DevToolsAPIClient surfaces trace lookup errors from the server body', async () => {
+  const originalFetch = globalThis.fetch;
   const requests = [];
-  const httpServer = createServer(async (req, res) => {
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const headers = new Headers(init.headers);
     requests.push({
-      method: req.method,
-      url: req.url,
-      authorization: req.headers.authorization,
-      protocolVersion: req.headers[PROTOCOL_HEADER],
-      client: req.headers[CLIENT_HEADER],
+      method: init.method ?? 'GET',
+      url: `${url.pathname}${url.search}`,
+      authorization: headers.get('authorization'),
+      protocolVersion: headers.get(PROTOCOL_HEADER),
+      client: headers.get(CLIENT_HEADER),
     });
 
-    if (req.method === 'POST' && req.url === '/auth/session') {
-      assert.equal(
-        req.headers[PROTOCOL_HEADER],
-        String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
-      );
-      assert.equal(req.headers[CLIENT_HEADER], 'mcp-unit-test');
-      assert.equal(req.headers.authorization, undefined);
-      assert.deepEqual(await readJson(req), { role: 'mcp' });
-      sendJson(res, 200, {
+    if (init.method === 'POST' && url.pathname === '/auth/session') {
+      assert.equal(headers.get(PROTOCOL_HEADER), String(REFLEX_DEVTOOLS_PROTOCOL_VERSION));
+      assert.equal(headers.get(CLIENT_HEADER), 'mcp-unit-test');
+      assert.equal(headers.get('authorization'), null);
+      assert.deepEqual(JSON.parse(String(init.body)), { role: 'mcp' });
+      return jsonResponse({
         success: true,
         role: 'mcp',
         token: SESSION_TOKEN,
         capabilities: ['inspect'],
         protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
       });
-      return;
     }
 
-    assert.equal(req.method, 'GET');
-    assert.equal(req.url, '/api/traces/99?runtimeId=runtime-b');
-    assert.equal(req.headers.authorization, `Bearer ${SESSION_TOKEN}`);
-    assert.equal(
-      req.headers[PROTOCOL_HEADER],
-      String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+    assert.equal(init.method ?? 'GET', 'GET');
+    assert.equal(`${url.pathname}${url.search}`, '/api/traces/99?runtimeId=runtime-b');
+    assert.equal(headers.get('authorization'), `Bearer ${SESSION_TOKEN}`);
+    assert.equal(headers.get(PROTOCOL_HEADER), String(REFLEX_DEVTOOLS_PROTOCOL_VERSION));
+    assert.equal(headers.get(CLIENT_HEADER), 'mcp-unit-test');
+    return jsonResponse(
+      {
+        success: false,
+        code: 'TRACE_NOT_FOUND',
+        error: 'No trace with id 99',
+      },
+      {
+        status: 404,
+      },
     );
-    assert.equal(req.headers[CLIENT_HEADER], 'mcp-unit-test');
-    sendJson(res, 404, {
-      success: false,
-      code: 'TRACE_NOT_FOUND',
-      error: 'No trace with id 99',
-    });
-  });
-
-  await new Promise((resolve) => {
-    httpServer.listen(0, '127.0.0.1', resolve);
-  });
+  };
 
   try {
-    const address = httpServer.address();
-    assert(address && typeof address === 'object');
-
     const apiClient = new DevToolsAPIClient({
-      serverUrl: `127.0.0.1:${address.port}`,
+      serverUrl: '127.0.0.1:4000',
       clientName: 'mcp-unit-test',
     });
 
@@ -719,28 +711,23 @@ test('DevToolsAPIClient surfaces trace lookup errors from the server body', asyn
       ['POST /auth/session', 'GET /api/traces/99?runtimeId=runtime-b'],
     );
   } finally {
-    await new Promise((resolve, reject) => {
-      httpServer.close((error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
+    globalThis.fetch = originalFetch;
   }
 });
 
 test('DevToolsAPIClient uses an explicit token and validates status protocol metadata', async () => {
+  const originalFetch = globalThis.fetch;
   const requests = [];
-  const httpServer = createServer((req, res) => {
-    requests.push(`${req.method} ${req.url}`);
-    assert.equal(req.method, 'GET');
-    assert.equal(req.url, '/api/status');
-    assert.equal(req.headers.authorization, 'Bearer configured-token');
-    assert.equal(
-      req.headers[PROTOCOL_HEADER],
-      String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
-    );
-    assert.equal(req.headers[CLIENT_HEADER], 'remote-mcp');
-    sendJson(res, 200, {
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    const headers = new Headers(init.headers);
+    requests.push(`${init.method ?? 'GET'} ${url.pathname}${url.search}`);
+    assert.equal(init.method ?? 'GET', 'GET');
+    assert.equal(url.pathname, '/api/status');
+    assert.equal(headers.get('authorization'), 'Bearer configured-token');
+    assert.equal(headers.get(PROTOCOL_HEADER), String(REFLEX_DEVTOOLS_PROTOCOL_VERSION));
+    assert.equal(headers.get(CLIENT_HEADER), 'remote-mcp');
+    return jsonResponse({
       success: true,
       capabilities: ['inspect'],
       protocol: {
@@ -749,17 +736,11 @@ test('DevToolsAPIClient uses an explicit token and validates status protocol met
         inspectorApiVersion: null,
       },
     });
-  });
-
-  await new Promise((resolve) => {
-    httpServer.listen(0, '127.0.0.1', resolve);
-  });
+  };
 
   try {
-    const address = httpServer.address();
-    assert(address && typeof address === 'object');
     const apiClient = new DevToolsAPIClient({
-      serverUrl: `http://127.0.0.1:${address.port}/`,
+      serverUrl: 'http://127.0.0.1:4000/',
       token: 'configured-token',
       clientName: 'remote-mcp',
     });
@@ -768,30 +749,24 @@ test('DevToolsAPIClient uses an explicit token and validates status protocol met
     assert.deepEqual(status.capabilities, ['inspect']);
     assert.deepEqual(requests, ['GET /api/status']);
   } finally {
-    await new Promise((resolve, reject) => {
-      httpServer.close((error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
+    globalThis.fetch = originalFetch;
   }
 });
 
 test('DevToolsAPIClient rejects incompatible protocol response headers', async () => {
-  const httpServer = createServer((req, res) => {
-    assert.equal(req.headers.authorization, 'Bearer configured-token');
-    sendJson(res, 200, { success: true }, REFLEX_DEVTOOLS_PROTOCOL_VERSION + 1);
-  });
-
-  await new Promise((resolve) => {
-    httpServer.listen(0, '127.0.0.1', resolve);
-  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_input, init = {}) => {
+    const headers = new Headers(init.headers);
+    assert.equal(headers.get('authorization'), 'Bearer configured-token');
+    return jsonResponse(
+      { success: true },
+      { protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION + 1 },
+    );
+  };
 
   try {
-    const address = httpServer.address();
-    assert(address && typeof address === 'object');
     const apiClient = new DevToolsAPIClient({
-      serverUrl: `127.0.0.1:${address.port}`,
+      serverUrl: '127.0.0.1:4000',
       token: 'configured-token',
     });
 
@@ -802,19 +777,16 @@ test('DevToolsAPIClient rejects incompatible protocol response headers', async (
       ),
     );
   } finally {
-    await new Promise((resolve, reject) => {
-      httpServer.close((error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
+    globalThis.fetch = originalFetch;
   }
 });
 
 test('DevToolsAPIClient rejects incompatible protocol metadata in /api/status', async () => {
-  const httpServer = createServer((req, res) => {
-    assert.equal(req.url, '/api/status');
-    sendJson(res, 200, {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    assert.equal(url.pathname, '/api/status');
+    return jsonResponse({
       success: true,
       capabilities: ['inspect'],
       protocol: {
@@ -823,17 +795,11 @@ test('DevToolsAPIClient rejects incompatible protocol metadata in /api/status', 
         inspectorApiVersion: null,
       },
     });
-  });
-
-  await new Promise((resolve) => {
-    httpServer.listen(0, '127.0.0.1', resolve);
-  });
+  };
 
   try {
-    const address = httpServer.address();
-    assert(address && typeof address === 'object');
     const apiClient = new DevToolsAPIClient({
-      serverUrl: `127.0.0.1:${address.port}`,
+      serverUrl: '127.0.0.1:4000',
       token: 'configured-token',
     });
 
@@ -844,11 +810,6 @@ test('DevToolsAPIClient rejects incompatible protocol metadata in /api/status', 
       ),
     );
   } finally {
-    await new Promise((resolve, reject) => {
-      httpServer.close((error) => {
-        if (error) reject(error);
-        else resolve();
-      });
-    });
+    globalThis.fetch = originalFetch;
   }
 });

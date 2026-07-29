@@ -60,6 +60,9 @@ jobs:
       - name: Check persistence package
         run: pnpm --filter @flexsurfer/reflex-persist run check
 
+      - name: Check packed persistence consumer
+        run: pnpm --filter @flexsurfer/reflex-persist run check:package
+
       - name: Run persistence coverage
         run: pnpm --filter @flexsurfer/reflex-persist run test:ci
 

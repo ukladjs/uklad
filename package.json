@@ -19,6 +19,8 @@
     "build:examples": "pnpm --filter todomvc build && pnpm --filter @flexsurfer/reflex-devtools-playground build",
     "format": "pnpm -r --if-present format",
     "check": "pnpm run build && pnpm -r --if-present check",
+    "check:package": "pnpm run build:reflex && pnpm run build:persist && pnpm -r --if-present check:package",
+    "check:all": "pnpm run check && pnpm -r --if-present check:package",
     "test": "pnpm run build && pnpm -r --if-present test:unit",
     "clean": "pnpm -r --reverse --if-present clean",
     "dev:reflex": "pnpm --filter @flexsurfer/reflex dev",

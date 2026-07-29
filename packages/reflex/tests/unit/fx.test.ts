@@ -2,6 +2,32 @@ import { consoleLog } from '../../src/core/logging';
 import { dispatch, getState, initState, regEffect, regEvent } from './runtime-test-api';
 import { waitForScheduled } from './test-utils';
 
+/** Node's rejection hook, which these tests' type environment omits by design. */
+interface RejectionHost {
+  on(event: 'unhandledRejection', listener: (reason: unknown) => void): void;
+  off(event: 'unhandledRejection', listener: (reason: unknown) => void): void;
+}
+
+/** Collect every rejection the host reports as unobserved while `work` runs. */
+async function recordUnhandledRejections(work: () => Promise<void>): Promise<unknown[]> {
+  const host = (globalThis as { process?: RejectionHost }).process;
+  const rejections: unknown[] = [];
+  const record = (reason: unknown) => {
+    rejections.push(reason);
+  };
+
+  host?.on('unhandledRejection', record);
+  try {
+    await work();
+    // A rejection is reported as unobserved only once the turn's microtasks
+    // have drained, so yield a macrotask before the caller asserts on it.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  } finally {
+    host?.off('unhandledRejection', record);
+  }
+  return rejections;
+}
+
 describe('regFx - Custom Effects', () => {
   beforeEach(() => {
     initState({ counter: 0, logs: [] });
@@ -144,6 +170,49 @@ describe('regFx - Custom Effects', () => {
       expect(workingEffectSpy).toHaveBeenCalledTimes(2);
       expect(workingEffectSpy).toHaveBeenNthCalledWith(1, 'Before error');
       expect(workingEffectSpy).toHaveBeenNthCalledWith(2, 'After error');
+    });
+
+    it('should report a rejected async effect instead of leaving the rejection unhandled', async () => {
+      const laterEffectSpy = jest.fn();
+      const failure = new Error('async effect failed');
+
+      regEffect('rejecting-effect', async () => {
+        throw failure;
+      });
+
+      regEffect('after-rejection', (message: string) => {
+        laterEffectSpy(message);
+      });
+
+      regEvent('test-async-rejection', () => [
+        ['rejecting-effect', { attempt: 1 }],
+        ['after-rejection', 'still executed'],
+      ]);
+
+      const unhandledRejections = await recordUnhandledRejections(async () => {
+        dispatch(['test-async-rejection']);
+        await waitForScheduled();
+      });
+
+      expect(unhandledRejections).toEqual([]);
+      expectLogCall('error', '[reflex] rejected async effect for rejecting-effect:', failure);
+      expect(laterEffectSpy).toHaveBeenCalledWith('still executed');
+    });
+
+    it('should leave a fulfilling async effect unreported', async () => {
+      regEffect('resolving-effect', async () => {
+        await Promise.resolve();
+      });
+
+      regEvent('test-async-fulfilment', () => [['resolving-effect', null]]);
+
+      const unhandledRejections = await recordUnhandledRejections(async () => {
+        dispatch(['test-async-fulfilment']);
+        await waitForScheduled();
+      });
+
+      expect(unhandledRejections).toEqual([]);
+      expect(getTestLogCalls().error).toEqual([]);
     });
 
     it('should warn about unregistered effects', async () => {

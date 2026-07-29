@@ -7,6 +7,10 @@ import type { OperationEventVector } from './runtime.js';
  * This mirrors Reflex's canonical coordinator snapshot. It deliberately
  * contains no trace, retry, or delivery timing data. Evidence such as effects
  * is collected through optional DevTools lifecycle observation.
+ *
+ * A snapshot is a copy taken when it was read. Detached effects settle after
+ * their operation does, so a `completed` operation whose promise-returning
+ * effect later rejects becomes `completed-with-errors` on the next read.
  */
 export interface OperationSnapshot {
   readonly operationId: string;

@@ -117,6 +117,19 @@ only when the accepted event has a probe callback for them. The active-effect
 slot is populated only for tracked work, so uninstrumented effects do not pay
 for causality bookkeeping.
 
+A promise-returning effect is reported as `detached`: the runtime does not
+supervise it and never claims its completion. It does observe its rejection,
+which would otherwise escape the executor as an unhandled promise rejection.
+The failure is logged and emitted as a second fact for the same effect index —
+`detached` when the effect was dispatched, then `failed` when it settled.
+
+That second fact arrives after the event finished, so consumers project it
+onto whatever record is still open to them rather than revising a delivered
+one. The trace collector emits a child `effect` trace in the next batch,
+because the event's own trace is closed and may already have been handed to
+callbacks. The DevTools coordinator, whose snapshots are copies taken per read,
+records the error and re-settles the operation to `completed-with-errors`.
+
 ## Optional instrumentation
 
 `RuntimeProbe` is the only instrumentation channel. Its capability flags

@@ -90,6 +90,10 @@ export function executeEffects(
         envelope.tracking === undefined
           ? invoke()
           : withActiveEffectExecution(runtime, { envelope, effectId, effectIndex }, invoke);
+      // Claim the rejection before anything else can throw past it.
+      if (isThenable(result)) {
+        observeDetachedEffect(envelope, effectId, value, effectIndex, startedAtMs, result);
+      }
       const invalidDispatch =
         (effectId === DISPATCH && !isEventVector(value)) ||
         (effectId === DISPATCH_LATER && !isValidDispatchLaterEffect(value));
@@ -116,6 +120,29 @@ export function executeEffects(
       reportEffect(envelope, effectId, value, effectIndex, 'failed', startedAtMs, error);
     }
   }
+}
+
+/**
+ * A detached effect settles after the executor has returned, so its rejection
+ * can no longer reach the surrounding `try`. Observe it here: the failure
+ * becomes a late effect fact on the same envelope instead of an unhandled
+ * promise rejection. Fulfilment stays unreported — a promise-returning effect
+ * remains unsupervised, and `detached` is the only outcome the runtime claims.
+ */
+function observeDetachedEffect(
+  envelope: ExecutionEnvelope,
+  effectId: string,
+  value: unknown,
+  effectIndex: number,
+  startedAtMs: number,
+  result: PromiseLike<unknown>,
+): void {
+  // Adopting the thenable routes a foreign `then` that throws into this same
+  // rejection path instead of back into the executor's frame.
+  Promise.resolve(result).then(undefined, (error: unknown) => {
+    consoleLog('error', `[reflex] rejected async effect for ${effectId}:`, error);
+    reportEffect(envelope, effectId, value, effectIndex, 'failed', startedAtMs, error);
+  });
 }
 
 function withActiveEffectExecution<T>(

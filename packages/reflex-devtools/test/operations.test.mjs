@@ -181,6 +181,45 @@ test('retains terminal failure and effect-error states', async () => {
   }
 });
 
+test('records a rejected detached effect as a late failure', async () => {
+  const runtime = createReflexRuntime({
+    runtimeId: 'operations-detached-rejection',
+    initialState: { saved: false },
+  });
+  let rejectEffect;
+  runtime.registerModule((registrar) => {
+    registrar.regEffect('save', () => new Promise((_resolve, reject) => (rejectEffect = reject)));
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('save', () => [['save', { source: 'detached-test' }]]);
+  });
+
+  try {
+    const operations = operationsFor(runtime);
+    const { operation } = await operations.dispatchAndWait(['save']);
+
+    assert.equal(operation.status, 'completed');
+    assert.equal(operation.events[0].effects.length, 1);
+    assert.equal(operation.events[0].effects[0].status, 'detached');
+
+    rejectEffect(new Error('detached effect failed'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const settled = operations.get(operation.operationId);
+    const [detached, failed] = settled.events[0].effects;
+    assert.equal(detached.status, 'detached');
+    assert.equal(failed.status, 'failed');
+    assert.equal(failed.id, 'save');
+    assert.equal(failed.index, 0);
+    assert.equal(failed.error.message, 'detached effect failed');
+    assert.equal(settled.errors.length, 1);
+    // The recorded error must move the settled operation off `completed`.
+    assert.equal(settled.status, 'completed-with-errors');
+  } finally {
+    runtime.dispose();
+  }
+});
+
 test('returns a retained failed operation when the runtime is disposed with queued work', async () => {
   const runtime = createReflexRuntime({
     runtimeId: 'operations-disposal',

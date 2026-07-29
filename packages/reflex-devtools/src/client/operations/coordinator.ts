@@ -144,6 +144,10 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
     if (!['failed', 'invalid', 'unhandled'].includes(effect.status)) return;
     operation.hasNonTerminalError = true;
     this.recordError(operation, effect.error);
+    // A detached effect can fail after its operation settled. Re-settle so the
+    // status reflects the recorded error instead of staying `completed`; while
+    // events are still pending this is a no-op and `finished` settles as usual.
+    this.settle(operation);
   }
 
   finished(operationRef: { readonly value: unknown }, status: string, error?: unknown): void {

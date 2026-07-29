@@ -127,6 +127,57 @@ describe('Error tracing', () => {
     expect(trace.tags.error).toBeUndefined();
   });
 
+  it('traces a detached effect failure without touching the delivered event trace', async () => {
+    const batches: any[][] = [];
+    registerTraceCallback('trace-late-effect-batches', (traces) => {
+      batches.push(traces);
+    });
+
+    let rejectEffect: (error: Error) => void = () => {};
+    regEffect(
+      'detached-effect',
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectEffect = reject;
+        }),
+    );
+    regEvent('with-detached-effect', () => [['detached-effect', 1]]);
+
+    try {
+      dispatch(['with-detached-effect']);
+      await waitForScheduled();
+      await waitForTraceFlush();
+
+      const eventTrace = collected.find((t) => t.operation === 'with-detached-effect');
+      expect(eventTrace).toBeDefined();
+      expect(eventTrace.tags.effectErrors).toBeUndefined();
+      const deliveredBatches = batches.length;
+
+      rejectEffect(new Error('detached failed'));
+      await waitForTraceFlush();
+
+      // The batch already handed to callbacks stays exactly as delivered.
+      expect(eventTrace.tags.effectErrors).toBeUndefined();
+      expect(batches.length).toBe(deliveredBatches + 1);
+
+      const lateTrace = collected.find((t) => t.opType === 'effect');
+      expect(lateTrace).toMatchObject({
+        operation: 'detached-effect',
+        childOf: eventTrace.id,
+      });
+      expect(lateTrace.tags.event).toEqual(['with-detached-effect']);
+      expect(lateTrace.tags.effectErrors).toEqual([
+        expect.objectContaining({
+          phase: 'effect',
+          effect: 'detached-effect',
+          message: 'detached failed',
+        }),
+      ]);
+    } finally {
+      removeTraceCallback('trace-late-effect-batches');
+    }
+  });
+
   it('still traces the error if the framework error handler is unexpectedly absent', async () => {
     delete getHandlers().error['event-handler'];
     try {

@@ -207,8 +207,16 @@ function getTraceState(runtime: RuntimeCore): TraceState {
     },
     effect(token: unknown, effect: RuntimeProbeEffect): void {
       if (effect.status !== 'failed') return;
-      const trace = (token as TraceEventToken).trace;
+      const eventToken = token as TraceEventToken;
+      const trace = eventToken.trace;
       if (!trace) return;
+      // A finished trace has been batched and may already have been delivered,
+      // so it is no longer amendable. A detached effect that rejects that late
+      // is traced on its own instead of mutating a record someone else holds.
+      if (trace.end !== undefined) {
+        traceDetachedEffectFailure(currentState(), trace, eventToken.event, effect);
+        return;
+      }
       const effectErrors = Array.isArray(trace.tags?.effectErrors)
         ? [...(trace.tags!.effectErrors as unknown[])]
         : [];
@@ -309,6 +317,28 @@ function finishTrace(state: TraceState, trace: Trace): void {
   trace.duration = trace.end - trace.start;
   state.traces.push(trace);
   scheduleFlush(state);
+}
+
+/**
+ * Emit a detached effect's failure as its own trace, parented to the event that
+ * dispatched it. Going through `finishTrace` puts the failure in the next batch,
+ * so callbacks learn about it rather than only seeing it in a record they were
+ * handed earlier. Its span covers the detached work, not the moment of failure.
+ */
+function traceDetachedEffectFailure(
+  state: TraceState,
+  eventTrace: Trace,
+  event: EventVector,
+  effect: RuntimeProbeEffect,
+): void {
+  const trace = startTrace(state, {
+    operation: effect.type,
+    opType: 'effect',
+    tags: { event, effectErrors: [toEffectTraceError(effect)] },
+    childOf: eventTrace.id,
+  });
+  if (effect.startedAtMs > 0) trace.start = effect.startedAtMs;
+  finishTrace(state, trace);
 }
 
 function scheduleFlush(state: TraceState): void {

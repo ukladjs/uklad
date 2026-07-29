@@ -17,8 +17,8 @@ runtime.registerModule((registrar) => {
 runtime.registerModule((registrar) => {
   registrar.regSub(
     'legacy/doubled',
-    (count: number) => count * 2,
     () => [['legacy/root']],
+    ([count]: [number]) => count * 2,
   );
 });
 

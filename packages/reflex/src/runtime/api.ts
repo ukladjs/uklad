@@ -94,12 +94,11 @@ export interface ReflexRegistrar<TContracts extends ReflexContracts = Permissive
    * dependencies is a compile-time error rather than a silent argument swap,
    * and adding a dependency never shifts a parameter's position.
    */
-  regSub<
-    TId extends string,
-    const TDependencies extends readonly ContractSubscribeVector<TContracts>[],
-  >(
+  regSub<TId extends string, TDependencies extends readonly ContractSubscribeVector<TContracts>[]>(
     id: TId,
-    dependencies: (...params: ContractSubscriptionParams<TContracts, TId>) => TDependencies,
+    dependencies: (
+      ...params: ContractSubscriptionParams<TContracts, TId>
+    ) => readonly [...TDependencies],
     compute: (
       values: ContractSubscriptionDependencyValues<TContracts, TDependencies>,
       ...params: ContractSubscriptionParams<TContracts, TId>

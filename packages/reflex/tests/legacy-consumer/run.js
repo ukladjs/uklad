@@ -30,13 +30,14 @@ const REACT_TYPES_VERSION = '18.3.31';
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 
-function run(command, args, cwd) {
-  execFileSync(command, args, { cwd, stdio: 'inherit' });
+function run(command, args, cwd, env) {
+  execFileSync(command, args, { cwd, env, stdio: 'inherit' });
 }
 
-function packLibrary(destination) {
+function packLibrary(destination, env) {
   const output = execFileSync(npm, ['pack', '--json', '--pack-destination', destination], {
     cwd: repoRoot,
+    env,
     encoding: 'utf8',
   });
   const filename = JSON.parse(output)[0]?.filename;
@@ -55,8 +56,12 @@ function main() {
   }
 
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reflex-legacy-consumer-'));
+  const env = {
+    ...process.env,
+    npm_config_cache: path.join(workDir, 'npm-cache'),
+  };
   try {
-    const tarball = packLibrary(workDir);
+    const tarball = packLibrary(workDir, env);
     const vanillaConsumerDir = path.join(workDir, 'vanilla-consumer');
     fs.mkdirSync(vanillaConsumerDir);
     fs.writeFileSync(
@@ -68,6 +73,7 @@ function main() {
       npm,
       ['install', '--no-audit', '--no-fund', '--no-save', '--omit=peer', tarball],
       vanillaConsumerDir,
+      env,
     );
     run(
       'node',
@@ -77,17 +83,20 @@ function main() {
         `import assert from 'node:assert/strict';
          import { createRequire } from 'node:module';
          import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
+         import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
          const require = createRequire(import.meta.url);
          assert.throws(() => require.resolve('react'));
          const runtime = createReflexRuntime({ initialState: { count: 0 }, runtimeId: 'packed-vanilla' });
+         const testHarness = createReflexTestHarness(runtime);
          runtime.registerModule((registrar) => {
            registrar.regEvent('increment', ({ draftState }) => { draftState.count += 1; });
          });
-         runtime.dispatchSync(['increment']);
-         assert.deepEqual(runtime.getState(), { count: 1 });
+         testHarness.dispatchSync(['increment']);
+         assert.deepEqual(testHarness.getState(), { count: 1 });
          runtime.dispose();`,
       ],
       vanillaConsumerDir,
+      env,
     );
 
     const consumerDir = path.join(workDir, 'consumer');
@@ -110,19 +119,20 @@ function main() {
         `@types/react@${REACT_TYPES_VERSION}`,
       ],
       consumerDir,
+      env,
     );
 
     console.log('[legacy] runtime smoke: CommonJS require()');
-    run('node', ['smoke.cjs'], consumerDir);
+    run('node', ['smoke.cjs'], consumerDir, env);
     console.log('[legacy] runtime smoke: ESM import');
-    run('node', ['smoke.mjs'], consumerDir);
+    run('node', ['smoke.mjs'], consumerDir, env);
 
     for (const version of typescriptVersions) {
       const tsc = ['--yes', '--package', `typescript@${version}`, 'tsc', '--noEmit', '-p'];
       console.log(`[legacy] TypeScript ${version}: exports resolution (NodeNext)`);
-      run(npx, [...tsc, 'tsconfig.nodenext.json'], consumerDir);
+      run(npx, [...tsc, 'tsconfig.nodenext.json'], consumerDir, env);
       console.log(`[legacy] TypeScript ${version}: classic node10 resolution (CommonJS)`);
-      run(npx, [...tsc, 'tsconfig.node10.json'], consumerDir);
+      run(npx, [...tsc, 'tsconfig.node10.json'], consumerDir, env);
     }
 
     console.log('[legacy] all legacy consumer checks passed');

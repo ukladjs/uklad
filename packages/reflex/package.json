@@ -101,7 +101,7 @@
     "lint": "eslint --max-warnings=0 src tests jest.config.mjs jest.setup.js tsdown.config.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run typecheck:compat && pnpm run typecheck:test && pnpm run build && pnpm run test:clean && pnpm run test:types && pnpm run test:types:dist && pnpm run test:types:package && pnpm run test:types:compat",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run typecheck:compat && pnpm run typecheck:test && pnpm run build && pnpm run test:types:legacy && pnpm run test:clean && pnpm run test:types && pnpm run test:types:dist && pnpm run test:types:package && pnpm run test:types:compat",
     "clean": "node ../../scripts/clean.mjs dist coverage",
     "dev": "tsdown --watch",
     "test": "jest --passWithNoTests",

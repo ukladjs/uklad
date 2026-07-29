@@ -20,7 +20,17 @@ export function ReflexProvider({ runtime, children }: ReflexProviderProps): Reac
   );
 }
 
-/** Return the nearest explicitly provided runtime. */
+/**
+ * Return the nearest explicitly provided runtime.
+ *
+ * `TContracts` is an unchecked assertion, not a check: this context is created
+ * once with a fixed type, so nothing relates the argument passed here to the
+ * runtime a provider actually supplied. Passing a contract the provided runtime
+ * was not built for compiles and then misreports `dispatch`.
+ *
+ * Use the `useRuntime` returned by `createReflexHooks<TContracts>()` to get the
+ * same client checked against the contract its paired provider enforces.
+ */
 export function useReflexRuntime<
   TContracts extends ReflexContracts = PermissiveReflexContracts,
 >(): ReflexRuntimeClient<TContracts> {

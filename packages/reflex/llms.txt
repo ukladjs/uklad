@@ -28,7 +28,7 @@ Rules:
 - Keep IDs centralized in `event-ids.ts`, `effect-ids.ts`, `sub-ids.ts`.
 - Create an explicit runtime in `runtime.ts` with `createReflexRuntime({ initialState })`.
 - Express feature registrations as `runtime.registerModule((scope) => { ... })`; keep and invoke its disposer for lazy loading/HMR.
-- Mount React below `<ReflexProvider runtime={runtime}>`. The package-root API remains available only as the single-runtime compatibility facade.
+- Mount React below `<ReflexProvider runtime={runtime}>`. With a declared contract (section 12), mount the `ReflexProvider` returned by `createReflexHooks` rather than the package-level one. The package-root API remains available only as the single-runtime compatibility facade.
 - Instance `runtime.dispatch` and effect-context dispatch throw on unregistered event ids — register before dispatching. `dispatchSync` is restricted to the testing/admin harness. React `useSubscription` reads through the provider binding and throws on unregistered subscription ids.
 - If `events.ts` or `subs.ts` grows too large, split by feature, keep shared/global state separate.
 
@@ -332,8 +332,24 @@ export interface AppContracts extends ReflexContracts {
 }
 
 export const runtime = createReflexRuntime<AppContracts>({ initialState: createState() });
-export const { useSubscription } = createReflexHooks<AppContracts>();
+
+// The provider comes from the same call as the hooks. Mount this one instead of
+// the package-level `ReflexProvider` from the quickstart above: it accepts only
+// a `ReflexRuntime<AppContracts>`, which is what ties the hooks' checked
+// contract to the runtime that actually serves them.
+export const { ReflexProvider, useSubscription } = createReflexHooks<AppContracts>();
 ```
+
+```tsx
+// app.tsx — note ReflexProvider now comes from the module above, not the package
+import { ReflexProvider, runtime } from './runtime';
+
+export function AppRoot() {
+  return <ReflexProvider runtime={runtime}><App /></ReflexProvider>;
+}
+```
+
+Call `createReflexHooks` once per contract and export the result: each call owns a private context, so hooks from one call do not see another call's provider. The returned provider also selects the runtime for the package-level context, so `HotReloadWrapper` and untyped hooks work beneath it without a second provider.
 
 Using the id constants as computed keys keeps one source of truth: an id cannot drift between its declaration, its registration, and its call sites.
 
@@ -347,7 +363,7 @@ What this changes:
 - `useSubscription([SUB_IDS.TODO_BY_ID, id])` — params checked and result inferred, no explicit generic.
 - `createReflexTestHarness(runtime)` exposes state reads, flush, and non-React subscription inspection for tests.
 
-Single-runtime apps: the package-level `useSubscription` cannot take a type argument, because a React context type is fixed at creation. Bind it once by augmenting the ambient anchor, which is the same `ReflexContracts` shape:
+Single-runtime apps have a second option: the package-level `useSubscription` cannot take a type argument, because a React context type is fixed at creation, but you can bind it once by augmenting the ambient anchor, which is the same `ReflexContracts` shape:
 
 ```ts
 declare module '@flexsurfer/reflex' {
@@ -355,7 +371,9 @@ declare module '@flexsurfer/reflex' {
 }
 ```
 
-Apps owning several runtimes should skip the anchor and use `createReflexHooks<AppContracts>()` per runtime, since one ambient default cannot describe two runtimes.
+With the anchor you keep the package-level `ReflexProvider` and `useSubscription` — no `createReflexHooks` call, and no second provider. Pick one of the two: the anchor types the package-level hook for one runtime, `createReflexHooks` pairs a provider and hooks per contract.
+
+Apps owning several runtimes must use `createReflexHooks<AppContracts>()` per runtime, since one ambient default cannot describe two runtimes. Mount each runtime's own provider — the package-level `ReflexProvider` selects a runtime without selecting a contract, so it cannot satisfy hooks from `createReflexHooks`, and those hooks throw beneath it rather than reading a value of the wrong contract.
 
 Rules:
 - Event and subscription params must be tuples; use `[]` for no params. Use labeled tuple members (`[title: string]`) — they double as documentation. Effect payloads are single values; use `void` for effects with no payload.

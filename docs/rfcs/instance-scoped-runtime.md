@@ -144,7 +144,9 @@ handle-and-publish boundary.
 
 ### React binding
 
-`<ReflexProvider runtime={runtime}>` selects a runtime for descendant Reflex hooks. Providers may be nested. `useSubscription` uses the nearest provider and falls back to the compatibility default runtime when no provider is present, so existing applications do not need an immediate migration.
+`<ReflexProvider runtime={runtime}>` selects a runtime for descendant Reflex hooks. Providers may be nested, and the nearest one wins. `useSubscription` uses the nearest provider and throws when no provider is present.
+
+The package-level provider and hook read one context whose type is fixed when the context is created, so they can only check against the ambient `DefaultContracts`. An application that owns several runtimes calls `createReflexHooks<TContracts>()`, which returns a provider and hooks over a private context. The provider accepts only a `ReflexRuntime<TContracts>`, so the contract the hooks are checked against is the one the runtime beneath them was built for; a runtime supplied through some other provider is a missing provider to those hooks, and throws rather than resolving to a value of the wrong type. The bound provider also selects the runtime for the package-level context, so hot-reload helpers and untyped hooks work beneath it without a second provider.
 
 ## Lifecycle and reset
 

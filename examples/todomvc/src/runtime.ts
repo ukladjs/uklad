@@ -14,8 +14,15 @@ export const todoRuntime = createReflexRuntime<TodoContracts>({
   name: 'TodoMVC',
 });
 
-/** Hooks bound to this runtime's contract, so views need no inline generics. */
-export const { useSubscription } = createReflexHooks<TodoContracts>();
+/**
+ * Bindings for this runtime's contract, so views need no inline generics.
+ *
+ * The provider ships with the hooks rather than coming from the package, which
+ * is what makes the pairing checkable: it accepts only a runtime built for
+ * `TodoContracts`, so the hooks' inferred results cannot drift from the runtime
+ * that actually serves them.
+ */
+export const { ReflexProvider, useSubscription } = createReflexHooks<TodoContracts>();
 
 todoRuntime.registerModule((registrar) => {
   registrar.regCoeffect('now', (coeffects) => ({

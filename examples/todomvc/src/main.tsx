@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { enableMapSet } from '@flexsurfer/reflex/vanilla';
-import { HotReloadWrapper, ReflexProvider } from '@flexsurfer/reflex/react';
+import { HotReloadWrapper } from '@flexsurfer/reflex/react';
 
 import TodoApp from './views';
 
@@ -12,7 +12,7 @@ import './index.css';
 import './events';
 import './subs';
 import { persistence } from './storage';
-import { todoRuntime } from './runtime';
+import { ReflexProvider, todoRuntime } from './runtime';
 
 // Immer requires an explicit plugin before it can draft the Map-backed todo collection.
 enableMapSet();

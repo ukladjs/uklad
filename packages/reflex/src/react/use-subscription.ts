@@ -9,14 +9,12 @@ import type {
   ContractSubscriptionResult,
   ContractSubscriptionVector,
   DefaultContracts,
-  ReflexContracts,
 } from '../contracts';
 import { getSubscriptionValueForInternalUse, subscribeForRender } from '../runtime/runtime';
 import type { ReflexRuntimeClient } from '../runtime/api';
 import type { SubVector } from '../types';
-import type { ReflexHooks } from './types';
 
-export type { ReflexHooks } from './types';
+export type { ReflexBindings, ReflexHooks } from './types';
 
 /**
  * Subscribe a React component to the nearest Reflex runtime.
@@ -27,7 +25,9 @@ export type { ReflexHooks } from './types';
  * This entry point checks against the ambient `DefaultContracts`, because a
  * React context type is fixed when the context is created and so cannot carry
  * a per-runtime contract. Applications owning more than one runtime should use
- * `createReflexHooks<TContracts>()` instead.
+ * `createReflexHooks<TContracts>()` instead, which pairs a provider and hooks
+ * over a private context so the contract they are checked against is the one
+ * the provided runtime was built for.
  */
 export function useSubscription<TId extends ContractSubscriptionId<DefaultContracts>>(
   query: ContractSubscriptionVector<DefaultContracts, TId>,
@@ -45,24 +45,8 @@ export function useSubscription<T>(
   return useRuntimeSubscription(runtime, subVector, componentName);
 }
 
-/** Create locally typed hooks for runtimes using `TContracts`. */
-export function createReflexHooks<TContracts extends ReflexContracts>(): ReflexHooks<TContracts> {
-  function useTypedSubscription<TId extends ContractSubscriptionId<TContracts>>(
-    query: ContractSubscriptionVector<TContracts, TId>,
-    componentName: string = 'react component',
-  ): ContractSubscriptionResult<TContracts, TId> {
-    const runtime = useReflexRuntime<TContracts>();
-    return useRuntimeSubscription<ContractSubscriptionResult<TContracts, TId>>(
-      runtime,
-      query as SubVector,
-      componentName,
-    );
-  }
-
-  return Object.freeze({ useSubscription: useTypedSubscription });
-}
-
-function useRuntimeSubscription<T>(
+/** @internal Shared subscription store used by every React entry point. */
+export function useRuntimeSubscription<T>(
   runtime: ReflexRuntimeClient<any>,
   subVector: SubVector,
   componentName: string,

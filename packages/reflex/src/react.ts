@@ -1,5 +1,6 @@
 export { ReflexProvider, useReflexRuntime } from './react/context';
-export { createReflexHooks, useSubscription } from './react/use-subscription';
+export { createReflexHooks } from './react/bindings';
+export { useSubscription } from './react/use-subscription';
 export {
   HotReloadWrapper,
   clearHotReloadCallbacks,
@@ -10,4 +11,9 @@ export {
   useHotReloadKey,
 } from './react/hot-reload';
 
-export type { ReflexHooks, ReflexProviderProps } from './react/types';
+export type {
+  ReflexBindings,
+  ReflexHooks,
+  ReflexProviderProps,
+  ReflexTypedProviderProps,
+} from './react/types';

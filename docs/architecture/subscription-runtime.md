@@ -39,6 +39,16 @@ active/dormant boundaries, and deep registered graphs.
 ## Lifecycle and correctness rules
 
 - Root cells are persistent STATE anchors and never accept query parameters.
+  Under a declared contract `regRootSub` rejects a parameterized id at compile
+  time, and rejects a source key whose state type does not satisfy the
+  subscription's declared result. Both the id and the key are resolved through
+  an indexed access rather than matched against a precomputed set, so an index
+  signature on either section constrains what it admits while a narrower named
+  entry still wins at its own name. The id, the key, and the state's own
+  variants are checked together, so a union-typed id is accepted only with a
+  key valid for every member, and a union state only with a key every variant
+  declares. The runtime keeps throwing on a parameterized root query, which is
+  what an undeclared contract still relies on.
 - Computed dependencies are static for one serialized subscription key.
 - Computed nodes have a terminal live lifecycle. Their last consumer evicts
   them; a later key lookup creates a fresh graph.

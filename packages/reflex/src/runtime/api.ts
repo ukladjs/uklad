@@ -3,6 +3,8 @@ import type {
   ContractEffectParams,
   ContractEffects,
   ContractEventParams,
+  ContractRootSubscriptionSource,
+  ContractRootSubscriptionSubject,
   ContractState,
   ContractSubscribeVector,
   ContractSubscriptionDependencyValues,
@@ -76,7 +78,25 @@ export interface ReflexRegistrar<TContracts extends ReflexContracts = Permissive
     ) => void,
   ): void;
   regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void;
-  regRootSub<TId extends string>(id: TId, sourceKey: string): void;
+  /**
+   * Register a subscription that reads one state key straight through.
+   *
+   * The arguments are checked as one correlated pair: `id` must name a
+   * subscription that declares no parameters, since the runtime rejects a
+   * parameterized query against a root subscription, and `sourceKey` must name
+   * a state key whose type satisfies *that* subscription's declared result.
+   *
+   * ```ts
+   * regRootSub('todos/all', 'todos');
+   * ```
+   *
+   * Sections the contract leaves undeclared stay permissive, so a runtime
+   * without a subscription or state contract accepts any pair.
+   */
+  regRootSub<TId extends ContractSubscriptionId<TContracts>, TKey extends string>(
+    id: ContractRootSubscriptionSubject<TContracts, TId>,
+    sourceKey: ContractRootSubscriptionSource<TContracts, TId, TKey>,
+  ): void;
   /**
    * Register a computed subscription.
    *

@@ -214,6 +214,184 @@ export type ContractSubscriptionResult<
     : TFallback
   : TFallback;
 
+/** True for `any`, which carries no type to check anything against. */
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/** True only when every branch of a distributed check held. */
+type AllTrue<TChecks extends boolean> = [TChecks] extends [true] ? true : false;
+
+/**
+ * Keys of `TState`, distributed so every variant of a union contributes.
+ *
+ * A plain `keyof` over a union keeps only the keys shared by every variant, so
+ * a disjoint state like `{ count: number } | { label: string }` would read as
+ * having no keys at all rather than two. Numeric keys are kept rather than
+ * filtered to strings, so a state like `{ 0: string }` reads as declared.
+ */
+type DistributedStateKeys<TState> = TState extends unknown ? keyof TState : never;
+
+/**
+ * True when the state section declares no keys at all.
+ *
+ * An empty section reads as "not declared yet" for the same reason an empty map
+ * does in `NormalizeContractMap`: `createReflexRuntime({ initialState: {} })` is
+ * the untyped entry point, and it must not reject every key.
+ */
+type HasOpenState<TContracts> = [DistributedStateKeys<ContractState<TContracts>>] extends [never]
+  ? true
+  : false;
+
+/**
+ * The declared key that a string source names on `TState`.
+ *
+ * `sourceKey` is always a string, but a state may declare a numeric key, and
+ * the runtime's `state[sourceKey]` reads the same property either way — `'0'`
+ * and `0` are one property in JavaScript. Mapping the numeric-string form onto
+ * the declared numeric key keeps the check aligned with that. Resolves to
+ * `never` when the state declares no such key.
+ */
+type ResolveStateKey<TState, TKey extends string> = TKey extends keyof TState
+  ? TKey
+  : TKey extends `${infer TNumeric extends number}`
+    ? `${TNumeric}` extends TKey
+      ? TNumeric extends keyof TState
+        ? TNumeric
+        : never
+      : never
+    : never;
+
+/** Whether one state value satisfies a declared result. `any` carries no check. */
+type StateValueAccepts<TValue, TResult> =
+  IsAny<TValue> extends true ? true : TValue extends TResult ? true : false;
+
+/**
+ * Whether every variant of `TState` holds `TKey` with a value satisfying
+ * `TResult`.
+ *
+ * A union state is only ever one of its variants at runtime, and the root
+ * subscription publishes that key whichever one is current. So the key has to
+ * be present in all of them — a key missing from one variant would read as
+ * `undefined` under it — and each variant's value has to satisfy the result.
+ */
+type StateVariantsAccept<TState, TKey extends string, TResult> = TState extends unknown
+  ? [ResolveStateKey<TState, TKey>] extends [never]
+    ? false
+    : StateValueAccepts<TState[ResolveStateKey<TState, TKey> & keyof TState], TResult>
+  : never;
+
+/**
+ * Whether a query for a subscription may be issued with no arguments at all.
+ *
+ * An unbounded `readonly any[]` — the shape an absent or permissive
+ * subscription section carries — reads as open. A typed array or a tuple with
+ * any declared position still permits a query that carries an argument, which
+ * a root subscription would reject at runtime. Only a fixed empty tuple is
+ * eligible alongside the permissive fallback.
+ */
+type ParamsAllowRootSub<TParams extends readonly any[]> = TParams extends readonly []
+  ? true
+  : [Exclude<keyof TParams, keyof any[]>] extends [never]
+    ? IsAny<TParams[number]> extends true
+      ? true
+      : false
+    : false;
+
+/**
+ * Subscription IDs that declare no parameters.
+ *
+ * A root subscription reads one state key straight through, so it cannot serve
+ * a parameterized subscription: the runtime throws when a query for one arrives
+ * carrying arguments. Narrowing to the parameterless ids moves that failure to
+ * the registration site.
+ *
+ * An open id set is not an unchecked one, exactly as with state keys. An absent
+ * or permissive section declares unbounded params and keeps every id available,
+ * but a typed index signature declares what every id it admits accepts — so
+ * `Record<string, { params: [factor: number]; … }>` yields no root-eligible id
+ * at all rather than every one.
+ *
+ * Unlike state keys, a contract that declares subscriptions but no parameterless
+ * one resolves to `never` rather than falling back: there really is no id
+ * `regRootSub` can accept.
+ */
+export type ContractRootSubscriptionId<TContracts> =
+  string extends ContractSubscriptionId<TContracts>
+    ? ParamsAllowRootSub<ContractSubscriptionParams<TContracts, string>> extends true
+      ? string
+      : never
+    : {
+        [TId in ContractSubscriptionId<TContracts>]: ParamsAllowRootSub<
+          ContractSubscriptionParams<TContracts, TId>
+        > extends true
+          ? TId
+          : never;
+      }[ContractSubscriptionId<TContracts>];
+
+/**
+ * The `id` parameter of `regRootSub`, checked against its own declaration.
+ *
+ * The id set above resolves an open subscription section through its index
+ * signature, which hides a narrower named entry the same way a state's index
+ * signature hides a named property. Resolving `TId` here reads that entry, so a
+ * parameterized id declared alongside an open index signature is still
+ * rejected.
+ */
+export type ContractRootSubscriptionSubject<TContracts, TId extends string> = TId &
+  (AllTrue<
+    TId extends string ? ParamsAllowRootSub<ContractSubscriptionParams<TContracts, TId>> : never
+  > extends true
+    ? unknown
+    : never);
+
+/**
+ * Whether `TKey` may back a root subscription for `TId`.
+ *
+ * The subscription publishes `state[sourceKey]` unchanged, so the state's type
+ * at that key must satisfy the subscription's declared result. The key is
+ * resolved through an ordinary indexed access, which is what keeps a narrower
+ * named property visible: `{ [key: string]: number | string; count: number }`
+ * reads `number` at `count` and `number | string` everywhere else, so a `count`
+ * subscription declaring `number` accepts the named key and rejects the rest.
+ * Enumerating valid keys instead cannot express that, because `keyof` collapses
+ * literal keys into `string` as soon as an index signature is present.
+ *
+ * The id, the key, and the state's own variants are all distributed, and every
+ * combination must hold. So a union-typed id — `'count' | 'label'` from an id
+ * variable, say — is accepted only with a key valid for each of its members,
+ * and a union state is accepted only with a key every variant declares.
+ *
+ * `any` on either side carries nothing to check: an `any` state value stays
+ * permissive, as does an undeclared result.
+ */
+type ContractRootSourceIsValid<TContracts, TId extends string, TKey extends string> =
+  HasOpenState<TContracts> extends true
+    ? true
+    : AllTrue<
+        TId extends string
+          ? TKey extends string
+            ? StateVariantsAccept<
+                ContractState<TContracts>,
+                TKey,
+                ContractSubscriptionResult<TContracts, TId>
+              >
+            : never
+          : never
+      >;
+
+/**
+ * The `sourceKey` parameter of `regRootSub`, checked against `TId`.
+ *
+ * Written as an intersection rather than a conditional so `TKey` stays in an
+ * inferable position: the compiler still reads the literal the caller passed,
+ * and the guard collapses the parameter to `never` when that literal cannot
+ * back `TId`.
+ */
+export type ContractRootSubscriptionSource<
+  TContracts,
+  TId extends string,
+  TKey extends string,
+> = TKey & (ContractRootSourceIsValid<TContracts, TId, TKey> extends true ? unknown : never);
+
 /** One subscription vector for `TId`. Omitting `TId` produces the query union. */
 export type ContractSubscriptionVector<
   TContracts,

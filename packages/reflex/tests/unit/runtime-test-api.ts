@@ -100,7 +100,10 @@ export function regEffect<K extends Id = Id>(id: K, handler: EffectHandler<any>)
   });
 }
 
-export function regCoeffect<T = DefaultAppState>(id: string, handler: CoEffectHandler<T>): void {
+export function regCoeffect<TValue = any, TArg = any>(
+  id: string,
+  handler: CoEffectHandler<TValue, TArg>,
+): void {
   testRuntime.registerModule((registrar) => {
     registrar.regCoeffect(id, handler as any);
   });

@@ -7,6 +7,7 @@
 import { getRuntimeAdminForTests } from './runtime/runtime';
 
 import type {
+  ContractCoeffectId,
   ContractEffectParams,
   ContractDispatchVector,
   ContractState,
@@ -20,8 +21,13 @@ import type {
   ReflexContracts,
   WatchSubscriptionOptions,
 } from './contracts';
-import type { ReflexRuntime, RuntimeEventHandler, RuntimeSubscriptionHandler } from './runtime/api';
-import type { CoEffectHandler, SubDepsHandler } from './types';
+import type {
+  ReflexRuntime,
+  RuntimeCoeffectHandler,
+  RuntimeEventHandler,
+  RuntimeSubscriptionHandler,
+} from './runtime/api';
+import type { SubDepsHandler } from './types';
 
 export interface ReflexTestHarness<TContracts extends ReflexContracts = PermissiveReflexContracts> {
   getState(): ContractState<TContracts>;
@@ -32,7 +38,9 @@ export interface ReflexTestHarness<TContracts extends ReflexContracts = Permissi
   getEffectHandler<TId extends string>(
     id: TId,
   ): ((value: ContractEffectParams<TContracts, TId>) => void) | undefined;
-  getCoeffectHandler(id: string): CoEffectHandler<ContractState<TContracts>> | undefined;
+  getCoeffectHandler<TId extends ContractCoeffectId<TContracts>>(
+    id: TId,
+  ): RuntimeCoeffectHandler<TContracts, TId> | undefined;
   getSubscriptionHandler<TId extends ContractSubscriptionId<TContracts>>(
     id: TId,
   ): RuntimeSubscriptionHandler<TContracts, TId> | undefined;

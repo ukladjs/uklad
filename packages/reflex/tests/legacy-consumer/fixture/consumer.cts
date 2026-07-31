@@ -14,7 +14,7 @@ runtime.registerModule((registrar) => {
 });
 const value: unknown = reflex.useSubscription(['legacy/cjs']);
 const state = testHarness.getState();
-const options: EventRegistrationOptions = { coeffects: [['now']] };
+const options: EventRegistrationOptions = { coeffects: { now: 'now' } };
 const trace: Trace | undefined = undefined;
 
 void value;

@@ -10,11 +10,17 @@ import type {
   Trace,
 } from '@flexsurfer/reflex';
 
-const options: EventRegistrationOptions = { coeffects: [['now']] };
+const options: EventRegistrationOptions = { coeffects: { now: 'now' } };
+const namedOptions: EventRegistrationOptions<{ package: string }> = {
+  coeffects: { now: 'system/now' },
+};
 const trace: Trace | undefined = undefined;
 const runtime = reflexVanilla.createReflexRuntime({ initialState: { package: 'cjs' } });
 runtime.registerModule((registrar) => {
   registrar.regEvent('package/cjs', () => undefined);
+  registrar.regEvent('package/cjs-named', ({ coeffects: { now } }) => void now, {
+    coeffects: { now: 'system/now' },
+  });
 });
 runtime.dispatch(['package/cjs']);
 const inspector: ReflexInspector = reflexDevtools.createReflexInspector(runtime);
@@ -26,6 +32,7 @@ const removeSubscriptionListener = testHarness.watchSubscription(['package/cjs']
 const hooks = reflexReact.createReflexHooks();
 
 void options;
+void namedOptions;
 void trace;
 void snapshot;
 void testHarness.getEventHandler('package/cjs');

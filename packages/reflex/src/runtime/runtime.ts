@@ -26,6 +26,7 @@ import {
 } from './core';
 import { detachRuntimeProbes, notifyRuntimeProbe } from './probe';
 import {
+  assertCoeffectId,
   assertDispatchableEvent,
   assertRateLimitDuration,
   assertRegisteredSubscription,
@@ -42,7 +43,6 @@ import type {
   ReflexRuntimeAdmin,
   ReflexRuntimeClient,
   ReflexRegistrar,
-  RuntimeEventHandler,
   RuntimeStateRevisions,
   RuntimeSubscriptionHandler,
 } from './api';
@@ -50,6 +50,7 @@ import type {
   CoEffectHandler,
   EqualityCheckFn,
   ErrorHandler,
+  EventHandler,
   EventRegistrationOptions,
   Id,
   Interceptor,
@@ -185,7 +186,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   regEvent(
     id: Id,
-    handler: RuntimeEventHandler<TContracts, any>,
+    handler: EventHandler<any, any>,
     options?: EventRegistrationOptions<ContractState<TContracts>>,
   ): void {
     this.assertUsable();
@@ -197,8 +198,9 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     this.recordRegistration(this.#core.registry.fx.register(id, handler));
   }
 
-  regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void {
+  regCoeffect(id: string, handler: CoEffectHandler<any, any>): void {
     this.assertUsable();
+    assertCoeffectId(id);
     this.recordRegistration(
       this.#core.registry.cofx.register(id, handler as unknown as CoEffectHandler),
     );
@@ -456,7 +458,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 
   private createRegistrar(): ReflexRegistrar<TContracts> {
     return Object.freeze({
-      regEvent: this.regEvent.bind(this),
+      regEvent: this.regEvent.bind(this) as ReflexRegistrar<TContracts>['regEvent'],
       regEffect: this.regEffect.bind(this),
       regCoeffect: this.regCoeffect.bind(this),
       regRootSub: this.regRootSub.bind(this),

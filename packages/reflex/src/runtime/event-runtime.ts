@@ -1,16 +1,12 @@
 import { IS_DEV } from '../core/environment';
 import { consoleLog } from '../core/logging';
 import { isEventVector } from '../core/validation';
+import { RUNTIME_OWNED_COEFFECT_IDS } from '../contracts';
 import { isRuntimeDisposed, type RuntimeCore } from './core';
 import { freezeDispatchedEvent } from '../core/event-freeze';
 import { createRegistrationHandle, RegistrationStore } from './registrations';
 import { assertRuntimeUsable } from './validation';
-import {
-  acceptRuntimeEvent,
-  notifyDroppedRuntimeEvents,
-  notifyRuntimeProbe,
-  notifyTrackedRuntimeEvent,
-} from './probe';
+import { acceptRuntimeEvent, notifyDroppedRuntimeEvents, notifyTrackedRuntimeEvent } from './probe';
 import { EventQueue, getEventScheduler } from '../events/router';
 import { registerBuiltInEffects } from '../events/built-in-effects';
 import { executeEventEnvelope } from '../events/execution';
@@ -21,6 +17,7 @@ import type { ExecutionEnvelope } from '../events/envelope';
 import type { RegistrationHandle } from './registrations';
 import type { RuntimeProbeParent } from './probe-types';
 import type {
+  CoeffectReadContext,
   Context,
   EventHandler,
   EventRegistrationOptions,
@@ -30,10 +27,19 @@ import type {
 } from '../types';
 
 const EMPTY_INTERCEPTORS: readonly Interceptor[] = Object.freeze([]);
+const EMPTY_NAMED_COEFFECT_BINDINGS: readonly NamedCoeffectBinding[] = Object.freeze([]);
+
+interface NamedCoeffectBinding {
+  readonly slot: string;
+  readonly id: string;
+  readonly arg?: unknown;
+}
 
 interface RuntimeEventDefinition {
   readonly handler: EventHandler<any, any>;
   readonly interceptors: readonly Interceptor[];
+  /** Provider-to-local-name projection used only when calling the event handler. */
+  readonly namedCoeffectBindings: readonly NamedCoeffectBinding[];
   /**
    * The complete chain this event executes, built once at registration.
    *
@@ -88,9 +94,12 @@ export class EventRuntime {
     handler: EventHandler<T>,
     options?: EventRegistrationOptions<T>,
   ): RegistrationHandle {
-    const interceptors = this.buildEventInterceptors(id, options);
+    const { interceptors, namedCoeffectBindings } = this.buildEventInterceptors(id, options);
     const registration = this.getRuntime().registry.event.register(id, handler);
-    this.eventDefinitions.set(id, createEventDefinition(this.getRuntime(), handler, interceptors));
+    this.eventDefinitions.set(
+      id,
+      createEventDefinition(this.getRuntime(), handler, interceptors, namedCoeffectBindings),
+    );
     return createRegistrationHandle({
       isActive: () => registration.active,
       release: (): boolean => {
@@ -117,10 +126,12 @@ export class EventRuntime {
 
   setEventInterceptors(id: string, interceptors: readonly Interceptor[]): void {
     const handler = this.getRuntime().registry.event.get(id);
+    const namedCoeffectBindings =
+      this.eventDefinitions.get(id)?.namedCoeffectBindings ?? EMPTY_NAMED_COEFFECT_BINDINGS;
     if (handler !== undefined)
       this.eventDefinitions.set(
         id,
-        createEventDefinition(this.getRuntime(), handler, interceptors),
+        createEventDefinition(this.getRuntime(), handler, interceptors, namedCoeffectBindings),
       );
   }
 
@@ -276,25 +287,24 @@ export class EventRuntime {
   private buildEventInterceptors<T>(
     id: string,
     options?: EventRegistrationOptions<T>,
-  ): readonly Interceptor[] {
+  ): {
+    readonly interceptors: readonly Interceptor[];
+    readonly namedCoeffectBindings: readonly NamedCoeffectBinding[];
+  } {
     const runtime = this.getRuntime();
     const coeffectInterceptors: Interceptor[] = [];
-    const coeffects = Array.isArray(options?.coeffects) ? options.coeffects : [];
+    const namedCoeffectBindings: NamedCoeffectBinding[] = [];
+    const coeffects = options?.coeffects;
 
-    for (const specification of coeffects) {
-      if (!Array.isArray(specification) || typeof specification[0] !== 'string') {
-        consoleLog('warn', '[reflex] invalid cofx specification:', specification);
-        continue;
-      }
-
-      if (specification.length === 1) {
-        coeffectInterceptors.push(getInjectCofxInterceptor(runtime, specification[0]));
-      } else if (specification.length === 2) {
-        coeffectInterceptors.push(
-          getInjectCofxInterceptor(runtime, specification[0], specification[1]),
-        );
-      } else {
-        consoleLog('warn', '[reflex] invalid cofx specification:', specification);
+    if (Array.isArray(coeffects)) {
+      throw new Error(
+        "[reflex] event coeffects must be an object of local bindings, for example { now: 'system/now' }.",
+      );
+    } else if (coeffects && typeof coeffects === 'object') {
+      const bindings = readNamedCoeffectBindings(coeffects);
+      for (const binding of bindings) {
+        namedCoeffectBindings.push(binding);
+        coeffectInterceptors.push(getInjectCofxInterceptor(runtime, binding.id, binding.arg));
       }
     }
 
@@ -314,49 +324,130 @@ export class EventRuntime {
       }
     }
 
-    return [...coeffectInterceptors, ...eventInterceptors];
+    return {
+      interceptors: [...coeffectInterceptors, ...eventInterceptors],
+      namedCoeffectBindings,
+    };
   }
 }
 
-/** Create a coeffect interceptor bound to one runtime. */
+/**
+ * Create a coeffect interceptor bound to one runtime.
+ *
+ * The handler returns a value and the interceptor always stores it under the
+ * coeffect's own id. Named event bindings are projected only for the final
+ * event-handler call, so providers remain available to later coeffects and
+ * infrastructure interceptors without leaking provider ids into application
+ * handler inputs.
+ *
+ * A missing or throwing handler aborts the event before its state transition
+ * runs. A successful handler may still deliberately inject `undefined`.
+ */
 function getInjectCofxInterceptor(
   runtime: RuntimeCore,
   id: string,
-  value?: any,
+  arg?: any,
 ): InternalInterceptor {
   return {
     id: `inject-${id}`,
     before(context: Context): Context {
       const handler = runtime.registry.cofx.get(id);
       if (!handler) {
-        const error = new Error(`[reflex] No cofx handler registered for ${id}`);
-        consoleLog('error', '[reflex] No cofx handler registered for', id);
-        notifyRuntimeProbe(runtime, 'error', 'missing-coeffect', error);
-        return context;
+        throw new Error(`[reflex] No coeffect handler registered for '${id}'.`);
       }
 
-      try {
-        context.coeffects = handler({ ...context.coeffects }, value);
-      } catch (error: unknown) {
-        consoleLog('error', `[reflex] Error in :${id} coeffect handler:`, error);
-        notifyRuntimeProbe(runtime, 'error', 'coeffect', error);
-      }
+      const value = handler(arg, createCoeffectReadContext(context.coeffects));
+      context.coeffects[id] = value;
       return context;
     },
   };
+}
+
+function readCoeffectSpecification(
+  specification: unknown,
+): { readonly id: string; readonly arg?: unknown } | undefined {
+  if (!Array.isArray(specification) || typeof specification[0] !== 'string') return;
+  if (specification.length === 1) return { id: specification[0] };
+  if (specification.length === 2) return { id: specification[0], arg: specification[1] };
+  return;
+}
+
+function readNamedCoeffectBindings(coeffects: object): NamedCoeffectBinding[] {
+  const bindings: NamedCoeffectBinding[] = [];
+  for (const [slot, binding] of Object.entries(coeffects)) {
+    if (!isNamedCoeffectSlot(slot)) {
+      consoleLog(
+        'warn',
+        `[reflex] invalid named coeffect binding slot '${slot}'. Slots must not replace runtime-owned coeffects.`,
+      );
+      continue;
+    }
+
+    if (typeof binding === 'string') {
+      bindings.push({ slot, id: binding });
+      continue;
+    }
+
+    const request = readCoeffectSpecification(binding);
+    if (request) {
+      bindings.push({ slot, ...request });
+      continue;
+    }
+
+    consoleLog('warn', '[reflex] invalid named coeffect binding:', slot, binding);
+  }
+  return bindings;
+}
+
+function isNamedCoeffectSlot(slot: string): boolean {
+  return (
+    slot.length > 0 &&
+    slot !== '__proto__' &&
+    !RUNTIME_OWNED_COEFFECT_IDS.some((runtimeOwnedId) => runtimeOwnedId === slot)
+  );
+}
+
+/**
+ * Give a coeffect handler a detached, immutable view of inputs it may read.
+ *
+ * `draftState` is deliberately omitted: it is an event-handler capability,
+ * not a coeffect capability. The event vector is copied before freezing, so a
+ * coeffect cannot replace its id or parameters for the event that follows.
+ * Values supplied by earlier coeffects retain their own identity; handlers
+ * should treat those values as read-only too.
+ */
+function createCoeffectReadContext(coeffects: Context['coeffects']): CoeffectReadContext {
+  const previous = Object.create(null) as Record<string, unknown>;
+  for (const [key, value] of Object.entries(coeffects)) {
+    if (key !== 'event' && key !== 'draftState') previous[key] = value;
+  }
+
+  return Object.freeze({
+    ...previous,
+    event: Object.freeze([...coeffects.event]) as Readonly<EventVector>,
+  }) as CoeffectReadContext;
 }
 
 function createEventDefinition(
   runtime: RuntimeCore,
   handler: EventHandler<any, any>,
   interceptors: readonly Interceptor[],
+  namedCoeffectBindings: readonly NamedCoeffectBinding[] = EMPTY_NAMED_COEFFECT_BINDINGS,
 ): RuntimeEventDefinition {
   const ownedInterceptors =
     interceptors.length === 0 ? EMPTY_INTERCEPTORS : Object.freeze([...interceptors]);
+  const ownedNamedCoeffectBindings =
+    namedCoeffectBindings.length === 0
+      ? EMPTY_NAMED_COEFFECT_BINDINGS
+      : Object.freeze([...namedCoeffectBindings]);
   return Object.freeze({
     handler,
     interceptors: ownedInterceptors,
-    chain: [...ownedInterceptors, createEventHandlerInterceptor(runtime, handler)],
+    namedCoeffectBindings: ownedNamedCoeffectBindings,
+    chain: [
+      ...ownedInterceptors,
+      createEventHandlerInterceptor(runtime, handler, ownedNamedCoeffectBindings),
+    ],
   });
 }
 

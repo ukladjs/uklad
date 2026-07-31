@@ -1,39 +1,42 @@
+/**
+ * Browser entry point — one execution owner, one runtime.
+ *
+ * Platform selection happens here and nowhere else: the shared feature modules
+ * first, then exactly one effect module and one coeffect module for this
+ * target. `headless.ts` installs the identical feature modules with the
+ * headless pair instead.
+ */
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex/vanilla';
+
+import { enableMapSet } from '@flexsurfer/reflex/vanilla';
 import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
+
+import { ReflexProvider } from './app/reflex/bindings';
+import { registerFeatureModules } from './app/reflex/register';
+import { createPlaygroundRuntime } from './app/reflex/runtime';
+import App from './app/ui/App';
+import { registerWebCoeffects, webCoeffectModes } from './platform/web/coeffects';
+import { registerWebEffects, webEffectModes } from './platform/web/effects';
 import './index.css';
-import App from './App';
-import { ReflexProvider } from './hooks';
-import { coeffectModes, installBrowserCoeffects } from './coeffects.browser';
-import { createInitialState, type PlaygroundContracts } from './state';
-import { effectModes, installBrowserEffects } from './effects.browser';
-import { installPlaygroundEvents } from './events';
-import { installPlaygroundSubscriptions } from './subs';
 
 enableMapSet();
 
-const browserRuntime = createReflexRuntime<PlaygroundContracts>({
-  initialState: createInitialState(),
+const browserRuntime = createPlaygroundRuntime({
   runtimeId: 'devtools-playground.browser',
   name: 'DevTools Playground (Browser)',
 });
 
-browserRuntime.registerModule(installPlaygroundEvents);
-browserRuntime.registerModule(installPlaygroundSubscriptions);
-browserRuntime.registerModule(installBrowserEffects);
-browserRuntime.registerModule(installBrowserCoeffects);
+registerFeatureModules(browserRuntime);
+browserRuntime.registerModule(registerWebEffects);
+browserRuntime.registerModule(registerWebCoeffects);
 
 enableDevtools(createReflexInspector(browserRuntime), {
   operations: true,
   runtime: 'browser',
   effectMode: 'real',
-  effects: {
-    ...effectModes,
-    ...coeffectModes,
-    'fake-effect': 'real',
-  },
+  effects: { ...webEffectModes, ...webCoeffectModes },
 });
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

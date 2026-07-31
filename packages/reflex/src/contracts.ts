@@ -9,14 +9,24 @@ export interface ReflexContracts {
   readonly state?: Record<string, any>;
   readonly events?: object;
   readonly effects?: object;
+  readonly coeffects?: object;
   readonly subscriptions?: object;
 }
+
+/** Coeffect keys reserved for values created by the runtime itself. */
+export const RUNTIME_OWNED_COEFFECT_IDS = ['event', 'draftState'] as const;
+
+/** A coeffect key an application must not declare or register. */
+export type RuntimeOwnedCoeffectId = (typeof RUNTIME_OWNED_COEFFECT_IDS)[number];
 
 /** Event payload map used when a runtime has no declared event contract. */
 export type PermissiveEventPayloads = Record<string, readonly any[]>;
 
 /** Effect payload map used when a runtime has no declared effect contract. */
 export type PermissiveEffectPayloads = Record<string, any>;
+
+/** Coeffect declaration map used when a runtime has no declared coeffect contract. */
+export type PermissiveCoeffectPayloads = Record<string, { readonly arg: any; readonly value: any }>;
 
 /** Subscription map used when a runtime has no declared subscription contract. */
 export type PermissiveSubscriptionPayloads = Record<
@@ -29,6 +39,7 @@ export interface PermissiveReflexContracts extends ReflexContracts {
   readonly state: Record<string, any>;
   readonly events: PermissiveEventPayloads;
   readonly effects: PermissiveEffectPayloads;
+  readonly coeffects: PermissiveCoeffectPayloads;
   readonly subscriptions: PermissiveSubscriptionPayloads;
 }
 
@@ -45,6 +56,7 @@ export interface PermissiveReflexContracts extends ReflexContracts {
  *   interface DefaultContracts {
  *     state: TodoState;
  *     events: { 'todos/add': [title: string] };
+ *     coeffects: { now: { arg: void; value: number } };
  *     subscriptions: { 'todos/all': { params: []; result: Todo[] } };
  *   }
  * }
@@ -177,6 +189,139 @@ export type ContractEffectVector<TContracts> = [keyof DeclaredEffectPayloads<TCo
 
 /** Effect list returned by an event handler for `TContracts`. */
 export type ContractEffects<TContracts> = ContractEffectVector<TContracts>[];
+
+type DeclaredCoeffectPayloads<TContracts> = TContracts extends {
+  readonly coeffects: infer TCoeffects;
+}
+  ? TCoeffects extends object
+    ? TCoeffects
+    : {}
+  : {};
+
+/** Normalized coeffect declaration map for `TContracts`. */
+export type ContractCoeffectPayloads<TContracts> = NormalizeContractMap<
+  DeclaredCoeffectPayloads<TContracts>,
+  PermissiveCoeffectPayloads
+>;
+
+/**
+ * True when the contract declares no coeffects.
+ *
+ * An absent or empty section reads as "not declared yet", exactly as it does
+ * for events and effects, and keeps every coeffect surface permissive.
+ */
+type HasOpenCoeffects<TContracts> = [keyof DeclaredCoeffectPayloads<TContracts>] extends [never]
+  ? true
+  : false;
+
+/** Coeffect IDs accepted by `regCoeffect` and by event registration. */
+export type ContractCoeffectId<TContracts> =
+  HasOpenCoeffects<TContracts> extends true
+    ? string
+    : Exclude<
+        Extract<keyof ContractCoeffectPayloads<TContracts>, string>,
+        RuntimeOwnedCoeffectId | '__proto__'
+      >;
+
+/** Argument a coeffect is injected with, or `any` when undeclared. */
+export type ContractCoeffectArg<
+  TContracts,
+  TId extends string,
+> = TId extends keyof ContractCoeffectPayloads<TContracts>
+  ? ContractCoeffectPayloads<TContracts>[TId] extends { readonly arg: infer TArg }
+    ? TArg
+    : void
+  : any;
+
+/** Value a coeffect contributes to the event's coeffects, or `any` when undeclared. */
+export type ContractCoeffectValue<
+  TContracts,
+  TId extends string,
+> = TId extends keyof ContractCoeffectPayloads<TContracts>
+  ? ContractCoeffectPayloads<TContracts>[TId] extends { readonly value: infer TValue }
+    ? TValue
+    : any
+  : any;
+
+/**
+ * One coeffect spec tuple, with the argument required exactly when the coeffect
+ * declares one. Mirrors `EffectTupleFor`: a `void` argument yields a
+ * single-element spec, an optional one yields an optional second element.
+ */
+type CoeffectTupleFor<TKey extends string, TArg> = 0 extends 1 & TArg
+  ? readonly [id: TKey, arg?: TArg]
+  : [TArg] extends [void]
+    ? readonly [id: TKey]
+    : undefined extends TArg
+      ? readonly [id: TKey, arg?: TArg]
+      : readonly [id: TKey, arg: TArg];
+
+/**
+ * One coeffect request in an event binding.
+ *
+ * A bare id is shorthand for a request with no registration argument. A tuple
+ * carries its registration argument.
+ */
+export type ContractNamedCoeffectBinding<TContracts> =
+  HasOpenCoeffects<TContracts> extends true
+    ? string | readonly [id: string, arg?: any]
+    : {
+        [TId in ContractCoeffectId<TContracts>]: NamedCoeffectBindingFor<
+          TId,
+          ContractCoeffectArg<TContracts, TId>
+        >;
+      }[ContractCoeffectId<TContracts>];
+
+/**
+ * A named binding for one provider id.
+ *
+ * A bare provider id means no argument is supplied, so it is valid only for
+ * providers whose argument is void or optional. Required arguments must use
+ * the tuple form.
+ */
+type NamedCoeffectBindingFor<TKey extends string, TArg> = [TArg] extends [void]
+  ? TKey | CoeffectTupleFor<TKey, TArg>
+  : undefined extends TArg
+    ? TKey | CoeffectTupleFor<TKey, TArg>
+    : CoeffectTupleFor<TKey, TArg>;
+
+/**
+ * Named coeffect requests for one event registration.
+ *
+ * The object key is local to the event handler; its value identifies the
+ * globally registered coeffect provider. This keeps slash-namespaced provider
+ * ids out of normal event-handler property access.
+ */
+export type ContractNamedCoeffectBindings<TContracts> = Readonly<
+  Record<string, ContractNamedCoeffectBinding<TContracts>>
+>;
+
+type CoeffectSpecId<TSpec> = TSpec extends readonly [infer TId extends string, ...unknown[]]
+  ? TId
+  : never;
+
+/** Provider id named by either a bare named binding or a tuple binding. */
+type CoeffectBindingId<TBinding> = TBinding extends string ? TBinding : CoeffectSpecId<TBinding>;
+
+/**
+ * Values an event handler receives from its coeffect bindings.
+ *
+ * The resulting property names are event-local binding slots. Contracts remain
+ * keyed by provider id, so platform registrations and their consumers still
+ * share one value declaration.
+ */
+export type ContractNamedCoeffectValues<
+  TContracts,
+  TBindings extends Readonly<Record<string, unknown>>,
+> = {
+  readonly [TSlot in keyof TBindings & string]: ContractCoeffectValue<
+    TContracts,
+    CoeffectBindingId<TBindings[TSlot]>
+  >;
+};
+
+/** Whether `TContracts` leaves its coeffect section undeclared. */
+export type ContractHasOpenCoeffects<TContracts> = HasOpenCoeffects<TContracts>;
 
 /** Normalized subscription payload map for `TContracts`. */
 export type ContractSubscriptionPayloads<TContracts> = TContracts extends {

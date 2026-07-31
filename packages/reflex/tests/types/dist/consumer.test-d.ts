@@ -12,6 +12,7 @@
 import { createReflexRuntime } from '@flexsurfer/reflex';
 import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import type {
+  ContractNamedEventRegistrationOptions,
   EventRegistrationOptions,
   ReflexContracts,
   SubscriptionDiagnostic,
@@ -34,6 +35,19 @@ interface TestContracts extends ReflexContracts {
     'storage/set-todos': Todo[];
     'dispatch': number;
     'dispatch-later': string;
+  };
+}
+
+interface NamedContracts extends ReflexContracts {
+  readonly state: {
+    todos: Todo[];
+  };
+  readonly events: {
+    'named/read': [];
+  };
+  readonly coeffects: {
+    'system/now': { arg: void; value: number };
+    'storage/value': { arg: string; value: string | null };
   };
 }
 
@@ -61,11 +75,49 @@ runtime.registerModule((registrar) => {
   });
 });
 const registrationOptions: EventRegistrationOptions<{ todos: Todo[] }> = {
-  coeffects: [['now']],
+  coeffects: { now: 'now' },
   interceptors: [{ id: 'dist-options', before: (context) => context }],
 };
 runtime.registerModule((registrar) => {
   registrar.regEvent('app/init', () => undefined, registrationOptions);
+});
+const looseNamedRegistrationOptions: EventRegistrationOptions<{ todos: Todo[] }> = {
+  coeffects: { now: 'system/now' },
+};
+runtime.registerModule((registrar) => {
+  registrar.regEvent(
+    'app/init',
+    ({ coeffects: { now } }) => void now,
+    looseNamedRegistrationOptions,
+  );
+});
+const namedRuntime = createReflexRuntime<NamedContracts>({
+  initialState: { todos: [] as Todo[] },
+});
+namedRuntime.registerModule((registrar) => {
+  registrar.regEvent(
+    'named/read',
+    (context) => {
+      const { coeffects } = context;
+      const now: number = coeffects.now;
+      const stored: string | null = coeffects.stored;
+      void now;
+      void stored;
+      // @ts-expect-error Provider ids are not named handler properties.
+      const providerValue = coeffects['system/now'];
+      void providerValue;
+    },
+    { coeffects: { now: 'system/now', stored: ['storage/value', 'todos'] } },
+  );
+});
+const namedRegistrationOptions: ContractNamedEventRegistrationOptions<
+  NamedContracts,
+  { readonly now: 'system/now' }
+> = {
+  coeffects: { now: 'system/now' },
+};
+namedRuntime.registerModule((registrar) => {
+  registrar.regEvent('named/read', ({ coeffects: { now } }) => void now, namedRegistrationOptions);
 });
 runtime.registerModule((registrar) => {
   // @ts-expect-error unknown state key

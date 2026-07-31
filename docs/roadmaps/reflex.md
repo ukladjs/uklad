@@ -44,7 +44,6 @@ The strongest recent work is invisible: local `main` is ahead of the public repo
 - [ ] Synchronize website, root/package READMEs, API reference, and examples with the current API (`createReflexInspector`, current DevTools setup) before any package release.
 - [x] Fix the swapped Best Practices / API Reference links in [packages/reflex/README.md](../../packages/reflex/README.md).
 - [ ] Decide how the central `docs/` tree should be distributed with future package releases; package tarballs currently contain package code and package-facing READMEs, while deep documentation remains in the monorepo.
-- [ ] Remove the leftover `'event2'` string from the TodoMVC save handler ([examples/todomvc/src/events.ts](../../examples/todomvc/src/events.ts), `SAVE` event) and enable Strict Mode in [examples/todomvc/src/main.tsx](../../examples/todomvc/src/main.tsx).
 - [x] Pin MCP package versions in the shipped agent templates.
 - [ ] Prepare coordinated prerelease versions and release notes after the experimental redesign reaches a release candidate.
 - [ ] Run the full workspace check and packed-package dry runs.

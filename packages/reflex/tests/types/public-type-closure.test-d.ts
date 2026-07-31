@@ -81,8 +81,13 @@ const reportFailures: ErrorHandler = (originalError: Error, reflexError: ReflexE
 // ---- and both compose into the public registration surface --------------
 
 const options: EventRegistrationOptions<AppState> = {
-  coeffects: [['now']],
+  coeffects: { now: 'now' },
   interceptors: [withAudit('events'), auditing],
+};
+
+const namedOptions: EventRegistrationOptions<AppState> = {
+  coeffects: { now: 'system/now' },
+  interceptors: [withAudit('named-events')],
 };
 
 const runtime = createReflexRuntime<AuditContracts>({ initialState: { audited: 0 } });
@@ -93,6 +98,13 @@ runtime.registerModule((registrar) => {
       draftState.audited += 1;
     },
     options,
+  );
+  registrar.regEvent(
+    'audit/named-bump',
+    ({ draftState, coeffects: { now } }) => {
+      draftState.audited += now;
+    },
+    namedOptions,
   );
 });
 

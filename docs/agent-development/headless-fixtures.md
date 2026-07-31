@@ -168,10 +168,7 @@ regEffect(EFFECT_IDS.LOCAL_STORAGE_SET, ({ key, value }) => {
   memoryStorage.set(key, JSON.stringify(value));
 });
 
-regCoeffect(COEFFECT_IDS.LOCAL_STORAGE_GET, (cofx, key) => {
-  cofx.localStorageValue = memoryStorage.get(key) ?? null;
-  return cofx;
-});
+regCoeffect(COEFFECT_IDS.LOCAL_STORAGE_VALUE, (key) => memoryStorage.get(key) ?? null);
 ```
 
 Typical examples: local storage, session storage, routing state, feature flags, and other local environment reads.
@@ -181,10 +178,7 @@ Typical examples: local storage, session storage, routing state, feature flags, 
 Use for values that must be repeatable across scenario runs:
 
 ```ts
-regCoeffect(COEFFECT_IDS.CLOCK_NOW, (cofx) => {
-  cofx.now = headlessClock.now();
-  return cofx;
-});
+regCoeffect(COEFFECT_IDS.CLOCK_NOW, () => headlessClock.now());
 ```
 
 Typical examples: clocks, random numbers, generated ids, and timers. The scenario runner should be able to set clock/random seeds.

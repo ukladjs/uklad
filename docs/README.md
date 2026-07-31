@@ -9,6 +9,9 @@ back here for the deeper material.
 
 - [Foundation ADR](architecture/foundation-adr.md) — provisional architectural
   direction for the redesign.
+- [Canonical application structure](architecture/canonical-app-structure.md) —
+  shared runtime, flat reactive roots, feature organization, and the central
+  application catalog.
 - [Reflex runtime architecture](architecture/reflex-runtime.md) — current
   runtime ownership and execution structure.
 - [Subscription runtime](architecture/subscription-runtime.md) — graph

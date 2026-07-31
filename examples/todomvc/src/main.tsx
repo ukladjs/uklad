@@ -4,22 +4,36 @@ import { createRoot } from 'react-dom/client';
 import { enableMapSet } from '@flexsurfer/reflex/vanilla';
 import { HotReloadWrapper } from '@flexsurfer/reflex/react';
 
-import TodoApp from './views';
+import { ReflexProvider } from './app/reflex/bindings';
+import { registerFeatureModules } from './app/reflex/register';
+import { createAppRuntime } from './app/reflex/runtime';
+import { TodoApp } from './features/todos/ui/TodoApp';
+import { registerWebCoeffects } from './platform/web/coeffects';
+import { registerWebPersistence } from './platform/web/persistence';
 
 import './index.css';
 
-// These side-effect imports must finish before hydration is dispatched.
-import './events';
-import './subs';
-import { persistence } from './storage';
-import { ReflexProvider, todoRuntime } from './runtime';
-
-// Immer requires an explicit plugin before it can draft the Map-backed todo collection.
+// Immer requires an explicit plugin before it can draft the Map-backed todo root.
 enableMapSet();
+
+// The web entry point owns the application's single runtime, and it is the one
+// place platform selection happens: shared feature modules first, then exactly
+// the web adapters. A native, headless, or test entry point installs the same
+// feature modules with a different platform pair.
+const appRuntime = createAppRuntime();
+registerFeatureModules(appRuntime);
+appRuntime.registerModule(registerWebCoeffects);
+
+const persistence = registerWebPersistence(appRuntime);
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => persistence.dispose());
+}
+
 if (import.meta.env.DEV) {
   void import('@flexsurfer/reflex-devtools').then(({ enableDevtools }) => {
     void import('@flexsurfer/reflex/devtools').then(({ createReflexInspector }) => {
-      enableDevtools(createReflexInspector(todoRuntime));
+      enableDevtools(createReflexInspector(appRuntime));
     });
   });
 }
@@ -51,7 +65,7 @@ void persistence.whenHydrated().catch(() => {
 const USE_STRICT_MODE = true;
 const app = (
   // HotReloadWrapper forces a remount when subscriptions are hot reloaded.
-  <ReflexProvider runtime={todoRuntime}>
+  <ReflexProvider runtime={appRuntime}>
     <HotReloadWrapper>
       <TodoApp />
     </HotReloadWrapper>

@@ -8,13 +8,23 @@ import { execute } from './interceptors-executor';
 
 import type {
   Context,
-  State,
   Effects,
+  EventCoeffects,
+  EventContext,
   EventHandler,
   EventVector,
   InternalInterceptor,
   ReflexError,
+  State,
 } from '../types';
+
+/** Provider-to-slot projection retained on one named event definition. */
+interface NamedCoeffectBinding {
+  readonly slot: string;
+  readonly id: string;
+}
+
+const EMPTY_NAMED_COEFFECT_BINDINGS: readonly NamedCoeffectBinding[] = Object.freeze([]);
 
 /** The result exposed by the event runner, not by the interceptor pipeline. */
 export interface EventRunResult {
@@ -81,6 +91,7 @@ export function runEvent(runtime: RuntimeCore, event: EventVector): EventRunResu
 export function createEventHandlerInterceptor(
   runtime: RuntimeCore,
   handler: EventHandler<any>,
+  namedCoeffectBindings: readonly NamedCoeffectBinding[] = EMPTY_NAMED_COEFFECT_BINDINGS,
 ): InternalInterceptor {
   return {
     id: 'fx-handler',
@@ -91,10 +102,14 @@ export function createEventHandlerInterceptor(
       let newState: State;
 
       const recipe = (draftState: Draft<State>) => {
-        const coeffects = { ...context.coeffects, draftState };
+        const eventContext = createEventContext(
+          context.coeffects,
+          draftState,
+          namedCoeffectBindings,
+        );
         runtime.events.runningHandlerEventId = event[0];
         try {
-          effects = handler(coeffects, ...params) ?? [];
+          effects = handler(eventContext, ...params) ?? [];
           // Still inside the recipe, so any draft the handler passed along is
           // live and can be snapshotted. After `produce` returns it is revoked.
           effects = snapshotDrafts(effects) as Effects;
@@ -146,5 +161,35 @@ export function createEventHandlerInterceptor(
         ...(reversePatches === undefined ? {} : { runtimeReversePatches: reversePatches }),
       };
     },
+  };
+}
+
+/**
+ * Keep runtime-owned inputs at the top level and group injected values under
+ * `coeffects` for event handlers. Named bindings replace provider ids with
+ * declared slots, while provider ids stay available to ordered coeffects and
+ * infrastructure interceptors inside the pipeline.
+ */
+function createEventContext(
+  pipelineCoeffects: Context['coeffects'],
+  draftState: Draft<State>,
+  namedCoeffectBindings: readonly NamedCoeffectBinding[],
+): EventContext<State> {
+  const handlerCoeffects: Record<string, any> = {};
+  for (const [id, value] of Object.entries(pipelineCoeffects)) {
+    if (id !== 'event' && id !== 'draftState') handlerCoeffects[id] = value;
+  }
+
+  if (namedCoeffectBindings.length > 0) {
+    for (const binding of namedCoeffectBindings) delete handlerCoeffects[binding.id];
+    for (const binding of namedCoeffectBindings) {
+      handlerCoeffects[binding.slot] = pipelineCoeffects[binding.id];
+    }
+  }
+
+  return {
+    event: pipelineCoeffects.event,
+    draftState,
+    coeffects: handlerCoeffects as EventCoeffects,
   };
 }

@@ -408,23 +408,18 @@ export function persist<TContracts extends ReflexContracts>(
       );
 
       if (isSync) {
-        scope.regCoeffect(PERSIST_IDS.SNAPSHOT, (coeffects) => {
-          coeffects[PERSIST_IDS.SNAPSHOT] =
-            lifecycleState === 'idle'
-              ? readAllSync()
-              : { rawByKey: Object.create(null) as RawByKey, diagnostics: [] };
-          return coeffects;
-        });
+        scope.regCoeffect(PERSIST_IDS.SNAPSHOT, () =>
+          lifecycleState === 'idle'
+            ? readAllSync()
+            : { rawByKey: Object.create(null) as RawByKey, diagnostics: [] },
+        );
         scope.regEvent(
           PERSIST_IDS.HYDRATE,
-          (coeffects) => {
+          ({ draftState, coeffects: { snapshot } }) => {
             if (lifecycleState !== 'idle') return [effect(PERSIST_IDS.SETTLE, {})];
-            return applySnapshot(
-              coeffects.draftState as AnyState,
-              coeffects[PERSIST_IDS.SNAPSHOT] as HydrationSnapshot,
-            );
+            return applySnapshot(draftState as AnyState, snapshot as HydrationSnapshot);
           },
-          { coeffects: [[PERSIST_IDS.SNAPSHOT]] },
+          { coeffects: { snapshot: PERSIST_IDS.SNAPSHOT } },
         );
       } else {
         scope.regEvent(PERSIST_IDS.HYDRATE, ({ draftState }, request: unknown) => {

@@ -35,7 +35,7 @@ describe('Reflex inspector', () => {
     initState(state);
     regEvent('inspector-event', () => undefined);
     regEffect('inspector-effect', () => {});
-    regCoeffect('inspector-coeffect', (coeffects) => coeffects);
+    regCoeffect('inspector-coeffect', () => 'inspected');
     regRootSub('count', 'count');
 
     const inspector = createReflexInspector();

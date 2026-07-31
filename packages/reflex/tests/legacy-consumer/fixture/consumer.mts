@@ -24,7 +24,7 @@ runtime.registerModule((registrar) => {
 
 const value: unknown = useSubscription(['legacy/esm']);
 const state = testHarness.getState();
-const options: EventRegistrationOptions = { coeffects: [['now']] };
+const options: EventRegistrationOptions = { coeffects: { now: 'now' } };
 const interceptor: Interceptor = { id: 'legacy/noop', before: (context) => context };
 const errorHandler: ErrorHandler = (originalError, reflexError) => {
   void originalError.message;

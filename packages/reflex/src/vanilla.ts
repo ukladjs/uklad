@@ -15,6 +15,8 @@ export { isRegistrationCollisionError } from './runtime/registrations';
 // build the runtime signatures — they stay internal to the package, and are
 // exported here only where a downstream package composes contracts of its own.
 export type {
+  ContractNamedCoeffectBindings,
+  ContractCoeffectPayloads,
   ContractEventPayloads,
   ContractState,
   ContractSubscriptionPayloads,
@@ -38,7 +40,9 @@ export type {
 export type { SubscriptionDiagnostic } from './runtime/subscriptions/types';
 export type {
   CoEffectHandler,
+  CoeffectReadContext,
   CoEffects,
+  ContractNamedEventRegistrationOptions,
   State,
   DefaultAppState,
   DispatchLaterEffect,
@@ -49,6 +53,7 @@ export type {
   ErrorHandler,
   EqualityCheckFn,
   EventHandler,
+  EventContext,
   EventRegistrationOptions,
   EventVector,
   Id,

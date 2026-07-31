@@ -23,7 +23,7 @@ export { RegistrationStore } from './registrations';
 export class RuntimeRegistry {
   readonly event: RegistrationStore<EventHandler<any, any>> = new RegistrationStore();
   readonly fx: RegistrationStore<EffectHandler> = new RegistrationStore();
-  readonly cofx: RegistrationStore<CoEffectHandler<any>> = new RegistrationStore();
+  readonly cofx: RegistrationStore<CoEffectHandler> = new RegistrationStore();
   readonly sub: RegistrationStore<SubHandler> = new RegistrationStore();
   readonly subDeps: RegistrationStore<SubDepsHandler> = new RegistrationStore();
   readonly error: RegistrationStore<ErrorHandler> = new RegistrationStore();

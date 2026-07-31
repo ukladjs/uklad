@@ -65,6 +65,26 @@ For compile-checked dispatch payloads, declare the typed payload maps (section 1
 
 - Put all I/O here: localStorage, HTTP, timers, analytics, navigation.
 - Effects should be small, defensive, and fail-soft (log, do not crash app state flow).
+- A coeffect handler takes its registration argument and returns one value. Its id is the global provider identity; bind it to an identifier-like local name in each event that uses it:
+
+```ts
+registrar.regCoeffect('system/now', () => Date.now());
+registrar.regCoeffect('storage/value', (key: string) => localStorage.getItem(key));
+
+registrar.regEvent(
+  EVENT_IDS.TODOS_ADD,
+  ({ draftState, coeffects: { now } }, title) => {
+    draftState.todosById[now] = { id: now, title, done: false };
+  },
+  { coeffects: { now: 'system/now' } },
+);
+```
+
+- Name a provider for the value it reads rather than the act of reading it (`storage/value`, not `storage/get-value`). Binding names are event-local and may be more specific: `{ stored: ['storage/value', key] }`. To contribute several related values, return one object and destructure it at the event.
+- Event handlers receive `{ event, draftState, coeffects }`: injected values are always read from `coeffects`, keeping the mutable draft and runtime-owned inputs separate from read-only dependencies.
+- Bindings are an event-handler boundary: handlers read their local slots from `coeffects`, not provider ids. Provider ids remain available only while ordered coeffects and infrastructure interceptors run.
+- `event` and `draftState` are runtime-owned and rejected as coeffect ids or binding names. A handler that needs to read the event, or a coeffect listed before it, takes a frozen, state-free view as its second argument: `(arg, coeffects) => ...`. The view never contains `draftState`.
+- Every coeffect requested by an event is required. A missing or throwing handler aborts the event before its handler or state transition runs. Returning `undefined` is still a successful injection: the binding remains present with an `undefined` value.
 
 - Interceptors are not application tooling. They exist for libraries and infrastructure (persistence, logging, telemetry), are an administrative capability rather than a registrar method, and are deliberately absent from the registrar `registerModule` hands you. Cross-cutting application behaviour belongs in coeffects (inputs) and effects (outputs), which stay readable one handler at a time.
 - Naming convention: `reg*` installs a handler under an id (`regEvent`, `regEffect`, `regCoeffect`, `regRootSub`, `regSub`). The runtime-wide hooks are named for what they do instead — `addInterceptor`/`removeInterceptor` maintain an ordered chain, `setEventErrorHandler`/`clearEventErrorHandler` replace and restore a singleton (clearing restores the built-in handler, which logs and rethrows).
@@ -133,10 +153,10 @@ Events and subscriptions are pure functions. In explicit-runtime code, install t
 
 ### Testing Events
 
-Use the test harness's read-only handler lookup to get the raw handler after installing the feature. Build a mock `coeffects` object with `draftState` (and any injected coeffects), call the handler, then assert mutations on `draftState` and the returned effect tuples.
+Use the test harness's read-only handler lookup to get the raw handler after installing the feature. Build a mock event context with `draftState` and a nested `coeffects` object, call the handler, then assert mutations on `draftState` and the returned effect tuples.
 
 ```ts
-import type { EventHandler, CoEffects } from '@flexsurfer/reflex';
+import type { EventContext, EventHandler } from '@flexsurfer/reflex';
 import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import './events'; // side-effect import registers handlers
 
@@ -146,13 +166,13 @@ it('ADD_TODO should add a todo and persist', () => {
   const handler = testHarness.getEventHandler(EVENT_IDS.ADD_TODO) as EventHandler;
 
   const mockSTATE = { todos: [], showing: 'all' };
-  const coeffects = {
+  const context = {
     event: [EVENT_IDS.ADD_TODO, 'Buy milk'],
     draftState: mockSTATE,
-    now: 12345,
-  } as CoEffects;
+    coeffects: { now: 12345 },
+  } as EventContext;
 
-  const effects = handler(coeffects, 'Buy milk');
+  const effects = handler(context, 'Buy milk');
 
   // Assert state mutation
   expect(mockSTATE.todos).toHaveLength(1);
@@ -166,9 +186,13 @@ it('ADD_TODO should ignore empty input', () => {
   const handler = testHarness.getEventHandler(EVENT_IDS.ADD_TODO) as EventHandler;
 
   const mockSTATE = { todos: [], showing: 'all' };
-  const coeffects = { event: [EVENT_IDS.ADD_TODO, '  '], draftState: mockSTATE, now: 1 } as CoEffects;
+  const context = {
+    event: [EVENT_IDS.ADD_TODO, '  '],
+    draftState: mockSTATE,
+    coeffects: { now: 1 },
+  } as EventContext;
 
-  const effects = handler(coeffects, '  ');
+  const effects = handler(context, '  ');
 
   expect(mockSTATE.todos).toHaveLength(0);
   expect(effects).toBeUndefined();
@@ -305,7 +329,7 @@ runtime.dispatch(['todos/add', 'Buy milk']);
 ```
 ## 12) Typed Contracts (opt-in compile-time checking)
 
-A contract is one `ReflexContracts` declaration describing the runtime's state, event payloads, effect payloads, and subscriptions. Declaring it turns `tsc` into a wiring verifier — typo'd ids, wrong payloads, wrong subscription usage, invalid effect tuples, and unknown state keys become compile errors. While undeclared, the whole API stays permissive and everything above works as written.
+A contract is one `ReflexContracts` declaration describing the runtime's state, event payloads, effect payloads, coeffects, and subscriptions. Declaring it turns `tsc` into a wiring verifier — typo'd ids, wrong payloads, wrong subscription usage, invalid effect tuples, and unknown state keys become compile errors. While undeclared, the whole API stays permissive and everything above works as written.
 
 Declare it next to the ids files (e.g. `src/contracts.ts`) and pass it to the runtime:
 
@@ -324,6 +348,10 @@ export interface AppContracts extends ReflexContracts {
   effects: {
     'storage/set_todos': Todo[];
     'ui/scroll_top': void; // no payload -> the tuple is just ['ui/scroll_top']
+  };
+  coeffects: {
+    now: { arg: void; value: number }; // no arg -> the spec is just ['now']
+    'local-storage-value': { arg: string; value: string | null };
   };
   subscriptions: {
     [SUB_IDS.TODOS_LIST]: { params: []; result: Todo[] };

@@ -22,7 +22,7 @@ runtime.registerModule((registrar) => {
     draftState.count += 1;
   });
   registrar.regEffect('log', () => {});
-  registrar.regCoeffect('now', (coeffects) => coeffects);
+  registrar.regCoeffect('now', () => Date.now());
   registrar.regRootSub('count', 'count');
 });
 

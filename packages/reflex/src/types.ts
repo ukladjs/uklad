@@ -1,6 +1,13 @@
 import type { Draft } from 'immer';
 
-import type { ContractState, DefaultContracts } from './contracts';
+import type {
+  ContractNamedCoeffectBindings,
+  ContractNamedCoeffectValues,
+  ContractHasOpenCoeffects,
+  ContractState,
+  DefaultContracts,
+  RuntimeOwnedCoeffectId,
+} from './contracts';
 
 // State and shared identifiers
 
@@ -17,15 +24,45 @@ export type EqualityCheckFn = (a: any, b: any) => boolean;
 export type EventVector = [Id, ...any[]];
 
 export type EventHandler<T = DefaultAppState, P extends readonly any[] = any[]> = (
-  coeffects: CoEffects<T>,
+  context: EventContext<T>,
   ...params: P
 ) => Effects | void;
 
-/** Optional coeffects and interceptors applied when registering an event. */
+/** One provider request in a named event-local coeffect binding. */
+export type CoeffectBinding = Id | readonly [id: Id, arg?: unknown];
+
+/**
+ * Event-local names for coeffect providers.
+ *
+ * Each object key becomes a property of `context.coeffects` in the event
+ * handler; each value is either a provider id or that id together with its
+ * registration argument.
+ */
+export type NamedCoeffectBindings = Readonly<Record<string, CoeffectBinding>>;
+
+/** Optional event-local coeffects and interceptors applied when registering an event. */
 export interface EventRegistrationOptions<T = DefaultAppState> {
-  coeffects?: ReadonlyArray<readonly [id: Id] | readonly [id: Id, value: unknown]>;
+  coeffects?: NamedCoeffectBindings;
   interceptors?: ReadonlyArray<Interceptor<T>>;
 }
+
+/**
+ * Event registration options narrowed by a runtime contract.
+ *
+ * `TBindings` is inferred from the `coeffects` object at the call site, which
+ * lets the handler's coeffects parameter name exactly its local binding slots.
+ */
+export interface ContractNamedEventRegistrationOptions<
+  TContracts,
+  TBindings extends ContractNamedCoeffectBindings<TContracts>,
+> {
+  readonly coeffects?: TBindings & NamedCoeffectBindingSlotGuard<TBindings>;
+  readonly interceptors?: ReadonlyArray<Interceptor<ContractState<TContracts>>>;
+}
+
+/** Reject literal slots that would replace a runtime-owned event input. */
+type NamedCoeffectBindingSlotGuard<TBindings> =
+  Extract<keyof TBindings, RuntimeOwnedCoeffectId | '__proto__'> extends never ? unknown : never;
 
 // Effects and coeffects
 
@@ -51,16 +88,93 @@ export interface EffectRuntimeContext {
 
 export type EffectHandler<V = any> = (value: V, runtime: EffectRuntimeContext) => void;
 
-export interface CoEffects<T = DefaultAppState> {
+/** Read-only values explicitly injected into one event handler. */
+export type EventCoeffects = Readonly<Record<string, any>>;
+
+/** Runtime-owned inputs that frame every event-handler invocation. */
+export interface EventContextBase<T = DefaultAppState> {
+  readonly event: EventVector;
+  draftState: Draft<State<T>>;
+}
+
+/**
+ * The context passed to an event handler.
+ *
+ * State mutation remains explicit through `draftState`; injected values live
+ * under the read-only `coeffects` property, rather than sharing the top-level
+ * namespace with runtime-owned inputs.
+ */
+export interface EventContext<
+  T = DefaultAppState,
+  TCoeffects extends object = EventCoeffects,
+> extends EventContextBase<T> {
+  readonly coeffects: TCoeffects;
+}
+
+/**
+ * The flat coeffect map used inside the interceptor pipeline.
+ *
+ * Event handlers receive `EventContext` instead. This surface remains flat so
+ * coeffect injectors and infrastructure interceptors can coordinate by global
+ * provider id during pipeline execution.
+ */
+export interface CoEffectsBase<T = DefaultAppState> {
   event: EventVector;
   draftState: Draft<State<T>>;
+}
+
+export interface CoEffects<T = DefaultAppState> extends CoEffectsBase<T> {
   [key: string]: any;
 }
 
-export type CoEffectHandler<T = DefaultAppState> = (
-  coeffects: CoEffects<T>,
-  value?: any,
-) => CoEffects<T>;
+/**
+ * The read-only environment visible to a coeffect handler.
+ *
+ * This is intentionally state-free. A coeffect may inspect the dispatched
+ * event and values injected by earlier coeffects, but it never receives the
+ * event handler's state draft. The runtime supplies a frozen top-level view,
+ * so a handler cannot replace the event or another coeffect contribution.
+ */
+export interface CoeffectReadContext {
+  readonly event: Readonly<EventVector>;
+  readonly [id: string]: unknown;
+}
+
+/**
+ * A coeffect handler: given its registration argument, produce one value.
+ *
+ * The runtime stores the returned value under the handler's own provider id.
+ * Legacy events read that id through `context.coeffects`; named event bindings
+ * expose the same value through an event-local property. Handlers receive a
+ * frozen, state-free view of the event and values injected before them. It is
+ * useful for the rare ordered dependency, but never exposes `draftState`.
+ */
+export type CoEffectHandler<TValue = any, TArg = any> = (
+  arg: TArg,
+  coeffects: CoeffectReadContext,
+) => TValue;
+
+/**
+ * Values available through `context.coeffects` for one event registration.
+ *
+ * A contract that declares no coeffects keeps the permissive shape, so
+ * untyped and incrementally typed runtimes are unaffected. Once the section is
+ * declared, the handler sees precisely the local slots its own registration
+ * injected.
+ */
+export type ContractEventCoeffects<
+  TContracts,
+  TBindings extends ContractNamedCoeffectBindings<TContracts>,
+> =
+  ContractHasOpenCoeffects<TContracts> extends true
+    ? EventCoeffects
+    : ContractNamedCoeffectValues<TContracts, TBindings>;
+
+/** A complete typed event-handler context for an event-local coeffect binding map. */
+export type ContractEventContext<
+  TContracts,
+  TBindings extends ContractNamedCoeffectBindings<TContracts>,
+> = EventContext<ContractState<TContracts>, ContractEventCoeffects<TContracts, TBindings>>;
 
 // Interceptor pipeline and errors
 

@@ -214,14 +214,23 @@ every mechanism should survive 1.0.
   gives a clear local transaction boundary.
 - **Cons:** Runtime checks validate only tuple shape and registration; effect
   promises are not awaited, cancelled, or retried; an effect failure cannot
-  roll back committed state; and a failed coeffect injection is logged but the
-  handler still runs.
+  roll back committed state; and a missing or throwing required coeffect aborts
+  its event before the handler or state transition runs.
 - **Alternatives:** Direct injected service calls, thunks, sagas/observables, or
   typed command outcomes connected to a task supervisor.
 - **Direction:** Keep the data boundary. Add schemas, adapter identity,
-  capability policy, explicit coeffect failure behavior, and required versus
-  detached completion. Put cancellation/retry/concurrency in a supervised task
-  layer rather than in the event queue.
+  capability policy, and required versus detached completion. Put
+  cancellation/retry/concurrency in a supervised task layer rather than in the
+  event queue.
+- **Deviation from re-frame:** `reg-cofx` hands the handler the whole coeffects
+  map and trusts whatever it returns, so the key a coeffect writes is knowable
+  only by running it. Reflex instead has the handler return one value under a
+  declared provider id. An event may bind that provider to an explicit local
+  input name, so the contract still types the provider while the handler avoids
+  awkward string-key access. The binding is declared at event registration,
+  rather than hidden inside arbitrary handler code. A handler that needs the
+  event or a prior coeffect receives a frozen, state-free view as its second
+  argument; `draftState` is never exposed.
 
 ## 9. Separate committed and published state heads — Rework
 

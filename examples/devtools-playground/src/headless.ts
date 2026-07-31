@@ -1,11 +1,14 @@
 /**
- * Headless runtime entry — the full Reflex state layer with no React mount.
+ * Headless entry point — the full Reflex state layer with no React mount.
  *
- * Installs the exact same state/events/subs modules as main.tsx; only the
- * side-effect adapters differ (effects.headless / coeffects.headless are
- * Node-safe: memory-backed or no-op). The devtools SDK connects over
- * WebSocket exactly as in the browser, so every MCP tool — app_status,
- * get_state, eval_sub, dispatch_event, dispatch_and_wait, get_traces — works against this process.
+ * It installs the exact same feature modules as main.tsx; only the platform
+ * pair differs (platform/headless is Node-safe: memory-backed or a documented
+ * no-op). This is the second execution owner in this app, so it creates and
+ * owns its own runtime rather than reusing the browser one.
+ *
+ * The devtools SDK connects over WebSocket exactly as in the browser, so every
+ * MCP tool — app_status, get_state, eval_sub, dispatch_event, dispatch_and_wait,
+ * get_traces — works against this process.
  *
  * Run it (devtools server first, then this; needs Node >= 22 for the
  * global WebSocket the SDK connects through):
@@ -16,37 +19,37 @@
  * to the local lib sources; a scaffolded project installing from npm can
  * run the same file under tsx instead.
  */
-import { createReflexRuntime, enableMapSet } from '@flexsurfer/reflex/vanilla';
+import { enableMapSet } from '@flexsurfer/reflex/vanilla';
 import { createReflexInspector } from '@flexsurfer/reflex/devtools';
 import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
-import { coeffectModes, installHeadlessCoeffects } from './coeffects.headless';
-import { createInitialState, type PlaygroundContracts } from './state';
-import { effectModes, installHeadlessEffects } from './effects.headless';
-import { installPlaygroundEvents } from './events';
-import { installPlaygroundSubscriptions } from './subs';
+
+import { appIds } from './app/reflex/catalog';
+import type { AppContracts } from './app/reflex/contracts';
+import { registerFeatureModules } from './app/reflex/register';
+import { createPlaygroundRuntime } from './app/reflex/runtime';
+import { headlessCoeffectModes, registerHeadlessCoeffects } from './platform/headless/coeffects';
+import { headlessEffectModes, registerHeadlessEffects } from './platform/headless/effects';
 
 const serverUrl = process.env.REFLEX_DEVTOOLS_SERVER_URL ?? '127.0.0.1:4000';
 
 enableMapSet();
 
-const headlessRuntime = createReflexRuntime<PlaygroundContracts>({
-  initialState: createInitialState(),
+const headlessRuntime = createPlaygroundRuntime({
   runtimeId: 'devtools-playground.headless',
   name: 'DevTools Playground (Headless)',
 });
 
-headlessRuntime.registerModule(installPlaygroundEvents);
-headlessRuntime.registerModule(installPlaygroundSubscriptions);
-headlessRuntime.registerModule(installHeadlessEffects);
-headlessRuntime.registerModule(installHeadlessCoeffects);
+registerFeatureModules(headlessRuntime);
+headlessRuntime.registerModule(registerHeadlessEffects);
+headlessRuntime.registerModule(registerHeadlessCoeffects);
 
 // There is no React tree in this entry point, so keep the counter subscription
 // active explicitly. It makes the headless playground exercise the same
 // publication path a mounted counter panel would use, and lets
 // dispatch_and_wait demonstrate its settled subscription evidence.
-createReflexTestHarness<PlaygroundContracts>(headlessRuntime).watchSubscription(
-  ['counter'],
+createReflexTestHarness<AppContracts>(headlessRuntime).watchSubscription(
+  [appIds.subscriptions.counterValue],
   () => {},
 );
 
@@ -56,11 +59,7 @@ enableDevtools(createReflexInspector(headlessRuntime), {
   // runtime: 'headless' is auto-detected (no window); declare the
   // side-effect policy so app_status can report what really executes.
   effectMode: 'safe',
-  effects: {
-    ...effectModes,
-    ...coeffectModes,
-    'fake-effect': 'real',
-  },
+  effects: { ...headlessEffectModes, ...headlessCoeffectModes },
 });
 
 console.log(

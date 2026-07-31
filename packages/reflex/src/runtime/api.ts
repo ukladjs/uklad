@@ -1,4 +1,8 @@
 import type {
+  ContractCoeffectArg,
+  ContractCoeffectId,
+  ContractCoeffectValue,
+  ContractNamedCoeffectBindings,
   ContractDispatchVector,
   ContractEffectParams,
   ContractEffects,
@@ -23,19 +27,35 @@ import type { HandlerRegistry } from './handler-types';
 import type { SubscriptionDiagnostic } from './subscriptions/types';
 import type { TraceCallback } from '../core/tracing-types';
 import type {
-  CoEffectHandler,
-  CoEffects,
+  CoeffectReadContext,
+  ContractEventContext,
+  ContractNamedEventRegistrationOptions,
   EqualityCheckFn,
   ErrorHandler,
-  EventRegistrationOptions,
   Interceptor,
   SubConfig,
 } from '../types';
 
-export type RuntimeEventHandler<TContracts extends ReflexContracts, TId extends string> = (
-  coeffects: CoEffects<ContractState<TContracts>>,
+export type RuntimeEventHandler<
+  TContracts extends ReflexContracts,
+  TId extends string,
+  TBindings extends ContractNamedCoeffectBindings<TContracts> = Record<never, never>,
+> = (
+  context: ContractEventContext<TContracts, TBindings>,
   ...params: ContractEventParams<TContracts, TId>
 ) => ContractEffects<TContracts> | void;
+
+/**
+ * A coeffect handler for one declared id.
+ *
+ * The value it returns is stored under `TId`, so the declaration is what both
+ * sides agree on: this signature checks the producer, and the same entry types
+ * the event-local binding that consumes it.
+ */
+export type RuntimeCoeffectHandler<TContracts extends ReflexContracts, TId extends string> = (
+  arg: ContractCoeffectArg<TContracts, TId>,
+  coeffects: CoeffectReadContext,
+) => ContractCoeffectValue<TContracts, TId>;
 
 export type RuntimeSubscriptionHandler<TContracts extends ReflexContracts, TId extends string> = (
   ...values: any[]
@@ -65,10 +85,26 @@ export interface ReflexRuntimeClient<
 
 /** Registration-only capability passed to feature modules. */
 export interface ReflexRegistrar<TContracts extends ReflexContracts = PermissiveReflexContracts> {
-  regEvent<TId extends string>(
+  /**
+   * Register an event with event-local coeffect bindings.
+   *
+   * A provider id stays global and is what `regCoeffect` registers. The key in
+   * this object is local to the event handler, so slash-namespaced providers
+   * stay pleasant to read:
+   *
+   * ```ts
+   * regEvent('todos/add',
+   *   ({ draftState, coeffects: { now } }, title) => { … },
+   *   { coeffects: { now: 'system/now' } });
+   * ```
+   */
+  regEvent<
+    TId extends string,
+    TBindings extends ContractNamedCoeffectBindings<TContracts> = Record<never, never>,
+  >(
     id: TId,
-    handler: RuntimeEventHandler<TContracts, TId>,
-    options?: EventRegistrationOptions<ContractState<TContracts>>,
+    handler: RuntimeEventHandler<TContracts, TId, TBindings>,
+    options?: ContractNamedEventRegistrationOptions<TContracts, TBindings>,
   ): void;
   regEffect<TId extends string>(
     id: TId,
@@ -77,7 +113,23 @@ export interface ReflexRegistrar<TContracts extends ReflexContracts = Permissive
       runtime: ReflexRuntimeClient<TContracts>,
     ) => void,
   ): void;
-  regCoeffect(id: string, handler: CoEffectHandler<ContractState<TContracts>>): void;
+  /**
+   * Register a coeffect: a value the runtime injects under `id`.
+   *
+   * ```ts
+   * regCoeffect('now', () => Date.now());
+   * regCoeffect('local-storage-value', (key) => localStorage.getItem(key));
+   * ```
+   *
+   * The second parameter is a frozen, state-free view of the event and
+   * coeffects injected so far, for the rare handler that derives from `event`
+   * or from a coeffect listed before it. `event` and `draftState` are reserved
+   * and rejected as ids.
+   */
+  regCoeffect<TId extends ContractCoeffectId<TContracts>>(
+    id: TId,
+    handler: RuntimeCoeffectHandler<TContracts, TId>,
+  ): void;
   /**
    * Register a subscription that reads one state key straight through.
    *

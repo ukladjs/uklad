@@ -119,7 +119,7 @@ const coeffects: CoEffects<{ todos: Todo[] }> = {
 };
 void coeffects;
 
-const options: EventRegistrationOptions<{ todos: Todo[] }> = { coeffects: [['now']] };
+const options: EventRegistrationOptions<{ todos: Todo[] }> = { coeffects: { now: 'now' } };
 void options;
 
 // ---- built-in dispatch effects keep their reserved contracts ----------

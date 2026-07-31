@@ -1,7 +1,7 @@
 import type {
-  CoEffects,
-  EventRegistrationOptions,
   Context,
+  EventContext,
+  EventRegistrationOptions,
   Interceptor,
   InterceptorContext,
 } from '../../src/types';
@@ -365,28 +365,22 @@ describe('regEvent with cofx', () => {
     initState({ counter: 0, messages: [], timestamp: 0, randomValue: 0 });
     handlerRegistry.cofx.clear('now');
     handlerRegistry.cofx.clear('random');
-    regCoeffect('now', (coeffects) => ({
-      ...coeffects,
-      now: Date.now(),
-    }));
-    regCoeffect('random', (coeffects) => ({
-      ...coeffects,
-      random: Math.random(),
-    }));
+    regCoeffect('now', () => Date.now());
+    regCoeffect('random', () => Math.random());
   });
 
   describe('Basic cofx functionality', () => {
     it('should inject an application-defined clock cofx', async () => {
       regEvent(
         'test-now-cofx',
-        ({ draftState, now }) => {
+        ({ draftState, coeffects: { now } }) => {
           expect(now).toBeDefined();
           expect(typeof now).toBe('number');
           expect(now).toBeGreaterThan(0);
 
           (draftState as any).timestamp = now;
         },
-        { coeffects: [['now']] },
+        { coeffects: { now: 'now' } },
       );
 
       dispatch(['test-now-cofx']);
@@ -399,7 +393,7 @@ describe('regEvent with cofx', () => {
     it('should inject an application-defined random cofx', async () => {
       regEvent(
         'test-random-cofx',
-        ({ draftState, random }) => {
+        ({ draftState, coeffects: { random } }) => {
           expect(random).toBeDefined();
           expect(typeof random).toBe('number');
           expect(random).toBeGreaterThanOrEqual(0);
@@ -407,7 +401,7 @@ describe('regEvent with cofx', () => {
 
           (draftState as any).randomValue = random;
         },
-        { coeffects: [['random']] },
+        { coeffects: { random: 'random' } },
       );
 
       dispatch(['test-random-cofx']);
@@ -440,7 +434,7 @@ describe('regEvent with cofx', () => {
     it('should inject multiple cofx in a single registration', async () => {
       regEvent(
         'test-multiple-cofx',
-        ({ draftState, now, random }) => {
+        ({ draftState, coeffects: { now, random } }) => {
           expect(now).toBeDefined();
           expect(random).toBeDefined();
           expect(draftState).toBeDefined();
@@ -449,7 +443,7 @@ describe('regEvent with cofx', () => {
           (draftState as any).randomValue = random;
           (draftState as any).counter = draftState.counter + 1;
         },
-        { coeffects: [['now'], ['random']] },
+        { coeffects: { now: 'now', random: 'random' } },
       );
 
       dispatch(['test-multiple-cofx']);
@@ -466,7 +460,7 @@ describe('regEvent with cofx', () => {
     it('should support explicit registration options', async () => {
       const executionOrder: string[] = [];
       const options: EventRegistrationOptions = {
-        coeffects: [['now']],
+        coeffects: { now: 'now' },
         interceptors: [
           {
             id: 'options-interceptor',
@@ -484,7 +478,7 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-registration-options',
-        ({ draftState, now }) => {
+        ({ draftState, coeffects: { now } }) => {
           executionOrder.push('handler');
           draftState.timestamp = now;
         },
@@ -520,7 +514,7 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-cofx-with-interceptors',
-        ({ draftState, now }) => {
+        ({ draftState, coeffects: { now } }) => {
           expect(now).toBeDefined();
           expect(draftState).toBeDefined();
 
@@ -528,7 +522,7 @@ describe('regEvent with cofx', () => {
           (draftState as any).counter = draftState.counter + 10;
         },
         {
-          coeffects: [['now']],
+          coeffects: { now: 'now' },
           interceptors: [beforeInterceptor, afterInterceptor],
         },
       );
@@ -594,7 +588,7 @@ describe('regEvent with cofx', () => {
 
     it('should reject re-registering an event id', () => {
       const staleCall = jest.fn();
-      const handler = ({ draftState }: CoEffects) => {
+      const handler = ({ draftState }: EventContext) => {
         draftState.counter += 1;
       };
 
@@ -660,37 +654,33 @@ describe('regEvent with cofx', () => {
   });
 
   describe('Error handling', () => {
-    it('should warn about invalid cofx specifications', async () => {
-      regEvent(
-        'test-invalid-cofx',
-        ({ draftState }) => {
-          (draftState as any).counter += 1;
-        },
-        { coeffects: [['now', 'extra', 'invalid'] as any] },
+    it('should reject tuple-list coeffects', () => {
+      expect(() =>
+        regEvent(
+          'test-invalid-cofx',
+          ({ draftState }) => {
+            (draftState as any).counter += 1;
+          },
+          { coeffects: [['now']] as any },
+        ),
+      ).toThrow(
+        "[reflex] event coeffects must be an object of local bindings, for example { now: 'system/now' }.",
       );
-
-      dispatch(['test-invalid-cofx']);
-      await waitForScheduled();
-
-      expectLogCall('warn', '[reflex] invalid cofx specification:', ['now', 'extra', 'invalid']);
     });
   });
 
   describe('Custom cofx', () => {
     it('should work with custom registered cofx', async () => {
-      regCoeffect('custom-test', (coeffects: any, value: any) => ({
-        ...coeffects,
-        customValue: value || 'default-custom-value',
-      }));
+      regCoeffect('custom-test', (value: any) => value || 'default-custom-value');
 
       regEvent(
         'test-custom-cofx',
-        ({ draftState, customValue }) => {
+        ({ draftState, coeffects: { 'custom-test': customValue } }) => {
           expect(customValue).toBe('default-custom-value');
 
           (draftState as any).messages.push(customValue);
         },
-        { coeffects: [['custom-test']] },
+        { coeffects: { 'custom-test': 'custom-test' } },
       );
 
       dispatch(['test-custom-cofx']);
@@ -701,19 +691,16 @@ describe('regEvent with cofx', () => {
     });
 
     it('should work with custom cofx with values', async () => {
-      regCoeffect('custom-with-value', (coeffects: any, value: any) => ({
-        ...coeffects,
-        customValue: `processed-${value}`,
-      }));
+      regCoeffect('custom-with-value', (value: any) => `processed-${value}`);
 
       regEvent(
         'test-custom-cofx-with-value',
-        ({ draftState, customValue }) => {
+        ({ draftState, coeffects: { 'custom-with-value': customValue } }) => {
           expect(customValue).toBe('processed-test-input');
 
           (draftState as any).messages.push(customValue);
         },
-        { coeffects: [['custom-with-value', 'test-input']] },
+        { coeffects: { 'custom-with-value': ['custom-with-value', 'test-input'] } },
       );
 
       dispatch(['test-custom-cofx-with-value']);
@@ -747,7 +734,7 @@ describe('regEvent with cofx', () => {
 
       addInterceptor(globalInterceptor);
 
-      regEvent('test-global-injection', ({ draftState, globalData }) => {
+      regEvent('test-global-injection', ({ draftState, coeffects: { globalData } }) => {
         expect(globalData).toBe('injected-by-global');
         (draftState as any).processedByGlobal = true;
       });
@@ -763,7 +750,7 @@ describe('regEvent with cofx', () => {
     it('should resolve global interceptors at dispatch time for registered events', async () => {
       const seenValues: unknown[] = [];
 
-      regEvent('test-dynamic-global', ({ dynamicValue }) => {
+      regEvent('test-dynamic-global', ({ coeffects: { dynamicValue } }) => {
         seenValues.push(dynamicValue);
       });
 
@@ -817,7 +804,7 @@ describe('regEvent with cofx', () => {
       addInterceptor(globalInterceptor1);
       addInterceptor(globalInterceptor2);
 
-      regEvent('test-multiple-globals', ({ draftState, order }) => {
+      regEvent('test-multiple-globals', ({ draftState, coeffects: { order } }) => {
         executionOrder.push('handler');
         expect(order).toEqual(['global-1', 'global-2']);
         (draftState as any).executionOrder = [...executionOrder];
@@ -963,7 +950,7 @@ describe('regEvent with cofx', () => {
 
       regEvent(
         'test-global-with-cofx',
-        ({ draftState, now, globalValue }) => {
+        ({ draftState, coeffects: { now, globalValue } }) => {
           expect(now).toBeDefined();
           expect(globalValue).toBe('from-global');
 
@@ -971,7 +958,7 @@ describe('regEvent with cofx', () => {
           (draftState as any).globalValue = globalValue;
           (draftState as any).counter += 1;
         },
-        { coeffects: [['now']] },
+        { coeffects: { now: 'now' } },
       );
 
       dispatch(['test-global-with-cofx']);
@@ -1035,7 +1022,7 @@ describe('regEvent with cofx', () => {
       addInterceptor(globalInterceptor2);
       clearInterceptors('clear-this-one');
 
-      regEvent('test-selective-clear', ({ draftState, from1, from2 }) => {
+      regEvent('test-selective-clear', ({ draftState, coeffects: { from1, from2 } }) => {
         expect(from1).toBe('interceptor1');
         expect(from2).toBeUndefined();
         (draftState as any).counter += 1;

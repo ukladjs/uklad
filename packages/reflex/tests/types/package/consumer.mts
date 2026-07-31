@@ -14,11 +14,17 @@ import type {
   Trace,
 } from '@flexsurfer/reflex';
 
-const options: EventRegistrationOptions = { coeffects: [['now']] };
+const options: EventRegistrationOptions = { coeffects: { now: 'now' } };
+const namedOptions: EventRegistrationOptions<{ package: string }> = {
+  coeffects: { now: 'system/now' },
+};
 const trace: Trace | undefined = undefined;
 const runtime = createReflexRuntime({ initialState: { package: 'esm' } });
 runtime.registerModule((registrar) => {
   registrar.regEvent('package/esm', () => undefined);
+  registrar.regEvent('package/esm-named', ({ coeffects: { now } }) => void now, {
+    coeffects: { now: 'system/now' },
+  });
 });
 runtime.dispatch(['package/esm']);
 const inspector: ReflexInspector = createReflexInspector(runtime);
@@ -30,6 +36,7 @@ const removeSubscriptionListener = testHarness.watchSubscription(['package/esm']
 const hooks = createReflexHooks();
 
 void options;
+void namedOptions;
 void trace;
 void snapshot;
 void testHarness.getEventHandler('package/esm');

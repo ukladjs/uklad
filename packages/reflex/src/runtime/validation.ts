@@ -1,4 +1,5 @@
 import { isEventVector } from '../core/validation';
+import { RUNTIME_OWNED_COEFFECT_IDS } from '../contracts';
 import { isRuntimeDisposed } from './core';
 
 import type { RuntimeCore } from './core';
@@ -10,6 +11,26 @@ export function assertStateRecord(
 ): asserts value is Record<string, any> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`[reflex] ${field} must be a non-null, non-array object.`);
+  }
+}
+
+/**
+ * Validate a coeffect id accepted by `regCoeffect`.
+ *
+ * Runtime-owned keys are reserved even though coeffect handlers no longer see
+ * the state draft. They remain part of the event-handler coeffects object.
+ */
+export function assertCoeffectId(id: unknown): asserts id is string {
+  if (typeof id !== 'string' || id.length === 0) {
+    throw new Error('[reflex] regCoeffect expects a non-empty coeffect id string.');
+  }
+  if (RUNTIME_OWNED_COEFFECT_IDS.includes(id as (typeof RUNTIME_OWNED_COEFFECT_IDS)[number])) {
+    throw new Error(
+      `[reflex] '${id}' is a runtime-owned coeffect and cannot be registered with regCoeffect().`,
+    );
+  }
+  if (id === '__proto__') {
+    throw new Error("[reflex] '__proto__' is not a valid coeffect id.");
   }
 }
 

@@ -81,8 +81,6 @@ cp node_modules/@flexsurfer/reflex/templates/agent/mcp.json .mcp.json
 mkdir -p .cursor && cp node_modules/@flexsurfer/reflex/templates/agent/mcp.json .cursor/mcp.json
 ```
 
-The complete Reflex reference for AI assistants ships in the package as [`llms.txt`](./llms.txt) (`node_modules/@flexsurfer/reflex/llms.txt`). Use it as a fallback/reference — don't paste it into always-loaded instructions; the plugin skill is the efficient path.
-
 ## ✨ The architecture in 30 seconds
 
 ```bash
@@ -157,7 +155,6 @@ Side effects (HTTP, storage, timers, navigation) live in **effects/coeffects**, 
 - [API Reference](https://reflex.js.org/docs/api-reference.html)
 - [Re-frame parity tradeoffs](https://github.com/flexsurfer/reflex/blob/main/docs/compatibility/re-frame-parity.md) - What Reflex gains, pays,
   and should improve in its JavaScript implementation
-- [AI Reference (llms.txt)](./llms.txt) - Full Reflex guide for AI assistants; use as a fallback/reference, not as always-loaded instructions
 
 - Examples
   - [TodoMVC](https://github.com/flexsurfer/reflex/tree/main/examples/todomvc) - Classic todo app implementation showcasing core reflex patterns

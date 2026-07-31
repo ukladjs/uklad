@@ -535,7 +535,7 @@ they improve agent-generated and agent-maintained applications.
 | Stable hydration/server snapshot                           | **P1**                                                 | **L**                      | **Medium**                                 | **No**                          | A new snapshot contract and Provider option can be additive.                                                                                            |
 | Equality-policy cleanup and benchmarks                     | **P1** benchmark, **P2** API change                    | **M** benchmark, **L** API | **Low** benchmark, **High** default change | **Benchmark: No; default: Yes** | Measurement is safe; changing the equality default alters observable recomputation and identity behavior.                                               |
 | Static manifest and source locations                       | **P0** contract manifest, **P1** enriched source index | **L**                      | **Medium**                                 | **No**                          | Generated metadata is additive and much more valuable to coding agents than ordinary API prose.                                                         |
-| Concise `llms.txt`, templates, and scaffolder              | **P1**                                                 | **L**                      | **Low**                                    | **No**                          | New-project defaults and documentation can change without breaking existing runtime code.                                                               |
+| Templates and scaffolder                                    | **P1**                                                 | **L**                      | **Low**                                    | **No**                          | New-project defaults and documentation can change without breaking existing runtime code.                                                               |
 | Redux/Zustand migration documentation                      | **P3**                                                 | **M**                      | **Low**                                    | **No**                          | Valuable for human adoption, but it does not improve execution correctness.                                                                             |
 | Redux DevTools bridge                                      | **P3**                                                 | **L**                      | **Low**                                    | **No**                          | Familiar human tooling; Reflex's structured receipts and causal agent tools come first.                                                                 |
 | Entity/normalization helpers                               | **P3**                                                 | **M**                      | **Low**                                    | **No**                          | Add only when applications or benchmarks demonstrate recurring agent difficulty.                                                                        |
@@ -585,7 +585,7 @@ painful after the stability boundary:
 #### Introduce now, remove only in a later major version
 
 These can start as additive replacements. Templates, examples, generated
-contracts, and `llms.txt` should move immediately so new agent-written code does
+contracts should move immediately so new agent-written code does
 not accumulate on the legacy surface:
 
 - command/query/effect descriptors and object payloads;
@@ -665,7 +665,7 @@ dependencies:
 
 - Finalize the canonical React vocabulary and typed hook/context factory.
 - Require the modern Provider and provide a stable hydration snapshot.
-- Complete templates, `llms.txt`, compatibility migration, release integrity,
+- Complete templates, compatibility migration, release integrity,
   performance budgets, and ecosystem documentation.
 - Add P3 parity items only when evaluations or real adoption justify them.
 

@@ -14,4 +14,3 @@ For Reflex state-management work:
 - Do not read `events.ts` or `subs.ts` end-to-end unless the index path fails.
 - Keep events pure, isolate I/O in effects/coeffects, keep subscriptions deterministic and view-ready, and keep typed payload maps in sync.
 - Verify with focused tests/typecheck and, when writable DevTools MCP is explicitly granted, the `dispatch_event` response plus filtered mounted-subscription checks. In read-only mode, verify from state, subscriptions, and traces. Treat a changed `sessionEpoch` as a restart.
-- Use `llms.txt` only as a fallback reference when the plugin skill and project indexes are insufficient.

@@ -263,7 +263,6 @@ Paths are relative to `src/`.
 | `events/execution-observer-types.ts`            | Structural DevTools observer contract                                             |
 | `events/execution-observer.ts`                  | DevTools observer-to-probe adapter                                                |
 | `core/tracing-types.ts`                         | Public trace and trace-error DTOs                                                 |
-| `core/structured-clone.ts`                      | Structured-clone-compatible value copying                                         |
 | `inspector-types.ts`                            | Public inspector and DevTools runtime-port contracts                              |
 | `inspector.ts`                                  | Runtime-bound structural inspection adapter                                       |
 | `react/types.ts`                                | Public React provider and typed-hook contracts                                    |

@@ -50,7 +50,10 @@ runtime.dispatchSync(['reflex-persist/hydrate']); // terminal before this return
 useSubscription(['reflex-persist']); // status, like any other state
 ```
 
-The runtime argument is mandatory: `persist(runtime, options)`. Facade apps pass the `defaultRuntime` that `@flexsurfer/reflex` exports; instance apps pass their own. Making it explicit keeps the library free of any default-runtime dependency and makes the attachment target visible at the call site (spike scenario 6 exercises the facade case).
+The runtime argument is mandatory: `persist(runtime, options)`. Applications pass
+the explicit runtime they own. Making it explicit keeps the attachment target
+visible at the call site and prevents persistence from depending on ambient
+process-global state.
 
 `whenHydrated()` involves no subscription watch either. Every terminal hydration event returns an internal completion effect, which runs after the state commit and settles waiters created through either the handle or direct-dispatch route. `dispose()` and runtime disposal use the module installer's same cleanup callback, deterministically reject pending waiters, and ignore late experimental async completions. The library uses `watchSubscription` nowhere.
 
@@ -194,7 +197,8 @@ The spike graduated into the package: its scenarios and beta regressions live in
 3. Experimental async read route with the gate: a pre-hydration change produces no write, so the stored snapshot survives the read window. This does not prove async write completion ordering and is not a beta.1 support claim.
 4. Thrown sync reads and rejected experimental async reads both set failed status, reject `whenHydrated()`, report sanitized diagnostics, and keep writes gated.
 5. Hydration appears as ordinary events, and the final trace for the causing domain event contains the exact interceptor-contributed WRITE effect.
-6. Facade apps (`initState`/`regEvent`/`dispatch`) work by passing the exported `defaultRuntime` explicitly.
+6. Applications use the explicit runtime API (`runtime.registerModule()` and
+   `runtime.dispatch()`); persistence never discovers a runtime implicitly.
 7. Handle/runtime disposal share cleanup; pending barriers reject, late reads are ignored, duplicate attachment is rejected, and reattach starts with a closed idle gate.
 8. Hydration-echo regression: hydrating stored values performs zero writes — the bug the watch-based writer shipped with (see Dogfood notes) cannot recur silently.
 

@@ -86,7 +86,7 @@ If you're not using the agent toolkit plugin, the setup the skill automates is f
    ```typescript
    import { enableDevtools } from '@flexsurfer/reflex-devtools';
    import { createReflexInspector } from '@flexsurfer/reflex/devtools';
-   import { runtime } from './state/runtime';
+   import { runtime } from './app/reflex/runtime';
 
    if (import.meta.env.DEV) {
      enableDevtools(createReflexInspector(runtime));
@@ -251,7 +251,7 @@ npm install --save-dev @flexsurfer/reflex-devtools
 // app entry point
 import { enableDevtools } from '@flexsurfer/reflex-devtools';
 import { createReflexInspector } from '@flexsurfer/reflex/devtools';
-import { runtime } from './state/runtime';
+import { runtime } from './app/reflex/runtime';
 
 enableDevtools(createReflexInspector(runtime)); // defaults to 127.0.0.1:4000
 ```
@@ -341,7 +341,7 @@ import {
   enableDevtools,
 } from '@flexsurfer/reflex-devtools';
 import { createReflexInspector } from '@flexsurfer/reflex/devtools';
-import { runtime } from './state/runtime';
+import { runtime } from './app/reflex/runtime';
 
 const redact = createKeyRedactor({
   keys: [...DEFAULT_SENSITIVE_KEYS, /^email$/i, /^phone$/i, /^dateOfBirth$/i],

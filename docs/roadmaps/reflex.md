@@ -40,9 +40,12 @@ Operation-spine status: **Phase 0 and Phase 1 of the [agent-operation RFC](../rf
 
 ## Phase 0 — Source and release integrity (days, do first)
 
-The strongest recent work is invisible: local `main` is ahead of the public repository, the website documents the old DevTools API, and the flagship example contains a literal bug. The current milestone is to synchronize and review the source repository; npm publication remains deferred until the redesign is stable.
+The strongest recent work is invisible: the source repository, package READMEs,
+and examples must stay synchronized with the evolving runtime contract. The
+current milestone is to review the published experimental surface; stable 1.0
+support remains deferred until the redesign and release gates are complete.
 
-- [ ] Synchronize website, root/package READMEs, API reference, and examples with the current API (`createReflexInspector`, current DevTools setup) before any package release.
+- [x] Synchronize root/package READMEs and examples with the current API (`createReflexInspector`, current DevTools setup, and the canonical application structure).
 - [x] Fix the swapped Best Practices / API Reference links in [packages/reflex/README.md](../../packages/reflex/README.md).
 - [ ] Decide how the central `docs/` tree should be distributed with future package releases; package tarballs currently contain package code and package-facing READMEs, while deep documentation remains in the monorepo.
 - [x] Pin MCP package versions in the shipped agent templates.
@@ -55,14 +58,23 @@ The strongest recent work is invisible: local `main` is ahead of the public repo
 These items do not win an evaluation by themselves, but each removes a common reason for an architecture or security team to reject the framework before evaluating its differentiators.
 
 - [x] **DevTools/MCP security baseline.** The server now uses generated role tokens for HTTP and WebSocket, exact browser-origin and Host checks, loopback-only binding by default, read-only MCP capabilities unless dispatch/restore are granted separately, bounded and schema-validated runtime/control data, application/server redaction hooks, mutation audit records, reconnect-safe runtime sessions, and a fail-closed runtime/DevTools/MCP protocol-version handshake. Principal-scoped capability policy and remote-deployment abuse controls remain explicitly tracked in the [DevTools roadmap](devtools.md#p2).
-- [ ] **Fail-loud dev mode.** The instance API (`runtime.dispatch`, `dispatchSync`, `getSubscriptionValue`, `watchSubscription`, and `useSubscription` through it) now throws on malformed vectors and unregistered ids in every mode. Remaining scope: the legacy facade's root functions still `console.error` and continue — make them throw in development, and add a nearest-match suggestion ("did you mean `todos/add`?") to both surfaces. String IDs are only safe if mistakes surface immediately; this matters double for AI-generated code.
+- [ ] **Fail-loud dev mode.** The instance API (`runtime.dispatch`,
+  `dispatchSync`, `getSubscriptionValue`, `watchSubscription`, and
+  `useSubscription` through it) now throws on malformed vectors and
+  unregistered IDs in every mode. Add nearest-match suggestions ("did you mean
+  `todos/add`?") to the explicit runtime surface. String IDs are only safe if
+  mistakes surface immediately; this matters double for AI-generated code.
 - [ ] **Release and support baseline.** `SECURITY.md` is present; remaining work includes `CHANGELOG.md`, a support/compatibility matrix, coordinated release automation, npm provenance/trusted publishing, and a documented deprecation policy. Define supported React, React Native, TypeScript, Node/headless, browser, Metro, and Hermes versions.
 - [ ] **Runtime performance baseline.** Add repeatable benchmarks and CI budgets for dispatch throughput, broad and deep subscription graphs, 1k/10k active subscriptions, mount/unmount churn, memory retention, large derived collections under deep versus shallow equality, React render counts, AI-token-frequency updates, Hermes performance, and bundle size.
 - [ ] **Internal agent eval baseline.** Run scripted Reflex tasks with MCP connected versus file-tools-only, scored on success rate, turns, tokens, wall time, and deterministic acceptance tests. Use this as the fitness function for DevTools work; do not publish cross-library claims yet.
 
 ## Phase 2 — Instance-scoped runtime (the quarter's architecture project, gates 1.0 RC)
 
-Before this phase, the state and registries were module-level globals ([state.ts](../../packages/reflex/src/runtime/state.ts), [registry.ts](../../packages/reflex/src/runtime/registry.ts)). That blocked or complicated SSR/per-request stores, microfrontends, embedded widgets, parallel tests, Storybook isolation — and, most on-thesis, multiple agent sandboxes running side by side. This phase moves those owners behind explicit runtime scopes while preserving the default-runtime facade.
+The state and registries now live behind explicit runtime scopes
+([state.ts](../../packages/reflex/src/runtime/state.ts),
+[registry.ts](../../packages/reflex/src/runtime/registry.ts)). This enables
+SSR/per-request stores, microfrontends, embedded widgets, parallel tests,
+Storybook isolation, and multiple agent sandboxes side by side.
 
 Target shape:
 
@@ -98,8 +110,15 @@ runtime.registerModule(feature);
 
 This phase begins once the instance API is stable enough that persistence, templates, examples, and public benchmarks will not be rewritten around a moving foundation.
 
-- [ ] **Persistence + versioned migrations.** Ship an instance-aware persistence API with version migrations, partial persistence, hydration state/barriers, custom merge behavior, and async storage adapters for localStorage, AsyncStorage, and SecureStore. Define SSR skip/defer behavior, per-runtime storage, restore publication semantics, redaction, and module disposal.
-- [ ] **`create-reflex-app` scaffolder.** Pin the intended convention: `state.ts` / `events.ts` / `subs.ts` / `effects.ts` / `*-ids.ts`, store-local or typed payload contracts, dev-only inspector wiring, CLAUDE.md/AGENTS.md routers, pinned MCP config, and a `reflex-map` script entry.
+- [x] **Synchronous persistence beta.** `@flexsurfer/reflex-persist` provides
+  instance-aware root persistence, versioned migrations, hydration barriers,
+  transforms, redaction-safe errors, and module disposal for synchronous
+  storage. Async storage, SSR integration, custom merge behavior, and multiple
+  attachments per runtime remain open follow-up work.
+- [ ] **`create-reflex-app` scaffolder.** Generate the canonical convention:
+  `app/reflex/catalog.ts`, `contracts.ts`, `initial-state.ts`, `runtime.ts`,
+  `bindings.ts`, feature modules, platform effect/coeffect registrations,
+  dev-only inspector wiring, and the agent router files.
 - [ ] **Official Expo reference app, built by agents using the Reflex toolkit.** Include Metro/Hermes CI, AsyncStorage + SecureStore adapters, hydration migrations, background transitions, reconnect handling, and an offline command outbox. Dogfood the workflow in a public demo showing an agent building and verifying the application with metrics on screen.
 - [ ] **Public agent benchmark.** Compare the same tested tasks in Reflex, Zustand, and Redux Toolkit only after the internal harness is stable. Fix model and tool versions, publish prompts and source, use identical acceptance tests and time limits, run multiple repetitions, disclose failures and variance, and make the harness reproducible.
 - [ ] **MCP backlog prioritized by harness data** (tracked in [docs/roadmaps/devtools.md](devtools.md)): `get_client_logs`, `find_state_changes(path)`, `sinceId` pagination with explicit cursor-reset responses, `reflex-map` static manifest + source locations through MCP, shape mode, snapshot/restore, `explain_event`, deterministic replay, and runtime schema validation for external tool payloads. Predicted winners remain hypotheses until measured.
@@ -125,7 +144,7 @@ Final 1.0 is a stability commitment, not a reward for completing one architectur
 - [ ] Publish migration guides from Reflex `0.x`, Redux Toolkit, and Zustand, including incremental coexistence and rollback strategies.
 - [ ] Verify the security policy, compatibility matrix, release automation, provenance, deprecation policy, and runtime/DevTools/MCP protocol negotiation.
 - [ ] Meet the documented runtime performance, memory, bundle-size, React render-count, Metro, and Hermes budgets.
-- [ ] Confirm the default-runtime compatibility facade and store-local contract APIs are stable and documented.
+- [ ] Confirm explicit runtime ownership and store-local contract APIs are stable and documented.
 - [ ] Resolve release-candidate feedback, publish a complete changelog, and cut `1.0.0`.
 
 ## Ongoing — Distribution (~⅓ of effort from Phase 3 onward)

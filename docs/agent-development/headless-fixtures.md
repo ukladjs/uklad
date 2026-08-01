@@ -65,7 +65,8 @@ agent/MCP
        stores snapshots, event logs, scenarios
        survives SDK reconnects
   -> headless app process
-       imports state/events/subs/effects
+       imports the application runtime, feature modules, and the selected
+       platform effect/coeffect registrations
        enables tracing/devtools
        receives dispatch/restore/eval messages
 ```

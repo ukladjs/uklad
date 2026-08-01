@@ -18,7 +18,11 @@ Tool responses shown are abbreviated.
 
 A mid-size task on purpose: it touches the state shape, two events, two subscriptions, an effect, and two components — and it contains a bug class that only runtime observation can catch.
 
-The app follows the scaffolded convention: `src/state.ts`, `src/event-ids.ts`, `src/events.ts`, `src/sub-ids.ts`, `src/subs.ts`, `src/effects.ts`, `src/components/`.
+The app follows the canonical convention in
+[`canonical-app-structure.md`](../architecture/canonical-app-structure.md):
+`src/app/reflex/catalog.ts` and `contracts.ts` define the application index;
+feature directories own state, events, subscriptions, modules, and UI; and
+platform directories register environment-specific effects and coeffects.
 
 ---
 
@@ -26,7 +30,10 @@ The app follows the scaffolded convention: `src/state.ts`, `src/event-ids.ts`, `
 
 The agent's first question is never "what is the state?" — the app isn't even running. It's _"what ids, handlers, and state keys already exist, and where?"_
 
-- **Today:** read `*-ids.ts` (they are the index), exact-match `rg` for the few ids that matter. Cheap and reliable — but text-based, and says nothing about payload shapes or the sub dependency graph.
+- **Today:** read `src/app/reflex/catalog.ts` for state roots and handler IDs,
+  then `contracts.ts` for payload and result shapes. Use exact-match `rg` to
+  open the owning feature or selected platform registration. This is cheap and
+  reliable while keeping the catalog free of duplicated metadata.
 - 🚧 **Roadmap:** `get_reflex_map` / `find_reflex_id` / `get_event_contract` backed by `.reflex/map.json` (lib: static manifest generator). No running app required; replaces every orientation grep with indexed lookups.
 
 What the agent must _not_ need to do: read `events.ts` / `subs.ts` end-to-end. On a real app those files are the most expensive read in the repo.
@@ -35,7 +42,10 @@ What the agent must _not_ need to do: read `events.ts` / `subs.ts` end-to-end. O
 
 ## Phase 1 — Write the code (the compiler is the loop)
 
-The agent writes, in order: the state key (`selectedCategory: null`), event ids, handlers (`expenses/set-category`, extend `expenses/add` with a category), sub ids and subs (`expenses/visible`, `expenses/category-total`), the persistence effect wiring, and the two components.
+The agent writes, in order: the state root (`expensesSelectedCategory: null`),
+the corresponding `stateKeys` and `appIds` entries, the complete contract
+entries, feature handlers and subscriptions, the selected platform adapter,
+and the two components.
 
 **No MCP is used in this phase, and that is by design.** The verification signal here is `tsc` against the runtime's declared `ReflexContracts`: a wrong payload, a typo'd id in `dispatch`, a mis-shaped sub result — all become compile errors, the cheapest feedback there is. Roughly 70% of the agent's total effort on this task happens in this phase, which is why the scaffolder, the declared contract, and the static manifest matter more to overall context cost than any runtime tool.
 
@@ -57,7 +67,7 @@ Bash: tsx watch src/headless.ts      # the app, headless — no browser needed
 
 The first wall used to be here: **the SDK runs inside the app, and the app historically ran in a browser tab** an autonomous agent doesn't have.
 
-- ✅ **Today: headless and parallel runtimes.** Reflex's state layer is React-free, so the scaffolded `src/headless.ts` installs the same state/events/subscriptions as `main.tsx` on an explicit runtime and calls `enableDevtools(createReflexInspector(runtime), { operations: true })` from the development-only Reflex entrypoint — run via `tsx`/`vite-node` with a watcher (`pnpm dev:playground:headless` in this repo) — a live, dispatchable, fully traceable app with no browser. Views are excluded, which is acceptable: the state layer is where Reflex's guarantees live, and view-file correctness is covered by tsc plus the browser smoke check below. Side effects are safe by default through the adapter split (`effects.headless.ts` / `coeffects.headless.ts` install the same effect ids against memory-backed or no-op adapters; policy in [headless-state-fixtures.md](headless-fixtures.md)), and the declared adapter modes surface in `app_status`. Browser, headless, widget, and agent-sandbox runtimes can remain connected together under stable IDs. A reconnect supersedes only the older socket with the same `runtimeId`, preventing duplicate execution without disconnecting other sandboxes.
+- ✅ **Today: headless and parallel runtimes.** Reflex's state layer is React-free, so the canonical `src/headless.ts` entry installs the same feature modules as `main.tsx` on an explicit runtime and selects the headless effect/coeffect adapters — run via `tsx`/`vite-node` with a watcher (`pnpm dev:playground:headless` in this repo) — a live, dispatchable, fully traceable app with no browser. Views are excluded, which is acceptable: the state layer is where Reflex's guarantees live, and view-file correctness is covered by tsc plus the browser smoke check below. Side effects are safe by default through the adapter split (`platform/headless/effects.ts` and `coeffects.ts` install the same effect IDs against memory-backed or no-op adapters; policy in [headless-state-fixtures.md](headless-fixtures.md)), and the declared adapter modes surface in `app_status`. Browser, headless, widget, and agent-sandbox runtimes can remain connected together under stable IDs. A reconnect supersedes only the older socket with the same `runtimeId`, preventing duplicate execution without disconnecting other sandboxes.
 
 ### 2. "Is it alive?"
 
@@ -262,7 +272,7 @@ Anti-patterns the API must keep unnecessary — if any of these becomes the prac
 
 | Stage          | Question                             | Tool                                                      | Status                  |
 | -------------- | ------------------------------------ | --------------------------------------------------------- | ----------------------- |
-| Orient         | what exists, where?                  | `*-ids.ts` + rg → `get_reflex_map` / `get_event_contract` | ✅ / 🚧                 |
+| Orient         | what exists, where?                  | `catalog.ts` + `contracts.ts` + rg → static manifest tools | ✅ / 🚧                 |
 | Write          | is the code legal?                   | `tsc` + typed payload maps                                | ✅ (lib)                |
 | Launch         | run the app without a browser        | headless runtime entry (`src/headless.ts`)                | ✅                      |
 | Health         | did it mount? errors? session?       | `app_status` · `get_client_logs`                          | ✅ · 🚧                 |

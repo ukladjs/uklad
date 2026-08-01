@@ -131,8 +131,7 @@ every mechanism should survive 1.0.
   `dispatch()` is called. The current 0.x implementation gives queued and
   delayed work structured-clone ownership; `dispatchSync` consumes its vector
   immediately. See
-  [`event-runtime.ts`](../../packages/reflex/src/runtime/event-runtime.ts),
-  [`structured-clone.ts`](../../packages/reflex/src/core/structured-clone.ts), and
+  [`event-runtime.ts`](../../packages/reflex/src/runtime/event-runtime.ts) and
   [`types.ts`](../../packages/reflex/src/types.ts).
 - **Why:** Re-frame events are immutable data values. Agent-authored code can
   follow that contract directly, so copying every event is defensive overhead

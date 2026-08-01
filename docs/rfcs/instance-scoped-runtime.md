@@ -2,7 +2,8 @@
 
 - **Status:** Implemented; release acceptance awaits Phase 1 performance budgets
 - **Last updated:** 2026-07-17
-- **Compatibility target:** existing `@flexsurfer/reflex` imports remain a facade over one default runtime
+- **Compatibility target:** applications explicitly create and own a runtime;
+  the package root re-exports the instance API and does not create a package-global runtime
 
 ## Summary
 
@@ -152,7 +153,7 @@ The package-level provider and hook read one context whose type is fixed when th
 
 Creation installs fresh framework built-ins (`dispatch`, `dispatch-later`, `now`, `random`, and the default event error handler) into that instance only. `clearHandlers` restores those built-ins and removes user definitions in the target instance. Clearing subscriptions remains illegal while an active graph exists. `restoreState` is the supported state-restoration primitive; `initState` remains the compatibility/bootstrap name on the default runtime.
 
-`runtime.dispose()` terminally releases instance-owned watches, module installations, delayed dispatches and rate-limit timers, event-queue waiters, tracing timers/callbacks, handlers, and subscription definitions. It is idempotent. Applications must first unmount consumers before disposal; disposal fails loudly while such a subscription graph remains active and can be retried after the consumer releases it. Later instance and inspector read/control operations fail as disposed; previously returned cleanup functions remain safe idempotent no-ops. The compatibility `defaultRuntime` is process-owned and cannot be disposed.
+`runtime.dispose()` terminally releases instance-owned watches, module installations, delayed dispatches and rate-limit timers, event-queue waiters, tracing timers/callbacks, handlers, and subscription definitions. It is idempotent. Applications must first unmount consumers before disposal; disposal fails loudly while such a subscription graph remains active and can be retried after the consumer releases it. Later instance and inspector read/control operations fail as disposed; previously returned cleanup functions remain safe idempotent no-ops.
 
 ## Entrypoints
 
@@ -160,14 +161,13 @@ Creation installs fresh framework built-ins (`dispatch`, `dispatch-later`, `now`
 - `@flexsurfer/reflex/react` contains `ReflexProvider`, runtime context access, `useSubscription`, and hot-reload helpers.
 - `@flexsurfer/reflex` remains the compatibility entrypoint and re-exports both surfaces.
 
-## Compatibility facade
+## Package entrypoint
 
-The named functions at the package root delegate to one exported `defaultRuntime`. They retain their current signatures, global augmentation behavior, scheduling, and built-ins. The default runtime has ID `default` and name `Default runtime`. This facade is a migration bridge, not a second implementation.
-
-Legacy and instance calls deliberately interoperate when they target
-`defaultRuntime`; development inspection is created explicitly with
-`createReflexInspector(defaultRuntime)` from the DevTools entrypoint. Separate
-runtimes never observe or mutate those registrations.
+The package root re-exports the explicit runtime, vanilla, and React surfaces.
+It does not create or discover a process-global runtime. Applications should
+create a runtime for each execution owner and pass that runtime to the provider,
+feature modules, persistence attachment, and inspector. Separate runtimes never
+observe or mutate one another's registrations.
 
 ## SSR and hydration
 
@@ -198,7 +198,6 @@ The architecture is accepted only when automated tests prove:
 - module installation/disposal is scoped and idempotent;
 - React providers select and nest runtimes correctly;
 - restore, watch, dispatch, `dispatchSync`, and `flush` follow the contracts above;
-- the legacy facade and the default runtime are the same state owner;
 - package tarballs expose working root, vanilla, and React ESM/CJS/type entrypoints;
 - DevTools keeps multiple runtimes connected and routes all reads/mutations by runtime ID;
 - existing subscription-runtime correctness and performance budgets do not materially regress.

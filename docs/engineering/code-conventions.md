@@ -19,7 +19,6 @@ src/
     immer.ts                       Immer integration
     logging.ts                     logging adapter
     scheduling.ts                  host scheduling primitives
-    structured-clone.ts             structured-clone-compatible value copying
     tracing-types.ts               public trace DTOs
     validation.ts                  untyped-boundary guards
   runtime/
@@ -50,7 +49,6 @@ src/
     effect-executor.ts             post-commit effects
     execution-observer-types.ts    DevTools observer contract
     execution-observer.ts          DevTools probe adapter
-    coeffects.ts
     built-in-effects.ts
     interceptors-executor.ts
   react/

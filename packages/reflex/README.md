@@ -90,24 +90,25 @@ npm install @flexsurfer/reflex
 ```tsx
 import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
 import { ReflexProvider, useSubscription } from '@flexsurfer/reflex/react';
+import { appIds, stateKeys } from './app/reflex/catalog';
 
 const runtime = createReflexRuntime({
-  initialState: { counter: 0 },
+  initialState: { counterValue: 0 },
   runtimeId: 'counter-app',
   name: 'Counter app',
 });
 
 // A module owns its registrations and can be disposed safely.
 runtime.registerModule((scope) => {
-  scope.regEvent('counter/increment', ({ draftState }) => {
-    draftState.counter += 1;
+  scope.regEvent(appIds.events.counterIncrement, ({ draftState }) => {
+    draftState.counterValue += 1;
   });
-  scope.regRootSub('counter', 'counter');
+  scope.regRootSub(appIds.subscriptions.counterValue, stateKeys.counterValue);
 });
 
 function Counter() {
-  const count = useSubscription(['counter']);
-  return <button onClick={() => runtime.dispatch(['counter/increment'])}>Count: {count}</button>;
+  const count = useSubscription([appIds.subscriptions.counterValue]);
+  return <button onClick={() => runtime.dispatch([appIds.events.counterIncrement])}>Count: {count}</button>;
 }
 
 function Root() {

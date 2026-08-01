@@ -45,8 +45,8 @@ structured runtime evidence instead of guessing from source text or logs.
   CLI, security boundaries, and package assembly.
 - [`@flexsurfer/reflex-devtools-mcp`](packages/reflex-devtools-mcp) — the
   experimental MCP bridge for inspection and controlled development actions.
-- [`@flexsurfer/reflex-devtools-ui`](packages/reflex-devtools-ui) — the local
-  dashboard source used by DevTools during development.
+- [`@flexsurfer/reflex-devtools-ui`](packages/reflex-devtools-ui) — the private
+  dashboard source assembled into the DevTools package.
 - [`TodoMVC`](examples/todomvc) and [`DevTools playground`](examples/devtools-playground)
   — example applications and integration fixtures.
 

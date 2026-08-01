@@ -45,4 +45,5 @@ back here for the deeper material.
 - [Code conventions](engineering/code-conventions.md)
 - [Performance benchmarks](engineering/performance-benchmarks.md)
 - [Re-frame parity trade-offs](compatibility/re-frame-parity.md)
+- [Redux Toolkit and Zustand feature parity](compatibility/redux-zustand-parity.md)
 - [Stability and versioning](compatibility/stability-and-versioning.md)

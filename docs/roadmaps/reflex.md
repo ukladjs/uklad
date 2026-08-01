@@ -22,7 +22,8 @@ Detailed trackers this document links into:
   priority order combining AI-native requirements with human/API work
   re-ranked by its value to agents.
 - [docs/roadmaps/devtools.md](devtools.md) — DevTools + MCP tool backlog; its non-operation backlog remains authoritative.
-- [docs/roadmaps/historical-reflex.md](historical-reflex.md) — previous roadmap; its **agent indexing model** and **Redux/Zustand feature-parity table** remain valid reference material.
+- [docs/roadmaps/historical-reflex.md](historical-reflex.md) — previous roadmap; its **agent indexing model** remains valid reference material.
+- [Redux Toolkit and Zustand feature parity](../compatibility/redux-zustand-parity.md) — compatibility guidance extracted from the historical roadmap.
 - [docs/agent-development/workflow.md](../agent-development/workflow.md) — the canonical agent scenario new tools are justified against.
 
 The immediate architecture gate is no longer “more trace tooling.” It is the

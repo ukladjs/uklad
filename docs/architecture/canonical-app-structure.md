@@ -12,6 +12,11 @@ examples, templates, and agent toolkit. It defines the target authoring model;
 existing examples and agent instructions may still use older structures until
 they are migrated.
 
+For the concise, normative checklist that application code, templates, and the
+agent toolkit must follow, see [Application authoring
+rules](application-authoring-rules.md). This document supplies the rationale,
+examples, and complete structural model behind those rules.
+
 The design optimizes for two related goals:
 
 - predictable application architecture at every project size; and

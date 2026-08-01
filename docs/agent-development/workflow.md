@@ -18,7 +18,9 @@ Tool responses shown are abbreviated.
 
 A mid-size task on purpose: it touches the state shape, two events, two subscriptions, an effect, and two components — and it contains a bug class that only runtime observation can catch.
 
-The app follows the canonical convention in
+The app follows the required
+[`application-authoring-rules.md`](../architecture/application-authoring-rules.md)
+and the canonical convention in
 [`canonical-app-structure.md`](../architecture/canonical-app-structure.md):
 `src/app/reflex/catalog.ts` and `contracts.ts` define the application index;
 feature directories own state, events, subscriptions, modules, and UI; and

@@ -1,8 +1,8 @@
-# ADR-001: Reflex Foundation and Descriptor-First Evolution
+# ADR-001: Reflex Foundation and Application-Contract-First Authoring
 
 - **Status:** Provisional
 - **Date:** 2026-07-23
-- **Scope:** Reflex core through the descriptor milestone
+- **Scope:** Reflex core and application authoring before 1.0
 - **Mandatory review:** Before the execution model is declared stable or Reflex reaches 1.0
 
 ## Context
@@ -31,9 +31,9 @@ Reflex is intentionally designed for AI-assisted and agent-authored
 development. Agents are the primary authoring and maintenance clients, while
 applications, tests, developer tools, and remote gateways remain runtime
 clients. This is not an excuse to weaken runtime correctness; it means the
-project can place more invariants in explicit instructions, readonly types,
-descriptors, generated templates, and verification checks instead of paying
-defensive runtime costs for every possible human mistake.
+project can place more invariants in explicit instructions, application
+contracts, readonly types, generated templates, and verification checks instead
+of paying defensive runtime costs for every possible human mistake.
 
 This constraint permits deliberate optimizations at trusted authoring
 boundaries. For example, agent-authored events may use immutable borrowed
@@ -65,9 +65,10 @@ scheduler.
 ### 2. AI-first authoring and explicit optimization contracts
 
 AI-first is an architectural constraint, not only a documentation preference.
-The agent instructions, descriptors, types, templates, and tests together form
-the authoring contract that lets Reflex avoid unnecessary defensive work while
-keeping violations visible.
+The application catalog, complete `AppContracts`, registrar calls, types,
+templates, tests, and agent instructions together form the authoring contract
+that lets Reflex avoid unnecessary defensive work while keeping violations
+visible.
 
 - **Events:** Event vectors and payload values are immutable after `dispatch()`
   is called. The preferred agent-authored path does not deep-clone every event;
@@ -77,10 +78,12 @@ keeping violations visible.
   as a compatibility mode during the 0.x transition.
 - **Subscriptions:** Every non-root subscription should be evaluated for
   result size, recomputation frequency, structural sharing, and downstream
-  fan-out. Its descriptor or registration should select the appropriate
-  equality policy (`Object.is`, shallow, deep, or a domain-specific comparator)
-  through subscription options. `fast-deep-equal` remains a compatibility
-  fallback, not an instruction to pay deep equality cost blindly everywhere.
+  fan-out. Each application selects one default equality policy through the
+  `equalityCheck` runtime-creation option; a `regSub` may override it for a
+  particular result. The fallback is `fast-deep-equal`, while `() => false`
+  propagates every recomputation by default. `Object.is`, shallow, deep, and
+  domain-specific comparators remain deliberate policy choices rather than
+  hidden registration requirements.
 - **Optimization rule:** Prefer a strict, machine-readable contract plus a
   development guard over an always-on defensive copy when the trust boundary is
   controlled by agent-authored code. Preserve an explicit safe path for data
@@ -88,14 +91,15 @@ keeping violations visible.
 
 This policy does not assume that agents are infallible. Contract violations must
 still fail in development and be covered by tests; runtime validation remains
-mandatory at descriptor and external-ingress boundaries.
+mandatory at external-ingress boundaries.
 
-### 3. Current executor remains during the descriptor phase
+### 3. The current application model is canonical; executor mechanics remain provisional
 
-The existing event execution model remains the initial execution backend while
-typed descriptors and runtime contracts are introduced.
+Application-authored Reflex code uses one application catalog, one complete
+`AppContracts`, event vectors, and registrar-installed modules. This is the
+canonical authoring model for applications, templates, and agents.
 
-During this phase, Reflex continues to support:
+The current executor implements that model through:
 
 - event-based mutation;
 - event vectors and `dispatch`;
@@ -103,65 +107,69 @@ During this phase, Reflex continues to support:
 - event cascades produced by declarative dispatch effects;
 - the interceptor pipeline;
 - coeffects and effects;
+- construction-time equality and global-interceptor policy;
 - dynamic runtime registration;
 - subscription-based derived state; and
 - scheduled React-facing state publication.
 
-This is a delivery strategy, not a declaration that these mechanisms are the
-permanent Reflex architecture.
+Event vectors and declarative dispatch effects are part of the canonical
+application authoring surface. Queue internals, interceptor implementation,
+dynamic registration mechanics, and React publication scheduling remain subject
+to the mandatory pre-1.0 review.
 
-Compatibility during this phase means behavioral continuity for the existing
+Compatibility during this period means behavioral continuity for the existing
 repository, examples, and tests. It is not a pre-1.0 promise that every current
 API or timing behavior will remain part of the stable public contract.
 
-### 4. Descriptors become the authoritative authoring contract
+### 4. Application contracts and registrar modules are the authoritative authoring contract
 
-New application definitions should use typed descriptors assembled into
-modules. A descriptor is the authoritative source for the contract it declares;
-it is not merely documentation attached to an independently registered handler.
+Every application has one catalog and one complete `AppContracts` type next to
+it. The catalog declares application state keys and handler IDs; `AppContracts`
+declares the state, event, subscription, effect, and coeffect shapes for those
+names. Feature and platform modules install implementations through the typed
+registrar.
 
-An event descriptor should be able to declare:
+The catalog plus `AppContracts` is the authoritative application capability
+index. It must be used by registrations, dispatches, subscription queries,
+effect tuples, components, and tests; application code does not independently
+repeat its IDs as raw strings.
 
-- stable ID and version;
-- description and source metadata;
-- object-shaped input schema;
-- output or domain-result schema when applicable;
-- declared environmental inputs;
-- declared effect capabilities;
-- exposure, risk, and policy metadata;
-- state access metadata when it can be enforced;
-- idempotency requirements when externally invocable; and
-- examples suitable for generated documentation and agent discovery.
+Event vectors are the canonical in-application command representation. A
+complete event contract gives their IDs and positional parameters a single
+typed source of truth. Declarative effects and named coeffect bindings remain
+part of the same contract boundary.
 
-Descriptor schemas must support runtime validation and a canonical,
-machine-readable representation suitable for manifests and contract hashing.
-Reflex should provide schema adapters rather than inventing a large validator
-DSL in core.
+Application registration and external exposure are separate decisions.
+Registering an event makes it available to the owning runtime; it does not make
+it callable by a remote gateway, developer tool, or another untrusted client.
+Those boundaries require their own validation, schema, policy, and exposure
+definitions without replacing the application authoring model.
 
-Module installation validates duplicate IDs, missing dependencies, invalid
-schemas, and incompatible declarations before the module becomes callable.
+Runtime-wide interceptors and the default subscription equality policy are
+immutable runtime-creation options. Global interceptors are ordered
+infrastructure hooks: they run before event-specific interceptors and unwind
+after them in reverse order. Feature modules do not dynamically add, remove, or
+reorder either runtime-wide policy.
 
-Registration and external exposure are separate decisions. Registering an event
-does not automatically make it callable by an agent, remote gateway, or
-developer tool. Externally callable definitions are private by default and must
-be exposed explicitly.
+The application structure rules define the catalog layout, flat reactive roots,
+module placement, platform boundaries, and equality policy expected of this
+model.
 
-### 5. Descriptors are independent of the current executor
+### 5. Application contracts are independent of executor mechanics
 
-Descriptor APIs must not expose or require:
+The application catalog, `AppContracts`, event vectors, declarative effects,
+and registrar module boundaries must survive a replacement of the current
+queue, interceptor, or publication implementation. Applications must not
+depend on:
 
-- positional event-vector parameters;
-- interceptor queue or stack internals;
-- the mutable interceptor `Context`;
-- event-queue FSM states;
+- queue or stack internals;
 - scheduler metadata attached to event arrays;
-- global `flush()` behavior;
+- global `flush()` behavior outside testing and administrative tooling;
 - trace storage details; or
 - React publication timing.
 
-The descriptor layer and executor communicate through normalized execution
-records. The exact TypeScript representation may evolve, but the conceptual
-boundary is:
+The application layer and executor communicate through transition outcomes.
+The exact TypeScript representation may evolve, but the conceptual boundary is:
 
 ```text
 ValidatedInvocation
@@ -183,30 +191,30 @@ CommitOutcome
 PublicationOutcome + EffectOutcomes
 ```
 
-The current event pipeline may initially produce these outcomes. A future
-executor must be able to produce the same outcomes without changing application
-descriptors.
+The current event pipeline produces these outcomes. A future executor must be
+able to produce the same outcomes without changing the catalog, `AppContracts`,
+or application modules.
 
-No descriptor-level feature may depend on an incidental behavior of the current
-event-vector or interceptor implementation.
+No application feature may depend on an incidental behavior of the current
+queue or interceptor implementation.
 
 ### 6. Runtime manifests must describe enforced truth
 
-The runtime manifest is a versioned snapshot of the active descriptor catalog.
-It must include a manifest revision or digest that changes when the callable
-catalog changes.
+If the runtime exposes a manifest, it is a versioned snapshot of the installed
+application catalog and registrations. It must include a revision or digest that
+changes when the callable capability set changes.
 
-Dynamic registration may continue during the descriptor phase, but it has the
-following consequences:
+Dynamic registration may continue, but it has the following consequences:
 
-- descriptor-backed registration updates the manifest revision;
-- raw legacy registration is not represented as a fully verified descriptor;
-- an inspector must distinguish descriptor-backed, partially verified, and
-  legacy-only entries; and
+- catalog-backed registration updates the manifest revision;
+- registration outside the application catalog is not represented as a fully
+  verified application capability;
+- an inspector must distinguish catalog-backed and dynamically registered
+  entries; and
 - a manifest must never claim that an unenforced declaration is authoritative.
 
 If arbitrary interceptors, coeffects, or handlers can introduce behavior not
-declared by a descriptor, the affected entry must be marked as partially
+declared by `AppContracts`, the affected entry must be marked as partially
 verified until the runtime can enforce the declaration.
 
 Machine-readable metadata is useful only when it describes actual runtime
@@ -215,15 +223,17 @@ manifest that execution can bypass.
 
 ### 7. Environmental inputs and effects remain explicit
 
-Coeffects remain supported by the current executor, but descriptor-backed
-environmental inputs must be declared, validated, and captured for the concrete
-invocation where practical.
+Coeffects remain supported by the current executor. Application contracts
+declare the provider argument and injected value, and event registrations bind
+them explicitly. Environmental data crossing an untrusted boundary must be
+validated and captured for the concrete invocation where practical.
 
 Deterministic inputs such as time, random values, generated IDs, principal
 identity, and configuration should be represented as captured invocation data.
 They must not be reconstructed from traces.
 
-Effects remain declarative data. Descriptor-backed effects should have:
+Effects remain declarative data. Application contracts declare their payloads;
+external operation layers may additionally define:
 
 - input and acknowledgement schemas;
 - adapter identity and execution mode;
@@ -250,15 +260,15 @@ They must not:
 - serve as the only storage for an operation result; or
 - redefine operation completion from trace timing.
 
-Operation support may be implemented incrementally, but new descriptor and
+Operation support may be implemented incrementally, but new operation and
 executor work must move toward this boundary rather than adding more execution
 logic to tracing or lifecycle observers.
 
 ### 9. Queue and scheduling behavior are provisional
 
-The existing asynchronous event queue remains in the current executor during
-the descriptor phase. Its serialized ordering is supported for that executor,
-but its implementation is not part of the descriptor contract.
+The existing asynchronous event queue remains in the current executor. Its
+serialized ordering is supported for that executor, but its implementation is
+not part of the application contract.
 
 In particular, new APIs must not depend on:
 
@@ -284,8 +294,8 @@ Reflex core must remain usable without React, `document`,
 `requestAnimationFrame`, or a browser event loop.
 
 The existing committed-state and published-state distinction may remain during
-the descriptor phase, but both revisions must be explicit wherever exact
-operation results or semantic observations are reported.
+the current executor's lifetime, but both revisions must be explicit wherever
+exact operation results or semantic observations are reported.
 
 No manifest or operation receipt may imply that committed state is already
 query-visible unless publication at that revision has occurred.
@@ -299,13 +309,16 @@ the React adapter.
 While the existing executor remains, the following rules prevent the
 transitional architecture from becoming a permanent hidden dependency:
 
-1. New examples and templates use descriptors and object-shaped inputs.
-2. Raw event-vector APIs remain available for compatibility, low-level testing,
-   and migration, but are not the preferred production command plane.
-3. Descriptor-backed execution validates external input before the application
-   handler runs.
-4. Runtime manifests are generated from installed descriptors, not inferred
-   from handler registries after the fact.
+1. New examples and templates use one application catalog, one complete
+   `AppContracts`, event vectors, registrar-installed modules, and immutable
+   runtime-wide equality and interceptor policy.
+2. Event vectors and declarative dispatch effects are the preferred production
+   command plane for application-authored code. External ingress maps its
+   validated input to that contract rather than redefining application events.
+3. External input is validated and receives an explicit ownership boundary
+   before it is dispatched into an application runtime.
+4. When a runtime manifest is provided, it is generated from the installed
+   catalog-backed registrations and identifies dynamic registrations separately.
 5. Arbitrary interceptor behavior cannot be described as fully verified unless
    the runtime enforces its declared inputs, effects, and capabilities.
 6. New operation features consume normalized execution outcomes rather than
@@ -328,10 +341,13 @@ transitional architecture from becoming a permanent hidden dependency:
 ### Positive
 
 - Existing behavior and conformance tests remain useful while contracts improve.
-- Descriptor and manifest work can proceed without simultaneously replacing
-  every runtime subsystem.
-- Applications gain typed object inputs, runtime validation, module validation,
-  discovery, and machine-readable contracts earlier.
+- Applications have one canonical source for identifiers, state, payloads,
+  registrations, dispatches, and queries rather than a descriptor-to-registrar
+  translation layer.
+- Catalog-plus-contract discovery remains compact for agents, tooling, and code
+  review while feature modules retain implementation ownership.
+- External gateways can add schemas, policy, and exposure metadata at their own
+  boundary without making ordinary application events carry a second contract.
 - Agent-authored applications can trade defensive allocation for explicit
   immutable-event and per-subscription equality contracts.
 - Equality and ownership decisions become inspectable authoring choices instead
@@ -339,14 +355,17 @@ transitional architecture from becoming a permanent hidden dependency:
 - The normalized execution boundary creates a place to compare the existing
   executor with a simpler alternative.
 - The project can make the eventual execution-model decision using measured
-  complexity and real descriptor use cases.
+  complexity and real application use cases.
 
 ### Negative
 
-- Reflex temporarily has two conceptual surfaces: descriptor contracts and
-  legacy event-vector execution.
+- Positional event vectors are compact rather than self-describing, so the
+  catalog and complete `AppContracts` are required for safe discovery and
+  maintenance.
+- Runtime application contracts are primarily TypeScript authoring contracts;
+  untrusted callers still need a separate runtime validation boundary.
 - Some declarations cannot be fully enforced while arbitrary interceptors,
-  coeffects, raw dispatch, and dynamic registration remain.
+  coeffects, untyped dispatch, and dynamic registration remain.
 - Exact operation completion remains more complicated while event cascades and
   delayed publication are supported.
 - The framework depends more heavily on agent instructions, readonly types, and
@@ -367,10 +386,10 @@ transitional architecture from becoming a permanent hidden dependency:
 Build a command-centered, synchronous transition executor with one state
 publication per command, supervised tasks, and no public event queue.
 
-This remains a credible target. It is not selected for the descriptor phase
-because it would combine contract, execution, scheduling, operation, effect, and
-publication changes in one step. The descriptor boundary created by this ADR
-allows that executor to be evaluated independently.
+This remains a credible target. It is not selected now because it would combine
+execution, scheduling, operation, effect, and publication changes in one step.
+The application-contract boundary created by this ADR allows that executor to
+be evaluated independently.
 
 ### Freeze the current event architecture as permanent
 
@@ -381,13 +400,16 @@ concepts.
 This is rejected. Those mechanisms may continue to prove useful, but they must
 be evaluated separately from the stable principles they currently implement.
 
-### Add descriptors only as documentation
+### Make descriptors the canonical application authoring model
 
-Generate types and manifests while allowing execution to bypass their schemas
-and declarations.
+Require ordinary application definitions to use object-shaped descriptors and
+translate them into registrations and event vectors.
 
-This is rejected. A machine-readable contract that is not enforced at its
-boundary is documentation, not runtime truth.
+This is rejected. It creates a second application representation without making
+local state transitions safer or clearer. Schemas, exposure policy, and rich
+metadata remain appropriate at external operation boundaries, but they do not
+replace the catalog, `AppContracts`, event vectors, or registrar modules that
+application code uses.
 
 ### Make traces authoritative
 
@@ -396,15 +418,20 @@ Infer invocation identity, causality, completion, and results from trace events.
 This is rejected. Traces are optional, may be buffered or dropped, and are not
 an execution ledger.
 
-## Descriptor milestone acceptance criteria
+## Application-contract acceptance criteria
 
-The descriptor phase is complete only when:
+The application authoring model is complete only when:
 
-- descriptor-backed input validation runs before application handling;
-- modules fail installation on duplicate or incompatible definitions;
-- the runtime exposes a versioned, deterministic manifest;
-- manifest entries distinguish enforced, partial, and legacy contracts;
-- catalog changes update the manifest revision or digest;
+- application templates and agent instructions use the catalog, complete
+  `AppContracts`, event vectors, and registrar modules;
+- registrations and query vectors are type-checked against the complete
+  application contract;
+- modules fail installation on duplicate or incompatible registrations;
+- a runtime manifest, when provided, exposes a versioned deterministic view of
+  installed catalog-backed registrations;
+- manifest entries distinguish catalog-backed, dynamically registered, and
+  partially enforced capabilities;
+- when a manifest is provided, catalog changes update its revision or digest;
 - executor outcomes carry exact event or invocation identity and state
   revisions;
 - operations and DevTools can consume outcomes without reconstructing root
@@ -413,11 +440,11 @@ The descriptor phase is complete only when:
   immutable-event contract and its development-time enforcement;
 - external event ingress has an explicit validate, freeze, or clone ownership
   policy;
-- subscription descriptors or registrations can declare an equality policy and
+- every non-root subscription registration declares an equality policy, and
   benchmark guidance exists for large, frequently recomputed outputs;
 - existing event behavior remains covered by conformance tests; and
-- descriptor definitions contain no dependency on event-vector layout,
-  interceptor internals, queue FSM states, or React timing.
+- application modules contain no dependency on queue FSM states, interceptor
+  internals, or React timing.
 
 ## Mandatory review triggers
 
@@ -425,28 +452,31 @@ This ADR must be reviewed before 1.0 and earlier if any of the following occurs:
 
 - Runtime manifests cannot remain authoritative because dynamic behavior can
   bypass them.
-- Descriptor-backed handlers require direct access to the interceptor context.
+- Application modules require direct access to the interceptor context.
 - Interceptors routinely introduce undeclared effects or environmental inputs.
 - Exact operation completion requires additional event-identity or trace-timing
   heuristics.
 - Event cascade interleaving prevents clear transaction or result semantics.
 - Headless execution continues to depend on browser-oriented scheduling.
 - Committed and query-visible revisions create ambiguity for operation results.
-- Supporting both raw registration and descriptor registration causes contract
-  drift or duplicated APIs.
+- Supporting both `AppContracts` and a competing application-definition surface
+  causes contract drift or duplicated APIs.
 - Most new features require changes inside the existing pipeline rather than at
   the normalized executor boundary.
 
 At review, the project must make one explicit decision:
 
 1. promote the current executor and document its mechanisms as stable;
-2. replace it with a descriptor-native executor; or
+2. replace it with an executor that preserves the application catalog,
+   `AppContracts`, event-vector, and registrar authoring surface; or
 3. isolate it in a legacy or compatibility entry point.
 
 The provisional status must not continue indefinitely by default.
 
 ## Related documents
 
+- [Application authoring rules](application-authoring-rules.md)
+- [Canonical application structure](canonical-app-structure.md)
 - [Reflex architecture](reflex-runtime.md)
 - [Re-frame parity tradeoffs](../compatibility/re-frame-parity.md)
 - [Agent-first priorities](../agent-development/priorities.md)

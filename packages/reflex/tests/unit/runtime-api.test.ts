@@ -101,6 +101,10 @@ describe('instance-scoped runtime', () => {
       'regRootSub',
       'regSub',
       'addInterceptor',
+      'removeInterceptor',
+      'getInterceptors',
+      'setEqualityCheck',
+      'getEqualityCheck',
     ]) {
       expect(exposed[adminMethod]).toBeUndefined();
     }
@@ -165,6 +169,130 @@ describe('instance-scoped runtime', () => {
     expect(interceptor.before).toHaveBeenCalledTimes(1);
 
     runtime.dispose();
+  });
+
+  it('installs immutable global interceptor and equality policies at runtime creation', () => {
+    const order: string[] = [];
+    const alwaysChanged = () => false;
+    const configuredInterceptor: Interceptor<{ count: number }> = {
+      id: 'configured-global',
+      before: (context) => {
+        order.push('global-before');
+        return context;
+      },
+      after: (context) => {
+        order.push('global-after');
+        return context;
+      },
+    };
+    const eventInterceptor: Interceptor = {
+      id: 'event-local',
+      before: (context) => {
+        order.push('event-before');
+        return context;
+      },
+      after: (context) => {
+        order.push('event-after');
+        return context;
+      },
+    };
+    const runtime = createReflexRuntime({
+      initialState: { count: 0 },
+      runtimeId: 'configured-runtime-policy',
+      equalityCheck: alwaysChanged,
+      interceptors: [configuredInterceptor],
+    });
+
+    runtime.registerModule((registrar) => {
+      registrar.regEvent(
+        'increment',
+        ({ draftState }) => {
+          order.push('handler');
+          draftState.count += 1;
+        },
+        { interceptors: [eventInterceptor] },
+      );
+    });
+
+    const installed = admin(runtime).getInterceptors();
+    expect(installed).toHaveLength(1);
+    expect(installed[0]).not.toBe(configuredInterceptor);
+    expect(Object.isFrozen(installed[0])).toBe(true);
+    expect(admin(runtime).getEqualityCheck()).toBe(alwaysChanged);
+
+    configuredInterceptor.before = (context) => {
+      order.push('caller-mutated-before');
+      return context;
+    };
+
+    runtime.dispatchSync(['increment']);
+
+    expect(order).toEqual([
+      'global-before',
+      'event-before',
+      'handler',
+      'event-after',
+      'global-after',
+    ]);
+    expect(runtime.getState()).toEqual({ count: 1 });
+    runtime.dispose();
+  });
+
+  it('uses the configured equality policy for unconfigured computed subscriptions', () => {
+    const runtime = createReflexRuntime({
+      initialState: { count: 0 },
+      runtimeId: 'configured-runtime-equality',
+      equalityCheck: () => false,
+    });
+    runtime.registerModule((registrar) => {
+      registrar.regRootSub('count', 'count');
+      registrar.regSub(
+        'parity',
+        () => [['count']],
+        ([count]) => count % 2,
+      );
+      registrar.regEvent('advance-by-two', ({ draftState }) => {
+        draftState.count += 2;
+      });
+    });
+
+    const observed: number[] = [];
+    const unsubscribe = runtime.watchSubscription(['parity'], (value) => observed.push(value));
+
+    runtime.dispatchSync(['advance-by-two']);
+
+    expect(observed).toEqual([0, 0]);
+    unsubscribe();
+    runtime.dispose();
+  });
+
+  it('rejects invalid or duplicate construction-time global interceptors', () => {
+    expect(() =>
+      createReflexRuntime({
+        initialState: { count: 0 },
+        runtimeId: 'invalid-runtime-equality',
+        equalityCheck: false as never,
+      }),
+    ).toThrow('runtime equalityCheck must be a function');
+
+    expect(() =>
+      createReflexRuntime({
+        initialState: { count: 0 },
+        runtimeId: 'invalid-runtime-interceptor',
+        interceptors: [{ id: 'invalid' }],
+      }),
+    ).toThrow('runtime interceptors must each have a string id and a before or after function');
+
+    expect(() =>
+      createReflexRuntime({
+        initialState: { count: 0 },
+        runtimeId: 'duplicate-runtime-interceptor',
+        interceptors: [
+          { id: 'duplicate', before: (context) => context },
+          { id: 'duplicate', after: (context) => context },
+        ],
+      }),
+    ).toThrow("Registration 'duplicate' is already registered");
   });
 
   it('does not allocate development effect lineage state without an observer', async () => {

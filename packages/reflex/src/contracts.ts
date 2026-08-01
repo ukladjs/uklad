@@ -1,3 +1,5 @@
+import type { EqualityCheckFn, Interceptor } from './types';
+
 /**
  * Store-local type contract consumed by an explicit Reflex runtime.
  *
@@ -76,6 +78,17 @@ export interface CreateReflexRuntimeOptions<TState extends Record<string, any>> 
   readonly initialState: TState;
   readonly runtimeId?: string;
   readonly name?: string;
+  /**
+   * Default equality policy for computed subscriptions without an override.
+   * A cached subscription captures this policy when the node is first created.
+   */
+  readonly equalityCheck?: EqualityCheckFn;
+  /**
+   * Ordered, runtime-wide interceptors. They run before event-specific
+   * interceptors and unwind after them; the runtime snapshots each definition
+   * during construction.
+   */
+  readonly interceptors?: readonly Interceptor<TState>[];
 }
 
 type NormalizeContractMap<TMap, TFallback> = TMap extends object

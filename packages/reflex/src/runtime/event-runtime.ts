@@ -4,7 +4,11 @@ import { isEventVector } from '../core/validation';
 import { RUNTIME_OWNED_COEFFECT_IDS } from '../contracts';
 import { isRuntimeDisposed, type RuntimeCore } from './core';
 import { freezeDispatchedEvent } from '../core/event-freeze';
-import { createRegistrationHandle, RegistrationStore } from './registrations';
+import {
+  createRegistrationHandle,
+  RegistrationCollisionError,
+  RegistrationStore,
+} from './registrations';
 import { assertRuntimeUsable } from './validation';
 import { acceptRuntimeEvent, notifyDroppedRuntimeEvents, notifyTrackedRuntimeEvent } from './probe';
 import { EventQueue, getEventScheduler } from '../events/router';
@@ -142,6 +146,38 @@ export class EventRuntime {
 
   registerInterceptor(interceptor: Interceptor): RegistrationHandle {
     return this.globalInterceptors.register(interceptor.id, interceptor);
+  }
+
+  /**
+   * Install the immutable global interceptor policy selected by runtime
+   * composition. Validate the whole list before mutating the registry so an
+   * invalid option cannot leave a partially configured runtime behind.
+   */
+  installGlobalInterceptors(interceptors: readonly Interceptor[] | undefined): void {
+    if (interceptors === undefined) return;
+    if (!Array.isArray(interceptors)) {
+      throw new TypeError('[reflex] runtime interceptors must be an array.');
+    }
+
+    const ids = new Set<string>();
+    const owned: Interceptor[] = [];
+    for (const candidate of interceptors) {
+      // Copy before validating so the runtime never retains a caller-owned
+      // interceptor object whose hooks or id could change after construction.
+      const interceptor = Object.freeze({ ...candidate }) as Interceptor;
+      if (!isInterceptor(interceptor)) {
+        throw new TypeError(
+          '[reflex] runtime interceptors must each have a string id and a before or after function.',
+        );
+      }
+      if (ids.has(interceptor.id) || this.globalInterceptors.has(interceptor.id)) {
+        throw new RegistrationCollisionError(interceptor.id);
+      }
+      ids.add(interceptor.id);
+      owned.push(interceptor);
+    }
+
+    for (const interceptor of owned) this.registerInterceptor(interceptor);
   }
 
   get hasGlobalInterceptors(): boolean {

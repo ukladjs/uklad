@@ -88,6 +88,8 @@ pnpm dev:todomvc
 ## Documentation
 
 - [`docs/README.md`](docs/README.md) — documentation index and structure.
+- [`docs/architecture/application-authoring-rules.md`](docs/architecture/application-authoring-rules.md)
+  — concise required rules for agent- and human-authored Reflex applications.
 - [`docs/roadmaps/reflex.md`](docs/roadmaps/reflex.md) — current execution track
   and release-readiness gates.
 - [`docs/rfcs/agent-operations.md`](docs/rfcs/agent-operations.md) — canonical

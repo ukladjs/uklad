@@ -7,6 +7,9 @@ back here for the deeper material.
 
 ## Architecture
 
+- [Application authoring rules](architecture/application-authoring-rules.md) —
+  concise required rules for application state, events, subscriptions, and
+  platform boundaries.
 - [Foundation ADR](architecture/foundation-adr.md) — provisional architectural
   direction for the redesign.
 - [Canonical application structure](architecture/canonical-app-structure.md) —

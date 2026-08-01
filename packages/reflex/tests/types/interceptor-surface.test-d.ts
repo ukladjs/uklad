@@ -15,6 +15,27 @@ import type { Interceptor, InterceptorContext } from '../../src/types';
 
 const runtime = createReflexRuntime({ initialState: { count: 0 } });
 
+const configuredRuntime = createReflexRuntime({
+  initialState: { count: 0 },
+  equalityCheck: () => false,
+  interceptors: [
+    {
+      id: 'audit',
+      before: (context) => {
+        context.effects.push(['audit/write', null]);
+        return context;
+      },
+    },
+  ],
+});
+configuredRuntime.dispose();
+
+createReflexRuntime({
+  initialState: { count: 0 },
+  // @ts-expect-error equalityCheck must be a function
+  equalityCheck: false,
+});
+
 // ---- application registrar ------------------------------------------
 
 runtime.registerModule((registrar) => {

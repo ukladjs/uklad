@@ -100,11 +100,21 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   private readonly renderSubscriptions = new Set<ReflexDisposer>();
   private clientRuntime: ReflexRuntimeClient<TContracts> | undefined;
 
-  constructor(core: RuntimeCore, initialState: ContractState<TContracts>) {
+  constructor(core: RuntimeCore, options: CreateReflexRuntimeOptions<ContractState<TContracts>>) {
+    const { initialState, equalityCheck, interceptors } = options;
     assertStateRecord(initialState, 'initialState');
     this.#core = core;
+    if (equalityCheck !== undefined) {
+      if (typeof equalityCheck !== 'function') {
+        throw new TypeError('[reflex] runtime equalityCheck must be a function.');
+      }
+      core.subscriptions.equalityCheck = equalityCheck;
+    }
     core.registry.error.registerSystem('event-handler', defaultErrorHandler);
     core.events.initialize();
+    core.events.installGlobalInterceptors(
+      interceptors as unknown as readonly Interceptor[] | undefined,
+    );
     core.state.initialize<ContractState<TContracts>>(initialState);
   }
 
@@ -540,7 +550,7 @@ export function createReflexRuntime<TState extends Record<string, any>>(
 ): ReflexRuntime<StateInferredContracts<TState>>;
 export function createReflexRuntime(options: CreateReflexRuntimeOptions<any>): ReflexRuntime<any> {
   const core = createRuntimeCore(options);
-  const implementation = new ReflexRuntimeImplementation(core, options.initialState);
+  const implementation = new ReflexRuntimeImplementation(core, options);
   const runtime = implementation.createPublicRuntime();
   const client = implementation.getClientForInternalUse();
   core.effectRuntime = client;

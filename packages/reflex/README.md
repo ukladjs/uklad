@@ -108,7 +108,11 @@ runtime.registerModule((scope) => {
 
 function Counter() {
   const count = useSubscription([appIds.subscriptions.counterValue]);
-  return <button onClick={() => runtime.dispatch([appIds.events.counterIncrement])}>Count: {count}</button>;
+  return (
+    <button onClick={() => runtime.dispatch([appIds.events.counterIncrement])}>
+      Count: {count}
+    </button>
+  );
 }
 
 function Root() {

@@ -1,9 +1,9 @@
 # Performance benchmarks
 
-The Reflex package includes a small Node benchmark harness for the two runtime
-hot paths most likely to regress: immutable state transitions and subscription
-graph work. It runs against the built package entrypoint, so benchmark results
-include bundler output rather than the test-only TypeScript loader.
+The Reflex package includes a small Node benchmark harness for core runtime hot
+paths: immutable state transitions, subscription graph work, event dispatch,
+and retained heap. It runs against the built package entrypoint, so benchmark
+results include bundler output rather than the test-only TypeScript loader.
 
 ## Run
 
@@ -38,7 +38,7 @@ so build logs do not get mixed into the JSON file:
 
 ```sh
 pnpm --filter @flexsurfer/reflex build
-REFLEX_BENCH_JSON=1 node packages/reflex/benchmarks/run.mjs > benchmark.json
+REFLEX_BENCH_JSON=1 node --expose-gc packages/reflex/benchmarks/run.mjs > benchmark.json
 ```
 
 ## Workloads
@@ -64,6 +64,13 @@ The equality-cutoff workload includes a
 after warmup; a non-zero value means the default equality cutoff is no longer
 preventing downstream recomputation.
 
+Reflex uses a runtime-local Immer instance with `autoFreeze: false`. State
+workloads therefore measure the copy-on-write transition and subscription work,
+not a recursive freeze of the finalized state graph. This is intentional in
+both development and production: ownership mistakes are caught through types,
+agent instructions, boundary tests, and ingress validation rather than a
+per-commit graph walk.
+
 ## Interpreting changes
 
 - State regressions usually point to Immer recipe size, structural sharing, or
@@ -75,10 +82,10 @@ preventing downstream recomputation.
 - Mount-churn results describe lifecycle cost, not steady-state publication
   cost; compare them separately.
 - Event dispatch results measure ownership and enqueueing. They do not include
-  event handler execution because queue draining happens after timing. Outside
-  development the runtime neither copies nor freezes the payload, so these
-  should stay flat as payload size grows; development additionally deep-freezes
-  the event, which is proportional to payload size.
+  event handler execution because queue draining happens after timing. The
+  runtime borrows event payloads without copying or deep-freezing them in both
+  development and production, so dispatch cost should remain close to flat as
+  payload size grows.
 - Memory results are retained heap deltas after an explicit GC. Run with
   `--expose-gc`; without it, GC availability is reported as false and values
   are much noisier.

@@ -44,11 +44,18 @@ function packLibrary(destination, env) {
   if (!filename) {
     throw new Error('npm pack did not report a tarball filename.');
   }
-  return path.join(destination, filename);
+  const tarball = path.join(destination, filename);
+  if (!fs.existsSync(tarball)) {
+    throw new Error(`npm pack reported ${filename} but wrote no tarball.`);
+  }
+  return tarball;
 }
 
 function main() {
-  const requested = process.argv.slice(2).filter((version) => version.trim() !== '');
+  // pnpm forwards the `--` separator itself into argv, so drop it alongside blanks.
+  const requested = process.argv
+    .slice(2)
+    .filter((version) => version.trim() !== '' && version.trim() !== '--');
   const typescriptVersions = requested.length > 0 ? requested : DEFAULT_TYPESCRIPT_VERSIONS;
 
   if (!fs.existsSync(path.join(repoRoot, 'dist', 'index.mjs'))) {
@@ -59,6 +66,9 @@ function main() {
   const env = {
     ...process.env,
     npm_config_cache: path.join(workDir, 'npm-cache'),
+    // `npm publish --dry-run` exports npm_config_dry_run=true to lifecycle scripts, and
+    // prepublishOnly runs this check: without the override npm pack writes no tarball.
+    npm_config_dry_run: 'false',
   };
   try {
     const tarball = packLibrary(workDir, env);

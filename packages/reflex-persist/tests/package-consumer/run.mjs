@@ -25,7 +25,11 @@ function pack(packageRoot, destination) {
   );
   const filename = JSON.parse(output)[0]?.filename;
   if (!filename) throw new Error(`npm pack did not report a tarball for ${packageRoot}.`);
-  return path.join(destination, filename);
+  const tarball = path.join(destination, filename);
+  if (!fs.existsSync(tarball)) {
+    throw new Error(`npm pack reported ${filename} for ${packageRoot} but wrote no tarball.`);
+  }
+  return tarball;
 }
 
 function compiler(name) {
@@ -49,6 +53,9 @@ function main() {
   try {
     process.env.npm_config_cache = path.join(workDir, '.npm-cache');
     process.env.npm_config_update_notifier = 'false';
+    // `npm publish --dry-run` exports npm_config_dry_run=true to lifecycle scripts, and
+    // prepublishOnly runs this check: without the override npm pack writes no tarball.
+    process.env.npm_config_dry_run = 'false';
     const reflexTarball = pack(reflexRoot, workDir);
     const persistTarball = pack(persistRoot, workDir);
     const consumerDir = path.join(workDir, 'consumer');

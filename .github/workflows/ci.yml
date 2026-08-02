@@ -133,7 +133,7 @@ jobs:
 
       - name: Verify packed tarball (runtime smoke + TypeScript ${{ matrix.typescript }})
         run: >-
-          pnpm --filter @flexsurfer/reflex run test:types:legacy --
+          pnpm --filter @flexsurfer/reflex run test:types:legacy
           ${{ matrix.typescript }}
 
   test-matrix:
@@ -214,7 +214,13 @@ jobs:
           cd test-consumption/esm-consumer
           npm init -y
           npm install ../../reflex.tgz react@19.2.8
-          echo 'import { initState, dispatch } from "@flexsurfer/reflex"; console.log("ESM import works");' > test.mjs
+          cat > test.mjs <<'EOF'
+          import assert from 'node:assert/strict';
+          import { createReflexRuntime, useSubscription } from '@flexsurfer/reflex';
+          assert.equal(typeof createReflexRuntime, 'function');
+          assert.equal(typeof useSubscription, 'function');
+          console.log('ESM import works');
+          EOF
           node test.mjs
 
           # Test CommonJS consumption
@@ -223,7 +229,13 @@ jobs:
           cd cjs-consumer
           npm init -y
           npm install ../../reflex.tgz react@19.2.8
-          echo 'const { initState, dispatch } = require("@flexsurfer/reflex"); console.log("CommonJS require works");' > test.js
+          cat > test.js <<'EOF'
+          const assert = require('node:assert/strict');
+          const { createReflexRuntime, useSubscription } = require('@flexsurfer/reflex');
+          assert.equal(typeof createReflexRuntime, 'function');
+          assert.equal(typeof useSubscription, 'function');
+          console.log('CommonJS require works');
+          EOF
           node test.js
 
   devtools-workspaces:
@@ -382,8 +394,13 @@ jobs:
 
           # Create entry file that imports from the library
           cat > index.js << 'EOF'
-          import { initState } from "@flexsurfer/reflex";
-          console.log("Successfully imported initState:", typeof initState);
+          import { createReflexRuntime, useSubscription } from "@flexsurfer/reflex";
+          if (typeof createReflexRuntime !== "function") {
+            throw new Error("createReflexRuntime is not a function");
+          }
+          if (typeof useSubscription !== "function") {
+            throw new Error("useSubscription is not a function");
+          }
           console.log("Library bundled successfully!");
           EOF
 

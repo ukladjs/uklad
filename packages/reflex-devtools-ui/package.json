@@ -17,7 +17,7 @@
     "immer": "^11.1.11",
     "react-obj-view": "^1.1.10",
     "react-force-graph-2d": "^1.29.1",
-    "react": "^19.2.7",
+    "react": "^19.2.8",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {

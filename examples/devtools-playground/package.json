@@ -17,7 +17,7 @@
     "@flexsurfer/reflex": "workspace:*",
     "@flexsurfer/reflex-devtools": "workspace:*",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

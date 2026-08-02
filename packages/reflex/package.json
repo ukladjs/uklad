@@ -138,7 +138,7 @@
     "prettier": "3.9.5",
     "publint": "0.3.21",
     "react": "19.2.7",
-    "react-dom": "19.2.7",
+    "react-dom": "19.2.8",
     "ts-jest": "29.4.11",
     "tsdown": "0.22.8",
     "typescript": "npm:@typescript/typescript6@6.0.2",

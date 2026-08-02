@@ -65,15 +65,15 @@
     "@flexsurfer/reflex": "workspace:*",
     "@types/jest": "30.0.0",
     "@typescript/native": "npm:typescript@7.0.2",
-    "eslint": "10.7.0",
-    "globals": "17.7.0",
+    "eslint": "10.8.0",
+    "globals": "17.8.0",
     "jest": "30.4.2",
-    "prettier": "3.9.5",
-    "publint": "0.3.21",
-    "ts-jest": "29.4.11",
-    "tsdown": "0.22.8",
+    "prettier": "3.9.6",
+    "publint": "0.3.22",
+    "ts-jest": "29.4.12",
+    "tsdown": "0.22.14",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "typescript-eslint": "8.64.0"
+    "typescript-eslint": "8.65.0"
   },
   "peerDependencies": {
     "@flexsurfer/reflex": "^0.1.27"

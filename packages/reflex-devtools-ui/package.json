@@ -14,22 +14,22 @@
   },
   "dependencies": {
     "@flexsurfer/reflex": "workspace:*",
-    "immer": "^11.1.11",
-    "react-obj-view": "^1.1.10",
+    "immer": "^11.1.15",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-force-graph-2d": "^1.29.1",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-obj-view": "^1.1.10"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@vitejs/plugin-react": "^6.0.3",
-    "daisyui": "^5.6.18",
+    "@vitejs/plugin-react": "^6.0.5",
+    "daisyui": "^5.7.9",
     "tailwindcss": "^4.3.3",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "vite": "^8.1.5"
+    "vite": "^8.2.0"
   }
 }

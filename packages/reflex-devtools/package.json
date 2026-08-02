@@ -55,14 +55,14 @@
   },
   "dependencies": {
     "express": "^5.2.1",
-    "ws": "^8.21.1",
-    "immer": "^11.1.11"
+    "immer": "^11.1.15",
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "@flexsurfer/reflex": "workspace:*",
     "@types/express": "^5.0.6",
-    "@types/ws": "^8.18.1",
     "@types/node": "^24.13.3",
+    "@types/ws": "^8.18.1",
     "@typescript/native": "npm:typescript@7.0.2",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },

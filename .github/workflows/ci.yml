@@ -142,7 +142,7 @@ jobs:
       fail-fast: false
       matrix:
         node: ['22', '24', '26']
-        react: ['18.3.1', '19.2.7']
+        react: ['18.3.1', '19.2.8']
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -169,7 +169,7 @@ jobs:
               react@18.3.1 react-dom@18.3.1 @types/react@18.3.31 @types/react-dom@18.3.7
           else
             pnpm --filter @flexsurfer/reflex add --save-dev --save-exact --lockfile=false \
-              react@19.2.7 react-dom@19.2.7 @types/react@19.2.17 @types/react-dom@19.2.3
+              react@19.2.8 react-dom@19.2.8 @types/react@19.2.18 @types/react-dom@19.2.4
           fi
 
       - name: Build library
@@ -213,7 +213,7 @@ jobs:
           mkdir -p test-consumption/esm-consumer
           cd test-consumption/esm-consumer
           npm init -y
-          npm install ../../reflex.tgz react@19.2.7
+          npm install ../../reflex.tgz react@19.2.8
           echo 'import { initState, dispatch } from "@flexsurfer/reflex"; console.log("ESM import works");' > test.mjs
           node test.mjs
 
@@ -222,7 +222,7 @@ jobs:
           mkdir -p cjs-consumer
           cd cjs-consumer
           npm init -y
-          npm install ../../reflex.tgz react@19.2.7
+          npm install ../../reflex.tgz react@19.2.8
           echo 'const { initState, dispatch } = require("@flexsurfer/reflex"); console.log("CommonJS require works");' > test.js
           node test.js
 

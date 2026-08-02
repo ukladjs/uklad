@@ -383,8 +383,11 @@ jobs:
           mkdir -p bundler-test
           cd bundler-test
 
-          # Initialize consumer project
+          # Initialize consumer project. Pin the module type instead of relying on the
+          # npm default, which differs across npm versions: bundler configs and the
+          # bundled output below are CommonJS, while the entry file is .mjs.
           npm init -y
+          npm pkg set type=commonjs
 
           # Install peer dependencies
           npm install react@18 react-dom@18
@@ -393,7 +396,7 @@ jobs:
           npm install ../reflex.tgz
 
           # Create entry file that imports from the library
-          cat > index.js << 'EOF'
+          cat > index.mjs << 'EOF'
           import { createReflexRuntime, useSubscription } from "@flexsurfer/reflex";
           if (typeof createReflexRuntime !== "function") {
             throw new Error("createReflexRuntime is not a function");
@@ -407,11 +410,11 @@ jobs:
           # Configure bundler-specific setup and build
           if [ "${{ matrix.bundler }}" = "vite" ]; then
             npm install --save-dev vite
-            cat > vite.config.js << 'EOF'
+            cat > vite.config.mjs << 'EOF'
           export default {
             build: {
               lib: {
-                entry: 'index.js',
+                entry: 'index.mjs',
                 formats: ['es'],
                 fileName: 'bundle'
               }
@@ -426,7 +429,7 @@ jobs:
             cat > webpack.config.js << 'EOF'
           const path = require('path');
           module.exports = {
-            entry: './index.js',
+            entry: './index.mjs',
             output: {
               filename: 'bundle.js',
               path: path.resolve(__dirname, 'dist'),
@@ -434,7 +437,7 @@ jobs:
             },
             mode: 'production',
             resolve: {
-              extensions: ['.js']
+              extensions: ['.mjs', '.js']
             }
           };
           EOF
@@ -445,12 +448,12 @@ jobs:
 
           elif [ "${{ matrix.bundler }}" = "rollup" ]; then
             npm install --save-dev rollup @rollup/plugin-node-resolve @rollup/plugin-commonjs
-            cat > rollup.config.js << 'EOF'
+            cat > rollup.config.mjs << 'EOF'
           import { nodeResolve } from '@rollup/plugin-node-resolve';
           import commonjs from '@rollup/plugin-commonjs';
 
           export default {
-            input: 'index.js',
+            input: 'index.mjs',
             output: {
               file: 'dist/bundle.js',
               format: 'cjs'
@@ -458,14 +461,14 @@ jobs:
             plugins: [nodeResolve(), commonjs()]
           };
           EOF
-            npx rollup -c
+            npx rollup -c rollup.config.mjs
             test -f dist/bundle.js
             # Test execution of bundled output
             node dist/bundle.js
 
           elif [ "${{ matrix.bundler }}" = "esbuild" ]; then
             npm install --save-dev esbuild
-            npx esbuild index.js --bundle --outfile=dist/bundle.js --format=cjs --platform=node
+            npx esbuild index.mjs --bundle --outfile=dist/bundle.js --format=cjs --platform=node
             test -f dist/bundle.js
             # Test execution of bundled output
             node dist/bundle.js

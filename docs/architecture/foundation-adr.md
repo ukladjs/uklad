@@ -515,6 +515,7 @@ The provisional status must not continue indefinitely by default.
 
 ## Related documents
 
+- [Invariant enforcement matrix](invariant-enforcement-matrix.md)
 - [Application authoring rules](application-authoring-rules.md)
 - [Canonical application structure](canonical-app-structure.md)
 - [Reflex architecture](reflex-runtime.md)

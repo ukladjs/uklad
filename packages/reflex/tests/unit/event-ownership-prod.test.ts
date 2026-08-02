@@ -1,9 +1,8 @@
 /**
- * Production pays nothing for the immutable-event contract.
+ * Production uses the same borrowed-event path as development.
  *
- * The development freeze is a diagnostic, not a semantic: outside development
- * the runtime neither copies nor freezes a dispatched payload, so a caller's
- * objects are never altered by having been dispatched.
+ * The runtime neither copies nor freezes a dispatched payload, so application
+ * code must honor the immutable-event ownership contract itself.
  */
 jest.mock('../../src/core/environment', () => ({ IS_DEV: false }));
 

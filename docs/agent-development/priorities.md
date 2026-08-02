@@ -144,10 +144,12 @@ This is the recommended cross-audience implementation order.
 Before adding new agent tools, make the existing event/state evidence complete
 and trustworthy.
 
-- Take ownership of initial and restored state. Do not retain caller-owned
-  mutable references; expose read-only snapshots and deep-freeze owned state in
-  development.
-- Copy or freeze accepted event inputs so callers cannot modify queued work.
+- Establish ownership of initial and restored state. Application code must not
+  retain or mutate values after handoff; use readonly types, agent skills, and
+  targeted tests rather than deep-freezing ordinary state graphs at runtime.
+- Keep accepted event inputs on a no-copy, no-deep-freeze path. Validate,
+  clone, or freeze data at an external or otherwise untrusted ingress boundary
+  before mapping it to an application event.
 - Replace collision-prone subscription query serialization with an enforced,
   canonical simple parameter contract: no parameters, or a small bounded tuple
   of `string`, finite `number`, `boolean`, and `null` values. Reject objects,

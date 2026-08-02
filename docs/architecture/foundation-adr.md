@@ -51,6 +51,8 @@ large applications:
 - One immutable application state per runtime.
 - Serialized, deterministic state transitions.
 - Pure, synchronous state-update logic.
+- Synchronous transition discipline: coeffects, interceptors, and handlers
+  finish before effects may run or schedule later work.
 - External effects represented as data.
 - Pure derived queries with equality cutoffs.
 - State commit before external effect execution.
@@ -62,20 +64,36 @@ These are behavioral invariants. They do not require a particular event syntax,
 queue implementation, interceptor model, subscription graph, or rendering
 scheduler.
 
-### 2. AI-first authoring and explicit optimization contracts
+### 2. AI-first authoring, integrity boundaries, and a fast production core
 
 AI-first is an architectural constraint, not only a documentation preference.
-The application catalog, complete `AppContracts`, registrar calls, types,
+Reflex targets applications authored and maintained through agent skills. The
+application catalog, complete `AppContracts`, registrar calls, types,
 templates, tests, and agent instructions together form the authoring contract
 that lets Reflex avoid unnecessary defensive work while keeping violations
 visible.
 
+Production event processing and subscription recomputation are trusted hot
+paths. They must remain direct, allocation-conscious, and predictable. Do not
+add broad defensive copies, deep walks or freezes, repeated schema validation,
+or generalized authoring-policy instrumentation to those paths solely to catch
+mistakes that controlled authoring can prevent.
+
+An always-on runtime check is appropriate only when it is both cheap and needed
+to preserve executor integrity, such as runtime isolation, serialized commit,
+or a public lifecycle boundary. A check that primarily explains an application
+authoring mistake belongs in agent skills, types, templates, tests, linting, or
+development diagnostics instead. Validation, cloning, freezing, and schema
+checks belong at external or otherwise untrusted ingress, before data enters
+the trusted runtime core.
+
 - **Events:** Event vectors and payload values are immutable after `dispatch()`
-  is called. The preferred agent-authored path does not deep-clone every event;
-  development builds should deep-freeze or otherwise guard accepted payloads so
-  mutation is reported at its source. Structured cloning remains appropriate
-  for external, plugin, remote, or otherwise untrusted ingress, and may remain
-  as a compatibility mode during the 0.x transition.
+  is called. The preferred agent-authored path neither copies nor deep-freezes
+  each event graph, including in ordinary development execution. Agent skills,
+  types, templates, and targeted tests establish that ownership contract.
+  Structured cloning remains appropriate for external, plugin, remote, or
+  otherwise untrusted ingress, and may remain as a compatibility mode during
+  the 0.x transition.
 - **Subscriptions:** Every non-root subscription should be evaluated for
   result size, recomputation frequency, structural sharing, and downstream
   fan-out. Each application selects one default equality policy through the
@@ -85,13 +103,19 @@ visible.
   domain-specific comparators remain deliberate policy choices rather than
   hidden registration requirements.
 - **Optimization rule:** Prefer a strict, machine-readable contract plus a
-  development guard over an always-on defensive copy when the trust boundary is
-  controlled by agent-authored code. Preserve an explicit safe path for data
-  crossing a trust boundary.
+  targeted test or opt-in diagnostic over an always-on defensive copy when the
+  trust boundary is controlled by agent-authored code. Preserve an explicit
+  safe path for data crossing a trust boundary, and require a measured,
+  integrity-specific reason for any new production hot-path check.
 
 This policy does not assume that agents are infallible. Contract violations must
-still fail in development and be covered by tests; runtime validation remains
-mandatory at external-ingress boundaries.
+still be made visible through types, targeted tests, and development tooling;
+runtime validation remains mandatory at external-ingress boundaries. The
+synchronous event-turn rule remains an authoring invariant: effects are the
+explicit asynchronous boundary, and they may prepare a final result event and
+dispatch it after the turn has committed. A cheap diagnostic for a direct
+handler dispatch is acceptable, but normal development execution must not
+deep-walk every payload or monitor every event and subscription callback.
 
 ### 3. The current application model is canonical; executor mechanics remain provisional
 
@@ -331,9 +355,16 @@ transitional architecture from becoming a permanent hidden dependency:
 10. Agent instructions, templates, and examples state the immutable-event
     contract and the expected equality-policy decision for each non-root
     subscription.
-11. No-copy event paths require a development mutation guard and an explicit
-    trust boundary; external ingress must validate, freeze, or clone payloads.
-12. Before 1.0, the project must explicitly decide whether to retain, replace,
+11. No-copy event paths require an explicit ownership contract and targeted
+    test coverage; external ingress must validate, freeze, or clone payloads.
+12. Turn-boundary discipline is established through agent skills, contracts,
+    types, templates, tests, and development diagnostics. An always-on guard
+    is added only when it protects executor integrity at negligible hot-path
+    cost.
+13. New event-path or subscription-path work documents why each always-on
+    check is necessary and verifies that it does not materially regress the
+    relevant benchmark.
+14. Before 1.0, the project must explicitly decide whether to retain, replace,
     or isolate the current event executor.
 
 ## Consequences
@@ -437,11 +468,16 @@ The application authoring model is complete only when:
 - operations and DevTools can consume outcomes without reconstructing root
   identity from traces;
 - agent-facing instructions, templates, and readonly types describe the
-  immutable-event contract and its development-time enforcement;
+  immutable-event contract and how targeted tests verify it;
+- agent skills, contracts, types, templates, tests, and development diagnostics
+  establish synchronous turn discipline without adding generalized production
+  instrumentation to every transition callback;
 - external event ingress has an explicit validate, freeze, or clone ownership
   policy;
 - every non-root subscription registration declares an equality policy, and
   benchmark guidance exists for large, frequently recomputed outputs;
+- changes that add work to event or subscription hot paths document their
+  integrity rationale and show no material benchmark regression;
 - existing event behavior remains covered by conformance tests; and
 - application modules contain no dependency on queue FSM states, interceptor
   internals, or React timing.

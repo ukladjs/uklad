@@ -1,7 +1,13 @@
-import { produce, produceWithPatches, type Draft, type Patch } from 'immer';
+import { type Draft, type Patch } from 'immer';
 
 import { IS_DEV } from '../core/environment';
-import { containsDraft, ensurePatchesEnabled, snapshotDrafts } from '../core/immer';
+import {
+  containsDraft,
+  ensurePatchesEnabled,
+  produce,
+  produceWithPatches,
+  snapshotDrafts,
+} from '../core/immer';
 import { consoleLog } from '../core/logging';
 import { type RuntimeCore } from '../runtime/core';
 import { execute } from './interceptors-executor';

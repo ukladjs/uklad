@@ -13,7 +13,12 @@ templates, and the agent toolkit must follow.
 
 These are application authoring rules, not conventions for implementing the
 `@flexsurfer/reflex` package itself. Core contributors should also follow
-[code conventions](../engineering/code-conventions.md).
+[code conventions](../engineering/code-conventions.md). The production-runtime
+protection policy is decided by the
+[Foundation ADR](foundation-adr.md#2-ai-first-authoring-integrity-boundaries-and-a-fast-production-core):
+these rules are enforced first through agent skills, contracts, types,
+templates, tests, and development diagnostics, rather than generalized work on
+every production event or subscription path.
 
 ## Foundation: runtime-owned application data
 
@@ -40,6 +45,30 @@ Keep mutable values outside the runtime to a minimum.
   validates and normalizes that data, creates the final result event, dispatches
   it once, and does not mutate or retain the payload afterward. A coeffect
   supplies only a synchronous, already-prepared input to the current event.
+
+### Synchronous turn contract
+
+One event turn is the synchronous coeffect, interceptor, and event-handler
+transition that begins after an event is accepted and ends before its effects
+run. Effects are the sole supported path from that turn to later work.
+
+- Do not call `dispatch`, `dispatchSync`, `debounceAndDispatch`, or
+  `throttleAndDispatch` from a coeffect, interceptor, or event handler. Return
+  a declarative effect instead. The development build may issue a cheap warning
+  for a direct handler `dispatch`; agents and tests enforce the rest. The
+  runtime still rejects `dispatchSync` reentrancy because it would violate
+  serialized state transitions.
+- Coeffects, interceptor hooks, event handlers, subscription dependency
+  functions, and subscription computations must return synchronously. A
+  returned promise or thenable is an authoring error; an effect must perform
+  async work and dispatch a fresh result event when it finishes.
+- The runtime does not recursively copy or freeze values when it takes
+  ownership, even in development. Test mutable ingress at the adapter boundary
+  and keep the ownership contract in application code.
+
+The runtime cannot prevent a handler from manually scheduling arbitrary host
+work such as `setTimeout`. Application code must not do that; model it as an
+effect so the later dispatch crosses the same explicit boundary.
 
 ## Required rules
 
@@ -126,8 +155,9 @@ storage property. They deliberately remain separate names.
 - State changes only through an event handler's Immer `draftState`. Build or
   validate any mutable external value before it enters state.
 
-Development immutability checks are diagnostic guards, not a substitute for
-this ownership rule. Production code must obey it without relying on defensive
+The runtime does not deep-freeze state at initialization, restoration, or
+commit, or cached computed results. Tests and boundary adapters must expose
+ownership mistakes; production code must obey this rule without defensive
 copying or freezing.
 
 ### 5. Event inputs become runtime-owned at dispatch
@@ -139,16 +169,21 @@ copying or freezing.
   dispatching it.
 - Event handlers treat their parameters and coeffect values as read-only.
 
-Development builds freeze dispatched events so an ownership violation fails at
-the mutation site. Production does not pay for a defensive copy, so the rule
-still applies there.
+Neither development nor production deep-freezes accepted events through
+dispatch, delayed, throttled, or inspector routes. The no-copy fast path relies
+on this ownership rule; test external adapters that need to accept mutable
+input before they dispatch.
 
 ### 6. Keep event transitions synchronous and declarative
 
 - An event handler performs a synchronous state transition through
   `draftState` and returns declarative effect tuples for follow-up work.
-- Do not call `dispatch` or `dispatchSync` from an event handler. Return the
-  built-in `dispatch` effect when a later event is required.
+- Do not call `dispatch`, `dispatchSync`, `debounceAndDispatch`, or
+  `throttleAndDispatch` from a coeffect, interceptor, or event handler. Return
+  the built-in `dispatch` or `dispatch-later` effect, or a custom effect, when
+  later work is required.
+- An event handler must not return a promise or thenable. This is an authoring
+  error; the runtime does not inspect every handler return value to diagnose it.
 - Do not read browser, native, storage, clock, random, network, or other
   environmental APIs directly in an event or subscription. Model a write as
   an effect and a synchronous environmental input as a coeffect.
@@ -160,6 +195,9 @@ still applies there.
 - A computed subscription declares every input it reads through its dependency
   function. Do not read application state, a runtime, or another subscription
   implicitly inside its compute function.
+- Dependency and compute functions return synchronously. A promise or thenable
+  must never become a cached reactive value. The runtime does not probe every
+  return value for thenability; types, skills, and tests enforce this rule.
 - Keep dependencies static for a serialized subscription query. A query's
   parameters may choose dependency queries, but a compute result must not
   secretly change the graph shape.
@@ -237,7 +275,7 @@ Coeffects are synchronous environmental reads. An event explicitly requests a
 coeffect and binds its value to a local name. A missing or throwing coeffect
 aborts the event before it can commit state. Coeffect handlers receive a
 frozen, state-free read view and must not mutate state or perform asynchronous
-work; an asynchronous read is an effect followed by a result event.
+work. An asynchronous read is an effect followed by a result event.
 
 ## Change checklist
 

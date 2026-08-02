@@ -3,7 +3,6 @@ import { consoleLog } from '../core/logging';
 import { isEventVector } from '../core/validation';
 import { RUNTIME_OWNED_COEFFECT_IDS } from '../contracts';
 import { isRuntimeDisposed, type RuntimeCore } from './core';
-import { freezeDispatchedEvent } from '../core/event-freeze';
 import {
   createRegistrationHandle,
   RegistrationCollisionError,
@@ -225,16 +224,11 @@ export class EventRuntime {
   /**
    * Accept an event from application code or from a dispatch effect.
    *
-   * The event becomes runtime-owned here. Development freezes it so a caller
-   * that keeps mutating what it dispatched fails at the mutation site rather
-   * than silently changing what the handler later receives.
+   * The runtime borrows this immutable event without copying or freezing it.
+   * Application code transfers ownership and must not mutate it afterward.
    */
   dispatchOwned(event: EventVector): void {
-    if (!isEventVector(event)) {
-      this.dispatch(event);
-      return;
-    }
-    this.dispatch(freezeDispatchedEvent(event));
+    this.dispatch(event);
   }
 
   dispatchSync(event: EventVector): void {
@@ -297,19 +291,17 @@ export class EventRuntime {
   }
 
   debounce(event: EventVector, durationMs: number): void {
-    const acceptedEvent = freezeDispatchedEvent(event);
-    const eventId = acceptedEvent[0];
+    const eventId = event[0];
     this.clearRateLimit(eventId);
     const timeout = setTimeout(() => {
       this.debounceTimers.delete(eventId);
-      this.dispatch(acceptedEvent);
+      this.dispatch(event);
     }, durationMs);
     this.debounceTimers.set(eventId, timeout);
   }
 
   throttle(event: EventVector, durationMs: number): void {
-    const acceptedEvent = freezeDispatchedEvent(event);
-    const eventId = acceptedEvent[0];
+    const eventId = event[0];
     if (this.throttledEventIds.has(eventId)) return;
     this.throttledEventIds.add(eventId);
     const timeout = setTimeout(() => {
@@ -317,7 +309,7 @@ export class EventRuntime {
       this.throttleTimers.delete(timeout);
     }, durationMs);
     this.throttleTimers.add(timeout);
-    this.dispatch(acceptedEvent);
+    this.dispatch(event);
   }
 
   private buildEventInterceptors<T>(

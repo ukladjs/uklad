@@ -1,6 +1,7 @@
 import isEqual from 'fast-deep-equal';
 import isEqualEs6 from 'fast-deep-equal/es6/index.js';
 import {
+  Immer,
   current as immerCurrent,
   enableMapSet as immerEnableMapSet,
   enablePatches as immerEnablePatches,
@@ -8,10 +9,23 @@ import {
   original as immerOriginal,
   type Draft,
 } from 'immer';
+import type { produce as ImmerProduce, produceWithPatches as ImmerProduceWithPatches } from 'immer';
 
 import { replaceDefaultEqualityCheck } from './equality';
 
 let patchesPluginEnabled = false;
+
+/**
+ * Reflex owns state through its event API, not through recursive runtime
+ * freezes. Keep Immer's development and production paths alike: an event
+ * commit must not walk the complete state graph solely to detect a later
+ * authoring mistake.
+ */
+const runtimeImmer = new Immer({ autoFreeze: false });
+
+/** Runtime-scoped producers that retain Immer drafts without auto-freezing results. */
+export const produce: typeof ImmerProduce = runtimeImmer.produce;
+export const produceWithPatches: typeof ImmerProduceWithPatches = runtimeImmer.produceWithPatches;
 
 /** Return a draft's underlying base value, or pass a non-draft through unchanged. */
 export function original<T>(value: T): T {

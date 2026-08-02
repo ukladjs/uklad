@@ -94,7 +94,7 @@ export type EventCoeffects = Readonly<Record<string, any>>;
 /** Runtime-owned inputs that frame every event-handler invocation. */
 export interface EventContextBase<T = DefaultAppState> {
   readonly event: EventVector;
-  draftState: Draft<State<T>>;
+  readonly draftState: Draft<State<T>>;
 }
 
 /**

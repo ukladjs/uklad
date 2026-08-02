@@ -101,7 +101,11 @@ the trusted runtime core.
   particular result. The fallback is `fast-deep-equal`, while `() => false`
   propagates every recomputation by default. `Object.is`, shallow, deep, and
   domain-specific comparators remain deliberate policy choices rather than
-  hidden registration requirements.
+  hidden registration requirements. Subscription query parameters are typed
+  cache-key scalars: `string | number | boolean | null`. Contracts reject
+  objects and other non-scalar values; finite-number validation remains an
+  ingress and authoring concern because TypeScript represents all numbers with
+  `number`.
 - **Optimization rule:** Prefer a strict, machine-readable contract plus a
   targeted test or opt-in diagnostic over an always-on defensive copy when the
   trust boundary is controlled by agent-authored code. Preserve an explicit

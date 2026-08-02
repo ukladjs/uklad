@@ -2,6 +2,7 @@ import type {
   ContractState,
   ContractDispatchVector,
   ContractSubscribeVector,
+  ContractSubscriptionParamsAreValid,
   CreateReflexRuntimeOptions,
   ReflexContracts,
   ReflexDisposer,
@@ -90,6 +91,12 @@ type StateInferredContracts<TState extends Record<string, any>> = ReflexContract
 
 type NonArrayRuntimeOptions<TState extends Record<string, any>> =
   CreateReflexRuntimeOptions<TState> & (TState extends readonly any[] ? never : unknown);
+
+/** Make an invalid subscription-parameter contract fail at typed runtime creation. */
+type SubscriptionParameterContractGuard<TContracts> =
+  ContractSubscriptionParamsAreValid<TContracts> extends true
+    ? unknown
+    : { readonly __reflexSubscriptionParamsMustBeScalars: never };
 
 class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   /** The only owner of this runtime's mutable engine services. */
@@ -544,7 +551,9 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
 export function createReflexRuntime<
   TContracts extends ReflexContracts,
   TState extends ContractState<TContracts> = ContractState<TContracts>,
->(options: NonArrayRuntimeOptions<TState>): ReflexRuntime<TContracts>;
+>(
+  options: NonArrayRuntimeOptions<TState> & SubscriptionParameterContractGuard<TContracts>,
+): ReflexRuntime<TContracts>;
 export function createReflexRuntime<TState extends Record<string, any>>(
   options: NonArrayRuntimeOptions<TState>,
 ): ReflexRuntime<StateInferredContracts<TState>>;
@@ -564,7 +573,7 @@ export function createReflexRuntimeForTests<
   TContracts extends ReflexContracts,
   TState extends ContractState<TContracts> = ContractState<TContracts>,
 >(
-  options: NonArrayRuntimeOptions<TState>,
+  options: NonArrayRuntimeOptions<TState> & SubscriptionParameterContractGuard<TContracts>,
 ): ReflexRuntime<TContracts> & ReflexRuntimeAdmin<TContracts>;
 export function createReflexRuntimeForTests<TState extends Record<string, any>>(
   options: NonArrayRuntimeOptions<TState>,

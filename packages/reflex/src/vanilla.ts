@@ -26,6 +26,7 @@ export type {
   ReflexContracts,
   ReflexDisposer,
   ReflexModule,
+  SubscriptionParam,
   WatchSubscriptionListener,
   WatchSubscriptionOptions,
 } from './contracts';

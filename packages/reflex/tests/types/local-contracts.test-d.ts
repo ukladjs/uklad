@@ -14,7 +14,9 @@ import type {
   ContractSubscriptionVector,
   PermissiveReflexContracts,
   ReflexContracts,
+  SubscriptionParam,
 } from '../../src/contracts';
+import { createReflexRuntime } from '../../src/vanilla';
 
 interface CounterContracts extends ReflexContracts {
   state: { count: number };
@@ -50,6 +52,51 @@ interface ContractRuntime<TContracts extends ReflexContracts> {
     query: ContractSubscriptionVector<TContracts, TId>,
   ): ContractSubscriptionResult<TContracts, TId>;
 }
+
+// ---- scalar subscription parameters ----------------------------------
+// A declared subscription query is a cache key, not a data transport. The
+// public scalar type permits the values JSON cache keys preserve unambiguously;
+// finite-number validation remains an application-boundary concern.
+const stringSubscriptionParam: SubscriptionParam = 'todo-1';
+const numberSubscriptionParam: SubscriptionParam = 3;
+const booleanSubscriptionParam: SubscriptionParam = true;
+const nullSubscriptionParam: SubscriptionParam = null;
+void stringSubscriptionParam;
+void numberSubscriptionParam;
+void booleanSubscriptionParam;
+void nullSubscriptionParam;
+
+// @ts-expect-error Object values are not scalar subscription parameters.
+const objectSubscriptionParam: SubscriptionParam = { id: 'todo-1' };
+// @ts-expect-error `undefined` would collide with a parameterless JSON key.
+const undefinedSubscriptionParam: SubscriptionParam = undefined;
+void objectSubscriptionParam;
+void undefinedSubscriptionParam;
+
+interface ScalarParameterContracts extends ReflexContracts {
+  subscriptions: {
+    filtered: {
+      params: [id: string, limit: number, includeDone: boolean, cursor: null];
+      result: number;
+    };
+  };
+}
+
+interface InvalidScalarParameterContracts extends ReflexContracts {
+  subscriptions: {
+    filtered: { params: [filter: { includeDone: boolean }]; result: number };
+  };
+}
+
+declare const scalarParameterRuntime: ContractRuntime<ScalarParameterContracts>;
+declare const invalidScalarParameterRuntime: ContractRuntime<InvalidScalarParameterContracts>;
+scalarParameterRuntime.getSubscriptionValue(['filtered', 'todo-1', 10, false, null]);
+// @ts-expect-error An invalid contract cannot produce a subscription query vector.
+invalidScalarParameterRuntime.getSubscriptionValue(['filtered', { includeDone: true }]);
+// @ts-expect-error Typed runtime construction rejects non-scalar contract parameters.
+createReflexRuntime<InvalidScalarParameterContracts>({ initialState: {} });
+void scalarParameterRuntime;
+void invalidScalarParameterRuntime;
 
 declare const counter: ContractRuntime<CounterContracts>;
 declare const session: ContractRuntime<SessionContracts>;

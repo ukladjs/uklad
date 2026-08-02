@@ -16,6 +16,7 @@ import type {
   EventRegistrationOptions,
   ReflexContracts,
   SubscriptionDiagnostic,
+  SubscriptionParam,
 } from '@flexsurfer/reflex';
 
 interface Todo { id: number; title: string; done: boolean }
@@ -37,6 +38,9 @@ interface TestContracts extends ReflexContracts {
     'dispatch-later': string;
   };
 }
+
+const subscriptionParam: SubscriptionParam = 'todo-1';
+void subscriptionParam;
 
 interface NamedContracts extends ReflexContracts {
   readonly state: {

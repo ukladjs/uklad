@@ -1,6 +1,14 @@
 import type { EqualityCheckFn, Interceptor } from './types';
 
 /**
+ * One scalar allowed in a typed subscription query cache key.
+ *
+ * TypeScript represents finite and non-finite numbers as `number`, so callers
+ * must still ensure numbers are finite at the application boundary.
+ */
+export type SubscriptionParam = string | number | boolean | null;
+
+/**
  * Store-local type contract consumed by an explicit Reflex runtime.
  *
  * Every section is optional so applications can adopt local contracts one
@@ -349,6 +357,17 @@ export type ContractSubscriptionId<TContracts> = Extract<
   string
 >;
 
+/** True for `any`, which carries no type to check anything against. */
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/** Keep a declared tuple only when every member is a subscription scalar. */
+type ScalarSubscriptionParams<TParams extends readonly any[]> =
+  IsAny<TParams> extends true
+    ? TParams
+    : [TParams] extends [readonly SubscriptionParam[]]
+      ? TParams
+      : never;
+
 /** Parameters declared for a subscription, or `any[]` when undeclared. */
 export type ContractSubscriptionParams<
   TContracts,
@@ -357,7 +376,7 @@ export type ContractSubscriptionParams<
   ? ContractSubscriptionPayloads<TContracts>[TId] extends {
       readonly params: infer TParams extends readonly any[];
     }
-    ? TParams
+    ? ScalarSubscriptionParams<TParams>
     : []
   : any[];
 
@@ -372,11 +391,53 @@ export type ContractSubscriptionResult<
     : TFallback
   : TFallback;
 
-/** True for `any`, which carries no type to check anything against. */
-type IsAny<T> = 0 extends 1 & T ? true : false;
-
 /** True only when every branch of a distributed check held. */
 type AllTrue<TChecks extends boolean> = [TChecks] extends [true] ? true : false;
+
+/** Whether one declared `params` field is an all-scalar tuple or array. */
+type SubscriptionParamsAreValid<TParams> =
+  IsAny<TParams> extends true
+    ? true
+    : [TParams] extends [readonly any[]]
+      ? [TParams] extends [readonly SubscriptionParam[]]
+        ? true
+        : false
+      : false;
+
+/** Omitted `params` retain the existing parameterless declaration behavior. */
+type SubscriptionDefinitionParamsAreValid<TDefinition> =
+  IsAny<TDefinition> extends true
+    ? true
+    : TDefinition extends { readonly params: infer TParams }
+      ? SubscriptionParamsAreValid<TParams>
+      : true;
+
+/** Whether every entry in one declared subscription map uses scalar params. */
+type SubscriptionMapParamsAreValid<TSubscriptions> =
+  IsAny<TSubscriptions> extends true
+    ? true
+    : [Exclude<TSubscriptions, undefined>] extends [object]
+      ? AllTrue<
+          {
+            [TId in keyof Exclude<TSubscriptions, undefined>]: SubscriptionDefinitionParamsAreValid<
+              Exclude<TSubscriptions, undefined>[TId]
+            >;
+          }[keyof Exclude<TSubscriptions, undefined>]
+        >
+      : true;
+
+/**
+ * Whether a contract's declared subscription parameter tuples are scalar.
+ *
+ * Omitted and explicitly `any`-typed sections remain the deliberate
+ * compatibility escape hatch. Typed runtime construction consumes this guard
+ * so malformed contracts fail before they can define a reactive graph.
+ */
+export type ContractSubscriptionParamsAreValid<TContracts> = TContracts extends {
+  readonly subscriptions?: infer TSubscriptions;
+}
+  ? SubscriptionMapParamsAreValid<TSubscriptions>
+  : true;
 
 /**
  * Keys of `TState`, distributed so every variant of a union contributes.

@@ -208,9 +208,17 @@ input before they dispatch.
 
 - A parameterized subscription declares a fixed-length parameter tuple in
   `AppContracts.subscriptions`; do not use an unbounded array parameter type.
-- Each parameter must be a `string`, finite `number`, `boolean`, or `null`.
-  Do not pass `undefined`, objects, arrays, functions, symbols, `bigint`,
-  `Date`, `Map`, `Set`, regular expressions, or non-finite numbers.
+- Each parameter is type-checked as a `SubscriptionParam`: `string`, `number`,
+  `boolean`, or `null`. Do not pass `undefined`, objects, arrays, functions,
+  symbols, `bigint`, `Date`, `Map`, `Set`, or regular expressions. TypeScript
+  cannot distinguish finite numbers, so validate or test that boundary rule
+  separately.
+- `SubscriptionParam` is exported from the package root and
+  `@flexsurfer/reflex/vanilla` for shared helper types. Typed runtime
+  construction rejects contracts that declare a non-scalar parameter tuple.
+- An omitted subscription section or an explicit `any`-typed map retains the
+  permissive compatibility surface. Treat that as an opt-out while migrating,
+  not as an application-authoring pattern.
 - Parameters identify one cached subscription graph. Pass IDs, flags, limits,
   or other small cache-key values—not a data object that the subscription could
   read from its declared state dependencies.

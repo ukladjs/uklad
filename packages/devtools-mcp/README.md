@@ -63,7 +63,7 @@ For Claude Code and Codex, don't configure this package by hand. The [Uklad Agen
 
 ```text
 /plugin marketplace add ukladjs/agent-toolkit
-/plugin install uklad-agent-toolkit@uklad-agent-toolkit
+/plugin install uklad-agent-toolkit@ukladjs
 ```
 
 **Codex**

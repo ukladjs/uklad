@@ -34,7 +34,7 @@ Install the [Uklad Agent Toolkit](https://github.com/ukladjs/agent-toolkit) plug
 
 ```text
 /plugin marketplace add ukladjs/agent-toolkit
-/plugin install uklad-agent-toolkit@uklad-agent-toolkit
+/plugin install uklad-agent-toolkit@ukladjs
 ```
 
 **Codex**

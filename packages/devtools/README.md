@@ -28,19 +28,19 @@ For **humans**, the same server hosts a real-time web dashboard with state inspe
 
 ### The two-step path
 
-Install the [Uklad Agent Toolkit](https://github.com/ukladjs/uklad-agent-toolkit) plugin once, globally — it teaches your agent the whole Uklad workflow (skills + MCP configuration):
+Install the [Uklad Agent Toolkit](https://github.com/ukladjs/agent-toolkit) plugin once, globally — it teaches your agent the whole Uklad workflow (skills + MCP configuration):
 
 **Claude Code**
 
 ```text
-/plugin marketplace add ukladjs/uklad-agent-toolkit
+/plugin marketplace add ukladjs/agent-toolkit
 /plugin install uklad-agent-toolkit@uklad-agent-toolkit
 ```
 
 **Codex**
 
 ```bash
-codex plugin marketplace add ukladjs/uklad-agent-toolkit
+codex plugin marketplace add ukladjs/agent-toolkit
 # then inside Codex: /plugins → install "Uklad Agent Toolkit"
 ```
 

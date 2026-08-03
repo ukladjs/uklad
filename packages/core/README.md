@@ -150,16 +150,12 @@ Side effects (HTTP, storage, timers, navigation) live in **effects/coeffects**, 
 
 ## 📚 Learn More
 
-- [Documentation](https://uklad.js.org/docs/)
-- [Step-by-Step Tutorial](https://uklad.js.org/docs/quick-start.html)
-- [Best Practices](https://uklad.js.org/docs/best-practices.html)
-- [API Reference](https://uklad.js.org/docs/api-reference.html)
 - [Re-frame parity tradeoffs](https://github.com/ukladjs/uklad/blob/main/docs/compatibility/re-frame-parity.md) - What Uklad gains, pays,
   and should improve in its JavaScript implementation
 
 - Examples
   - [TodoMVC](https://github.com/ukladjs/uklad/tree/main/examples/todomvc) - Classic todo app implementation showcasing core uklad patterns
-  - [Issue Triage Board](https://github.com/ukladjs/uklad-demo) - Demo app built with uklad architecture rules ([Live Video](https://www.youtube.com/watch?v=xwv5SwlF4Dg))
+  - [Issue Triage Board](https://github.com/flexsurfer/reflex-demo) - Demo app built with uklad architecture rules ([Live Video](https://www.youtube.com/watch?v=xwv5SwlF4Dg))
   - [Einbürgerungstest](https://github.com/flexsurfer/einburgerungstest/) - Cross-platform web/mobile app built with uklad ([Live Demo](https://www.ebtest.org/))
   - [StarRupture Planner](https://github.com/flexsurfer/starrupture-planner) - Production planning tool built with uklad ([Live Demo](https://www.starrupture-planner.com/))
 

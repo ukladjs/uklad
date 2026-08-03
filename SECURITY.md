@@ -14,12 +14,20 @@ anything is published.
 
 ## Supported versions
 
-Uklad is pre-1.0. Security fixes land in the latest published version of each
-package; older `0.x` releases are not patched.
+Uklad is pre-1.0, and **no `@ukladjs` package has been published to npm yet** —
+this repository is currently source-only. Until the first release, report issues
+against the source in this repository at the commit you tested.
+
+Uklad is a rebrand of Reflex. The Reflex packages
+(`@flexsurfer/reflex`, `@flexsurfer/reflex-devtools`,
+`@flexsurfer/reflex-devtools-mcp`) remain published and in scope; security fixes
+there land in the latest published version of each package, and older `0.x`
+releases are not patched.
 
 ## Scope
 
-In scope are the published packages:
+In scope are the packages built in this repository, which will ship under the
+`@ukladjs` scope:
 
 - [`@ukladjs/core`](packages/core) — the runtime.
 - [`@ukladjs/devtools`](packages/devtools) — the DevTools SDK,

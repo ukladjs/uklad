@@ -57,19 +57,19 @@ The app does not have to be a browser tab: a **[headless runtime](#-headless-run
 
 ### Recommended: the Uklad Agent Toolkit plugin
 
-For Claude Code and Codex, don't configure this package by hand. The [Uklad Agent Toolkit](https://github.com/ukladjs/uklad-agent-toolkit) plugin ships the MCP configuration *and* the workflow skill that teaches the agent when to use each tool:
+For Claude Code and Codex, don't configure this package by hand. The [Uklad Agent Toolkit](https://github.com/ukladjs/agent-toolkit) plugin ships the MCP configuration *and* the workflow skill that teaches the agent when to use each tool:
 
 **Claude Code**
 
 ```text
-/plugin marketplace add ukladjs/uklad-agent-toolkit
+/plugin marketplace add ukladjs/agent-toolkit
 /plugin install uklad-agent-toolkit@uklad-agent-toolkit
 ```
 
 **Codex**
 
 ```bash
-codex plugin marketplace add ukladjs/uklad-agent-toolkit
+codex plugin marketplace add ukladjs/agent-toolkit
 # then inside Codex: /plugins → install "Uklad Agent Toolkit"
 ```
 
@@ -692,7 +692,7 @@ packages/devtools-mcp/
 
 - **[@ukladjs/core](https://github.com/ukladjs/uklad)** - The reactive state management library
 - **[@ukladjs/devtools](https://github.com/ukladjs/uklad/tree/main/packages/devtools)** - Main DevTools package with web UI
-- **[Uklad Agent Toolkit](https://github.com/ukladjs/uklad-agent-toolkit)** - Claude Code / Codex plugin with skills + this MCP preconfigured
+- **[Uklad Agent Toolkit](https://github.com/ukladjs/agent-toolkit)** - Claude Code / Codex plugin with skills + this MCP preconfigured
 - **[Model Context Protocol](https://modelcontextprotocol.io)** - The MCP specification
 
 ---

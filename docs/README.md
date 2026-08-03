@@ -5,6 +5,11 @@ architecture, engineering, compatibility, agent-development, and roadmap
 documents. Package READMEs remain short package-facing entry points; they link
 back here for the deeper material.
 
+> **Naming:** Uklad is the new name for Reflex. These documents use "Uklad" and
+> the `@ukladjs` scope throughout, including where they describe work done under
+> the old name. No `@ukladjs` package is published to npm yet — see
+> [stability and versioning](compatibility/stability-and-versioning.md).
+
 ## Architecture
 
 - [Application authoring rules](architecture/application-authoring-rules.md) —

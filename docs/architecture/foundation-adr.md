@@ -7,7 +7,8 @@
 
 ## Context
 
-Uklad began as a TypeScript port of re-frame. Its current architecture has
+Uklad, then named Reflex, began as a TypeScript port of re-frame. Its current
+architecture has
 valuable, well-tested semantics, but it also carries mechanisms that were chosen
 for re-frame compatibility: positional event vectors, an asynchronous event
 queue, event cascades, a generic interceptor pipeline, dynamic registration, and

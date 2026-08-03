@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@ukladjs/core';
 import { dispatch } from '../../runtime';
 
 export default function EventFilter() {

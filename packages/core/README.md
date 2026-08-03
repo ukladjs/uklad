@@ -1,10 +1,3 @@
-<div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="uklad-avatar-dark.png" />
-    <img src="uklad-avatar.png" alt="Uklad" width="160" />
-  </picture>
-</div>
-
 **Reactive state management for React & React Native — built for AI agentic development**
 
 Pure event handlers over an instance-owned state, derived subscriptions, isolated side effects. An architecture coding agents can generate, observe at runtime, and verify — and humans can still read.
@@ -17,19 +10,19 @@ Pure event handlers over an instance-owned state, derived subscriptions, isolate
 
 Uklad is designed to be written _and driven_ by coding agents. The whole setup is two steps.
 
-**1. Install the [Uklad Agent Toolkit](https://github.com/ukladjs/uklad-agent-toolkit) plugin** — once, globally:
+**1. Install the [Uklad Agent Toolkit](https://github.com/ukladjs/agent-toolkit) plugin** — once, globally:
 
 Claude Code:
 
 ```text
-/plugin marketplace add ukladjs/uklad-agent-toolkit
+/plugin marketplace add ukladjs/agent-toolkit
 /plugin install uklad-agent-toolkit@uklad-agent-toolkit
 ```
 
 Codex:
 
 ```bash
-codex plugin marketplace add ukladjs/uklad-agent-toolkit
+codex plugin marketplace add ukladjs/agent-toolkit
 # then inside Codex: /plugins → install "Uklad Agent Toolkit"
 ```
 

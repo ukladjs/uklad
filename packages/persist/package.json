@@ -1,7 +1,7 @@
 {
-  "name": "@flexsurfer/reflex-persist",
+  "name": "@ukladjs/persist",
   "version": "0.1.0-beta.1",
-  "description": "Synchronous persistence for Reflex.",
+  "description": "Synchronous persistence for Uklad.",
   "license": "MIT",
   "sideEffects": false,
   "devEngines": {
@@ -17,8 +17,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/flexsurfer/reflex.git",
-    "directory": "packages/reflex-persist"
+    "url": "git+https://github.com/ukladjs/uklad.git",
+    "directory": "packages/persist"
   },
   "type": "module",
   "main": "dist/index.cjs",
@@ -62,7 +62,7 @@
   "devDependencies": {
     "@arethetypeswrong/core": "0.18.5",
     "@eslint/js": "10.0.1",
-    "@flexsurfer/reflex": "workspace:*",
+    "@ukladjs/core": "workspace:*",
     "@types/jest": "30.0.0",
     "@typescript/native": "npm:typescript@7.0.2",
     "eslint": "10.8.0",
@@ -76,11 +76,11 @@
     "typescript-eslint": "8.65.0"
   },
   "peerDependencies": {
-    "@flexsurfer/reflex": "^0.1.27"
+    "@ukladjs/core": "^0.1.27"
   },
   "keywords": [
-    "reflex",
-    "reflex.js",
+    "uklad",
+    "uklad.js",
     "persistence",
     "localStorage",
     "hydration",

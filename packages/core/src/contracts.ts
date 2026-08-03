@@ -9,13 +9,13 @@ import type { EqualityCheckFn, Interceptor } from './types';
 export type SubscriptionParam = string | number | boolean | null;
 
 /**
- * Store-local type contract consumed by an explicit Reflex runtime.
+ * Store-local type contract consumed by an explicit Uklad runtime.
  *
  * Every section is optional so applications can adopt local contracts one
  * surface at a time. Missing and empty sections retain the permissive 0.x
  * behavior; a non-empty section narrows the corresponding runtime API.
  */
-export interface ReflexContracts {
+export interface UkladContracts {
   readonly state?: Record<string, any>;
   readonly events?: object;
   readonly effects?: object;
@@ -45,7 +45,7 @@ export type PermissiveSubscriptionPayloads = Record<
 >;
 
 /** Fully permissive contract for incrementally typed or JavaScript runtimes. */
-export interface PermissiveReflexContracts extends ReflexContracts {
+export interface PermissiveUkladContracts extends UkladContracts {
   readonly state: Record<string, any>;
   readonly events: PermissiveEventPayloads;
   readonly effects: PermissiveEffectPayloads;
@@ -62,7 +62,7 @@ export interface PermissiveReflexContracts extends ReflexContracts {
  * against it:
  *
  * ```ts
- * declare module '@flexsurfer/reflex' {
+ * declare module '@ukladjs/core' {
  *   interface DefaultContracts {
  *     state: TodoState;
  *     events: { 'todos/add': [title: string] };
@@ -72,17 +72,17 @@ export interface PermissiveReflexContracts extends ReflexContracts {
  * }
  * ```
  *
- * It is a `ReflexContracts`, not a parallel system: the same declaration can be
- * passed explicitly to `createReflexRuntime<T>()` or `createReflexHooks<T>()`.
+ * It is a `UkladContracts`, not a parallel system: the same declaration can be
+ * passed explicitly to `createUkladRuntime<T>()` or `createUkladHooks<T>()`.
  * Applications that own several runtimes should do exactly that instead, since
  * one ambient default cannot describe two different runtimes.
  *
  * While unaugmented every section is absent, so the API stays permissive.
  */
-export interface DefaultContracts extends ReflexContracts {}
+export interface DefaultContracts extends UkladContracts {}
 
-/** Options shared by `createReflexRuntime` implementations. */
-export interface CreateReflexRuntimeOptions<TState extends Record<string, any>> {
+/** Options shared by `createUkladRuntime` implementations. */
+export interface CreateUkladRuntimeOptions<TState extends Record<string, any>> {
   readonly initialState: TState;
   readonly runtimeId?: string;
   readonly name?: string;
@@ -453,7 +453,7 @@ type DistributedStateKeys<TState> = TState extends unknown ? keyof TState : neve
  * True when the state section declares no keys at all.
  *
  * An empty section reads as "not declared yet" for the same reason an empty map
- * does in `NormalizeContractMap`: `createReflexRuntime({ initialState: {} })` is
+ * does in `NormalizeContractMap`: `createUkladRuntime({ initialState: {} })` is
  * the untyped entry point, and it must not reject every key.
  */
 type HasOpenState<TContracts> = [DistributedStateKeys<ContractState<TContracts>>] extends [never]
@@ -649,7 +649,7 @@ export type ContractSubscriptionDependencyValues<
 };
 
 /** Idempotent cleanup returned by watches and module installation. */
-export type ReflexDisposer = () => void;
+export type UkladDisposer = () => void;
 
 /** Options for a non-React subscription watch. */
 export interface WatchSubscriptionOptions {
@@ -664,4 +664,4 @@ export type WatchSubscriptionListener<TValue> = (
 ) => void;
 
 /** Synchronous feature installer accepted by `runtime.registerModule`. */
-export type ReflexModule<TRegistrar> = (registrar: TRegistrar) => void | ReflexDisposer;
+export type UkladModule<TRegistrar> = (registrar: TRegistrar) => void | UkladDisposer;

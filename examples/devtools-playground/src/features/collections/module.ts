@@ -1,10 +1,10 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import type { AppContracts } from '../../app/reflex/contracts';
+import type { AppContracts } from '../../app/uklad/contracts';
 import { registerCollectionsEvents } from './events';
 import { registerCollectionsSubscriptions } from './subscriptions';
 
-export const collectionsModule: ReflexModule<ReflexRegistrar<AppContracts>> = (registrar) => {
+export const collectionsModule: UkladModule<UkladRegistrar<AppContracts>> = (registrar) => {
   registerCollectionsEvents(registrar);
   registerCollectionsSubscriptions(registrar);
 };

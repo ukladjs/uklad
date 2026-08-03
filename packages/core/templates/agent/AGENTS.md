@@ -1,13 +1,13 @@
-# Reflex Agent Router
+# Uklad Agent Router
 
-This project uses `@flexsurfer/reflex`. In this project, "Reflex" always means `@flexsurfer/reflex` (aka Reflex.js) — the JavaScript/TypeScript state library. It is NOT the Python Reflex framework (reflex.dev), NOT `react-reflex`, and NOT `reflexjs`; never install those packages here.
+This project uses `@ukladjs/core`. In this project, "Uklad" always means `@ukladjs/core` — the JavaScript/TypeScript state library.
 
-Preferred setup: install the Reflex Agent Toolkit plugin. It owns the Reflex skill, MCP configuration, and context-efficient workflows. This file is only a small fallback router for agents that read `AGENTS.md`.
+Preferred setup: install the Uklad Agent Toolkit plugin. It owns the Uklad skill, MCP configuration, and context-efficient workflows. This file is only a small fallback router for agents that read `AGENTS.md`.
 
-For Reflex state-management work:
+For Uklad state-management work:
 
-- Use the Reflex skill from the Reflex Agent Toolkit plugin if it is available.
-- Start source orientation with `src/app/reflex/catalog.ts`, then
+- Use the Uklad skill from the Uklad Agent Toolkit plugin if it is available.
+- Start source orientation with `src/app/uklad/catalog.ts`, then
   `contracts.ts`, and the owning feature or selected platform module. Use
   exact-match `rg` for one handler, subscription, or call site.
 - When MCP tools are available, call `app_status` after a cold start or reload. Then use only advertised tools: typed `get_handlers`, path-scoped `get_state`, filtered `get_active_subs` for mounted subscriptions, filtered `get_traces`/one `get_trace`, and `dispatch_event` only when the server explicitly grants it.

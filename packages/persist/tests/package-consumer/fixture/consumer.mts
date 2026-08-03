@@ -1,17 +1,17 @@
-import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
-import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
-import { PERSIST_IDS, memoryStorageAdapter, persist } from '@flexsurfer/reflex-persist';
-import type { PersistContracts, PersistStatus } from '@flexsurfer/reflex-persist';
+import { createUkladRuntime } from '@ukladjs/core/vanilla';
+import { createUkladTestHarness } from '@ukladjs/core/testing';
+import type { UkladContracts } from '@ukladjs/core/vanilla';
+import { PERSIST_IDS, memoryStorageAdapter, persist } from '@ukladjs/persist';
+import type { PersistContracts, PersistStatus } from '@ukladjs/persist';
 
-interface AppContracts extends ReflexContracts {
+interface AppContracts extends UkladContracts {
   readonly state: { readonly count: number };
   readonly events: { readonly increment: [] };
 }
 
 type Contracts = PersistContracts<AppContracts>;
-const runtime = createReflexRuntime<Contracts>({ initialState: { count: 0 } });
-const testHarness = createReflexTestHarness(runtime);
+const runtime = createUkladRuntime<Contracts>({ initialState: { count: 0 } });
+const testHarness = createUkladTestHarness(runtime);
 const handle = persist(runtime, {
   storage: memoryStorageAdapter(),
   keys: [{ key: 'count', serialize: (count) => count, deserialize: Number }],

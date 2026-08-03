@@ -1,7 +1,7 @@
 /**
- * Reflex DevTools MCP Server
+ * Uklad DevTools MCP Server
  * 
- * Model Context Protocol server that connects to Reflex DevTools
+ * Model Context Protocol server that connects to Uklad DevTools
  * and provides AI assistants with tools to inspect state, evaluate
  * subscriptions, inspect traces, and dispatch events.
  */
@@ -39,7 +39,7 @@ export interface MCPServerConfig {
 // Sent to every client at initialize time — for most agents this is the only
 // usage documentation they ever see, so it must stay in sync with the actual
 // tool set (the stdio integration test checks every tool is mentioned).
-const SERVER_INSTRUCTIONS = `Reflex DevTools: inspect and drive a live Reflex app (re-frame-style — events mutate a central state through pure handlers, subscriptions derive values from it).
+const SERVER_INSTRUCTIONS = `Uklad DevTools: inspect and drive a live Uklad app (re-frame-style — events mutate a central state through pure handlers, subscriptions derive values from it).
 
 Retrieval order (cheapest first):
 1. app_status — discover runtimes and select one. It lists stable runtimeId values and reports whether the selected app is connected, browser/React Native/headless, tracing state, handler counts, and sessionEpoch. Call it first after a cold start and after any reload; a changed sessionEpoch means the DevTools connection session changed and server-stored trace ids were invalidated. A transient reconnect can leave the runtime state intact.
@@ -57,7 +57,7 @@ Caveats:
 - A failed dispatch or subscription evaluation with phase "missing-handler" means that exact id is not registered — check it against get_handlers.
 - "[REDACTED]" and "[REDACTED:CREDENTIAL]" values in state, traces, or subscription results are the default credential masking working as intended, not an application bug. Never disable or suggest disabling redaction; if a non-sensitive key is masked, the application owner can supply a custom key list in the redaction config.`;
 
-export class ReflexDevToolsMCPServer {
+export class UkladDevToolsMCPServer {
   private server: Server;
   private apiClient: DevToolsAPIClient;
   private tools: Map<string, any>;
@@ -65,7 +65,7 @@ export class ReflexDevToolsMCPServer {
   constructor(config: MCPServerConfig) {
     this.server = new Server(
       {
-        name: 'reflex-devtools',
+        name: 'uklad-devtools',
         version: PACKAGE_VERSION,
       },
       {
@@ -80,7 +80,7 @@ export class ReflexDevToolsMCPServer {
     this.apiClient = new DevToolsAPIClient({
       serverUrl: config.devtoolsServerUrl,
       token: config.token,
-      clientName: config.clientName ?? `reflex-devtools-mcp/${PACKAGE_VERSION}`,
+      clientName: config.clientName ?? `uklad-devtools-mcp/${PACKAGE_VERSION}`,
       allowInsecureRemote: config.allowInsecureRemote,
     });
 
@@ -204,7 +204,7 @@ export class ReflexDevToolsMCPServer {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
 
-    console.error('[MCP] Reflex DevTools MCP server started');
+    console.error('[MCP] Uklad DevTools MCP server started');
     console.error('[MCP] Available tools:', Array.from(this.tools.keys()).join(', '));
   }
 
@@ -217,7 +217,7 @@ export class ReflexDevToolsMCPServer {
 function toolAnnotations(name: string) {
   if (name === 'dispatch_event' || name === 'dispatch_and_wait') {
     return {
-      title: 'Dispatch Reflex event',
+      title: 'Dispatch Uklad event',
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
@@ -325,8 +325,8 @@ function validateSchemaValue(
   return null;
 }
 
-export async function createMCPServer(config: MCPServerConfig): Promise<ReflexDevToolsMCPServer> {
-  const server = new ReflexDevToolsMCPServer(config);
+export async function createMCPServer(config: MCPServerConfig): Promise<UkladDevToolsMCPServer> {
+  const server = new UkladDevToolsMCPServer(config);
   await server.start();
   return server;
 }

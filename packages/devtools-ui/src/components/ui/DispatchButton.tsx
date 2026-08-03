@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes } from 'react';
-import { useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@ukladjs/core';
 
 interface DispatchButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'> {
   size?: 'xs' | 'sm';

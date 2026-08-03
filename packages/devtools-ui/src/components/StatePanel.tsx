@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@ukladjs/core';
 import { JsonViewer } from './ui/JsonViewer';
 import HandlersTable from './HandlersTable';
 

@@ -12,7 +12,7 @@ import type {
   Interceptor,
   InterceptorDirection,
   InterceptorErrorData,
-  ReflexError,
+  UkladError,
 } from '../types';
 import type { TraceErrorTag } from '../core/tracing-types';
 
@@ -53,13 +53,13 @@ export function execute(
   try {
     return executeAndTraceFinalEffects(runtime, context);
   } catch (error: unknown) {
-    const reflexError = mergeErrorData(
-      isReflexError(error) ? error : toReflexError(error, { id: 'unknown-interceptor' }, 'before'),
+    const ukladError = mergeErrorData(
+      isUkladError(error) ? error : toUkladError(error, { id: 'unknown-interceptor' }, 'before'),
       { eventV: event },
     );
-    traceError(runtime, reflexError, event);
-    errorHandler(reflexError.cause, reflexError);
-    return { ...context, executionError: reflexError.cause };
+    traceError(runtime, ukladError, event);
+    errorHandler(ukladError.cause, ukladError);
+    return { ...context, executionError: ukladError.cause };
   }
 }
 
@@ -83,33 +83,33 @@ function normalizeError(value: unknown): Error {
   }
 }
 
-function isReflexError(value: unknown): value is ReflexError {
+function isUkladError(value: unknown): value is UkladError {
   if (!(value instanceof Error) || typeof value !== 'object' || value === null) return false;
 
-  const candidate = value as Partial<ReflexError>;
+  const candidate = value as Partial<UkladError>;
   return candidate.cause instanceof Error && typeof candidate.data === 'object';
 }
 
 function traceError(runtime: RuntimeCore, value: unknown, event: EventVector): void {
-  const reflexError = isReflexError(value) ? value : undefined;
-  const originalError = reflexError?.cause ?? normalizeError(value);
+  const ukladError = isUkladError(value) ? value : undefined;
+  const originalError = ukladError?.cause ?? normalizeError(value);
   const traceErrorTag: TraceErrorTag = {
     phase: 'handler',
     message: originalError.message,
     ...(typeof originalError.stack === 'string' ? { stack: originalError.stack } : {}),
-    ...(reflexError ? { interceptor: reflexError.data.interceptor } : {}),
-    ...(reflexError ? { direction: reflexError.data.direction } : {}),
+    ...(ukladError ? { interceptor: ukladError.data.interceptor } : {}),
+    ...(ukladError ? { direction: ukladError.data.direction } : {}),
     eventV: event,
   };
   mergeRuntimeProbeSpan(runtime, () => ({ error: traceErrorTag }));
   notifyRuntimeProbe(runtime, 'error', 'handler', originalError);
 }
 
-function toReflexError(
+function toUkladError(
   value: unknown,
   interceptor: Interceptor,
   direction: InterceptorDirection,
-): ReflexError {
+): UkladError {
   const originalError = normalizeError(value);
   return Object.assign(new Error(`Interceptor Exception: ${originalError.message}`), {
     data: { direction, interceptor: interceptor.id, originalError },
@@ -117,7 +117,7 @@ function toReflexError(
   });
 }
 
-function mergeErrorData(error: ReflexError, data: Partial<InterceptorErrorData>): ReflexError {
+function mergeErrorData(error: UkladError, data: Partial<InterceptorErrorData>): UkladError {
   return Object.assign(new Error(error.message), {
     data: { ...error.data, ...data },
     cause: error.cause,
@@ -156,7 +156,7 @@ function invokeInterceptor(
   try {
     return restorePipelineState(context, interceptorFunction(context));
   } catch (error: unknown) {
-    throw toReflexError(error, interceptor, direction);
+    throw toUkladError(error, interceptor, direction);
   }
 }
 

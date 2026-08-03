@@ -1,19 +1,19 @@
 import { performance } from 'node:perf_hooks';
 
-import { createReflexRuntime } from '../dist/vanilla.mjs';
-import { createReflexTestHarness } from '../dist/testing.mjs';
+import { createUkladRuntime } from '../dist/vanilla.mjs';
+import { createUkladTestHarness } from '../dist/testing.mjs';
 
 const scope = process.argv[2] ?? 'all';
-const sampleCount = numberFromEnv('REFLEX_BENCH_SAMPLES', 5);
-const globalIterations = process.env.REFLEX_BENCH_ITERATIONS;
-const jsonOutput = process.env.REFLEX_BENCH_JSON === '1';
+const sampleCount = numberFromEnv('UKLAD_BENCH_SAMPLES', 5);
+const globalIterations = process.env.UKLAD_BENCH_ITERATIONS;
+const jsonOutput = process.env.UKLAD_BENCH_JSON === '1';
 
 const BENCH_HARNESSES = new WeakMap();
 
 function getBenchHarness(runtime) {
   let harness = BENCH_HARNESSES.get(runtime);
   if (!harness) {
-    harness = createReflexTestHarness(runtime);
+    harness = createUkladTestHarness(runtime);
     BENCH_HARNESSES.set(runtime, harness);
   }
   return harness;
@@ -53,7 +53,7 @@ function runStateBenchmarks() {
       name: 'state/no-op',
       iterations: iterationsFor('state', 20_000),
       setup: () => {
-        const runtime = createReflexRuntime({
+        const runtime = createUkladRuntime({
           initialState: { counter: 0 },
           runtimeId: 'bench-state-no-op',
         });
@@ -68,7 +68,7 @@ function runStateBenchmarks() {
       name: 'state/small-update',
       iterations: iterationsFor('state', 20_000),
       setup: () => {
-        const runtime = createReflexRuntime({
+        const runtime = createUkladRuntime({
           initialState: { counter: 0 },
           runtimeId: 'bench-state-small-update',
         });
@@ -85,7 +85,7 @@ function runStateBenchmarks() {
       name: 'state/deep-update',
       iterations: iterationsFor('state', 10_000),
       setup: () => {
-        const runtime = createReflexRuntime({
+        const runtime = createUkladRuntime({
           initialState: createDeepState(),
           runtimeId: 'bench-state-deep-update',
         });
@@ -103,7 +103,7 @@ function runStateBenchmarks() {
       name: 'state/large-no-op',
       iterations: iterationsFor('state', 2_000),
       setup: () => {
-        const runtime = createReflexRuntime({
+        const runtime = createUkladRuntime({
           initialState: { rows: createRows(10_000) },
           runtimeId: 'bench-state-large-no-op',
         });
@@ -193,7 +193,7 @@ function runMemoryBenchmarks() {
     measureMemory({
       name: 'memory/state-10k-rows',
       setup: () => ({
-        runtime: createReflexRuntime({
+        runtime: createUkladRuntime({
           initialState: { rows: createRows(10_000) },
           runtimeId: 'bench-memory-state-10k',
         }),
@@ -401,7 +401,7 @@ function setupMountChurn(runtimeId) {
 }
 
 function setupEventDispatch(payload, runtimeId) {
-  const runtime = createReflexRuntime({
+  const runtime = createUkladRuntime({
     initialState: { accepted: 0 },
     runtimeId,
   });
@@ -417,7 +417,7 @@ function setupEventDispatch(payload, runtimeId) {
 }
 
 function createBenchRuntime(runtimeId, initialState = { tick: 0 }) {
-  const runtime = createReflexRuntime({ initialState, runtimeId });
+  const runtime = createUkladRuntime({ initialState, runtimeId });
   runtime.registerModule((registrar) => {
     registrar.regEvent('bench/tick', ({ draftState }) => {
       draftState.tick += 1;

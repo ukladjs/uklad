@@ -155,7 +155,7 @@ export class EventRuntime {
   installGlobalInterceptors(interceptors: readonly Interceptor[] | undefined): void {
     if (interceptors === undefined) return;
     if (!Array.isArray(interceptors)) {
-      throw new TypeError('[reflex] runtime interceptors must be an array.');
+      throw new TypeError('[uklad] runtime interceptors must be an array.');
     }
 
     const ids = new Set<string>();
@@ -166,7 +166,7 @@ export class EventRuntime {
       const interceptor = Object.freeze({ ...candidate }) as Interceptor;
       if (!isInterceptor(interceptor)) {
         throw new TypeError(
-          '[reflex] runtime interceptors must each have a string id and a before or after function.',
+          '[uklad] runtime interceptors must each have a string id and a before or after function.',
         );
       }
       if (ids.has(interceptor.id) || this.globalInterceptors.has(interceptor.id)) {
@@ -199,19 +199,19 @@ export class EventRuntime {
     const runtime = this.getRuntime();
     if (isRuntimeDisposed(runtime)) return;
     if (!isEventVector(event)) {
-      consoleLog('error', '[reflex] invalid dispatch event vector.');
+      consoleLog('error', '[uklad] invalid dispatch event vector.');
       return;
     }
     if (IS_DEV && this.runningHandlerEventId !== null) {
       consoleLog(
         'warn',
-        `[reflex] dispatch called for '${String(event[0])}' from inside the event handler for '${this.runningHandlerEventId}'. Event handlers must stay pure — return a ['dispatch', [...]] effect instead. The event was queued anyway.`,
+        `[uklad] dispatch called for '${String(event[0])}' from inside the event handler for '${this.runningHandlerEventId}'. Event handlers must stay pure — return a ['dispatch', [...]] effect instead. The event was queued anyway.`,
       );
     }
     const envelope = createExecutionEnvelope(runtime, event as EventVector);
     if (requireTrackedOperation && !envelope.tracking?.operationTracked) {
       throw new Error(
-        '[reflex] operation dispatch could not be accepted by the development observer.',
+        '[uklad] operation dispatch could not be accepted by the development observer.',
       );
     }
     this.queue.push(envelope);
@@ -235,17 +235,17 @@ export class EventRuntime {
     const runtime = this.getRuntime();
     assertRuntimeUsable(runtime);
     if (!isEventVector(event)) {
-      consoleLog('error', '[reflex] invalid dispatchSync event vector.');
+      consoleLog('error', '[uklad] invalid dispatchSync event vector.');
       return;
     }
     if (this.handlingEventId !== null) {
-      const message = `[reflex] dispatchSync called for '${String(event[0])}' while event '${this.handlingEventId}' is being handled. dispatchSync must not be called from an event handler; return a ['dispatch', ...] effect instead.`;
+      const message = `[uklad] dispatchSync called for '${String(event[0])}' while event '${this.handlingEventId}' is being handled. dispatchSync must not be called from an event handler; return a ['dispatch', ...] effect instead.`;
       consoleLog('error', message);
       throw new Error(message);
     }
     if (!this.isIdle) {
       throw new Error(
-        `[reflex] dispatchSync cannot overtake asynchronous work already accepted by runtime '${runtime.identity.runtimeId}'. Await runtime.flush() first.`,
+        `[uklad] dispatchSync cannot overtake asynchronous work already accepted by runtime '${runtime.identity.runtimeId}'. Await runtime.flush() first.`,
       );
     }
     runtime.subscriptions.assertPublicationAllowed();
@@ -326,7 +326,7 @@ export class EventRuntime {
 
     if (Array.isArray(coeffects)) {
       throw new Error(
-        "[reflex] event coeffects must be an object of local bindings, for example { now: 'system/now' }.",
+        "[uklad] event coeffects must be an object of local bindings, for example { now: 'system/now' }.",
       );
     } else if (coeffects && typeof coeffects === 'object') {
       const bindings = readNamedCoeffectBindings(coeffects);
@@ -344,7 +344,7 @@ export class EventRuntime {
       } else {
         consoleLog(
           'error',
-          '[reflex] invalid interceptor provided for event:',
+          '[uklad] invalid interceptor provided for event:',
           id,
           'interceptor:',
           candidate,
@@ -381,7 +381,7 @@ function getInjectCofxInterceptor(
     before(context: Context): Context {
       const handler = runtime.registry.cofx.get(id);
       if (!handler) {
-        throw new Error(`[reflex] No coeffect handler registered for '${id}'.`);
+        throw new Error(`[uklad] No coeffect handler registered for '${id}'.`);
       }
 
       const value = handler(arg, createCoeffectReadContext(context.coeffects));
@@ -406,7 +406,7 @@ function readNamedCoeffectBindings(coeffects: object): NamedCoeffectBinding[] {
     if (!isNamedCoeffectSlot(slot)) {
       consoleLog(
         'warn',
-        `[reflex] invalid named coeffect binding slot '${slot}'. Slots must not replace runtime-owned coeffects.`,
+        `[uklad] invalid named coeffect binding slot '${slot}'. Slots must not replace runtime-owned coeffects.`,
       );
       continue;
     }
@@ -422,7 +422,7 @@ function readNamedCoeffectBindings(coeffects: object): NamedCoeffectBinding[] {
       continue;
     }
 
-    consoleLog('warn', '[reflex] invalid named coeffect binding:', slot, binding);
+    consoleLog('warn', '[uklad] invalid named coeffect binding:', slot, binding);
   }
   return bindings;
 }

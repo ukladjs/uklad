@@ -1,7 +1,7 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 
 /**
  * Web implementations of the application's coeffect ids.
@@ -14,6 +14,6 @@ import type { AppContracts } from '../../app/reflex/contracts';
  * There is no `platform/web/effects.ts`: TodoMVC declares no application
  * effects. Web storage arrives through the persistence module instead.
  */
-export const registerWebCoeffects: ReflexModule<ReflexRegistrar<AppContracts>> = (registrar) => {
+export const registerWebCoeffects: UkladModule<UkladRegistrar<AppContracts>> = (registrar) => {
   registrar.regCoeffect(appIds.coeffects.systemNow, () => Date.now());
 };

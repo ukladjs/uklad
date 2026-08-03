@@ -3,10 +3,10 @@ import { StateStore } from './state';
 import { RuntimeRegistry } from './registry';
 import { SubscriptionRuntime } from './subscriptions/subscription-runtime';
 import type { RuntimeProbe } from './probe-types';
-import type { ReflexRuntimeClient } from './api';
+import type { UkladRuntimeClient } from './api';
 
 /**
- * The instance-owned core state of one Reflex application.
+ * The instance-owned core state of one Uklad application.
  *
  * It deliberately has no process-global registry and no default instance:
  * every handler, queue, subscription cache, and diagnostic service belongs to
@@ -27,7 +27,7 @@ export interface RuntimeCore {
   readonly events: EventRuntime;
   readonly subscriptions: SubscriptionRuntime;
   /** Injected after construction so effect handlers receive the stable client facade. */
-  effectRuntime: ReflexRuntimeClient<any> | undefined;
+  effectRuntime: UkladRuntimeClient<any> | undefined;
   /** The only optional hot-path instrumentation capability. */
   probe: RuntimeProbe | undefined;
 }
@@ -48,18 +48,18 @@ export function createRuntimeCore(options: RuntimeIdentityOptions = {}): Runtime
   const runtimeId = options.runtimeId ?? createGeneratedRuntimeId();
   if (typeof runtimeId !== 'string' || !RUNTIME_ID_PATTERN.test(runtimeId)) {
     throw new Error(
-      '[reflex] runtimeId must be 1-128 characters and contain only letters, numbers, dot, underscore, colon, or hyphen.',
+      '[uklad] runtimeId must be 1-128 characters and contain only letters, numbers, dot, underscore, colon, or hyphen.',
     );
   }
 
   const runtimeName = options.name ?? runtimeId;
   if (typeof runtimeName !== 'string' || runtimeName.length === 0 || runtimeName.length > 128) {
-    throw new Error('[reflex] runtime name must be between 1 and 128 characters.');
+    throw new Error('[uklad] runtime name must be between 1 and 128 characters.');
   }
 
   const owner: { runtime?: RuntimeCore } = {};
   const getRuntime = (): RuntimeCore => {
-    if (!owner.runtime) throw new Error('[reflex] Runtime service used before initialization.');
+    if (!owner.runtime) throw new Error('[uklad] Runtime service used before initialization.');
     return owner.runtime;
   };
   const state = new StateStore(getRuntime);

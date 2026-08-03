@@ -1,6 +1,6 @@
 # Performance benchmarks
 
-The Reflex package includes a small Node benchmark harness for core runtime hot
+The Uklad package includes a small Node benchmark harness for core runtime hot
 paths: immutable state transitions, subscription graph work, event dispatch,
 and retained heap. It runs against the built package entrypoint, so benchmark
 results include bundler output rather than the test-only TypeScript loader.
@@ -10,14 +10,14 @@ results include bundler output rather than the test-only TypeScript loader.
 From the repository root:
 
 ```sh
-pnpm --filter @flexsurfer/reflex benchmark
-pnpm --filter @flexsurfer/reflex benchmark:state
-pnpm --filter @flexsurfer/reflex benchmark:subscriptions
-pnpm --filter @flexsurfer/reflex benchmark:events
-pnpm --filter @flexsurfer/reflex benchmark:memory
+pnpm --filter @ukladjs/core benchmark
+pnpm --filter @ukladjs/core benchmark:state
+pnpm --filter @ukladjs/core benchmark:subscriptions
+pnpm --filter @ukladjs/core benchmark:events
+pnpm --filter @ukladjs/core benchmark:memory
 ```
 
-Each command rebuilds `packages/reflex/dist` first. The timing harness performs
+Each command rebuilds `packages/core/dist` first. The timing harness performs
 a short warmup, then reports the median of five samples as operations/second.
 The package scripts pass `--expose-gc` so memory measurements can force a
 collection between snapshots.
@@ -25,8 +25,8 @@ collection between snapshots.
 Useful controls:
 
 ```sh
-REFLEX_BENCH_SAMPLES=9 pnpm --filter @flexsurfer/reflex benchmark
-REFLEX_BENCH_ITERATIONS=1000 pnpm --filter @flexsurfer/reflex benchmark:subscriptions
+UKLAD_BENCH_SAMPLES=9 pnpm --filter @ukladjs/core benchmark
+UKLAD_BENCH_ITERATIONS=1000 pnpm --filter @ukladjs/core benchmark:subscriptions
 ```
 
 Use the same Node version, machine power mode, and benchmark parameters when
@@ -37,8 +37,8 @@ For machine-readable output, build first and then invoke the harness directly
 so build logs do not get mixed into the JSON file:
 
 ```sh
-pnpm --filter @flexsurfer/reflex build
-REFLEX_BENCH_JSON=1 node --expose-gc packages/reflex/benchmarks/run.mjs > benchmark.json
+pnpm --filter @ukladjs/core build
+UKLAD_BENCH_JSON=1 node --expose-gc packages/core/benchmarks/run.mjs > benchmark.json
 ```
 
 ## Workloads
@@ -64,7 +64,7 @@ The equality-cutoff workload includes a
 after warmup; a non-zero value means the default equality cutoff is no longer
 preventing downstream recomputation.
 
-Reflex uses a runtime-local Immer instance with `autoFreeze: false`. State
+Uklad uses a runtime-local Immer instance with `autoFreeze: false`. State
 workloads therefore measure the copy-on-write transition and subscription work,
 not a recursive freeze of the finalized state graph. This is intentional in
 both development and production: ownership mistakes are caught through types,

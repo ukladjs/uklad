@@ -8,16 +8,16 @@
  *
  * Run with `npm run test:types`.
  */
-import { createReflexRuntime } from '../../src/vanilla';
-import { createReflexTestHarness } from '../../src/testing';
-import type { ReflexContracts } from '../../src/vanilla';
+import { createUkladRuntime } from '../../src/vanilla';
+import { createUkladTestHarness } from '../../src/testing';
+import type { UkladContracts } from '../../src/vanilla';
 
 interface Session {
   userId: number;
   token: string;
 }
 
-interface AppContracts extends ReflexContracts {
+interface AppContracts extends UkladContracts {
   state: { count: number; lastSeen: number };
   events: {
     tick: [];
@@ -33,7 +33,7 @@ interface AppContracts extends ReflexContracts {
   };
 }
 
-const runtime = createReflexRuntime<AppContracts>({
+const runtime = createUkladRuntime<AppContracts>({
   initialState: { count: 0, lastSeen: 0 },
   runtimeId: 'typed-coeffects',
 });
@@ -261,7 +261,7 @@ runtime.registerModule((registrar) => {
 
 // ---- test harness ----------------------------------------------------
 
-const harness = createReflexTestHarness(runtime);
+const harness = createUkladTestHarness(runtime);
 const nowHandler = harness.getCoeffectHandler('now');
 if (nowHandler) {
   const millis: number = nowHandler(undefined, { event: ['tick'] } as never);
@@ -274,7 +274,7 @@ harness.getCoeffectHandler('clock');
 // A runtime that declares no coeffects keeps the open shape, so untyped and
 // incrementally typed applications are unaffected by the narrowing above.
 
-const untyped = createReflexRuntime({ initialState: { count: 0 } });
+const untyped = createUkladRuntime({ initialState: { count: 0 } });
 untyped.registerModule((registrar) => {
   registrar.regCoeffect('now', () => Date.now());
   registrar.regCoeffect('anything', (arg: string) => arg.length);
@@ -291,12 +291,12 @@ untyped.registerModule((registrar) => {
 });
 
 // A contract that declares other sections but no coeffects is open too.
-interface PartialContracts extends ReflexContracts {
+interface PartialContracts extends UkladContracts {
   state: { count: number };
   events: { bump: [] };
 }
 
-const partial = createReflexRuntime<PartialContracts>({ initialState: { count: 0 } });
+const partial = createUkladRuntime<PartialContracts>({ initialState: { count: 0 } });
 partial.registerModule((registrar) => {
   registrar.regCoeffect('now', () => Date.now());
   registrar.regEvent(

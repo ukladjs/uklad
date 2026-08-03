@@ -117,14 +117,14 @@ function parseArgs(): CliConfig {
   }
 
   const tokens: Partial<Record<DevtoolsClientRole, string>> = {};
-  if (process.env.REFLEX_DEVTOOLS_RUNTIME_TOKEN) {
-    tokens.runtime = process.env.REFLEX_DEVTOOLS_RUNTIME_TOKEN;
+  if (process.env.UKLAD_DEVTOOLS_RUNTIME_TOKEN) {
+    tokens.runtime = process.env.UKLAD_DEVTOOLS_RUNTIME_TOKEN;
   }
-  if (process.env.REFLEX_DEVTOOLS_UI_TOKEN) {
-    tokens.ui = process.env.REFLEX_DEVTOOLS_UI_TOKEN;
+  if (process.env.UKLAD_DEVTOOLS_UI_TOKEN) {
+    tokens.ui = process.env.UKLAD_DEVTOOLS_UI_TOKEN;
   }
-  if (process.env.REFLEX_DEVTOOLS_MCP_TOKEN) {
-    tokens.mcp = process.env.REFLEX_DEVTOOLS_MCP_TOKEN;
+  if (process.env.UKLAD_DEVTOOLS_MCP_TOKEN) {
+    tokens.mcp = process.env.UKLAD_DEVTOOLS_MCP_TOKEN;
   }
 
   return {
@@ -145,9 +145,9 @@ function parseArgs(): CliConfig {
 
 function printHelp(): void {
   console.log(`
-Reflex DevTools
+Uklad DevTools
 
-Usage: reflex-devtools [options]
+Usage: uklad-devtools [options]
 
 Options:
   -p, --port <port>          Port (default: 4000)
@@ -174,14 +174,14 @@ Security defaults:
     Host and Origin allowlists. Put remote access behind TLS or an SSH tunnel.
 
 Token environment variables:
-  REFLEX_DEVTOOLS_RUNTIME_TOKEN
-  REFLEX_DEVTOOLS_UI_TOKEN
-  REFLEX_DEVTOOLS_MCP_TOKEN
+  UKLAD_DEVTOOLS_RUNTIME_TOKEN
+  UKLAD_DEVTOOLS_UI_TOKEN
+  UKLAD_DEVTOOLS_MCP_TOKEN
 
 Examples:
-  reflex-devtools
-  reflex-devtools --mcp --allow-origin http://localhost:5173
-  reflex-devtools --mcp --allow-dispatch --allow-origin http://localhost:5173
+  uklad-devtools
+  uklad-devtools --mcp --allow-origin http://localhost:5173
+  uklad-devtools --mcp --allow-dispatch --allow-origin http://localhost:5173
 `);
 }
 
@@ -192,16 +192,16 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string): Promise<void> => {
     if (isShuttingDown) {
-      console.error('[Reflex Devtools] Force exiting.');
+      console.error('[Uklad Devtools] Force exiting.');
       process.exit(1);
     }
     isShuttingDown = true;
-    console.log(`[Reflex Devtools] Received ${signal}, shutting down.`);
+    console.log(`[Uklad Devtools] Received ${signal}, shutting down.`);
     try {
       await server.stop();
       process.exit(0);
     } catch (error) {
-      console.error('[Reflex Devtools] Shutdown failed:', error);
+      console.error('[Uklad Devtools] Shutdown failed:', error);
       process.exit(1);
     }
   };
@@ -213,7 +213,7 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
   console.error(
-    '[Reflex Devtools] Failed to start:',
+    '[Uklad Devtools] Failed to start:',
     error instanceof Error ? error.message : error,
   );
   process.exit(1);

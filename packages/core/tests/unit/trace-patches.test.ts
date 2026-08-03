@@ -5,7 +5,7 @@
  */
 import { waitForScheduled } from './test-utils';
 import {
-  createReflexRuntimeForTests as createReflexRuntime,
+  createUkladRuntimeForTests as createUkladRuntime,
   getRuntimeCoreForTests,
 } from '../../src/runtime/runtime';
 import {
@@ -70,7 +70,7 @@ describe('Conditional patch generation', () => {
   });
 
   it('does not allocate trace state while no trace consumer is attached', async () => {
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       runtimeId: 'trace-free-hot-path',
       initialState: { value: 0 },
     });

@@ -25,7 +25,7 @@ export interface GetTracesParams extends RuntimeSelectionParams {
 export function getTracesTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'get_traces',
-    description: 'List compact Reflex trace rows: events, subscription operations (create/run/dispose), and render cycles with timing. Use a small limit and eventFilter or opType before opening one get_trace row for patches, effects, or an error stack. To get current mounted subscription values, use get_active_subs.',
+    description: 'List compact Uklad trace rows: events, subscription operations (create/run/dispose), and render cycles with timing. Use a small limit and eventFilter or opType before opening one get_trace row for patches, effects, or an error stack. To get current mounted subscription values, use get_active_subs.',
     inputSchema: {
       type: 'object',
       properties: {

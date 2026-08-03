@@ -148,7 +148,7 @@ describe('regFx - Custom Effects', () => {
       const workingEffectSpy = jest.fn();
 
       regEffect('failing-effect', () => {
-        consoleLog('error', '[reflex] Custom effect failed');
+        consoleLog('error', '[uklad] Custom effect failed');
       });
 
       regEffect('working-effect', (message: string) => {
@@ -165,7 +165,7 @@ describe('regFx - Custom Effects', () => {
 
       await waitForScheduled();
 
-      expectLogCall('error', '[reflex] Custom effect failed');
+      expectLogCall('error', '[uklad] Custom effect failed');
 
       expect(workingEffectSpy).toHaveBeenCalledTimes(2);
       expect(workingEffectSpy).toHaveBeenNthCalledWith(1, 'Before error');
@@ -195,7 +195,7 @@ describe('regFx - Custom Effects', () => {
       });
 
       expect(unhandledRejections).toEqual([]);
-      expectLogCall('error', '[reflex] rejected async effect for rejecting-effect:', failure);
+      expectLogCall('error', '[uklad] rejected async effect for rejecting-effect:', failure);
       expect(laterEffectSpy).toHaveBeenCalledWith('still executed');
     });
 
@@ -224,7 +224,7 @@ describe('regFx - Custom Effects', () => {
 
       expectLogCall(
         'warn',
-        "[reflex] in 'effects' found non-existent-effect which has no associated handler. Ignoring.",
+        "[uklad] in 'effects' found non-existent-effect which has no associated handler. Ignoring.",
       );
     });
 
@@ -235,7 +235,7 @@ describe('regFx - Custom Effects', () => {
 
       await waitForScheduled();
 
-      expectLogCall('warn', '[reflex] effects expects a vector, but was given string');
+      expectLogCall('warn', '[uklad] effects expects a vector, but was given string');
     });
 
     it('should warn for a falsy non-array effect result and still commit the STATE', async () => {
@@ -248,7 +248,7 @@ describe('regFx - Custom Effects', () => {
       await waitForScheduled();
 
       expect(getState().counter).toBe(1);
-      expectLogCall('warn', '[reflex] effects expects a vector, but was given boolean');
+      expectLogCall('warn', '[uklad] effects expects a vector, but was given boolean');
     });
   });
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
-import { appIds } from '../../../app/reflex/catalog';
-import { useRuntime } from '../../../app/reflex/bindings';
+import { appIds } from '../../../app/uklad/catalog';
+import { useRuntime } from '../../../app/uklad/bindings';
 import type { Todo } from '../state';
 import { TodoInput } from './TodoInput';
 

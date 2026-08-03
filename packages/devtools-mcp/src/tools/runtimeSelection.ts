@@ -8,7 +8,7 @@ export const runtimeIdInputProperty = {
   maxLength: 128,
   pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$',
   description:
-    'Optional runtime id from app_status. Required when multiple Reflex runtimes are connected.',
+    'Optional runtime id from app_status. Required when multiple Uklad runtimes are connected.',
 };
 
 export function runtimeMetadata(response: any): Record<string, unknown> {

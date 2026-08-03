@@ -17,7 +17,7 @@ interface RuntimeMarker {
   readonly instance: object;
 }
 
-const RUNTIME_MARKER_KEY = Symbol.for('@flexsurfer/reflex/runtime');
+const RUNTIME_MARKER_KEY = Symbol.for('@ukladjs/core/runtime');
 const RUNTIME_MARKER_VERSION = 1;
 const SHOULD_DETECT_DUPLICATE_RUNTIME =
   IS_DEV ||
@@ -54,7 +54,7 @@ export function registerRuntimeInstance(instance: object): void {
         value: marker,
       });
     } catch {
-      // Duplicate detection must not prevent Reflex from loading in a hardened realm.
+      // Duplicate detection must not prevent Uklad from loading in a hardened realm.
     }
     return;
   }
@@ -64,7 +64,7 @@ export function registerRuntimeInstance(instance: object): void {
   try {
     consoleLog(
       'warn',
-      '[reflex] Multiple copies of @flexsurfer/reflex detected in the same JavaScript realm. Each copy owns a separate state, handler registry, subscription cache, and trace callback registry; do not mix providers, hooks, or runtime helpers across copies. Ensure your application resolves a single copy of @flexsurfer/reflex.',
+      '[uklad] Multiple copies of @ukladjs/core detected in the same JavaScript realm. Each copy owns a separate state, handler registry, subscription cache, and trace callback registry; do not mix providers, hooks, or runtime helpers across copies. Ensure your application resolves a single copy of @ukladjs/core.',
     );
   } catch {
     // A diagnostic must not make module initialization fail.

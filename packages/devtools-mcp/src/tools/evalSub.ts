@@ -22,7 +22,7 @@ export interface EvalSubParams extends RuntimeSelectionParams {
 export function evalSubTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'eval_sub',
-    description: 'Evaluate any registered Reflex subscription against the live app state, even when no component has mounted it. Use this to verify a new subscription\'s output before writing a view. Pass only the arguments after the subscription id.',
+    description: 'Evaluate any registered Uklad subscription against the live app state, even when no component has mounted it. Use this to verify a new subscription\'s output before writing a view. Pass only the arguments after the subscription id.',
     inputSchema: {
       type: 'object',
       properties: {

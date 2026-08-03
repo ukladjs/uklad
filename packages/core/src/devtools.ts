@@ -5,23 +5,23 @@
  * applications cannot access inspector capabilities unless they explicitly
  * import this adapter.
  */
-import { createReflexInspector as createInspectorForCore } from './inspector';
+import { createUkladInspector as createInspectorForCore } from './inspector';
 import { getRuntimeCoreForDevtools } from './runtime/runtime';
 
-import type { ReflexInspector } from './inspector-types';
+import type { UkladInspector } from './inspector-types';
 
 /** Minimal owner identity required to request a development adapter. */
-export interface ReflexDevtoolsRuntimeOwner {
+export interface UkladDevtoolsRuntimeOwner {
   readonly runtimeInstanceId: string;
 }
 
-export function createReflexInspector(runtime: ReflexDevtoolsRuntimeOwner): ReflexInspector {
+export function createUkladInspector(runtime: UkladDevtoolsRuntimeOwner): UkladInspector {
   return createInspectorForCore(getRuntimeCoreForDevtools(runtime));
 }
 
 export type {
-  ReflexDevtoolsOperationRuntime,
-  ReflexHandlerKeys,
-  ReflexInspector,
-  ReflexInspectorSnapshot,
+  UkladDevtoolsOperationRuntime,
+  UkladHandlerKeys,
+  UkladInspector,
+  UkladInspectorSnapshot,
 } from './inspector-types';

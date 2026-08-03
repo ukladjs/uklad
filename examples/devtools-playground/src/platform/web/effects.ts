@@ -1,7 +1,7 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 
 /**
  * Web implementations of the application's effect ids: real side effects
@@ -23,7 +23,7 @@ export const webEffectModes = {
   [appIds.effects.documentTitle]: 'real',
 } as const;
 
-export const registerWebEffects: ReflexModule<ReflexRegistrar<AppContracts>> = (registrar) => {
+export const registerWebEffects: UkladModule<UkladRegistrar<AppContracts>> = (registrar) => {
   registrar.regEffect(appIds.effects.diagnosticsDispatchEvent, (event, runtime) => {
     runtime.dispatch(event);
   });

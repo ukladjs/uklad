@@ -4,8 +4,8 @@ export type { DevtoolsConfig, EventPayload } from './client/index.js';
 export {
   createKeyRedactor,
   DEFAULT_SENSITIVE_KEYS,
-  REFLEX_DEVTOOLS_PROTOCOL_VERSION,
-  REFLEX_DEVTOOLS_RUNTIME_ID_HEADER,
+  UKLAD_DEVTOOLS_PROTOCOL_VERSION,
+  UKLAD_DEVTOOLS_RUNTIME_ID_HEADER,
 } from './client/index.js';
 export type {
   DevtoolsCapability,
@@ -21,10 +21,10 @@ export type {
   TraceRedactor,
 } from './client/index.js';
 export type {
-  ReflexHandlerKeys,
-  ReflexInspector,
-  ReflexInspectorSnapshot,
-  ReflexSubscriptionDiagnostic,
-  ReflexTrace,
-  ReflexTraceCallback,
+  UkladHandlerKeys,
+  UkladInspector,
+  UkladInspectorSnapshot,
+  UkladSubscriptionDiagnostic,
+  UkladTrace,
+  UkladTraceCallback,
 } from './client/types.js';

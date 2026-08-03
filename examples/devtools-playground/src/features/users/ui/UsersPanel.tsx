@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 
-import { useRuntime, useSubscription } from '../../../app/reflex/bindings';
-import { appIds } from '../../../app/reflex/catalog';
+import { useRuntime, useSubscription } from '../../../app/uklad/bindings';
+import { appIds } from '../../../app/uklad/catalog';
 import UserItem from './UserItem';
 
 function UsersPanel() {

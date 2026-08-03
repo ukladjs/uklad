@@ -26,13 +26,13 @@ interface ThemeProviderProps {
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>(() => {
-    const savedTheme = localStorage.getItem('reflex-daisyui-theme') as Theme;
+    const savedTheme = localStorage.getItem('uklad-daisyui-theme') as Theme;
     return savedTheme && AVAILABLE_THEMES.includes(savedTheme) ? savedTheme : 'light';
   });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('reflex-daisyui-theme', theme);
+    localStorage.setItem('uklad-daisyui-theme', theme);
   }, [theme]);
 
   return (

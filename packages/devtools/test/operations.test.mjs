@@ -1,23 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createReflexRuntime } from '@flexsurfer/reflex';
-import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
-import { createReflexInspector } from '@flexsurfer/reflex/devtools';
+import { createUkladRuntime } from '@ukladjs/core';
+import { createUkladTestHarness } from '@ukladjs/core/testing';
+import { createUkladInspector } from '@ukladjs/core/devtools';
 import { createOperationClient } from '../dist/client/operations/client.js';
 import { OperationCoordinator } from '../dist/client/operations/coordinator.js';
 import { createOperationInspector } from '../dist/client/operations/inspector.js';
 
 function operationsFor(runtime) {
-  return createOperationClient(createReflexInspector(runtime).getOperationRuntime());
+  return createOperationClient(createUkladInspector(runtime).getOperationRuntime());
 }
 
 test('reads the canonical coordinator snapshot after dispatch', async () => {
-  const runtime = createReflexRuntime({
+  const runtime = createUkladRuntime({
     runtimeId: 'operations-test',
     initialState: { count: 0 },
   });
-  const testHarness = createReflexTestHarness(runtime);
+  const testHarness = createUkladTestHarness(runtime);
   runtime.registerModule((registrar) => {
     registrar.regEvent('increment', ({ draftState }, amount) => {
       draftState.count += amount;
@@ -40,11 +40,11 @@ test('reads the canonical coordinator snapshot after dispatch', async () => {
 });
 
 test('retains parent and effect lineage for a dispatch cascade', async () => {
-  const runtime = createReflexRuntime({
+  const runtime = createUkladRuntime({
     runtimeId: 'operations-cascade',
     initialState: { count: 0 },
   });
-  const testHarness = createReflexTestHarness(runtime);
+  const testHarness = createUkladTestHarness(runtime);
   runtime.registerModule((registrar) => {
     registrar.regEvent('root', () => [['dispatch', ['child', 3]]]);
   });
@@ -71,11 +71,11 @@ test('retains parent and effect lineage for a dispatch cascade', async () => {
 });
 
 test('keeps concurrently accepted root operations separate', async () => {
-  const runtime = createReflexRuntime({
+  const runtime = createUkladRuntime({
     runtimeId: 'operations-concurrent',
     initialState: { count: 0 },
   });
-  const testHarness = createReflexTestHarness(runtime);
+  const testHarness = createUkladTestHarness(runtime);
   runtime.registerModule((registrar) => {
     registrar.regEvent('increment', ({ draftState }, amount) => {
       draftState.count += amount;
@@ -101,7 +101,7 @@ test('keeps concurrently accepted root operations separate', async () => {
 });
 
 test('records effect evidence through the execution probe', async () => {
-  const runtime = createReflexRuntime({
+  const runtime = createUkladRuntime({
     runtimeId: 'operations-effects',
     initialState: { saved: false },
   });
@@ -154,7 +154,7 @@ test('reports publishing until the committed revision is published', () => {
 });
 
 test('retains terminal failure and effect-error states', async () => {
-  const runtime = createReflexRuntime({
+  const runtime = createUkladRuntime({
     runtimeId: 'operations-failures',
     initialState: { count: 0 },
   });
@@ -182,7 +182,7 @@ test('retains terminal failure and effect-error states', async () => {
 });
 
 test('records a rejected detached effect as a late failure', async () => {
-  const runtime = createReflexRuntime({
+  const runtime = createUkladRuntime({
     runtimeId: 'operations-detached-rejection',
     initialState: { saved: false },
   });
@@ -221,7 +221,7 @@ test('records a rejected detached effect as a late failure', async () => {
 });
 
 test('returns a retained failed operation when the runtime is disposed with queued work', async () => {
-  const runtime = createReflexRuntime({
+  const runtime = createUkladRuntime({
     runtimeId: 'operations-disposal',
     initialState: { count: 0 },
   });
@@ -247,7 +247,7 @@ test('returns a retained failed operation when the runtime is disposed with queu
 });
 
 test('decorates an inspector without creating a second operation ledger', async () => {
-  const runtime = createReflexRuntime({
+  const runtime = createUkladRuntime({
     runtimeId: 'operations-inspector',
     initialState: { count: 0 },
   });
@@ -258,7 +258,7 @@ test('decorates an inspector without creating a second operation ledger', async 
   });
 
   try {
-    const inspector = createOperationInspector(createReflexInspector(runtime));
+    const inspector = createOperationInspector(createUkladInspector(runtime));
     const { operation } = await inspector.executeEvent(['increment']);
 
     assert.equal(operation.status, 'completed');

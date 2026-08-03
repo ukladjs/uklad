@@ -1,11 +1,11 @@
 {
   "mcpServers": {
-    "reflex-devtools": {
+    "uklad-devtools": {
       "command": "npx",
       "args": [
         "--yes",
-        "--package=@flexsurfer/reflex-devtools-mcp@0.1.13",
-        "reflex-devtools-mcp",
+        "--package=@ukladjs/devtools-mcp@0.1.13",
+        "uklad-devtools-mcp",
         "--host",
         "127.0.0.1",
         "--port",

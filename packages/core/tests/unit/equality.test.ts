@@ -119,7 +119,7 @@ describe('per-sub equalityCheck config with shallowEqual', () => {
 
     expectLogCall(
       'warn',
-      "[reflex] Subscription 'se-invalid-equality' equalityCheck must be a function. Using the global equality check.",
+      "[uklad] Subscription 'se-invalid-equality' equalityCheck must be a function. Using the global equality check.",
     );
     expect(callback).not.toHaveBeenCalled();
     expect(getSubscriptionSnapshot(subscription)).toBe(first);

@@ -1,8 +1,8 @@
 const assert = require('node:assert/strict');
 
-const { createReflexRuntime } = require('@flexsurfer/reflex/vanilla');
-const { createReflexTestHarness } = require('@flexsurfer/reflex/testing');
-const { persist } = require('@flexsurfer/reflex-persist');
+const { createUkladRuntime } = require('@ukladjs/core/vanilla');
+const { createUkladTestHarness } = require('@ukladjs/core/testing');
+const { persist } = require('@ukladjs/persist');
 
 const entries = new Map([['packed/count', JSON.stringify({ v: 1, data: 41 })]]);
 const storage = {
@@ -11,8 +11,8 @@ const storage = {
   setItem: (key, value) => entries.set(key, value),
   removeItem: (key) => entries.delete(key),
 };
-const runtime = createReflexRuntime({ initialState: { count: 0 } });
-const testHarness = createReflexTestHarness(runtime);
+const runtime = createUkladRuntime({ initialState: { count: 0 } });
+const testHarness = createUkladTestHarness(runtime);
 const handle = persist(runtime, { storage, prefix: 'packed', keys: ['count'] });
 runtime.registerModule((registrar) => {
   registrar.regEvent('increment', ({ draftState }) => {

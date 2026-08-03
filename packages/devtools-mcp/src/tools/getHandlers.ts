@@ -1,6 +1,6 @@
 /**
  * MCP Tool: get_handlers
- * List registered handlers in the Reflex application
+ * List registered handlers in the Uklad application
  */
 
 import { DevToolsAPIClient } from '../httpClient.js';
@@ -21,7 +21,7 @@ export interface GetHandlersParams extends RuntimeSelectionParams {
 export function getHandlersTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'get_handlers',
-    description: 'List registered Reflex handlers: event handlers, effects (fx), coeffects (cofx), and subscriptions (sub). Pass type whenever it is known to keep the runtime index small.',
+    description: 'List registered Uklad handlers: event handlers, effects (fx), coeffects (cofx), and subscriptions (sub). Pass type whenever it is known to keep the runtime index small.',
     inputSchema: {
       type: 'object',
       properties: {

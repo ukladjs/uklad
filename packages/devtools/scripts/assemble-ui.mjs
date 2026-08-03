@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const uiDist = path.resolve(packageRoot, '../reflex-devtools-ui/dist');
+const uiDist = path.resolve(packageRoot, '../devtools-ui/dist');
 const target = path.join(packageRoot, 'dist/ui');
 
 try {

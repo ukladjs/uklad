@@ -4,14 +4,14 @@
 import { cleanup, render, renderHook, act } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 
-import { createReflexHooks } from '../../src/react/bindings';
-import { ReflexProvider } from '../../src/react/context';
+import { createUkladHooks } from '../../src/react/bindings';
+import { UkladProvider } from '../../src/react/context';
 import { HotReloadWrapper, triggerHotReload } from '../../src/react/hot-reload';
 import { useSubscription } from '../../src/react/use-subscription';
-import { createReflexRuntimeForTests, type ReflexRuntime } from '../../src/runtime/runtime';
+import { createUkladRuntimeForTests, type UkladRuntime } from '../../src/runtime/runtime';
 
 function createValueRuntime(runtimeId: string, value: number) {
-  const runtime = createReflexRuntimeForTests({ initialState: { value }, runtimeId });
+  const runtime = createUkladRuntimeForTests({ initialState: { value }, runtimeId });
   runtime.registerModule((registrar) => {
     registrar.regRootSub('value', 'value');
   });
@@ -23,20 +23,17 @@ function createValueRuntime(runtimeId: string, value: number) {
   return runtime;
 }
 
-function boundProvider(
-  bindings: ReturnType<typeof createReflexHooks>,
-  runtime: ReflexRuntime<any>,
-) {
+function boundProvider(bindings: ReturnType<typeof createUkladHooks>, runtime: UkladRuntime<any>) {
   return function BoundWrapper({ children }: { children: ReactNode }) {
-    return createElement(bindings.ReflexProvider, { runtime }, children);
+    return createElement(bindings.UkladProvider, { runtime }, children);
   };
 }
 
-describe('createReflexHooks', () => {
+describe('createUkladHooks', () => {
   afterEach(() => cleanup());
 
   it('reads the runtime selected by its own provider', () => {
-    const bindings = createReflexHooks();
+    const bindings = createUkladHooks();
     const runtime = createValueRuntime('bindings-own-provider', 1);
 
     const hook = renderHook(() => bindings.useSubscription(['value']), {
@@ -52,7 +49,7 @@ describe('createReflexHooks', () => {
   });
 
   it('rejects the package-level provider instead of reading it as its own contract', () => {
-    const bindings = createReflexHooks();
+    const bindings = createUkladHooks();
     const runtime = createValueRuntime('bindings-foreign-provider', 1);
 
     // The package-level provider selects a runtime without selecting a
@@ -62,37 +59,37 @@ describe('createReflexHooks', () => {
     expect(() =>
       renderHook(() => bindings.useSubscription(['value']), {
         wrapper: function Wrapper({ children }: { children: ReactNode }) {
-          return createElement(ReflexProvider, { runtime }, children);
+          return createElement(UkladProvider, { runtime }, children);
         },
       }),
-    ).toThrow(/require the <ReflexProvider> returned by the same createReflexHooks\(\) call/);
+    ).toThrow(/require the <UkladProvider> returned by the same createUkladHooks\(\) call/);
 
     runtime.dispose();
   });
 
   it('does not satisfy bindings created by a different call for the same contract', () => {
-    const first = createReflexHooks();
-    const second = createReflexHooks();
+    const first = createUkladHooks();
+    const second = createUkladHooks();
     const runtime = createValueRuntime('bindings-distinct-calls', 1);
 
     expect(() =>
       renderHook(() => second.useSubscription(['value']), {
         wrapper: boundProvider(first, runtime),
       }),
-    ).toThrow(/createReflexHooks\(\) call/);
+    ).toThrow(/createUkladHooks\(\) call/);
 
     runtime.dispose();
   });
 
   it('throws without any provider', () => {
-    const bindings = createReflexHooks();
+    const bindings = createUkladHooks();
     expect(() => renderHook(() => bindings.useSubscription(['value']))).toThrow(
-      /createReflexHooks\(\) call/,
+      /createUkladHooks\(\) call/,
     );
   });
 
   it('exposes the bound runtime as a client facade', () => {
-    const bindings = createReflexHooks();
+    const bindings = createUkladHooks();
     const runtime = createValueRuntime('bindings-client-facade', 1);
 
     const hook = renderHook(() => bindings.useRuntime(), {
@@ -110,7 +107,7 @@ describe('createReflexHooks', () => {
   });
 
   it('also selects the runtime for the package-level context beneath it', () => {
-    const bindings = createReflexHooks();
+    const bindings = createUkladHooks();
     const runtime = createValueRuntime('bindings-shared-context', 5);
 
     // Hot reload and the untyped hook both read the package-level context, so
@@ -122,7 +119,7 @@ describe('createReflexHooks', () => {
 
     const view = render(
       createElement(
-        bindings.ReflexProvider,
+        bindings.UkladProvider,
         { runtime },
         createElement(HotReloadWrapper, null, createElement(Value)),
       ),
@@ -137,7 +134,7 @@ describe('createReflexHooks', () => {
   });
 
   it('selects the nearest bound provider when nested', () => {
-    const bindings = createReflexHooks();
+    const bindings = createUkladHooks();
     const outer = createValueRuntime('bindings-outer', 3);
     const inner = createValueRuntime('bindings-inner', 4);
 
@@ -147,14 +144,14 @@ describe('createReflexHooks', () => {
 
     const view = render(
       createElement(
-        bindings.ReflexProvider,
+        bindings.UkladProvider,
         { runtime: outer },
-        createElement(bindings.ReflexProvider, { runtime: inner }, createElement(Value)),
+        createElement(bindings.UkladProvider, { runtime: inner }, createElement(Value)),
       ),
     );
     expect(view.container.textContent).toBe('4');
 
-    view.rerender(createElement(bindings.ReflexProvider, { runtime: outer }, createElement(Value)));
+    view.rerender(createElement(bindings.UkladProvider, { runtime: outer }, createElement(Value)));
     expect(view.container.textContent).toBe('3');
 
     view.unmount();
@@ -163,7 +160,7 @@ describe('createReflexHooks', () => {
   });
 
   it('keeps sibling runtimes isolated, as SSR request rendering relies on', () => {
-    const bindings = createReflexHooks();
+    const bindings = createUkladHooks();
     const first = createValueRuntime('bindings-ssr-first', 1);
     const second = createValueRuntime('bindings-ssr-second', 2);
 

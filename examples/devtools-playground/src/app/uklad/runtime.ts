@@ -1,5 +1,5 @@
-import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import { createUkladRuntime } from '@ukladjs/core/vanilla';
+import type { UkladRuntime } from '@ukladjs/core/vanilla';
 
 import type { AppContracts } from './contracts';
 import { createInitialState } from './initial-state';
@@ -18,8 +18,8 @@ export interface CreatePlaygroundRuntimeOptions {
  */
 export function createPlaygroundRuntime(
   options: CreatePlaygroundRuntimeOptions,
-): ReflexRuntime<AppContracts> {
-  return createReflexRuntime<AppContracts>({
+): UkladRuntime<AppContracts> {
+  return createUkladRuntime<AppContracts>({
     initialState: createInitialState(),
     runtimeId: options.runtimeId,
     name: options.name,

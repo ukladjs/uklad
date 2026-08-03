@@ -1,4 +1,4 @@
-import { createReflexRuntimeForTests as createReflexRuntime } from '../../src/runtime/runtime';
+import { createUkladRuntimeForTests as createUkladRuntime } from '../../src/runtime/runtime';
 
 describe('parallel runtime isolation', () => {
   it.concurrent.each([
@@ -7,7 +7,7 @@ describe('parallel runtime isolation', () => {
     ['gamma', -4, 9],
     ['delta', 100, -25],
   ])('keeps test worker %s independent', async (runtimeId, initial, amount) => {
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       initialState: { value: initial },
       runtimeId: `parallel-${runtimeId}`,
     });

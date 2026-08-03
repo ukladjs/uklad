@@ -1,6 +1,6 @@
 # Headless state fixtures for agent loops
 
-This document specifies the missing acceleration layer for headless Reflex development: an AI agent should be able to reproduce a bug from a known state after every edit/reload without re-running a long setup sequence by hand.
+This document specifies the missing acceleration layer for headless Uklad development: an AI agent should be able to reproduce a bug from a known state after every edit/reload without re-running a long setup sequence by hand.
 
 It complements [agent-workflow.md](workflow.md). That document describes the whole task loop; this one focuses on the hot-reload/restart problem inside the headless runtime.
 
@@ -285,14 +285,14 @@ restore_state { name: "category-filter-before-action" }
   }
 ```
 
-Restore should flow through a traced operation owned by the injected Reflex
+Restore should flow through a traced operation owned by the injected Uklad
 inspector so subscriptions are flushed and traces remain coherent:
 
 ```text
 inspector.restoreState(snapshotState)
 ```
 
-Reflex may implement that operation with an internal event, but DevTools only
+Uklad may implement that operation with an internal event, but DevTools only
 calls the injected adapter and never imports or registers against the runtime.
 
 ### `list_snapshots`
@@ -437,7 +437,7 @@ Every snapshot should store enough metadata to detect risk:
 Recommended fields:
 
 - `stateVersion`: app-provided version, usually from `state.meta.stateVersion` or a configured getter.
-- `appMapHash`: hash of `.reflex/map.json` when available.
+- `appMapHash`: hash of `.uklad/map.json` when available.
 - `schemaHash`: hash of top-level keys and coarse value types.
 - `stateShape`: bounded summary for agent visibility.
 
@@ -456,11 +456,11 @@ MCP restore_state
   -> HTTP POST /api/snapshots/:id/restore
   -> server sends WebSocket message to SDK:
        { type: "restore-state-to-client", payload: { restoreId, state } }
-  -> SDK calls the injected Reflex inspector:
+  -> SDK calls the injected Uklad inspector:
        inspector.restoreState(state)
   -> app replaces state and flushes subscriptions
   -> SDK sends restore result:
-       { type: "reflex-restore-result", payload: { restoreId, trace } }
+       { type: "uklad-restore-result", payload: { restoreId, trace } }
   -> server resolves MCP call
 ```
 
@@ -476,20 +476,20 @@ The restore response should include:
 
 ## Internal restore event
 
-The Reflex library should provide a dev-only primitive for replacing app state safely. The current public API does not expose `updateState` directly, and that is good; restore should remain a devtools/testing capability.
+The Uklad library should provide a dev-only primitive for replacing app state safely. The current public API does not expose `updateState` directly, and that is good; restore should remain a devtools/testing capability.
 
 Options:
 
-1. **The injected Reflex inspector exposes a traced restore operation.**
+1. **The injected Uklad inspector exposes a traced restore operation.**
 
    ```ts
    inspector.restoreState(nextState);
    ```
 
-   Reflex owns the internal event or publication-safe primitive; DevTools only
+   Uklad owns the internal event or publication-safe primitive; DevTools only
    forwards the protocol message to the injected inspector.
 
-2. **Reflex exports a dev-only helper used by the inspector.**
+2. **Uklad exports a dev-only helper used by the inspector.**
 
    ```ts
    restoreStateForDevtools(nextState);
@@ -497,7 +497,7 @@ Options:
 
    The inspector calls it after DevTools forwards the restore message.
 
-The first option keeps the runtime boundary explicit and restore visible in the event trace. The second option is simpler internally but should not make the DevTools package import Reflex again. Prefer the traced inspector operation unless implementation cost proves too high.
+The first option keeps the runtime boundary explicit and restore visible in the event trace. The second option is simpler internally but should not make the DevTools package import Uklad again. Prefer the traced inspector operation unless implementation cost proves too high.
 
 ---
 
@@ -580,7 +580,7 @@ Phase 1 can be in-memory server storage:
 Phase 2 can add optional disk persistence:
 
 ```text
-.reflex/devtools-fixtures.json
+.uklad/devtools-fixtures.json
 ```
 
 Disk persistence should be opt-in or project-local. Do not silently write large app states into source control paths without clear configuration.

@@ -1,9 +1,9 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds, stateKeys } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds, stateKeys } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 
-export const registerCounterSubscriptions: ReflexModule<ReflexRegistrar<AppContracts>> = (
+export const registerCounterSubscriptions: UkladModule<UkladRegistrar<AppContracts>> = (
   registrar,
 ) => {
   // `regRootSub` maps the queried subscription id to the state property that

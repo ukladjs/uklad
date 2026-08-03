@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@ukladjs/core';
 import SortIndicator from './ui/SortIndicator';
 
 type SortField = 'handlerId' | 'runs';

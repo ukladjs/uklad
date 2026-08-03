@@ -9,10 +9,10 @@ lerna-debug.log*
 
 node_modules
 dist
-# packages/reflex/tests/types/dist is a source fixture (compile-time test against the built
+# packages/core/tests/types/dist is a source fixture (compile-time test against the built
 # types), not build output — keep it tracked despite the dist pattern above
-!packages/reflex/tests/types/dist/
-!packages/reflex/tests/types/dist/**
+!packages/core/tests/types/dist/
+!packages/core/tests/types/dist/**
 dist-ssr
 experiments
 coverage

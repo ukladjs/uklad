@@ -1,13 +1,13 @@
-# Canonical Reflex application structure
+# Canonical Uklad application structure
 
 - **Status:** Working canonical design
 - **Last updated:** 2026-07-30
-- **Scope:** Application-authored Reflex code for React, React Native, SSR,
+- **Scope:** Application-authored Uklad code for React, React Native, SSR,
   tests, and headless execution
 
 ## Purpose
 
-This document captures the application structure agreed for the next Reflex API,
+This document captures the application structure agreed for the next Uklad API,
 examples, templates, and agent toolkit. It defines the target authoring model;
 existing examples and agent instructions may still use older structures until
 they are migrated.
@@ -24,7 +24,7 @@ The design optimizes for two related goals:
 
 ## Decisions at a glance
 
-1. A Reflex application normally owns one shared runtime, one application state
+1. A Uklad application normally owns one shared runtime, one application state
    object, one complete `AppContracts`, and one runtime-scoped reactive graph.
 2. Feature modules organize application-wide registrations. They do not create
    state domains, contract scopes, graph boundaries, or child runtimes.
@@ -49,7 +49,7 @@ The design optimizes for two related goals:
 
 ## One application runtime
 
-A normal Reflex application has one application-owned runtime. That runtime is
+A normal Uklad application has one application-owned runtime. That runtime is
 the sole owner of:
 
 - the application state;
@@ -126,7 +126,7 @@ This is a performance invariant, not only a naming preference.
 identity, and the subscription engine propagates only those changed roots. A
 mutation anywhere inside one large `todos` object changes that object's
 identity and reevaluates the dependent subgraph rooted there. Independent roots
-allow Reflex to start publication from only the affected values.
+allow Uklad to start publication from only the affected values.
 
 Downstream subscription equality may still stop propagation and prevent
 consumer notification. Flat roots reduce the work that enters the graph; they
@@ -155,9 +155,9 @@ The owning feature name is the required property prefix: `todosById`,
 used for state roots.
 
 See the current
-[`StateStore` publication boundary](../../packages/reflex/src/runtime/state.ts)
+[`StateStore` publication boundary](../../packages/core/src/runtime/state.ts)
 and
-[`SubscriptionEngine` propagation](../../packages/reflex/src/runtime/subscriptions/engine.ts)
+[`SubscriptionEngine` propagation](../../packages/core/src/runtime/subscriptions/engine.ts)
 for the implementation behind this rule.
 
 ## Application catalog
@@ -165,8 +165,8 @@ for the implementation behind this rule.
 The application has one catalog next to `AppContracts`:
 
 ```text
-src/app/reflex/catalog.ts
-src/app/reflex/contracts.ts
+src/app/uklad/catalog.ts
+src/app/uklad/contracts.ts
 ```
 
 The catalog has two separate top-level exports:
@@ -286,7 +286,7 @@ names. `regRootSub` is the explicit mapping between the query surface and the
 state storage shape.
 
 Registering a root subscription declares that its backing state key can enter
-the reactive graph. Reflex observes identity changes at that root; it does not
+the reactive graph. Uklad observes identity changes at that root; it does not
 make the value deeply reactive. Nested mutations performed through Immer change
 the containing root identity.
 
@@ -294,7 +294,7 @@ Root subscription IDs live beside computed subscription IDs under
 `appIds.subscriptions`. Their `AppContracts.subscriptions` entries declare an
 empty parameter tuple and a result type matching the backing state root.
 
-Reflex-owned identifiers are outside `appIds`. In particular, the built-in
+Uklad-owned identifiers are outside `appIds`. In particular, the built-in
 effects `dispatch` and `dispatch-later` remain runtime-reserved identifiers and
 do not require application feature prefixes. The event-context keys `event`
 and `draftState` are likewise runtime-owned and cannot be used as application
@@ -309,13 +309,13 @@ answers **what each name means at the type boundary**.
 handler-ID string has one source of truth:
 
 ```ts
-import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
+import type { UkladContracts } from '@ukladjs/core/vanilla';
 
 import { appIds, stateKeys } from './catalog';
 import type { AuthStatus, Session } from '../../features/auth/state';
 import type { Todo, TodoDraft, TodoFilter, TodoId } from '../../features/todos/state';
 
-export interface AppContracts extends ReflexContracts {
+export interface AppContracts extends UkladContracts {
   state: {
     [stateKeys.todosById]: Record<TodoId, Todo>;
     [stateKeys.todosOrder]: TodoId[];
@@ -378,7 +378,7 @@ export interface AppContracts extends ReflexContracts {
 ```
 
 The contract is application-owned and complete across features. Feature
-installers receive `ReflexRegistrar<AppContracts>` and may register dependencies
+installers receive `UkladRegistrar<AppContracts>` and may register dependencies
 across any declared feature namespace.
 
 The catalog and contract are intentionally adjacent. They form the smallest
@@ -432,12 +432,12 @@ appropriate for that environment:
 
 ```ts
 // platform/web/effects.ts
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 
-export const registerWebEffects: ReflexModule<ReflexRegistrar<AppContracts>> = (registrar) => {
+export const registerWebEffects: UkladModule<UkladRegistrar<AppContracts>> = (registrar) => {
   registrar.regEffect(appIds.effects.todosPersist, ({ todos }) => {
     window.localStorage.setItem('todos', JSON.stringify(todos));
   });
@@ -450,7 +450,7 @@ provider to an ergonomic local input name:
 
 ```ts
 // platform/web/coeffects.ts
-export const registerWebCoeffects: ReflexModule<ReflexRegistrar<AppContracts>> = (registrar) => {
+export const registerWebCoeffects: UkladModule<UkladRegistrar<AppContracts>> = (registrar) => {
   registrar.regCoeffect(appIds.coeffects.systemNow, () => Date.now());
 };
 ```
@@ -491,8 +491,8 @@ Platform modules follow these rules:
 declaring the argument it is injected with and the value it contributes:
 
 ```ts
-// app/reflex/contracts.ts
-export interface AppContracts extends ReflexContracts {
+// app/uklad/contracts.ts
+export interface AppContracts extends UkladContracts {
   coeffects: {
     [appIds.coeffects.systemNow]: { arg: void; value: number };
     [appIds.coeffects.systemRandom]: { arg: void; value: number };
@@ -553,7 +553,7 @@ The application uses feature-based organization even when it is small:
 ```text
 src/
   app/
-    reflex/
+    uklad/
       catalog.ts
       contracts.ts
       initial-state.ts
@@ -607,7 +607,7 @@ from the generic `main.tsx` shown above.
 
 ### Application composition files
 
-`src/app/reflex/` owns the shared application boundary:
+`src/app/uklad/` owns the shared application boundary:
 
 | File               | Responsibility                                                                |
 | ------------------ | ----------------------------------------------------------------------------- |
@@ -637,13 +637,13 @@ several independently reactive application roots.
 application contract. Platform effects and coeffects are deliberately absent:
 
 ```ts
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import type { AppContracts } from '../../app/reflex/contracts';
+import type { AppContracts } from '../../app/uklad/contracts';
 import { registerTodoEvents } from './events';
 import { registerTodoSubscriptions } from './subscriptions';
 
-export const todosModule: ReflexModule<ReflexRegistrar<AppContracts>> = (registrar) => {
+export const todosModule: UkladModule<UkladRegistrar<AppContracts>> = (registrar) => {
   registerTodoEvents(registrar);
   registerTodoSubscriptions(registrar);
 };
@@ -760,7 +760,7 @@ The following details remain to be finalized:
    occupy separate registries. Decide whether identical values may intentionally
    appear in different string-ID catalog groups, or whether the application
    convention requires global uniqueness across those groups.
-2. **Reusable libraries:** Decide how a reusable Reflex library exposes its own
+2. **Reusable libraries:** Decide how a reusable Uklad library exposes its own
    identifiers while preserving one application discovery surface. The leading
    option is for the application catalog to import or re-export library-owned
    state keys and handler IDs rather than redeclaring their strings.

@@ -2,8 +2,8 @@ import type {
   ContractState,
   ContractEventPayloads,
   ContractSubscriptionPayloads,
-  ReflexContracts,
-} from '@flexsurfer/reflex/vanilla';
+  UkladContracts,
+} from '@ukladjs/core/vanilla';
 
 import type { PERSIST_IDS } from './ids';
 
@@ -102,7 +102,7 @@ interface PersistBaseOptions<TState extends AnyState> {
   readonly version?: number;
   /** Migrates serialized data from an older version. Must be synchronous and pure. */
   readonly migrate?: (key: string, data: unknown, fromVersion: number) => PersistData;
-  /** Storage namespace. Entries live at `<prefix>/<encoded-root-key>`. Default `reflex`. */
+  /** Storage namespace. Entries live at `<prefix>/<encoded-root-key>`. Default `uklad`. */
   readonly prefix?: string;
   /** Receives sanitized diagnostics after the causing event commits. */
   readonly onError?: (diagnostic: PersistDiagnostic) => void;
@@ -153,7 +153,7 @@ export interface PersistSubscriptionPayloads {
 }
 
 /** Add the public persistence protocol to an existing strict runtime contract. */
-export type PersistContracts<TContracts extends ReflexContracts> = Omit<
+export type PersistContracts<TContracts extends UkladContracts> = Omit<
   TContracts,
   'state' | 'events' | 'subscriptions'
 > & {

@@ -96,7 +96,7 @@ export class SubscriptionCell<T> {
           listener,
         );
       } catch (error) {
-        consoleLog('error', '[reflex] Error in subscription listener:', error);
+        consoleLog('error', '[uklad] Error in subscription listener:', error);
       }
     }
   }
@@ -153,7 +153,7 @@ export class SubscriptionCell<T> {
     } catch (error) {
       observableChanged = this.setError(error);
       if (observableChanged) {
-        consoleLog('error', `[reflex] Error in subscription computation ${this.spec.key}:`, error);
+        consoleLog('error', `[uklad] Error in subscription computation ${this.spec.key}:`, error);
       }
     }
     return observableChanged;

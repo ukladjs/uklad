@@ -1,18 +1,18 @@
-# Reflex application authoring rules
+# Uklad application authoring rules
 
 - **Status:** Working canonical rules
-- **Scope:** Application-authored Reflex code: React, React Native, SSR, tests,
+- **Scope:** Application-authored Uklad code: React, React Native, SSR, tests,
   and headless entry points
 
 This is the short, normative companion to
-[Canonical Reflex application structure](canonical-app-structure.md). Read it
+[Canonical Uklad application structure](canonical-app-structure.md). Read it
 before adding or changing application state, events, subscriptions, effects, or
 coeffects. The canonical-structure document explains the rationale and full
 directory layout; this document states the rules that application code,
 templates, and the agent toolkit must follow.
 
 These are application authoring rules, not conventions for implementing the
-`@flexsurfer/reflex` package itself. Core contributors should also follow
+`@ukladjs/core` package itself. Core contributors should also follow
 [code conventions](../engineering/code-conventions.md). The production-runtime
 protection policy is decided by the
 [Foundation ADR](foundation-adr.md#2-ai-first-authoring-integrity-boundaries-and-a-fast-production-core):
@@ -75,7 +75,7 @@ effect so the later dispatch crosses the same explicit boundary.
 ### 1. Use one application catalog and one complete contract
 
 - Declare every application state root once in
-  `src/app/reflex/catalog.ts` under `stateKeys`.
+  `src/app/uklad/catalog.ts` under `stateKeys`.
 - Declare every application-defined event, subscription, custom effect, and
   coeffect ID once there under `appIds`.
 - Use those catalog values in `AppContracts`, registrations, dispatches,
@@ -214,7 +214,7 @@ input before they dispatch.
   cannot distinguish finite numbers, so validate or test that boundary rule
   separately.
 - `SubscriptionParam` is exported from the package root and
-  `@flexsurfer/reflex/vanilla` for shared helper types. Typed runtime
+  `@ukladjs/core/vanilla` for shared helper types. Typed runtime
   construction rejects contracts that declare a non-scalar parameter tuple.
 - An omitted subscription section or an explicit `any`-typed map retains the
   permissive compatibility surface. Treat that as an opt-out while migrating,
@@ -234,7 +234,7 @@ and stale graph reuse.
   subscriptions have no equality configuration because they expose their source
   root directly.
 - Set the runtime default with the `equalityCheck` option during
-  `createReflexRuntime` composition. The framework default is deep equality
+  `createUkladRuntime` composition. The framework default is deep equality
   through `fast-deep-equal`; cached subscriptions capture the selected policy
   when they are first created.
 - An application may set `equalityCheck: () => false` to treat every computed
@@ -249,9 +249,9 @@ and stale graph reuse.
   whether React renders.
 
 ```ts
-import { createReflexRuntime, shallowEqual } from '@flexsurfer/reflex/vanilla';
+import { createUkladRuntime, shallowEqual } from '@ukladjs/core/vanilla';
 
-const runtime = createReflexRuntime({
+const runtime = createUkladRuntime({
   initialState,
   equalityCheck: () => false,
 });
@@ -291,7 +291,7 @@ work. An asynchronous read is an effect followed by a result event.
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Independently reactive data          | `stateKeys`, `AppContracts.state`, feature initial state, and a root subscription if it is queried                                                        |
 | Initial, restored, or hydrated state | Validate and normalize it at the input boundary, transfer ownership to the runtime, and never mutate it after handoff                                     |
-| Runtime-wide policy                  | Pass the default `equalityCheck` and ordered global `interceptors` to `createReflexRuntime`; feature modules do not alter either policy                   |
+| Runtime-wide policy                  | Pass the default `equalityCheck` and ordered global `interceptors` to `createUkladRuntime`; feature modules do not alter either policy                   |
 | Event                                | `appIds.events`, `AppContracts.events`, and its feature registration                                                                                      |
 | Derived subscription                 | `appIds.subscriptions`, `AppContracts.subscriptions`, complete dependencies, bounded scalar query parameters if any, and an equality override when needed |
 | Environment write                    | `appIds.effects`, `AppContracts.effects`, platform handlers for every supported target                                                                    |

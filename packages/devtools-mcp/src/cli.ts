@@ -87,18 +87,18 @@ function parseArgs(): CliConfig {
 
   return {
     serverUrl: url.toString().replace(/\/+$/, ''),
-    token: process.env.REFLEX_DEVTOOLS_MCP_TOKEN,
+    token: process.env.UKLAD_DEVTOOLS_MCP_TOKEN,
     allowInsecureRemote,
   };
 }
 
 function printHelp(): void {
   console.log(`
-Reflex DevTools MCP Server
+Uklad DevTools MCP Server
 
-Connects the stdio MCP transport to an authenticated Reflex DevTools API.
+Connects the stdio MCP transport to an authenticated Uklad DevTools API.
 
-Usage: reflex-devtools-mcp [options]
+Usage: uklad-devtools-mcp [options]
 
 Options:
   -p, --port <port>             DevTools port (default: 4000)
@@ -114,7 +114,7 @@ Capabilities:
 
 Authentication:
   Local loopback connections obtain a generated MCP-role token automatically.
-  Remote connections must set REFLEX_DEVTOOLS_MCP_TOKEN to the same value used
+  Remote connections must set UKLAD_DEVTOOLS_MCP_TOKEN to the same value used
   by the DevTools server. Keep tokens out of MCP JSON and process arguments.
 `);
 }

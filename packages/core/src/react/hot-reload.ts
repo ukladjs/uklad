@@ -3,9 +3,9 @@ import type { ReactElement, ReactNode } from 'react';
 
 import { consoleLog } from '../core/logging';
 import { clearRuntimeSubsForHotReload, getRuntimeClientForInternalUse } from '../runtime/runtime';
-import type { ReflexRuntime, ReflexRuntimeClient } from '../runtime/api';
-import type { ReflexContracts } from '../contracts';
-import { useReflexRuntime } from './context';
+import type { UkladRuntime, UkladRuntimeClient } from '../runtime/api';
+import type { UkladContracts } from '../contracts';
+import { useUkladRuntime } from './context';
 
 import type { Id } from '../types';
 
@@ -19,8 +19,8 @@ interface HotReloadState {
 const hotReloadStates = new WeakMap<object, HotReloadState>();
 
 /** Register a callback for one explicit runtime and return an unregister function. */
-export function registerHotReloadCallback<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntimeClient<TContracts>,
+export function registerHotReloadCallback<TContracts extends UkladContracts>(
+  runtime: UkladRuntimeClient<TContracts>,
   callback: HotReloadCallback,
 ): () => void {
   const callbacks = getHotReloadState(runtime).callbacks;
@@ -29,24 +29,24 @@ export function registerHotReloadCallback<TContracts extends ReflexContracts>(
 }
 
 /** Invoke callbacks for one explicit runtime. */
-export function triggerHotReload<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntimeClient<TContracts>,
+export function triggerHotReload<TContracts extends UkladContracts>(
+  runtime: UkladRuntimeClient<TContracts>,
 ): void {
-  consoleLog('log', '[reflex] Triggering hot reload callbacks');
+  consoleLog('log', '[uklad] Triggering hot reload callbacks');
   const state = getHotReloadState(runtime);
   state.version++;
   for (const callback of state.callbacks) {
     try {
       callback();
     } catch (error) {
-      consoleLog('error', '[reflex] Error in hot reload callback:', error);
+      consoleLog('error', '[uklad] Error in hot reload callback:', error);
     }
   }
 }
 
 /** Remove callbacks for one explicit runtime. */
-export function clearHotReloadCallbacks<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntimeClient<TContracts>,
+export function clearHotReloadCallbacks<TContracts extends UkladContracts>(
+  runtime: UkladRuntimeClient<TContracts>,
 ): void {
   getHotReloadState(runtime).callbacks.clear();
 }
@@ -66,8 +66,8 @@ export function useHotReloadKey(): string {
  * Create bundler-agnostic HMR hooks scoped to one runtime. Pass the owning
  * module's subscription IDs to preserve unrelated definitions.
  */
-export function setupSubsHotReload<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntime<TContracts>,
+export function setupSubsHotReload<TContracts extends UkladContracts>(
+  runtime: UkladRuntime<TContracts>,
   subscriptionIds?: readonly Id[],
 ): {
   dispose: () => void;
@@ -78,7 +78,7 @@ export function setupSubsHotReload<TContracts extends ReflexContracts>(
   };
   const accept = (newModule?: unknown) => {
     if (newModule) {
-      consoleLog('log', '[reflex] Hot reloading subs module');
+      consoleLog('log', '[uklad] Hot reloading subs module');
       triggerHotReload(runtime);
     }
   };
@@ -91,8 +91,8 @@ export function HotReloadWrapper({ children }: { children: ReactNode }): ReactEl
   return createElement(Fragment, { key }, children);
 }
 
-function getHotReloadState<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntimeClient<TContracts>,
+function getHotReloadState<TContracts extends UkladContracts>(
+  runtime: UkladRuntimeClient<TContracts>,
 ): HotReloadState {
   const client = getRuntimeClientForInternalUse(runtime);
   let state = hotReloadStates.get(client);
@@ -103,8 +103,8 @@ function getHotReloadState<TContracts extends ReflexContracts>(
   return state;
 }
 
-function useHotReloadVersion(): readonly [ReflexRuntimeClient<any>, number] {
-  const runtime = useReflexRuntime();
+function useHotReloadVersion(): readonly [UkladRuntimeClient<any>, number] {
+  const runtime = useUkladRuntime();
   const subscribe = useCallback(
     (callback: HotReloadCallback) => registerHotReloadCallback(runtime, callback),
     [runtime],

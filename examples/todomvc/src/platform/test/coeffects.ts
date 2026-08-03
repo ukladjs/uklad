@@ -1,11 +1,11 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 
 export interface TestClock {
   /** Install `system/now` backed by this clock. */
-  readonly module: ReflexModule<ReflexRegistrar<AppContracts>>;
+  readonly module: UkladModule<UkladRegistrar<AppContracts>>;
   /** Set the value the next injections will read. */
   set(value: number): void;
 }

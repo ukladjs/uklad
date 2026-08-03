@@ -20,9 +20,9 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@flexsurfer/reflex": "workspace:*",
-    "@flexsurfer/reflex-devtools": "workspace:*",
-    "@flexsurfer/reflex-persist": "workspace:*",
+    "@ukladjs/core": "workspace:*",
+    "@ukladjs/devtools": "workspace:*",
+    "@ukladjs/persist": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

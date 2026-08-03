@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createReflexRuntime } from '@flexsurfer/reflex';
-import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
-import { createReflexInspector } from '@flexsurfer/reflex/devtools';
+import { createUkladRuntime } from '@ukladjs/core';
+import { createUkladTestHarness } from '@ukladjs/core/testing';
+import { createUkladInspector } from '@ukladjs/core/devtools';
 import { enableDevtools, logEvent } from '../dist/client/index.js';
 
 const waitForTurn = () => new Promise((resolve) => setImmediate(resolve));
@@ -40,7 +40,7 @@ class FakeWebSocket {
 
   send(data) {
     const message = JSON.parse(data);
-    if (message.type === 'reflex-auth') {
+    if (message.type === 'uklad-auth') {
       this.sent.push(message);
       queueMicrotask(() => {
         if (this.readyState !== FakeWebSocket.OPEN) return;
@@ -84,7 +84,7 @@ function response(body, { ok = true, status = 200, protocolVersion = '2' } = {})
     ok,
     status,
     headers: new Headers(
-      protocolVersion === null ? {} : { 'Reflex-DevTools-Protocol-Version': protocolVersion },
+      protocolVersion === null ? {} : { 'Uklad-DevTools-Protocol-Version': protocolVersion },
     ),
     async json() {
       return body;
@@ -230,7 +230,7 @@ async function runtimeInfoPayloadFor(config) {
     await waitForTurn();
     const socket = FakeWebSocket.instances[0];
     socket.emit({ type: 'ui-connection-status', payload: { connectedUIs: 1 } });
-    return socket.sent.find((event) => event.type === 'reflex-runtime-info')?.payload;
+    return socket.sent.find((event) => event.type === 'uklad-runtime-info')?.payload;
   } finally {
     cleanup?.();
     globalThis.fetch = originalFetch;
@@ -240,7 +240,7 @@ async function runtimeInfoPayloadFor(config) {
 
 test('runtime-info omits unset optional fields instead of serializing undefined', async () => {
   // Regression: enableDevtools() with no effects/effectMode used to send those
-  // keys as undefined, which reflexReplacer serializes to the string
+  // keys as undefined, which ukladReplacer serializes to the string
   // 'undefined'. The server's runtime-info schema then rejected the event
   // (effects must be a record), closing the socket into a reconnect loop that
   // stalled data updates and dropped traces.
@@ -319,12 +319,12 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
     assert.equal(FakeWebSocket.instances.length, 1);
     const socket = FakeWebSocket.instances[0];
     assert.equal(socket.url, 'ws://devtools.test/sdk');
-    assert.deepEqual(socket.protocols, ['reflex-devtools.v2']);
+    assert.deepEqual(socket.protocols, ['uklad-devtools.v2']);
     assert.equal(socket.readyState, FakeWebSocket.OPEN);
     assert.equal(fake.unsubscribeCount, 0);
     assert.equal(fake.snapshotCount, 0);
     assert.equal(socket.sent.length, 1);
-    assert.equal(socket.sent[0].type, 'reflex-auth');
+    assert.equal(socket.sent[0].type, 'uklad-auth');
     assert.equal(socket.sent[0].payload.role, 'runtime');
     assert.equal(socket.sent[0].payload.protocolVersion, 2);
     assert.equal(socket.sent[0].payload.inspectorApiVersion, 2);
@@ -339,7 +339,7 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
     assert.equal(fake.snapshotCount, 1);
     assert.deepEqual(
       socket.sent.slice(-4).map((event) => event.type),
-      ['reflex-state', 'reflex-active-subs', 'reflex-handler-keys', 'reflex-runtime-info'],
+      ['uklad-state', 'uklad-active-subs', 'uklad-handler-keys', 'uklad-runtime-info'],
     );
 
     socket.emit({
@@ -360,9 +360,9 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
         tags: { event: fake.dispatches[0] },
       },
     ]);
-    assert.ok(socket.sent.some((event) => event.type === 'reflex-traces'));
+    assert.ok(socket.sent.some((event) => event.type === 'uklad-traces'));
     assert.deepEqual(
-      socket.sent.find((event) => event.type === 'reflex-dispatch-result')?.payload,
+      socket.sent.find((event) => event.type === 'uklad-dispatch-result')?.payload,
       {
         dispatchId: 'dispatch-7',
         trace: {
@@ -390,7 +390,7 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
 
     assert.deepEqual(fake.evaluations, [['answer'], ['boom']]);
     const evaluationResults = socket.sent
-      .filter((event) => event.type === 'reflex-eval-sub-result')
+      .filter((event) => event.type === 'uklad-eval-sub-result')
       .map((event) => event.payload);
     assert.deepEqual(evaluationResults.slice(0, 2), [
       { evalId: 10, value: 42 },
@@ -499,11 +499,11 @@ test('executes a retained operation through a runtime inspector configured in De
   globalThis.WebSocket = FakeWebSocket;
   globalThis.fetch = successfulFetch;
 
-  const runtime = createReflexRuntime({
+  const runtime = createUkladRuntime({
     runtimeId: 'configured-operations',
     initialState: { count: 0 },
   });
-  const testHarness = createReflexTestHarness(runtime);
+  const testHarness = createUkladTestHarness(runtime);
   runtime.registerModule((registrar) => {
     registrar.regEvent('increment', ({ draftState }, amount) => {
       draftState.count += amount;
@@ -511,7 +511,7 @@ test('executes a retained operation through a runtime inspector configured in De
   });
   let cleanup;
   try {
-    cleanup = enableDevtools(createReflexInspector(runtime), { operations: true });
+    cleanup = enableDevtools(createUkladInspector(runtime), { operations: true });
     await waitForTurn();
     await waitForTurn();
     const socket = FakeWebSocket.instances[0];
@@ -528,7 +528,7 @@ test('executes a retained operation through a runtime inspector configured in De
     await waitForTurn();
 
     assert.equal(testHarness.getState().count, 2);
-    const result = socket.sent.find((event) => event.type === 'reflex-operation-result')?.payload;
+    const result = socket.sent.find((event) => event.type === 'uklad-operation-result')?.payload;
     assert.equal(result?.dispatchId, 'configured-operation-1');
     assert.equal(result?.result.operation.status, 'completed');
     assert.equal(result?.result.operation.eventInstanceIds.length, 1);
@@ -590,7 +590,7 @@ test('uses the negotiated operation capability instead of trace correlation', as
     assert.deepEqual(executed, [['increment', 2]]);
     assert.deepEqual(fake.dispatches, []);
     assert.deepEqual(
-      socket.sent.find((event) => event.type === 'reflex-operation-result')?.payload,
+      socket.sent.find((event) => event.type === 'uklad-operation-result')?.payload,
       {
         dispatchId: 'operation-7',
         result: {
@@ -979,7 +979,7 @@ test('correlates concurrent same-name dispatch outcomes by opaque runtime id', a
     ]);
 
     const results = socket.sent
-      .filter((event) => event.type === 'reflex-dispatch-result')
+      .filter((event) => event.type === 'uklad-dispatch-result')
       .map((event) => ({
         dispatchId: event.payload.dispatchId,
         traceId: event.payload.trace.id,
@@ -1047,11 +1047,11 @@ test('cleanup aborts in-flight HTTP fallback events', async () => {
     assert.equal(eventSignals.length, 4);
     assert.ok(eventSignals.every((signal) => !signal.aborted));
     assert.ok(
-      eventHeaders.every((headers) => headers.get('x-reflex-runtime-id') === 'runtime-test'),
+      eventHeaders.every((headers) => headers.get('x-uklad-runtime-id') === 'runtime-test'),
     );
     assert.ok(
       eventHeaders.every(
-        (headers) => headers.get('x-reflex-runtime-session') === 'runtime-session-test',
+        (headers) => headers.get('x-uklad-runtime-session') === 'runtime-session-test',
       ),
     );
 
@@ -1092,7 +1092,7 @@ test('redacts common secret keys before state and traces leave the runtime', asy
       payload: { connectedUIs: 1 },
     });
 
-    const stateEvent = socket.sent.find((event) => event.type === 'reflex-state');
+    const stateEvent = socket.sent.find((event) => event.type === 'uklad-state');
     assert.equal(stateEvent.payload.user.password, '[REDACTED]');
     assert.equal(stateEvent.payload.user.apiKey, '[REDACTED]');
     assert.equal(stateEvent.payload.user.displayName, 'Ada');
@@ -1114,7 +1114,7 @@ test('redacts common secret keys before state and traces leave the runtime', asy
         },
       },
     ]);
-    const traceEvent = socket.sent.find((event) => event.type === 'reflex-traces');
+    const traceEvent = socket.sent.find((event) => event.type === 'uklad-traces');
     assert.equal(traceEvent.payload[0].tags.event[1].access_token, '[REDACTED]');
     assert.equal(traceEvent.payload[0].tags.patches[0].value, '[REDACTED]');
     assert.doesNotMatch(JSON.stringify(socket.sent), /plain-text|trace-secret|patch-secret/);
@@ -1162,7 +1162,7 @@ test('applies subscription-result redaction to evaluation errors before transpor
     await waitForTurn();
 
     const result = socket.sent.find(
-      (event) => event.type === 'reflex-eval-sub-result' && event.payload.evalId === 'eval-secret',
+      (event) => event.type === 'uklad-eval-sub-result' && event.payload.evalId === 'eval-secret',
     );
     assert.equal(result.payload.error.message, '[REDACTED:EVALUATION_ERROR]');
     assert.equal('stack' in result.payload.error, false);
@@ -1219,14 +1219,14 @@ test('drops oversized telemetry before either transport and warns only once', as
     await waitForTurn();
 
     assert.equal(
-      socket.sent.some((event) => event.type === 'reflex-state'),
+      socket.sent.some((event) => event.type === 'uklad-state'),
       false,
     );
     assert.equal(eventRequests.length, 0);
     assert.equal(JSON.stringify(socket.sent).includes(marker), false);
 
     const payloadWarnings = warnings.filter((warning) =>
-      warning.includes('Dropped "reflex-state" telemetry before transport'),
+      warning.includes('Dropped "uklad-state" telemetry before transport'),
     );
     assert.equal(payloadWarnings.length, 1);
     assert.match(payloadWarnings[0], /negotiated 512-byte runtime limit/);
@@ -1265,7 +1265,7 @@ test('deduplicates bounded server telemetry-drop notices', async () => {
       payload: {
         code: 'RUNTIME_TELEMETRY_DROPPED',
         reason: 'retention-limit',
-        eventType: 'reflex-state',
+        eventType: 'uklad-state',
       },
       timestamp: Date.now(),
     };
@@ -1273,7 +1273,7 @@ test('deduplicates bounded server telemetry-drop notices', async () => {
     socket.emit(notice);
 
     const noticeWarnings = warnings.filter((warning) =>
-      warning.includes('Server dropped "reflex-state" telemetry'),
+      warning.includes('Server dropped "uklad-state" telemetry'),
     );
     assert.equal(noticeWarnings.length, 1);
     assert.match(noticeWarnings[0], /retention-limit/);
@@ -1302,14 +1302,14 @@ test('handles typed retention rejection from the HTTP fallback without reconnect
       return successfulFetch(url, options);
     }
     const event = JSON.parse(options.body);
-    if (event.type !== 'reflex-state') return response({ success: true });
+    if (event.type !== 'uklad-state') return response({ success: true });
     stateRequests++;
     return response(
       {
         success: false,
         code: 'RUNTIME_TELEMETRY_DROPPED',
         reason: 'retention-limit',
-        eventType: 'reflex-state',
+        eventType: 'uklad-state',
         error: 'Runtime telemetry was not retained.',
       },
       { ok: false, status: 422 },
@@ -1342,7 +1342,7 @@ test('handles typed retention rejection from the HTTP fallback without reconnect
     assert.equal(FakeWebSocket.instances.length, 1);
     assert.equal(socket.readyState, FakeWebSocket.OPEN);
     const dropWarnings = warnings.filter((warning) =>
-      warning.includes('Server dropped "reflex-state" telemetry'),
+      warning.includes('Server dropped "uklad-state" telemetry'),
     );
     assert.equal(dropWarnings.length, 1);
     assert.equal(

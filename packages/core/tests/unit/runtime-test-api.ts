@@ -15,9 +15,9 @@ import {
   withOptionalTrace as withOptionalTraceInternal,
 } from '../../src/runtime/tracing';
 import { execute as executeInterceptors } from '../../src/events/interceptors-executor';
-import { createReflexInspector as createInspectorInternal } from '../../src/inspector';
+import { createUkladInspector as createInspectorInternal } from '../../src/inspector';
 import {
-  createReflexRuntimeForTests as createReflexRuntime,
+  createUkladRuntimeForTests as createUkladRuntime,
   getRuntimeCoreForTests,
 } from '../../src/runtime/runtime';
 import type { RegistrationStore } from '../../src/runtime/registrations';
@@ -25,7 +25,7 @@ import { createElement } from 'react';
 
 import type { Trace, TraceCallback, TraceOptions } from '../../src/runtime/tracing';
 import type { ReactElement, ReactNode } from 'react';
-import { ReflexProvider } from '../../src/react/context';
+import { UkladProvider } from '../../src/react/context';
 import type {
   Context,
   CoEffectHandler,
@@ -48,15 +48,15 @@ import type {
   SubscriptionSpec,
 } from '../../src/runtime/subscriptions/engine';
 
-export const testRuntime = createReflexRuntime({
+export const testRuntime = createUkladRuntime({
   initialState: {},
-  runtimeId: 'reflex-unit-test-runtime',
-  name: 'Reflex unit-test runtime',
+  runtimeId: 'uklad-unit-test-runtime',
+  name: 'Uklad unit-test runtime',
 });
 
 /** Provider for hook tests that exercise the explicit test runtime. */
-export function ReflexTestProvider({ children }: { children?: ReactNode }): ReactElement {
-  return createElement(ReflexProvider, { runtime: testRuntime }, children);
+export function UkladTestProvider({ children }: { children?: ReactNode }): ReactElement {
+  return createElement(UkladProvider, { runtime: testRuntime }, children);
 }
 
 const core = getRuntimeCoreForTests(testRuntime);
@@ -244,7 +244,7 @@ export const testEventRuntime = core.events;
 export const debounceAndDispatch = testRuntime.debounceAndDispatch.bind(testRuntime);
 export const throttleAndDispatch = testRuntime.throttleAndDispatch.bind(testRuntime);
 
-export function createReflexInspector() {
+export function createUkladInspector() {
   return createInspectorInternal(core);
 }
 

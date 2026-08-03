@@ -1,7 +1,7 @@
 import React from 'react';
 
-import { useSubscription } from '../../../app/reflex/bindings';
-import { appIds } from '../../../app/reflex/catalog';
+import { useSubscription } from '../../../app/uklad/bindings';
+import { appIds } from '../../../app/uklad/catalog';
 
 interface UserItemProps {
   userId: number;

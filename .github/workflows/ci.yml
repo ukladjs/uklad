@@ -31,7 +31,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run quality checks
-        run: pnpm --filter @flexsurfer/reflex run check
+        run: pnpm --filter @ukladjs/core run check
 
   persist-quality:
     runs-on: ubuntu-latest
@@ -54,20 +54,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Reflex peer
-        run: pnpm run build:reflex
+      - name: Build Uklad peer
+        run: pnpm run build:core
 
       - name: Check persistence package
-        run: pnpm --filter @flexsurfer/reflex-persist run check
+        run: pnpm --filter @ukladjs/persist run check
 
       - name: Check packed persistence consumer
-        run: pnpm --filter @flexsurfer/reflex-persist run check:package
+        run: pnpm --filter @ukladjs/persist run check:package
 
       - name: Run persistence coverage
-        run: pnpm --filter @flexsurfer/reflex-persist run test:ci
+        run: pnpm --filter @ukladjs/persist run test:ci
 
       - name: Verify persistence tarball
-        run: npm pack --dry-run --json ./packages/reflex-persist
+        run: npm pack --dry-run --json ./packages/persist
 
   typescript-compatibility:
     runs-on: ubuntu-latest
@@ -91,17 +91,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build declarations
-        run: pnpm --filter @flexsurfer/reflex run build
+        run: pnpm --filter @ukladjs/core run build
 
       - name: Check with native TypeScript 7
         run: >-
-          pnpm --filter @flexsurfer/reflex run typecheck &&
-          pnpm --filter @flexsurfer/reflex run test:types:package
+          pnpm --filter @ukladjs/core run typecheck &&
+          pnpm --filter @ukladjs/core run test:types:package
 
       - name: Check with TypeScript 6 compatibility compiler
         run: >-
-          pnpm --filter @flexsurfer/reflex run typecheck:compat &&
-          pnpm --filter @flexsurfer/reflex run test:types:compat
+          pnpm --filter @ukladjs/core run typecheck:compat &&
+          pnpm --filter @ukladjs/core run test:types:compat
 
   legacy-consumers:
     runs-on: ubuntu-latest
@@ -129,11 +129,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build library
-        run: pnpm --filter @flexsurfer/reflex run build
+        run: pnpm --filter @ukladjs/core run build
 
       - name: Verify packed tarball (runtime smoke + TypeScript ${{ matrix.typescript }})
         run: >-
-          pnpm --filter @flexsurfer/reflex run test:types:legacy
+          pnpm --filter @ukladjs/core run test:types:legacy
           ${{ matrix.typescript }}
 
   test-matrix:
@@ -165,18 +165,18 @@ jobs:
       - name: Install React ${{ matrix.react }}
         run: |
           if [ "${{ matrix.react }}" = "18.3.1" ]; then
-            pnpm --filter @flexsurfer/reflex add --save-dev --save-exact --lockfile=false \
+            pnpm --filter @ukladjs/core add --save-dev --save-exact --lockfile=false \
               react@18.3.1 react-dom@18.3.1 @types/react@18.3.31 @types/react-dom@18.3.7
           else
-            pnpm --filter @flexsurfer/reflex add --save-dev --save-exact --lockfile=false \
+            pnpm --filter @ukladjs/core add --save-dev --save-exact --lockfile=false \
               react@19.2.8 react-dom@19.2.8 @types/react@19.2.18 @types/react-dom@19.2.4
           fi
 
       - name: Build library
-        run: pnpm --filter @flexsurfer/reflex run build
+        run: pnpm --filter @ukladjs/core run build
 
       - name: Run tests
-        run: pnpm --filter @flexsurfer/reflex run test:ci
+        run: pnpm --filter @ukladjs/core run test:ci
 
   package-consumption:
     runs-on: ubuntu-latest
@@ -200,12 +200,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build library
-        run: pnpm --filter @flexsurfer/reflex run build
+        run: pnpm --filter @ukladjs/core run build
 
       - name: Pack library
         run: |
-          npm pack ./packages/reflex
-          mv flexsurfer-reflex-*.tgz reflex.tgz
+          npm pack ./packages/core
+          mv ukladjs-core-*.tgz uklad.tgz
 
       - name: Create test consumer packages
         run: |
@@ -213,11 +213,11 @@ jobs:
           mkdir -p test-consumption/esm-consumer
           cd test-consumption/esm-consumer
           npm init -y
-          npm install ../../reflex.tgz react@19.2.8
+          npm install ../../uklad.tgz react@19.2.8
           cat > test.mjs <<'EOF'
           import assert from 'node:assert/strict';
-          import { createReflexRuntime, useSubscription } from '@flexsurfer/reflex';
-          assert.equal(typeof createReflexRuntime, 'function');
+          import { createUkladRuntime, useSubscription } from '@ukladjs/core';
+          assert.equal(typeof createUkladRuntime, 'function');
           assert.equal(typeof useSubscription, 'function');
           console.log('ESM import works');
           EOF
@@ -228,11 +228,11 @@ jobs:
           mkdir -p cjs-consumer
           cd cjs-consumer
           npm init -y
-          npm install ../../reflex.tgz react@19.2.8
+          npm install ../../uklad.tgz react@19.2.8
           cat > test.js <<'EOF'
           const assert = require('node:assert/strict');
-          const { createReflexRuntime, useSubscription } = require('@flexsurfer/reflex');
-          assert.equal(typeof createReflexRuntime, 'function');
+          const { createUkladRuntime, useSubscription } = require('@ukladjs/core');
+          assert.equal(typeof createUkladRuntime, 'function');
           assert.equal(typeof useSubscription, 'function');
           console.log('CommonJS require works');
           EOF
@@ -263,16 +263,16 @@ jobs:
         run: pnpm run build:devtools && pnpm run build:mcp
 
       - name: Check DevTools UI
-        run: pnpm --filter @flexsurfer/reflex-devtools-ui run check
+        run: pnpm --filter @ukladjs/devtools-ui run check
 
       - name: Run DevTools package tests
-        run: pnpm --filter @flexsurfer/reflex-devtools run test:unit
+        run: pnpm --filter @ukladjs/devtools run test:unit
 
       - name: Run DevTools MCP tests
-        run: pnpm --filter @flexsurfer/reflex-devtools-mcp run test:unit
+        run: pnpm --filter @ukladjs/devtools-mcp run test:unit
 
       - name: Build DevTools playground
-        run: pnpm --filter @flexsurfer/reflex-devtools-playground run build
+        run: pnpm --filter @ukladjs/devtools-playground run build
 
   example-todomvc:
     runs-on: ubuntu-latest
@@ -296,7 +296,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build TodoMVC library dependencies
-        run: pnpm run build:reflex && pnpm run build:persist
+        run: pnpm run build:core && pnpm run build:persist
 
       - name: Build TodoMVC example
         run: pnpm --filter todomvc run build
@@ -330,16 +330,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build library
-        run: pnpm run build:reflex && pnpm run build:persist
+        run: pnpm run build:core && pnpm run build:persist
 
       - name: Run tests
-        run: pnpm --filter @flexsurfer/reflex run test:ci
+        run: pnpm --filter @ukladjs/core run test:ci
 
       - name: Test package publication
         run: >-
-          npm pack --dry-run ./packages/reflex &&
-          npm pack --dry-run ./packages/reflex-persist &&
-          npm publish --dry-run --tag beta ./packages/reflex-persist
+          npm pack --dry-run ./packages/core &&
+          npm pack --dry-run ./packages/persist &&
+          npm publish --dry-run --tag beta ./packages/persist
 
       - name: Test TodoMVC example build
         run: pnpm --filter todomvc run build
@@ -370,12 +370,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build library
-        run: pnpm --filter @flexsurfer/reflex run build
+        run: pnpm --filter @ukladjs/core run build
 
       - name: Pack library
         run: |
-          npm pack ./packages/reflex
-          mv flexsurfer-reflex-*.tgz reflex.tgz
+          npm pack ./packages/core
+          mv ukladjs-core-*.tgz uklad.tgz
 
       - name: Test with ${{ matrix.bundler }}
         run: |
@@ -393,13 +393,13 @@ jobs:
           npm install react@18 react-dom@18
 
           # Install the packed library
-          npm install ../reflex.tgz
+          npm install ../uklad.tgz
 
           # Create entry file that imports from the library
           cat > index.mjs << 'EOF'
-          import { createReflexRuntime, useSubscription } from "@flexsurfer/reflex";
-          if (typeof createReflexRuntime !== "function") {
-            throw new Error("createReflexRuntime is not a function");
+          import { createUkladRuntime, useSubscription } from "@ukladjs/core";
+          if (typeof createUkladRuntime !== "function") {
+            throw new Error("createUkladRuntime is not a function");
           }
           if (typeof useSubscription !== "function") {
             throw new Error("useSubscription is not a function");

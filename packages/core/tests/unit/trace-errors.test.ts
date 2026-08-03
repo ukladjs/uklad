@@ -222,7 +222,7 @@ describe('Queue failure isolation', () => {
 
     expect(processed).toEqual([1, 2]);
     expect(
-      getTestLogCalls().error.some((call) => call[0] === '[reflex] event processing exception:'),
+      getTestLogCalls().error.some((call) => call[0] === '[uklad] event processing exception:'),
     ).toBe(true);
     expect(
       getTestLogCalls().error.some(

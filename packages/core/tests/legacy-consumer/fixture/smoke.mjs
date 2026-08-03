@@ -1,14 +1,14 @@
 // Runtime smoke test for ESM consumers: drives a real event -> state ->
 // subscription cycle against the packed tarball, not the repo sources.
 import assert from 'node:assert';
-import { ReflexProvider, createReflexRuntime } from '@flexsurfer/reflex';
-import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
-import { ReflexProvider as subpathReflexProvider } from '@flexsurfer/reflex/react';
+import { UkladProvider, createUkladRuntime } from '@ukladjs/core';
+import { createUkladTestHarness } from '@ukladjs/core/testing';
+import { UkladProvider as subpathUkladProvider } from '@ukladjs/core/react';
 
-assert.strictEqual(ReflexProvider, subpathReflexProvider);
+assert.strictEqual(UkladProvider, subpathUkladProvider);
 
-const runtime = createReflexRuntime({ initialState: { count: 0 } });
-const testHarness = createReflexTestHarness(runtime);
+const runtime = createUkladRuntime({ initialState: { count: 0 } });
+const testHarness = createUkladTestHarness(runtime);
 runtime.registerModule((registrar) => {
   registrar.regEvent('inc', ({ draftState }) => {
     draftState.count += 1;

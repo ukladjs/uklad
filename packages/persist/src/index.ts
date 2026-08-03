@@ -1,5 +1,5 @@
 /**
- * @flexsurfer/reflex-persist — persistence as Reflex primitives.
+ * @ukladjs/persist — persistence as Uklad primitives.
  *
  * The package exposes one stable root entrypoint. Implementation modules stay
  * private so storage engines and lifecycle internals can evolve without

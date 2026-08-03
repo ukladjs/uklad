@@ -204,7 +204,7 @@ function createCompositeProbe(attachments: readonly RuntimeProbeAttachment[]): R
           entries.push({ attachment, token });
           operationTracked ||= attachment.probe.tracksOperations === true;
         } catch (error) {
-          consoleLog('warn', '[reflex] runtime probe failed during eventAccepted.', error);
+          consoleLog('warn', '[uklad] runtime probe failed during eventAccepted.', error);
         }
       }
       return entries.length === 0
@@ -243,7 +243,7 @@ function createCompositeProbe(attachments: readonly RuntimeProbeAttachment[]): R
             token: callback.call(attachment.probe, span),
           });
         } catch (error) {
-          consoleLog('warn', '[reflex] runtime probe failed during spanStarted.', error);
+          consoleLog('warn', '[uklad] runtime probe failed during spanStarted.', error);
         }
       }
       return entries.length === 0 ? undefined : { entries };
@@ -288,6 +288,6 @@ function invokeProbe(
   try {
     (callback as (...values: readonly unknown[]) => unknown).call(probe, ...args);
   } catch (error) {
-    consoleLog('warn', `[reflex] runtime probe failed during ${String(method)}.`, error);
+    consoleLog('warn', `[uklad] runtime probe failed during ${String(method)}.`, error);
   }
 }

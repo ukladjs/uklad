@@ -1,5 +1,5 @@
 import ReactDOM from 'react-dom/client';
-import { ReflexProvider } from '@flexsurfer/reflex';
+import { UkladProvider } from '@ukladjs/core';
 import App from './App';
 import './index.css';
 import './subs';
@@ -10,7 +10,7 @@ import { devtoolsRuntime, dispatch } from './runtime';
 dispatch(['init-socket']);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-    <ReflexProvider runtime={devtoolsRuntime}>
+    <UkladProvider runtime={devtoolsRuntime}>
         <App />
-    </ReflexProvider>
+    </UkladProvider>
 );

@@ -12,13 +12,13 @@ import type {
   ContractSubscriptionParams,
   ContractSubscriptionResult,
   ContractSubscriptionVector,
-  PermissiveReflexContracts,
-  ReflexContracts,
+  PermissiveUkladContracts,
+  UkladContracts,
   SubscriptionParam,
 } from '../../src/contracts';
-import { createReflexRuntime } from '../../src/vanilla';
+import { createUkladRuntime } from '../../src/vanilla';
 
-interface CounterContracts extends ReflexContracts {
+interface CounterContracts extends UkladContracts {
   state: { count: number };
   events: {
     set: [value: number];
@@ -34,7 +34,7 @@ interface CounterContracts extends ReflexContracts {
   };
 }
 
-interface SessionContracts extends ReflexContracts {
+interface SessionContracts extends UkladContracts {
   state: { value: string };
   events: {
     set: [value: string];
@@ -44,7 +44,7 @@ interface SessionContracts extends ReflexContracts {
   };
 }
 
-interface ContractRuntime<TContracts extends ReflexContracts> {
+interface ContractRuntime<TContracts extends UkladContracts> {
   getState(): ContractState<TContracts>;
   dispatch(event: ContractDispatchVector<TContracts>): void;
   emit(effect: ContractEffectVector<TContracts>): void;
@@ -73,7 +73,7 @@ const undefinedSubscriptionParam: SubscriptionParam = undefined;
 void objectSubscriptionParam;
 void undefinedSubscriptionParam;
 
-interface ScalarParameterContracts extends ReflexContracts {
+interface ScalarParameterContracts extends UkladContracts {
   subscriptions: {
     filtered: {
       params: [id: string, limit: number, includeDone: boolean, cursor: null];
@@ -82,7 +82,7 @@ interface ScalarParameterContracts extends ReflexContracts {
   };
 }
 
-interface InvalidScalarParameterContracts extends ReflexContracts {
+interface InvalidScalarParameterContracts extends UkladContracts {
   subscriptions: {
     filtered: { params: [filter: { includeDone: boolean }]; result: number };
   };
@@ -94,7 +94,7 @@ scalarParameterRuntime.getSubscriptionValue(['filtered', 'todo-1', 10, false, nu
 // @ts-expect-error An invalid contract cannot produce a subscription query vector.
 invalidScalarParameterRuntime.getSubscriptionValue(['filtered', { includeDone: true }]);
 // @ts-expect-error Typed runtime construction rejects non-scalar contract parameters.
-createReflexRuntime<InvalidScalarParameterContracts>({ initialState: {} });
+createUkladRuntime<InvalidScalarParameterContracts>({ initialState: {} });
 void scalarParameterRuntime;
 void invalidScalarParameterRuntime;
 
@@ -170,7 +170,7 @@ void counterQuery;
 // by the parameterless subscription ids and, for one of them, whether a given
 // state key holds a value satisfying that subscription's declared result.
 
-interface DashboardContracts extends ReflexContracts {
+interface DashboardContracts extends UkladContracts {
   state: { count: number; label: string; other: number };
   subscriptions: {
     count: { params: []; result: number };
@@ -213,9 +213,9 @@ const mismatchedUnionSource: DashboardSource<'count' | 'label', 'count'> = 'coun
 void mismatchedUnionSource;
 
 // Undeclared sections leave both halves open.
-const permissiveRootSubId: ContractRootSubscriptionId<PermissiveReflexContracts> = 'any/sub';
+const permissiveRootSubId: ContractRootSubscriptionId<PermissiveUkladContracts> = 'any/sub';
 const permissiveSource: ContractRootSubscriptionSource<
-  PermissiveReflexContracts,
+  PermissiveUkladContracts,
   'any/sub',
   'any-key'
 > = 'any-key';
@@ -228,18 +228,18 @@ void permissiveSource;
 // every key it admits holds — and a narrower named property still wins at its
 // own key, which is why the key is resolved rather than enumerated.
 
-interface AnyIndexedContracts extends ReflexContracts {
+interface AnyIndexedContracts extends UkladContracts {
   state: Record<string, any>;
   subscriptions: { count: { params: []; result: number } };
 }
-interface TypedIndexedContracts extends ReflexContracts {
+interface TypedIndexedContracts extends UkladContracts {
   state: Record<string, number | string>;
   subscriptions: {
     count: { params: []; result: number };
     either: { params: []; result: number | string };
   };
 }
-interface MixedIndexedContracts extends ReflexContracts {
+interface MixedIndexedContracts extends UkladContracts {
   state: { [key: string]: number | string; count: number };
   subscriptions: {
     count: { params: []; result: number };
@@ -290,11 +290,11 @@ void siblingOfNamedSource;
 // `keyof` over a union keeps only the shared keys, which would read a disjoint
 // state as declaring nothing at all; the check distributes instead.
 
-interface DisjointStateContracts extends ReflexContracts {
+interface DisjointStateContracts extends UkladContracts {
   state: { count: number } | { label: string };
   subscriptions: { count: { params: []; result: number } };
 }
-interface SharedStateContracts extends ReflexContracts {
+interface SharedStateContracts extends UkladContracts {
   state:
     { status: 'loading'; items: readonly string[] } | { status: 'ready'; items: readonly string[] };
   subscriptions: {
@@ -339,14 +339,14 @@ void sharedStatusSource;
 // `state['0']` and `state[0]` are one property at runtime. Such a state is
 // declared, not open, and the numeric-string form resolves onto its key.
 
-interface NumericKeyContracts extends ReflexContracts {
+interface NumericKeyContracts extends UkladContracts {
   state: { 0: string };
   subscriptions: {
     first: { params: []; result: string };
     counted: { params: []; result: number };
   };
 }
-interface NumberIndexedStateContracts extends ReflexContracts {
+interface NumberIndexedStateContracts extends UkladContracts {
   state: Record<number, string>;
   subscriptions: { first: { params: []; result: string } };
 }
@@ -384,22 +384,22 @@ void exponentSource;
 // absent or permissive section declares unbounded params, but a typed index
 // signature declares what every id it admits accepts.
 
-interface ParameterizedIndexSubContracts extends ReflexContracts {
+interface ParameterizedIndexSubContracts extends UkladContracts {
   state: { value: number };
   subscriptions: Record<string, { params: [factor: number]; result: number }>;
 }
-interface ParameterlessIndexSubContracts extends ReflexContracts {
+interface ParameterlessIndexSubContracts extends UkladContracts {
   state: { value: number };
   subscriptions: Record<string, { params: []; result: number }>;
 }
-interface MixedSubContracts extends ReflexContracts {
+interface MixedSubContracts extends UkladContracts {
   state: { value: number };
   subscriptions: {
     [id: string]: { params: readonly any[]; result: any };
     scaled: { params: [factor: number]; result: number };
   };
 }
-interface ArrayParamSubContracts extends ReflexContracts {
+interface ArrayParamSubContracts extends UkladContracts {
   state: { value: number };
   subscriptions: {
     empty: { params: []; result: number };
@@ -407,7 +407,7 @@ interface ArrayParamSubContracts extends ReflexContracts {
     atLeastOne: { params: [first: number, ...rest: number[]]; result: number };
   };
 }
-interface UnionIndexSubContracts extends ReflexContracts {
+interface UnionIndexSubContracts extends UkladContracts {
   state: { value: number };
   subscriptions: {
     [id: string]: { params: []; result: number } | { params: [factor: number]; result: number };
@@ -454,11 +454,11 @@ void namedParameterizedSubject;
 void unionIndexArbitrarySubject;
 
 // Undeclared and permissive sections stay open.
-const permissiveSubject: ContractRootSubscriptionSubject<PermissiveReflexContracts, 'any/sub'> =
+const permissiveSubject: ContractRootSubscriptionSubject<PermissiveUkladContracts, 'any/sub'> =
   'any/sub';
 void permissiveSubject;
 
-declare const permissive: ContractRuntime<PermissiveReflexContracts>;
+declare const permissive: ContractRuntime<PermissiveUkladContracts>;
 permissive.dispatch(['any/event', 1, 'two']);
 permissive.emit(['any-effect', { anything: true }]);
 const permissiveResult: any = permissive.getSubscriptionValue(['any/sub', { page: 1 }]);

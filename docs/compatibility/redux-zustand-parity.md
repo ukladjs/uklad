@@ -1,11 +1,11 @@
 # Redux Toolkit and Zustand feature parity
 
-This document records the feature-parity decisions for Reflex against Redux
+This document records the feature-parity decisions for Uklad against Redux
 Toolkit (RTK) and Zustand.
 
 Legend: ✅ has it · ⚠️ partial / community · ❌ missing.
 
-| Feature                                                | Redux Toolkit                                           | Zustand                     | Reflex today                                              | Adopt?                                                                                                                                                                            |
+| Feature                                                | Redux Toolkit                                           | Zustand                     | Uklad today                                              | Adopt?                                                                                                                                                                            |
 | ------------------------------------------------------ | ------------------------------------------------------- | --------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Concurrent-safe React binding (`useSyncExternalStore`) | ✅ react-redux v8+                                      | ✅ built on it              | ✅ `useSyncExternalStore`                                 | **Done** — stale params, missed render→subscribe updates, and per-sub tearing fixed; cross-sub render consistency done too (subscriptions read the last flushed state generation) |
 | Typed action/event payloads                            | ✅ `PayloadAction<T>`                                   | ✅ typed store API          | ✅ opt-in `EventPayloads`/`SubPayloads` maps              | **Done** — typed dispatch/regEvent/useSubscription via module augmentation                                                                                                        |

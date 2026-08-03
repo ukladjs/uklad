@@ -1,7 +1,7 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 
 /**
  * Web implementations of the application's coeffect ids: read real browser
@@ -16,7 +16,7 @@ export const webCoeffectModes = {
   [appIds.coeffects.storageLocalValue]: 'real',
 } as const;
 
-export const registerWebCoeffects: ReflexModule<ReflexRegistrar<AppContracts>> = (registrar) => {
+export const registerWebCoeffects: UkladModule<UkladRegistrar<AppContracts>> = (registrar) => {
   registrar.regCoeffect(appIds.coeffects.systemNow, () => Date.now());
 
   registrar.regCoeffect(appIds.coeffects.storageLocalValue, (key) =>

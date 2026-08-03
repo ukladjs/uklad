@@ -1,7 +1,7 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 import { memoryStorage } from './env';
 
 /**
@@ -14,7 +14,7 @@ export const headlessCoeffectModes = {
   [appIds.coeffects.storageLocalValue]: 'memory',
 } as const;
 
-export const registerHeadlessCoeffects: ReflexModule<ReflexRegistrar<AppContracts>> = (
+export const registerHeadlessCoeffects: UkladModule<UkladRegistrar<AppContracts>> = (
   registrar,
 ) => {
   registrar.regCoeffect(appIds.coeffects.systemNow, () => Date.now());

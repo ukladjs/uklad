@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { enableMapSet } from '@flexsurfer/reflex/vanilla';
-import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
-import type { SyncPersistStorage } from '@flexsurfer/reflex-persist';
+import { enableMapSet } from '@ukladjs/core/vanilla';
+import { createUkladTestHarness } from '@ukladjs/core/testing';
+import type { SyncPersistStorage } from '@ukladjs/persist';
 
-import { appIds } from '../../app/reflex/catalog';
-import { registerFeatureModules } from '../../app/reflex/register';
-import { createAppRuntime } from '../../app/reflex/runtime';
+import { appIds } from '../../app/uklad/catalog';
+import { registerFeatureModules } from '../../app/uklad/register';
+import { createAppRuntime } from '../../app/uklad/runtime';
 import { createTestClock } from '../test/coeffects';
 import { registerWebPersistence } from './persistence';
 
@@ -34,7 +34,7 @@ describe('web persistence integration', () => {
     const fake = createFakeStorage(
       new Map([
         [
-          'reflex/todosById',
+          'uklad/todosById',
           JSON.stringify({ v: 1, data: [[1, { id: 1, title: 'stored', done: false }]] }),
         ],
       ]),
@@ -45,7 +45,7 @@ describe('web persistence integration', () => {
     const firstRuntime = createAppRuntime({ runtimeId: 'todomvc.persist.first' });
     registerFeatureModules(firstRuntime);
     firstRuntime.registerModule(createTestClock(2).module);
-    const firstHarness = createReflexTestHarness(firstRuntime);
+    const firstHarness = createUkladTestHarness(firstRuntime);
     const first = registerWebPersistence(firstRuntime, fake.storage);
 
     first.hydrate();
@@ -60,7 +60,7 @@ describe('web persistence integration', () => {
     // Reload: a fresh runtime rebuilds the Map root from the stored tuples.
     const reloadRuntime = createAppRuntime({ runtimeId: 'todomvc.persist.reload' });
     registerFeatureModules(reloadRuntime);
-    const reloadHarness = createReflexTestHarness(reloadRuntime);
+    const reloadHarness = createUkladTestHarness(reloadRuntime);
     const reload = registerWebPersistence(reloadRuntime, fake.storage);
     reload.hydrate();
 

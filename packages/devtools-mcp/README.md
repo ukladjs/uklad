@@ -1,13 +1,13 @@
-# 🤖 Reflex DevTools MCP Server
+# 🤖 Uklad DevTools MCP Server
 
-**The bridge that lets AI agents observe and drive a running Reflex app**
+**The bridge that lets AI agents observe and drive a running Uklad app**
 
-This package is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that connects AI agents — Claude Code, Codex, Cursor, Claude Desktop — to a running Reflex application through the [Reflex DevTools](https://github.com/flexsurfer/reflex/tree/main/packages/reflex-devtools) server. Agents inspect state and traces and, when explicitly authorized, dispatch events and verify outcomes from the response instead of re-reading source files.
+This package is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that connects AI agents — Claude Code, Codex, Cursor, Claude Desktop — to a running Uklad application through the [Uklad DevTools](https://github.com/ukladjs/uklad/tree/main/packages/devtools) server. Agents inspect state and traces and, when explicitly authorized, dispatch events and verify outcomes from the response instead of re-reading source files.
 
 **Note:** Trace storage lives in the DevTools server (started with `--mcp`). This MCP server is a stateless API client — install it once, globally, and it works across every project.
 
 [License: MIT](https://opensource.org/licenses/MIT)
-[NPM Version](https://www.npmjs.com/package/@flexsurfer/reflex-devtools-mcp)
+[NPM Version](https://www.npmjs.com/package/@ukladjs/devtools-mcp)
 
 ---
 
@@ -18,7 +18,7 @@ This package is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io
 ```
 ┌─────────────────┐    WebSocket    ┌─────────────────────────┐    HTTP    ┌─────────────────┐
 │   Your App      │◀───────────────▶│   DevTools Server       │◀──────────▶│   MCP Server    │
-│  + Reflex SDK   │                 │   + Trace Storage       │            │  (this package) │
+│  + Uklad SDK   │                 │   + Trace Storage       │            │  (this package) │
 │ (browser tab or │                 │   + REST API            │            └────────┬────────┘
 │  headless Node) │                 │  project-local, --mcp   │                     │ MCP (stdio)
 └─────────────────┘                 └─────────────────────────┘                     ▼
@@ -55,25 +55,25 @@ The app does not have to be a browser tab: a **[headless runtime](#-headless-run
 
 
 
-### Recommended: the Reflex Agent Toolkit plugin
+### Recommended: the Uklad Agent Toolkit plugin
 
-For Claude Code and Codex, don't configure this package by hand. The [Reflex Agent Toolkit](https://github.com/flexsurfer/reflex-agent-toolkit) plugin ships the MCP configuration *and* the workflow skill that teaches the agent when to use each tool:
+For Claude Code and Codex, don't configure this package by hand. The [Uklad Agent Toolkit](https://github.com/ukladjs/uklad-agent-toolkit) plugin ships the MCP configuration *and* the workflow skill that teaches the agent when to use each tool:
 
 **Claude Code**
 
 ```text
-/plugin marketplace add flexsurfer/reflex-agent-toolkit
-/plugin install reflex-agent-toolkit@reflex-agent-toolkit
+/plugin marketplace add ukladjs/uklad-agent-toolkit
+/plugin install uklad-agent-toolkit@uklad-agent-toolkit
 ```
 
 **Codex**
 
 ```bash
-codex plugin marketplace add flexsurfer/reflex-agent-toolkit
-# then inside Codex: /plugins → install "Reflex Agent Toolkit"
+codex plugin marketplace add ukladjs/uklad-agent-toolkit
+# then inside Codex: /plugins → install "Uklad Agent Toolkit"
 ```
 
-Then ask for what you want — "Create a React/Vite site using Reflex (@flexsurfer/reflex)" — and the agent handles project setup (dependencies, tracing, the `devtools:mcp` script) itself.
+Then ask for what you want — "Create a React/Vite site using Uklad (@ukladjs/core)" — and the agent handles project setup (dependencies, tracing, the `devtools:mcp` script) itself.
 
 ### Manual client configuration
 
@@ -85,12 +85,12 @@ For Claude Desktop, Cursor, or any other MCP client, register the bridge with `n
 ```json
 {
   "mcpServers": {
-    "reflex-devtools": {
+    "uklad-devtools": {
       "command": "npx",
       "args": [
         "--yes",
-        "--package=@flexsurfer/reflex-devtools-mcp@0.1.13",
-        "reflex-devtools-mcp",
+        "--package=@ukladjs/devtools-mcp@0.1.13",
+        "uklad-devtools-mcp",
         "--host",
         "127.0.0.1",
         "--port",
@@ -112,15 +112,15 @@ The bridge needs a DevTools server with a connected app to talk to. In the proje
 
 1. **Install DevTools:**
   ```bash
-   npm install --save-dev @flexsurfer/reflex-devtools
+   npm install --save-dev @ukladjs/devtools
   ```
 2. **Enable it in development** (app entry point):
   ```typescript
-   import { enableDevtools } from '@flexsurfer/reflex-devtools';
-   import { createReflexInspector } from '@flexsurfer/reflex/devtools';
+   import { enableDevtools } from '@ukladjs/devtools';
+   import { createUkladInspector } from '@ukladjs/core/devtools';
 
    if (import.meta.env.DEV) {
-     enableDevtools(createReflexInspector(runtime), {
+     enableDevtools(createUkladInspector(runtime), {
        operations: true,
      });
    }
@@ -129,21 +129,21 @@ The bridge needs a DevTools server with a connected app to talk to. In the proje
   ```json
    {
      "scripts": {
-       "devtools:mcp": "reflex-devtools --mcp --host 127.0.0.1 --port 4000 --allow-origin http://localhost:5173"
+       "devtools:mcp": "uklad-devtools --mcp --host 127.0.0.1 --port 4000 --allow-origin http://localhost:5173"
      }
    }
   ```
    Replace the origin with the exact origin of your browser dev server. Repeat
    `--allow-origin` for additional browser origins, or omit it for headless-only
    use.
-4. **Start your Reflex app** — a browser tab, or a headless entry (`src/headless.ts` under `tsx`/`vite-node`) for browserless agent work.
+4. **Start your Uklad app** — a browser tab, or a headless entry (`src/headless.ts` under `tsx`/`vite-node`) for browserless agent work.
 
 If the task genuinely needs mutation, grant it separately:
 
 ```json
 {
   "scripts": {
-    "devtools:mcp": "reflex-devtools --mcp --allow-dispatch --host 127.0.0.1 --port 4000 --allow-origin http://localhost:5173"
+    "devtools:mcp": "uklad-devtools --mcp --allow-dispatch --host 127.0.0.1 --port 4000 --allow-origin http://localhost:5173"
   }
 }
 ```
@@ -263,7 +263,7 @@ Retrieve the current application state state — scoped by path whenever possibl
 ### 5. `dispatch_and_wait`
 
 The preferred development action for a runtime enabled with
-`enableDevtools(createReflexInspector(runtime), { operations: true })`. It waits for the root event and all joined
+`enableDevtools(createUkladInspector(runtime), { operations: true })`. It waits for the root event and all joined
 synchronous descendants and returns the DevTools-owned operation snapshot. The
 snapshot includes operation identity/status, event lineage, committed and
 published revisions, pending work, and errors. It is authoritative even when
@@ -361,24 +361,24 @@ Evaluate any registered subscription against current app state. Unlike `get_acti
 
 ## 🧪 Headless runtime for autonomous agent loops
 
-Reflex's state layer is React-free, so the app an agent drives does not need a browser tab. The convention is a `src/headless.ts` entry that imports the same state modules as `main.tsx` — just with Node-safe side-effect adapters and no React mount:
+Uklad's state layer is React-free, so the app an agent drives does not need a browser tab. The convention is a `src/headless.ts` entry that imports the same state modules as `main.tsx` — just with Node-safe side-effect adapters and no React mount:
 
 ```typescript
 // src/headless.ts — run under tsx (or vite-node when your project
 // resolves dependencies through vite aliases)
-import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import { enableDevtools } from '@flexsurfer/reflex-devtools';
-import { createReflexInspector } from '@flexsurfer/reflex/devtools';
+import { createUkladRuntime } from '@ukladjs/core/vanilla';
+import { enableDevtools } from '@ukladjs/devtools';
+import { createUkladInspector } from '@ukladjs/core/devtools';
 import { headlessModule } from './module.headless';
 
-const runtime = createReflexRuntime({
+const runtime = createUkladRuntime({
   runtimeId: 'agent-headless',
   name: 'Agent headless runtime',
   initialState: {},
 });
 runtime.registerModule(headlessModule); // events, subs, and Node-safe adapters
 
-enableDevtools(createReflexInspector(runtime), {
+enableDevtools(createUkladInspector(runtime), {
   operations: true,
   // runtime: 'headless' is auto-detected (no window)
   effectMode: 'safe',
@@ -394,7 +394,7 @@ Run it with a watcher for the edit → reload → re-verify loop (`tsx watch src
 
 Headless mode needs **Node.js 22+** (the SDK uses the global `WebSocket`, stable since Node 22). On older Node it disables itself with an explicit warning.
 
-The [DevTools playground](https://github.com/flexsurfer/reflex/tree/main/examples/devtools-playground) in this repo is the reference implementation (`pnpm dev:playground:headless` from the workspace root).
+The [DevTools playground](https://github.com/ukladjs/uklad/tree/main/examples/devtools-playground) in this repo is the reference implementation (`pnpm dev:playground:headless` from the workspace root).
 
 ---
 
@@ -450,7 +450,7 @@ consider debouncing the dispatch or caching the request.
 ### DevTools Server (project-local)
 
 ```bash
-reflex-devtools [options]
+uklad-devtools [options]
 
 Options:
   -p, --port <port>          Port (default: 4000)
@@ -474,7 +474,7 @@ it does not grant dispatch and no restore MCP tool is currently advertised.
 ### MCP Bridge (this package)
 
 ```bash
-reflex-devtools-mcp [options]
+uklad-devtools-mcp [options]
 
 Options:
   -p, --port <port>             DevTools port (default: 4000)
@@ -495,7 +495,7 @@ list once at init — usually before the DevTools server is running — so a gra
 applied afterward would otherwise never surface.
 
 The bridge reads an explicit remote credential only from
-`REFLEX_DEVTOOLS_MCP_TOKEN`; keep it out of MCP JSON, process arguments, logs,
+`UKLAD_DEVTOOLS_MCP_TOKEN`; keep it out of MCP JSON, process arguments, logs,
 and repositories. It refuses to send that bearer token to a non-loopback
 `http://` URL unless `--allow-insecure-remote` is supplied. Prefer HTTPS or an
 SSH tunnel; the override is intended only for a deliberately isolated
@@ -512,7 +512,7 @@ Every DevTools server process uses independent `runtime`, `ui`, and `mcp` role
 tokens; missing local tokens are generated from 256 bits of randomness.
 `/auth/session` provides the requested role token only to loopback callers. The
 MCP bridge then uses that token as an HTTP bearer credential; remote bootstrap
-is rejected and requires `REFLEX_DEVTOOLS_MCP_TOKEN`.
+is rejected and requires `UKLAD_DEVTOOLS_MCP_TOKEN`.
 
 `--mcp` grants inspection only. `--allow-dispatch` and `--allow-restore` are
 separate capability grants enforced by the DevTools server on every request:
@@ -536,18 +536,18 @@ Non-loopback binding requires all of the following:
 - at least one repeatable exact `--allow-host` value (host name only; no port)
 - at least one repeatable exact `--allow-origin` value (scheme, host, and port;
 no path)
-- `REFLEX_DEVTOOLS_RUNTIME_TOKEN`, `REFLEX_DEVTOOLS_UI_TOKEN`, and
-`REFLEX_DEVTOOLS_MCP_TOKEN`, each at least 32 UTF-8 bytes
+- `UKLAD_DEVTOOLS_RUNTIME_TOKEN`, `UKLAD_DEVTOOLS_UI_TOKEN`, and
+`UKLAD_DEVTOOLS_MCP_TOKEN`, each at least 32 UTF-8 bytes
 - a trusted TLS boundary, or an SSH tunnel instead of a remote bind
 
 On the DevTools host, behind a TLS reverse proxy:
 
 ```bash
-export REFLEX_DEVTOOLS_RUNTIME_TOKEN="$(openssl rand -hex 32)"
-export REFLEX_DEVTOOLS_UI_TOKEN="$(openssl rand -hex 32)"
-export REFLEX_DEVTOOLS_MCP_TOKEN="$(openssl rand -hex 32)"
+export UKLAD_DEVTOOLS_RUNTIME_TOKEN="$(openssl rand -hex 32)"
+export UKLAD_DEVTOOLS_UI_TOKEN="$(openssl rand -hex 32)"
+export UKLAD_DEVTOOLS_MCP_TOKEN="$(openssl rand -hex 32)"
 
-reflex-devtools \
+uklad-devtools \
   --mcp \
   --allow-remote \
   --host 0.0.0.0 \
@@ -559,13 +559,13 @@ In the MCP client environment, deliver the same MCP token through a secret
 manager and connect over HTTPS:
 
 ```bash
-export REFLEX_DEVTOOLS_MCP_TOKEN="<same MCP-role token>"
-reflex-devtools-mcp --url https://devtools.internal.example
+export UKLAD_DEVTOOLS_MCP_TOKEN="<same MCP-role token>"
+uklad-devtools-mcp --url https://devtools.internal.example
 ```
 
 The runtime must receive the same runtime token through
 `DevtoolsConfig.sessionToken`. A remote dashboard accepts the UI token in the
-one-time URL fragment `#token=<REFLEX_DEVTOOLS_UI_TOKEN>`, keeps it in memory,
+one-time URL fragment `#token=<UKLAD_DEVTOOLS_UI_TOKEN>`, keeps it in memory,
 and removes the fragment. A page reload requires supplying the fragment again.
 Do not use a query parameter.
 
@@ -620,8 +620,8 @@ MCP-role callers with `inspect` capability can read
 `GET /api/audit?limit=100` (1–500); programmatic DevTools servers can stream
 records to a durable sink through `onAuditRecord`.
 
-HTTP clients send `Reflex-DevTools-Protocol-Version: 2`; WebSockets negotiate
-`reflex-devtools.v2`, authenticate immediately, and receive the effective
+HTTP clients send `Uklad-DevTools-Protocol-Version: 2`; WebSockets negotiate
+`uklad-devtools.v2`, authenticate immediately, and receive the effective
 capabilities and payload limits in the server hello. Protocol mismatches fail
 closed with HTTP `426` or a WebSocket close. `app_status.protocol` reports the
 server, runtime, and inspector versions.
@@ -637,8 +637,8 @@ server, runtime, and inspector versions.
 ### Building from Source
 
 ```bash
-git clone https://github.com/flexsurfer/reflex.git
-cd reflex
+git clone https://github.com/ukladjs/uklad.git
+cd uklad
 pnpm install
 pnpm build
 ```
@@ -649,7 +649,7 @@ pnpm build
 
 ```bash
 # Terminal 1: Start DevTools server with MCP support
-node packages/reflex-devtools/dist/cli.js --mcp --host 127.0.0.1 --port 4000 --allow-origin http://localhost:3000
+node packages/devtools/dist/cli.js --mcp --host 127.0.0.1 --port 4000 --allow-origin http://localhost:3000
 
 # Terminal 2: Start the DevTools playground (browser)
 pnpm dev:playground
@@ -660,12 +660,12 @@ pnpm dev:playground:headless
 pnpm test
 ```
 
-For the `AGENTS.md` guidance template shipped with Reflex, see [packages/reflex/templates/agent/AGENTS.md](https://github.com/flexsurfer/reflex/blob/main/packages/reflex/templates/agent/AGENTS.md).
+For the `AGENTS.md` guidance template shipped with Uklad, see [packages/core/templates/agent/AGENTS.md](https://github.com/ukladjs/uklad/blob/main/packages/core/templates/agent/AGENTS.md).
 
 ### Project Structure
 
 ```
-packages/reflex-devtools-mcp/
+packages/devtools-mcp/
 ├── src/
 │   ├── index.ts           # Main MCP server implementation
 │   ├── cli.ts             # CLI entry point
@@ -690,9 +690,9 @@ packages/reflex-devtools-mcp/
 
 ## 🔗 Related Projects
 
-- **[@flexsurfer/reflex](https://github.com/flexsurfer/reflex)** - The reactive state management library
-- **[@flexsurfer/reflex-devtools](https://github.com/flexsurfer/reflex/tree/main/packages/reflex-devtools)** - Main DevTools package with web UI
-- **[Reflex Agent Toolkit](https://github.com/flexsurfer/reflex-agent-toolkit)** - Claude Code / Codex plugin with skills + this MCP preconfigured
+- **[@ukladjs/core](https://github.com/ukladjs/uklad)** - The reactive state management library
+- **[@ukladjs/devtools](https://github.com/ukladjs/uklad/tree/main/packages/devtools)** - Main DevTools package with web UI
+- **[Uklad Agent Toolkit](https://github.com/ukladjs/uklad-agent-toolkit)** - Claude Code / Codex plugin with skills + this MCP preconfigured
 - **[Model Context Protocol](https://modelcontextprotocol.io)** - The MCP specification
 
 ---
@@ -709,11 +709,11 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-Built with ❤️ for the Reflex community. Special thanks to:
+Built with ❤️ for the Uklad community. Special thanks to:
 
 - The [MCP](https://modelcontextprotocol.io) team for creating an amazing protocol
 - Anthropic for Claude and MCP support
-- All contributors to the Reflex ecosystem
+- All contributors to the Uklad ecosystem
 
 ---
 

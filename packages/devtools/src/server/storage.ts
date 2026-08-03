@@ -179,7 +179,7 @@ export class TraceStorage {
           if (error instanceof StorageRetentionError) {
             stateRetentionRejected = true;
           } else {
-            console.warn('[Reflex Devtools] Failed to apply trace patches to app state.');
+            console.warn('[Uklad Devtools] Failed to apply trace patches to app state.');
           }
         }
       }
@@ -223,7 +223,7 @@ export class TraceStorage {
     for (const [key, value] of Object.entries(subs)) {
       const exists = Object.prototype.hasOwnProperty.call(this.activeSubs, key);
       const previousSize = this.activeSubSizes[key] ?? 0;
-      if (value === 'reflex-tool-sub-disposed') {
+      if (value === 'uklad-tool-sub-disposed') {
         if (exists) {
           projectedSize -= 1;
           projectedBytes -= previousSize;
@@ -253,7 +253,7 @@ export class TraceStorage {
     }
 
     for (const [key, value] of Object.entries(subs)) {
-      if (value === 'reflex-tool-sub-disposed') {
+      if (value === 'uklad-tool-sub-disposed') {
         delete this.activeSubs[key];
         delete this.activeSubSizes[key];
       } else {

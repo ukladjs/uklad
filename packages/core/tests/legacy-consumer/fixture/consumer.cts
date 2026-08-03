@@ -1,18 +1,18 @@
 // CommonJS consumer typechecked with legacy TypeScript versions (see ../run.js).
 // Keep the syntax conservative: this file must compile under TypeScript 4.9.
-import reflex = require('@flexsurfer/reflex');
-import reflexReact = require('@flexsurfer/reflex/react');
-import reflexVanilla = require('@flexsurfer/reflex/vanilla');
-import reflexTesting = require('@flexsurfer/reflex/testing');
-import type { EventRegistrationOptions, Trace } from '@flexsurfer/reflex';
+import uklad = require('@ukladjs/core');
+import ukladReact = require('@ukladjs/core/react');
+import ukladVanilla = require('@ukladjs/core/vanilla');
+import ukladTesting = require('@ukladjs/core/testing');
+import type { EventRegistrationOptions, Trace } from '@ukladjs/core';
 
-const runtime = reflexVanilla.createReflexRuntime({ initialState: {} });
-const testHarness = reflexTesting.createReflexTestHarness(runtime);
+const runtime = ukladVanilla.createUkladRuntime({ initialState: {} });
+const testHarness = ukladTesting.createUkladTestHarness(runtime);
 runtime.dispatch(['legacy/cjs']);
 runtime.registerModule((registrar) => {
   registrar.regEvent('legacy/cjs', () => undefined);
 });
-const value: unknown = reflex.useSubscription(['legacy/cjs']);
+const value: unknown = uklad.useSubscription(['legacy/cjs']);
 const state = testHarness.getState();
 const options: EventRegistrationOptions = { coeffects: { now: 'now' } };
 const trace: Trace | undefined = undefined;
@@ -21,5 +21,5 @@ void value;
 void state;
 void options;
 void trace;
-void reflexReact.ReflexProvider;
+void ukladReact.UkladProvider;
 void runtime;

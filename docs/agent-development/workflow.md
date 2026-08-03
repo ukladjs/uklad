@@ -1,11 +1,11 @@
-# How an AI agent works on a Reflex task
+# How an AI agent works on a Uklad task
 
-This is the canonical scenario both roadmaps serve: one realistic task, walked through the agent's eyes, showing exactly which tool answers which question at each moment. It exists so that API decisions are made against a real workflow instead of tool-by-tool intuition — a proposed tool that doesn't shorten a step in this document probably shouldn't be built, and a step that today costs several calls or a browser is where the next tool belongs. The eval harness scenarios and the `reflex` agent skill should both be derived from it.
+This is the canonical scenario both roadmaps serve: one realistic task, walked through the agent's eyes, showing exactly which tool answers which question at each moment. It exists so that API decisions are made against a real workflow instead of tool-by-tool intuition — a proposed tool that doesn't shorten a step in this document probably shouldn't be built, and a step that today costs several calls or a browser is where the next tool belongs. The eval harness scenarios and the `uklad` agent skill should both be derived from it.
 
 Status legend used throughout:
 
 - ✅ **today** — ships in the current MCP
-- 🚧 **roadmap** — an accepted item in the [DevTools roadmap](../roadmaps/devtools.md) or the [Reflex roadmap](../roadmaps/reflex.md)
+- 🚧 **roadmap** — an accepted item in the [DevTools roadmap](../roadmaps/devtools.md) or the [Uklad roadmap](../roadmaps/uklad.md)
 - ✳️ **proposed** — identified by this scenario; this document is its spec
 
 Tool responses shown are abbreviated.
@@ -22,7 +22,7 @@ The app follows the required
 [`application-authoring-rules.md`](../architecture/application-authoring-rules.md)
 and the canonical convention in
 [`canonical-app-structure.md`](../architecture/canonical-app-structure.md):
-`src/app/reflex/catalog.ts` and `contracts.ts` define the application index;
+`src/app/uklad/catalog.ts` and `contracts.ts` define the application index;
 feature directories own state, events, subscriptions, modules, and UI; and
 platform directories register environment-specific effects and coeffects.
 
@@ -32,11 +32,11 @@ platform directories register environment-specific effects and coeffects.
 
 The agent's first question is never "what is the state?" — the app isn't even running. It's _"what ids, handlers, and state keys already exist, and where?"_
 
-- **Today:** read `src/app/reflex/catalog.ts` for state roots and handler IDs,
+- **Today:** read `src/app/uklad/catalog.ts` for state roots and handler IDs,
   then `contracts.ts` for payload and result shapes. Use exact-match `rg` to
   open the owning feature or selected platform registration. This is cheap and
   reliable while keeping the catalog free of duplicated metadata.
-- 🚧 **Roadmap:** `get_reflex_map` / `find_reflex_id` / `get_event_contract` backed by `.reflex/map.json` (lib: static manifest generator). No running app required; replaces every orientation grep with indexed lookups.
+- 🚧 **Roadmap:** `get_uklad_map` / `find_uklad_id` / `get_event_contract` backed by `.uklad/map.json` (lib: static manifest generator). No running app required; replaces every orientation grep with indexed lookups.
 
 What the agent must _not_ need to do: read `events.ts` / `subs.ts` end-to-end. On a real app those files are the most expensive read in the repo.
 
@@ -49,7 +49,7 @@ the corresponding `stateKeys` and `appIds` entries, the complete contract
 entries, feature handlers and subscriptions, the selected platform adapter,
 and the two components.
 
-**No MCP is used in this phase, and that is by design.** The verification signal here is `tsc` against the runtime's declared `ReflexContracts`: a wrong payload, a typo'd id in `dispatch`, a mis-shaped sub result — all become compile errors, the cheapest feedback there is. Roughly 70% of the agent's total effort on this task happens in this phase, which is why the scaffolder, the declared contract, and the static manifest matter more to overall context cost than any runtime tool.
+**No MCP is used in this phase, and that is by design.** The verification signal here is `tsc` against the runtime's declared `UkladContracts`: a wrong payload, a typo'd id in `dispatch`, a mis-shaped sub result — all become compile errors, the cheapest feedback there is. Roughly 70% of the agent's total effort on this task happens in this phase, which is why the scaffolder, the declared contract, and the static manifest matter more to overall context cost than any runtime tool.
 
 The MCP earns its keep in everything that follows.
 
@@ -60,7 +60,7 @@ The MCP earns its keep in everything that follows.
 ### 1. Launch the app
 
 ```
-Bash: node node_modules/@flexsurfer/reflex-devtools/dist/cli.js --mcp --allow-dispatch --host 127.0.0.1 --port 4000
+Bash: node node_modules/@ukladjs/devtools/dist/cli.js --mcp --allow-dispatch --host 127.0.0.1 --port 4000
                                       # devtools server with MCP, no npx/package manager
 Bash: tsx watch src/headless.ts      # the app, headless — no browser needed
       (pnpm dev                      #  …or the vite dev server + a browser tab,
@@ -69,7 +69,7 @@ Bash: tsx watch src/headless.ts      # the app, headless — no browser needed
 
 The first wall used to be here: **the SDK runs inside the app, and the app historically ran in a browser tab** an autonomous agent doesn't have.
 
-- ✅ **Today: headless and parallel runtimes.** Reflex's state layer is React-free, so the canonical `src/headless.ts` entry installs the same feature modules as `main.tsx` on an explicit runtime and selects the headless effect/coeffect adapters — run via `tsx`/`vite-node` with a watcher (`pnpm dev:playground:headless` in this repo) — a live, dispatchable, fully traceable app with no browser. Views are excluded, which is acceptable: the state layer is where Reflex's guarantees live, and view-file correctness is covered by tsc plus the browser smoke check below. Side effects are safe by default through the adapter split (`platform/headless/effects.ts` and `coeffects.ts` install the same effect IDs against memory-backed or no-op adapters; policy in [headless-state-fixtures.md](headless-fixtures.md)), and the declared adapter modes surface in `app_status`. Browser, headless, widget, and agent-sandbox runtimes can remain connected together under stable IDs. A reconnect supersedes only the older socket with the same `runtimeId`, preventing duplicate execution without disconnecting other sandboxes.
+- ✅ **Today: headless and parallel runtimes.** Uklad's state layer is React-free, so the canonical `src/headless.ts` entry installs the same feature modules as `main.tsx` on an explicit runtime and selects the headless effect/coeffect adapters — run via `tsx`/`vite-node` with a watcher (`pnpm dev:playground:headless` in this repo) — a live, dispatchable, fully traceable app with no browser. Views are excluded, which is acceptable: the state layer is where Uklad's guarantees live, and view-file correctness is covered by tsc plus the browser smoke check below. Side effects are safe by default through the adapter split (`platform/headless/effects.ts` and `coeffects.ts` install the same effect IDs against memory-backed or no-op adapters; policy in [headless-state-fixtures.md](headless-fixtures.md)), and the declared adapter modes surface in `app_status`. Browser, headless, widget, and agent-sandbox runtimes can remain connected together under stable IDs. A reconnect supersedes only the older socket with the same `runtimeId`, preventing duplicate execution without disconnecting other sandboxes.
 
 ### 2. "Is it alive?"
 
@@ -89,7 +89,7 @@ app_status {}
 
 The most-called tool in the set: select a runtime from `runtimes`, pass its `runtimeId` to later tools when more than one is connected, and treat a changed `sessionEpoch` for that ID as the DevTools-session reset signal feeding the reload loop below. `runtime`/`effects` tell the agent which world (and which side-effect policy) it is driving.
 
-- 🚧 **Roadmap: `get_client_logs(sinceId)`** — will add a `clientErrors.unread` counter to this response: render crashes, uncaught exceptions, React and reflex dev-mode warnings, without a browser. After a cold start with a white screen, this is the _only_ tool that explains why.
+- 🚧 **Roadmap: `get_client_logs(sinceId)`** — will add a `clientErrors.unread` counter to this response: render crashes, uncaught exceptions, React and uklad dev-mode warnings, without a browser. After a cold start with a white screen, this is the _only_ tool that explains why.
 
 ### 3. Read the initial state
 
@@ -142,7 +142,7 @@ With this, the state layer of the feature is **fully verified before a single co
 
 ## The bug
 
-The picker works, the list filters, but the _total_ doesn't change when the category changes — it updates only when an expense is added. Classic reflex bug class:
+The picker works, the list filters, but the _total_ doesn't change when the category changes — it updates only when an expense is added. Classic uklad bug class:
 
 ```ts
 // subs.ts — the dependency on the selected category is missing
@@ -165,7 +165,7 @@ A runtime that declares a `subscriptions` contract now catches the narrower vers
 
 The agent's question, verbatim: _"I dispatched `expenses/set-category`, state changed — why didn't the total update?"_ The debugging chain is always the same three hops: **state written? → subs recomputed? → components re-rendered?**
 
-- **Today** ⚠️: hop 1 is in the dispatch response; hops 2–3 mean paging `get_traces { opType: "sub/run" }` and `{ opType: "render" }` and correlating timestamps by hand — several calls, fat rows, and reflex-internals knowledge required.
+- **Today** ⚠️: hop 1 is in the dispatch response; hops 2–3 mean paging `get_traces { opType: "sub/run" }` and `{ opType: "render" }` and correlating timestamps by hand — several calls, fat rows, and uklad-internals knowledge required.
 - ✳️ **Proposed: `explain_event(traceId)`** — the causality chain as one bounded response:
 
 ```

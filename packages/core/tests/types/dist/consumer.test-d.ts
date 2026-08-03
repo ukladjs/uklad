@@ -1,27 +1,27 @@
 /**
  * Compile-time regression test against the BUILT package types
- * (dist/index.d.mts), resolved as '@flexsurfer/reflex' via a paths mapping —
+ * (dist/index.d.mts), resolved as '@ukladjs/core' via a paths mapping —
  * exactly how a consumer sees it. This guards the augmentation contract:
  * tsup's dts rollup must keep DefaultContracts declared (not
  * just re-exported) in the entry module, or `declare module
- * '@flexsurfer/reflex'` stops merging.
+ * '@ukladjs/core'` stops merging.
  *
  * Run with `npm run test:types:dist` (requires a fresh `npm run build`);
  * wired into prepublishOnly after the build step.
  */
-import { createReflexRuntime } from '@flexsurfer/reflex';
-import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
+import { createUkladRuntime } from '@ukladjs/core';
+import { createUkladTestHarness } from '@ukladjs/core/testing';
 import type {
   ContractNamedEventRegistrationOptions,
   EventRegistrationOptions,
-  ReflexContracts,
+  UkladContracts,
   SubscriptionDiagnostic,
   SubscriptionParam,
-} from '@flexsurfer/reflex';
+} from '@ukladjs/core';
 
 interface Todo { id: number; title: string; done: boolean }
 
-interface TestContracts extends ReflexContracts {
+interface TestContracts extends UkladContracts {
   readonly state: {
     todos: Todo[];
   };
@@ -42,7 +42,7 @@ interface TestContracts extends ReflexContracts {
 const subscriptionParam: SubscriptionParam = 'todo-1';
 void subscriptionParam;
 
-interface NamedContracts extends ReflexContracts {
+interface NamedContracts extends UkladContracts {
   readonly state: {
     todos: Todo[];
   };
@@ -55,8 +55,8 @@ interface NamedContracts extends ReflexContracts {
   };
 }
 
-const runtime = createReflexRuntime<TestContracts>({ initialState: { todos: [] as Todo[] } });
-const testHarness = createReflexTestHarness(runtime);
+const runtime = createUkladRuntime<TestContracts>({ initialState: { todos: [] as Todo[] } });
+const testHarness = createUkladTestHarness(runtime);
 runtime.dispatch(['todos/add', 'buy milk']);
 runtime.dispatch(['app/init']);
 // @ts-expect-error unknown event id
@@ -95,7 +95,7 @@ runtime.registerModule((registrar) => {
     looseNamedRegistrationOptions,
   );
 });
-const namedRuntime = createReflexRuntime<NamedContracts>({
+const namedRuntime = createUkladRuntime<NamedContracts>({
   initialState: { todos: [] as Todo[] },
 });
 namedRuntime.registerModule((registrar) => {

@@ -6,17 +6,17 @@ import { createElement } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 
-import { ReflexProvider } from '../../src/react/context';
+import { UkladProvider } from '../../src/react/context';
 import { useSubscription } from '../../src/react/use-subscription';
 import {
-  createReflexRuntimeForTests as createReflexRuntime,
-  type ReflexRuntime,
+  createUkladRuntimeForTests as createUkladRuntime,
+  type UkladRuntime,
 } from '../../src/runtime/runtime';
 function ValueView() {
   return createElement('span', null, String(useSubscription<number>(['value'])));
 }
 
-function installValueFeature(runtime: ReflexRuntime<any>) {
+function installValueFeature(runtime: UkladRuntime<any>) {
   runtime.registerModule((registrar) => {
     registrar.regRootSub('value', 'value');
   });
@@ -29,19 +29,19 @@ function installValueFeature(runtime: ReflexRuntime<any>) {
 
 describe('runtime hydration', () => {
   it('hydrates a fresh client runtime without retaining the request runtime', async () => {
-    const serverRuntime = createReflexRuntime({
+    const serverRuntime = createUkladRuntime({
       initialState: { value: 7 },
       runtimeId: 'hydration-server',
     });
     installValueFeature(serverRuntime);
     const html = renderToString(
-      createElement(ReflexProvider, { runtime: serverRuntime }, createElement(ValueView)),
+      createElement(UkladProvider, { runtime: serverRuntime }, createElement(ValueView)),
     );
     const serializedState = JSON.parse(JSON.stringify(serverRuntime.getState())) as {
       value: number;
     };
 
-    const clientRuntime = createReflexRuntime({
+    const clientRuntime = createUkladRuntime({
       initialState: serializedState,
       runtimeId: 'hydration-client',
     });
@@ -54,7 +54,7 @@ describe('runtime hydration', () => {
     await act(async () => {
       root = hydrateRoot(
         container,
-        createElement(ReflexProvider, { runtime: clientRuntime }, createElement(ValueView)),
+        createElement(UkladProvider, { runtime: clientRuntime }, createElement(ValueView)),
       );
     });
 

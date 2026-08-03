@@ -1,13 +1,13 @@
 /**
  * Reviver function for JSON.parse to deserialize Maps and Sets
  */
-export function reflexReviver(_key: string, value: any): any {
+export function ukladReviver(_key: string, value: any): any {
   // Handle serialized Maps
-  if (value && typeof value === 'object' && value.__reflex_type === 'Map') {
+  if (value && typeof value === 'object' && value.__uklad_type === 'Map') {
     return new Map(value.entries);
   }
   // Handle serialized Sets
-  if (value && typeof value === 'object' && value.__reflex_type === 'Set') {
+  if (value && typeof value === 'object' && value.__uklad_type === 'Set') {
     return new Set(value.values);
   }
   // For all other values, return as-is
@@ -17,7 +17,7 @@ export function reflexReviver(_key: string, value: any): any {
 /**
  * Replacer function for JSON.stringify to serialize Maps and Sets
  */
-export function reflexReplacer(_key: string, value: any): any {
+export function ukladReplacer(_key: string, value: any): any {
   // Handle primitive types that are serializable
   if (value === null || typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
     return value;
@@ -49,14 +49,14 @@ export function reflexReplacer(_key: string, value: any): any {
     // Handle Maps
     if (value instanceof Map) {
       return {
-        __reflex_type: 'Map',
+        __uklad_type: 'Map',
         entries: Array.from(value.entries())
       };
     }
     // Handle Sets
     if (value instanceof Set) {
       return {
-        __reflex_type: 'Set',
+        __uklad_type: 'Set',
         values: Array.from(value)
       };
     }
@@ -88,7 +88,7 @@ export function reflexReplacer(_key: string, value: any): any {
 /**
  * Simple replacer function for MCP responses - only handles Maps and Sets with "type" field
  */
-export function mapSetReflexReplacer(_key: string, value: any): any {
+export function mapSetUkladReplacer(_key: string, value: any): any {
   // Handle Maps
   if (value instanceof Map) {
     return {

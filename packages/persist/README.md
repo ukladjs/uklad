@@ -1,24 +1,24 @@
-# @flexsurfer/reflex-persist
+# @ukladjs/persist
 
-Sync-safe, versioned persistence for [Reflex](https://github.com/flexsurfer/reflex). Hydration is an event, storage operations are effects/coeffects, status is a subscription, and one global interceptor contributes post-commit writes to the events that changed configured roots.
+Sync-safe, versioned persistence for [Uklad](https://github.com/ukladjs/uklad). Hydration is an event, storage operations are effects/coeffects, status is a subscription, and one global interceptor contributes post-commit writes to the events that changed configured roots.
 
 `0.1.0-beta.1` supports browser CSR with synchronous storage such as `localStorage`, one attachment per runtime, root-key persistence, synchronous migrations, and per-key transforms. Async storage, SSR integration, custom merge, and multiple configurations per runtime are not supported in this beta. The async type surface requires an explicit `experimentalAsync: true` opt-in and has no write-ordering or durability guarantee.
 
 ## Install
 
 ```sh
-pnpm add @flexsurfer/reflex-persist@beta
+pnpm add @ukladjs/persist@beta
 ```
 
-The package requires `@flexsurfer/reflex@^0.1.27` as a peer dependency.
+The package requires `@ukladjs/core@^0.1.27` as a peer dependency.
 
 ## Usage
 
 ```ts
-import { createReflexRuntime } from '@flexsurfer/reflex';
-import { localStorageAdapter, persist } from '@flexsurfer/reflex-persist';
+import { createUkladRuntime } from '@ukladjs/core';
+import { localStorageAdapter, persist } from '@ukladjs/persist';
 
-const runtime = createReflexRuntime({
+const runtime = createUkladRuntime({
   initialState: { todos: [], settings: {} },
   runtimeId: 'my-app',
 });
@@ -36,10 +36,10 @@ persistence.hydrate();
 The runtime is explicit. Attach only once per runtime; a second attachment and
 persistence protocol collisions fail loudly.
 
-`hydrate()` performs one attachment-scoped attempt. Repeated calls are idempotent no-ops. Status is available at `['reflex-persist']`:
+`hydrate()` performs one attachment-scoped attempt. Repeated calls are idempotent no-ops. Status is available at `['uklad-persist']`:
 
 ```ts
-import { PERSIST_IDS } from '@flexsurfer/reflex-persist';
+import { PERSIST_IDS } from '@ukladjs/persist';
 
 // In React, read this with useSubscription([PERSIST_IDS.STATUS]).
 // Non-React reads are intentionally limited to the explicit testing harness.
@@ -58,7 +58,7 @@ Each configured root owns one entry:
 <prefix>/<encoded-root-key> -> {"v":<configured-version>,"data":...}
 ```
 
-The prefix defaults to `reflex`, and the configured version defaults to `1`. Root-key components are percent-encoded. A change writes only roots whose identities changed according to `Object.is`. Deleting a configured root (or setting it to `undefined`) removes its storage entry.
+The prefix defaults to `uklad`, and the configured version defaults to `1`. Root-key components are percent-encoded. A change writes only roots whose identities changed according to `Object.is`. Deleting a configured root (or setting it to `undefined`) removes its storage entry.
 
 Use `prefix` to isolate applications or runtimes that share a storage backend:
 
@@ -75,12 +75,12 @@ persist(runtime, {
 Transforms are typed to their selected root and run synchronously. Their result is recursively constrained to JSON data and validated again at runtime. For a `Map`:
 
 ```ts
-import { createReflexRuntime } from '@flexsurfer/reflex';
-import { localStorageAdapter, persist } from '@flexsurfer/reflex-persist';
+import { createUkladRuntime } from '@ukladjs/core';
+import { localStorageAdapter, persist } from '@ukladjs/persist';
 
 type Todo = { id: number; title: string; done: boolean };
 
-const runtime = createReflexRuntime({
+const runtime = createUkladRuntime({
   initialState: { todos: new Map<number, Todo>() },
 });
 
@@ -143,21 +143,21 @@ Serialization and storage-write failures are reported through `onError` without 
 `PersistHandle` is the primary typed API. Applications that intentionally dispatch the public hydrate/purge events or query status on a strict runtime can compose its contract:
 
 ```ts
-import { createReflexRuntime } from '@flexsurfer/reflex';
-import { PERSIST_IDS } from '@flexsurfer/reflex-persist';
-import type { PersistContracts } from '@flexsurfer/reflex-persist';
+import { createUkladRuntime } from '@ukladjs/core';
+import { PERSIST_IDS } from '@ukladjs/persist';
+import type { PersistContracts } from '@ukladjs/persist';
 
-// AppContracts is the application's existing strict Reflex contract.
+// AppContracts is the application's existing strict Uklad contract.
 type AppWithPersist = PersistContracts<AppContracts>;
 
-const runtime = createReflexRuntime<AppWithPersist>({ initialState });
+const runtime = createUkladRuntime<AppWithPersist>({ initialState });
 runtime.dispatch([PERSIST_IDS.HYDRATE]);
 // React consumers can read status with useSubscription([PERSIST_IDS.STATUS]).
 ```
 
 Internal completion/effect IDs are exported for diagnostics but are not part of `PersistContracts` and must not be dispatched by applications. Library-owned payloads are authenticated at runtime; forged or malformed internal work is rejected without opening the write gate.
 
-For the package [architecture](https://github.com/flexsurfer/reflex/blob/main/docs/architecture/reflex-persist.md), safety invariant, and roadmap to async support, see the [reflex-persist RFC](https://github.com/flexsurfer/reflex/blob/main/docs/rfcs/persistence.md).
+For the package [architecture](https://github.com/ukladjs/uklad/blob/main/docs/architecture/uklad-persist.md), safety invariant, and roadmap to async support, see the [uklad-persist RFC](https://github.com/ukladjs/uklad/blob/main/docs/rfcs/persistence.md).
 
 ## License
 

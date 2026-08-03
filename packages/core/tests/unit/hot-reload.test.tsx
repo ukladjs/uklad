@@ -3,7 +3,7 @@
  */
 import { renderHook, cleanup, act } from '@testing-library/react';
 import { createElement, type ComponentType, type PropsWithChildren } from 'react';
-import { ReflexProvider } from '../../src/react/context';
+import { UkladProvider } from '../../src/react/context';
 import {
   registerHotReloadCallback,
   triggerHotReload,
@@ -13,21 +13,21 @@ import {
   setupSubsHotReload,
 } from '../../src/react/hot-reload';
 import {
-  createReflexRuntimeForTests as createReflexRuntime,
+  createUkladRuntimeForTests as createUkladRuntime,
   getRuntimeAdminForTests,
-  type ReflexRuntime,
+  type UkladRuntime,
 } from '../../src/runtime/runtime';
-function runtimeWrapper(runtime: ReflexRuntime): ComponentType<PropsWithChildren> {
-  return ({ children }) => createElement(ReflexProvider, { runtime }, children);
+function runtimeWrapper(runtime: UkladRuntime): ComponentType<PropsWithChildren> {
+  return ({ children }) => createElement(UkladProvider, { runtime }, children);
 }
 
 describe('Hot Reload System', () => {
-  let runtime: ReflexRuntime;
+  let runtime: UkladRuntime;
   let runtimeSequence = 0;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    runtime = createReflexRuntime({
+    runtime = createUkladRuntime({
       initialState: {},
       runtimeId: `hot-reload-test-${++runtimeSequence}`,
     });
@@ -203,7 +203,7 @@ describe('Hot Reload System', () => {
     });
 
     it('clears an explicit runtime while its current React-style graph is active', () => {
-      const runtime = createReflexRuntime({
+      const runtime = createUkladRuntime({
         initialState: { value: 1 },
         runtimeId: 'explicit-hmr-runtime',
       });
@@ -221,7 +221,7 @@ describe('Hot Reload System', () => {
     });
 
     it('can clear only module-owned subscription definitions', () => {
-      const runtime = createReflexRuntime({
+      const runtime = createUkladRuntime({
         initialState: { value: 1, persistStatus: 'idle' },
         runtimeId: 'scoped-hmr-runtime',
       });

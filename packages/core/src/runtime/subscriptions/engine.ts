@@ -57,11 +57,11 @@ export class SubscriptionEngine {
   create<T>(spec: SubscriptionSpec<T>): SubscriptionNode<T> {
     if (this.phase === 'settling') {
       throw new Error(
-        '[reflex] Creating subscriptions during subscription computation is not allowed.',
+        '[uklad] Creating subscriptions during subscription computation is not allowed.',
       );
     }
     if (spec.kind === 'root' && spec.dependencies.length !== 0) {
-      throw new Error(`[reflex] Root subscription ${spec.key} cannot have dependencies.`);
+      throw new Error(`[uklad] Root subscription ${spec.key} cannot have dependencies.`);
     }
     return new SubscriptionCell(this, spec) as unknown as SubscriptionNode<T>;
   }
@@ -73,13 +73,13 @@ export class SubscriptionEngine {
   getSnapshot<T>(node: SubscriptionNode<T>): T {
     if (this.phase === 'settling') {
       throw new Error(
-        '[reflex] Subscription reads are not allowed during subscription computation.',
+        '[uklad] Subscription reads are not allowed during subscription computation.',
       );
     }
     const subscription = this.unwrap(node);
     if (subscription.disposed) {
       throw new Error(
-        `[reflex] Subscription ${subscription.spec.key} was disposed; reacquire it by key.`,
+        `[uklad] Subscription ${subscription.spec.key} was disposed; reacquire it by key.`,
       );
     }
     if (subscription.hasError) {
@@ -97,12 +97,12 @@ export class SubscriptionEngine {
     listenerKind: SubscriptionListenerKind = 'render',
   ): () => void {
     if (this.phase === 'settling') {
-      throw new Error('[reflex] Subscribing during subscription computation is not allowed.');
+      throw new Error('[uklad] Subscribing during subscription computation is not allowed.');
     }
     const subscription = this.unwrap(node);
     if (subscription.disposed) {
       throw new Error(
-        `[reflex] Subscription ${subscription.spec.key} was disposed; reacquire it by key.`,
+        `[uklad] Subscription ${subscription.spec.key} was disposed; reacquire it by key.`,
       );
     }
     const firstListener = subscription.listeners.length === 0;
@@ -134,21 +134,21 @@ export class SubscriptionEngine {
     const subscriptions = roots.map((root) => this.unwrap(root));
     const nonRoot = subscriptions.find((subscription) => subscription.spec.kind !== 'root');
     if (nonRoot)
-      throw new Error(`[reflex] Cannot publish non-root subscription ${nonRoot.spec.key}.`);
+      throw new Error(`[uklad] Cannot publish non-root subscription ${nonRoot.spec.key}.`);
     return this.publishWave(Array.from(new Set(subscriptions)), includeDiagnostics);
   }
 
   assertPublicationAllowed(): void {
     if (this.phase !== 'idle') {
       throw new Error(
-        '[reflex] Subscription publication is not allowed during computation or listener delivery.',
+        '[uklad] Subscription publication is not allowed during computation or listener delivery.',
       );
     }
   }
 
   assertClearAllowed(): void {
     if (this.activeNodes > 0) {
-      throw new Error('[reflex] Cannot clear subscriptions while a subscription graph is active.');
+      throw new Error('[uklad] Cannot clear subscriptions while a subscription graph is active.');
     }
   }
 
@@ -173,7 +173,7 @@ export class SubscriptionEngine {
 
   unwrap<T>(node: SubscriptionNode<T>): SubscriptionCell<T> {
     if (!(node instanceof SubscriptionCell) || node.engine !== this) {
-      throw new Error('[reflex] Subscription belongs to a different runtime.');
+      throw new Error('[uklad] Subscription belongs to a different runtime.');
     }
     return node;
   }
@@ -327,7 +327,7 @@ export class SubscriptionEngine {
         const [subscription, expanded] = stack.pop()!;
         if (subscription.active) continue;
         if (subscription.disposed) {
-          throw new Error(`[reflex] Dependency ${subscription.spec.key} was already disposed.`);
+          throw new Error(`[uklad] Dependency ${subscription.spec.key} was already disposed.`);
         }
         if (!expanded) {
           stack.push([subscription, true]);
@@ -408,7 +408,7 @@ export class SubscriptionEngine {
     try {
       subscription.spec.onUnused();
     } catch (error) {
-      consoleLog('error', '[reflex] Error releasing subscription:', error);
+      consoleLog('error', '[uklad] Error releasing subscription:', error);
     }
   }
 }

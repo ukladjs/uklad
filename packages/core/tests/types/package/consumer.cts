@@ -1,21 +1,21 @@
-import reflex = require('@flexsurfer/reflex');
-import reflexReact = require('@flexsurfer/reflex/react');
-import reflexVanilla = require('@flexsurfer/reflex/vanilla');
-import reflexDevtools = require('@flexsurfer/reflex/devtools');
-import reflexTesting = require('@flexsurfer/reflex/testing');
+import uklad = require('@ukladjs/core');
+import ukladReact = require('@ukladjs/core/react');
+import ukladVanilla = require('@ukladjs/core/vanilla');
+import ukladDevtools = require('@ukladjs/core/devtools');
+import ukladTesting = require('@ukladjs/core/testing');
 import type {
   EventRegistrationOptions,
-  ReflexInspector,
-  ReflexInspectorSnapshot,
+  UkladInspector,
+  UkladInspectorSnapshot,
   Trace,
-} from '@flexsurfer/reflex';
+} from '@ukladjs/core';
 
 const options: EventRegistrationOptions = { coeffects: { now: 'now' } };
 const namedOptions: EventRegistrationOptions<{ package: string }> = {
   coeffects: { now: 'system/now' },
 };
 const trace: Trace | undefined = undefined;
-const runtime = reflexVanilla.createReflexRuntime({ initialState: { package: 'cjs' } });
+const runtime = ukladVanilla.createUkladRuntime({ initialState: { package: 'cjs' } });
 runtime.registerModule((registrar) => {
   registrar.regEvent('package/cjs', () => undefined);
   registrar.regEvent('package/cjs-named', ({ coeffects: { now } }) => void now, {
@@ -23,13 +23,13 @@ runtime.registerModule((registrar) => {
   });
 });
 runtime.dispatch(['package/cjs']);
-const inspector: ReflexInspector = reflexDevtools.createReflexInspector(runtime);
-const testHarness = reflexTesting.createReflexTestHarness(runtime);
+const inspector: UkladInspector = ukladDevtools.createUkladInspector(runtime);
+const testHarness = ukladTesting.createUkladTestHarness(runtime);
 const runtimeState: unknown = testHarness.getState();
-const snapshot: ReflexInspectorSnapshot = inspector.getSnapshot();
+const snapshot: UkladInspectorSnapshot = inspector.getSnapshot();
 const removeTraceListener = inspector.subscribeTraces(() => {});
 const removeSubscriptionListener = testHarness.watchSubscription(['package/cjs'], () => {});
-const hooks = reflexReact.createReflexHooks();
+const hooks = ukladReact.createUkladHooks();
 
 void options;
 void namedOptions;
@@ -37,8 +37,8 @@ void trace;
 void snapshot;
 void testHarness.getEventHandler('package/cjs');
 void runtimeState;
-void reflexReact.ReflexProvider;
-void reflexReact.useReflexRuntime;
+void ukladReact.UkladProvider;
+void ukladReact.useUkladRuntime;
 void hooks;
 removeTraceListener();
 removeSubscriptionListener();

@@ -22,7 +22,7 @@ export interface DispatchAndWaitParams extends RuntimeSelectionParams {
 export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'dispatch_and_wait',
-    description: 'Dispatch an event through the runtime-owned operation coordinator and wait for its canonical snapshot. The snapshot includes operation identity and status, joined-event lineage, committed/published revisions, pending work, and execution errors. Requires enableDevtools(createReflexInspector(runtime), { operations: true }).',
+    description: 'Dispatch an event through the runtime-owned operation coordinator and wait for its canonical snapshot. The snapshot includes operation identity and status, joined-event lineage, committed/published revisions, pending work, and execution errors. Requires enableDevtools(createUkladInspector(runtime), { operations: true }).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -89,7 +89,7 @@ export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
               message: details.error ?? (error instanceof Error ? error.message : 'Unknown error'),
               event: params.eventName,
               hint: unavailableCapability
-                ? 'Enable DevTools with enableDevtools(createReflexInspector(runtime), { operations: true }), then reconnect the runtime and retry.'
+                ? 'Enable DevTools with enableDevtools(createUkladInspector(runtime), { operations: true }), then reconnect the runtime and retry.'
                 : 'Make sure the DevTools server and operation-enabled app are running.',
             }, null, 2),
           }],

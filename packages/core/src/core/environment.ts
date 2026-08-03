@@ -11,7 +11,7 @@ declare const __DEV__: boolean | undefined;
 /**
  * Whether this module loaded in development mode.
  *
- * Reflex recognizes `NODE_ENV=development` and the React Native-style
+ * Uklad recognizes `NODE_ENV=development` and the React Native-style
  * `__DEV__` global. Environments with another convention must expose one of
  * those values before this module is evaluated.
  */

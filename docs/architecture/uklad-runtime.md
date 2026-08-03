@@ -1,6 +1,6 @@
-# Reflex architecture
+# Uklad architecture
 
-Each `ReflexRuntime` is the sole owner of one application state and its event
+Each `UkladRuntime` is the sole owner of one application state and its event
 and subscription machinery. Events are pure functions that describe a state
 candidate plus effects. Effects are the only side effects. Subscriptions form a
 cached reactive DAG over the runtime's published state.
@@ -91,7 +91,7 @@ to id-keyed handler namespaces, so an ordered chain does not belong in it.
 
 ### What the handler catalog reports
 
-`ReflexHandlerKeys` — the projection behind the inspector snapshot and the
+`UkladHandlerKeys` — the projection behind the inspector snapshot and the
 DevTools `get_handlers` tool — lists `event`, `fx`, `cofx`, and `sub` only.
 
 Global interceptors and the event error handler are intentionally absent. They

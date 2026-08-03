@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { SubDepsHandler, SubHandler } from '@flexsurfer/reflex';
-import { enableMapSet } from '@flexsurfer/reflex/vanilla';
-import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
-import type { ReflexTestHarness } from '@flexsurfer/reflex/testing';
+import type { SubDepsHandler, SubHandler } from '@ukladjs/core';
+import { enableMapSet } from '@ukladjs/core/vanilla';
+import type { UkladRuntime } from '@ukladjs/core/vanilla';
+import { createUkladTestHarness } from '@ukladjs/core/testing';
+import type { UkladTestHarness } from '@ukladjs/core/testing';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts, AppState } from '../../app/reflex/contracts';
-import { registerFeatureModules } from '../../app/reflex/register';
-import { createAppRuntime } from '../../app/reflex/runtime';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts, AppState } from '../../app/uklad/contracts';
+import { registerFeatureModules } from '../../app/uklad/register';
+import { createAppRuntime } from '../../app/uklad/runtime';
 import type { TodosById } from './state';
 
 enableMapSet();
@@ -19,8 +19,8 @@ enableMapSet();
 // would have produced. Root subscriptions read the state, so those are driven
 // through the harness instead.
 
-let runtime: ReflexRuntime<AppContracts>;
-let harness: ReflexTestHarness<AppContracts>;
+let runtime: UkladRuntime<AppContracts>;
+let harness: UkladTestHarness<AppContracts>;
 
 const handlerFor = (id: string) => harness.getSubscriptionHandler(id as never) as SubHandler;
 
@@ -32,7 +32,7 @@ const stateWith = (todosById: TodosById, todosShowing: AppState['todosShowing'])
 beforeEach(() => {
   runtime = createAppRuntime({ runtimeId: 'todomvc.test' });
   registerFeatureModules(runtime);
-  harness = createReflexTestHarness(runtime);
+  harness = createUkladTestHarness(runtime);
 });
 
 afterEach(() => {

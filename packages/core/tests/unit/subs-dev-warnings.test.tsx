@@ -11,7 +11,7 @@ import {
   clearSubscriptionCache,
   getOrCreateSubscription,
   initState,
-  ReflexTestProvider,
+  UkladTestProvider,
   regRootSub,
   regSub,
 } from './runtime-test-api';
@@ -78,7 +78,7 @@ describe('Dev warnings for non-serializable subscription params', () => {
     // the actionable dev warning must fire first
     expect(() => {
       renderHook(() => useSubscription(['warn-hook-circular', circular]), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
     }).toThrow();
     expect(warnCallsContaining("subscription 'warn-hook-circular'")).toHaveLength(1);
@@ -91,7 +91,7 @@ describe('Dev warnings for non-serializable subscription params', () => {
 
     expect(() => {
       renderHook(() => useSubscription(['warn-hook-bigint', BigInt(1) as any]), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
     }).toThrow();
     expect(warnCallsContaining("subscription 'warn-hook-bigint'")).toHaveLength(1);

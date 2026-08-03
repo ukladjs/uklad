@@ -18,7 +18,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@flexsurfer/reflex": ["../reflex/src/index.ts"]
+      "@ukladjs/core": ["../core/src/index.ts"]
     }
   },
   "include": ["src"]

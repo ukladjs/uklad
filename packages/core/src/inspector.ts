@@ -10,18 +10,18 @@ import { assertRuntimeUsable } from './runtime/validation';
 import type { TraceCallback } from './core/tracing-types';
 import type { DevelopmentExecutionObserver } from './events/execution-observer-types';
 import type {
-  ReflexDevtoolsOperationRuntime,
-  ReflexHandlerKeys,
-  ReflexInspector,
-  ReflexInspectorSnapshot,
+  UkladDevtoolsOperationRuntime,
+  UkladHandlerKeys,
+  UkladInspector,
+  UkladInspectorSnapshot,
 } from './inspector-types';
 import type { EventVector, SubVector } from './types';
 
 export type {
-  ReflexDevtoolsOperationRuntime,
-  ReflexHandlerKeys,
-  ReflexInspector,
-  ReflexInspectorSnapshot,
+  UkladDevtoolsOperationRuntime,
+  UkladHandlerKeys,
+  UkladInspector,
+  UkladInspectorSnapshot,
 } from './inspector-types';
 
 const NEXT_TRACE_SUBSCRIPTION_ID = new WeakMap<RuntimeCore, number>();
@@ -29,8 +29,8 @@ const NEXT_TRACE_SUBSCRIPTION_ID = new WeakMap<RuntimeCore, number>();
 // Devtools is an intentionally dynamic boundary. App-level payload-map
 // augmentation must not narrow vectors arriving from an external inspector.
 /** @internal Create an inspection adapter bound to one explicit runtime. */
-export function createReflexInspector(runtime: RuntimeCore): ReflexInspector {
-  const operationRuntime: ReflexDevtoolsOperationRuntime = {
+export function createUkladInspector(runtime: RuntimeCore): UkladInspector {
+  const operationRuntime: UkladDevtoolsOperationRuntime = {
     runtimeId: runtime.identity.runtimeId,
     runtimeInstanceId: runtime.identity.runtimeInstanceId,
     dispatch(event: never) {
@@ -38,7 +38,7 @@ export function createReflexInspector(runtime: RuntimeCore): ReflexInspector {
       const envelope = runtime.events.dispatch(event, true);
       const operation = getDevelopmentOperationReference(runtime, envelope?.tracking);
       if (!operation)
-        throw new Error('[reflex] operation dispatch requires an installed development observer.');
+        throw new Error('[uklad] operation dispatch requires an installed development observer.');
       return operation.operationId;
     },
     flush() {
@@ -50,11 +50,11 @@ export function createReflexInspector(runtime: RuntimeCore): ReflexInspector {
       return observeDevelopmentExecution(runtime, observer);
     },
   };
-  const inspector: ReflexInspector = {
+  const inspector: UkladInspector = {
     apiVersion: 2,
     runtimeId: runtime.identity.runtimeId,
     runtimeName: runtime.identity.runtimeName,
-    getSnapshot(): ReflexInspectorSnapshot {
+    getSnapshot(): UkladInspectorSnapshot {
       assertRuntimeUsable(runtime);
       return {
         state: runtime.state.get(),
@@ -64,7 +64,7 @@ export function createReflexInspector(runtime: RuntimeCore): ReflexInspector {
     },
     subscribeTraces(callback: TraceCallback): () => void {
       assertRuntimeUsable(runtime);
-      const key = `reflex-inspector-${nextTraceSubscriptionId(runtime)}`;
+      const key = `uklad-inspector-${nextTraceSubscriptionId(runtime)}`;
       const releaseTracing = acquireTracing(runtime);
       try {
         registerTraceCallback(runtime, key, callback);
@@ -89,7 +89,7 @@ export function createReflexInspector(runtime: RuntimeCore): ReflexInspector {
       assertRuntimeUsable(runtime);
       return runtime.subscriptions.read(query);
     },
-    getOperationRuntime(): ReflexDevtoolsOperationRuntime {
+    getOperationRuntime(): UkladDevtoolsOperationRuntime {
       assertRuntimeUsable(runtime);
       return operationRuntime;
     },
@@ -104,7 +104,7 @@ function nextTraceSubscriptionId(runtime: RuntimeCore): number {
   return next;
 }
 
-function getHandlerKeys(runtime: RuntimeCore): ReflexHandlerKeys {
+function getHandlerKeys(runtime: RuntimeCore): UkladHandlerKeys {
   const handlers = runtime.registry.handlers;
   return {
     event: Object.keys(handlers.event),

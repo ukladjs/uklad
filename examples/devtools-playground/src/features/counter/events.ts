@@ -1,10 +1,10 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 import { COUNTER_STORAGE_KEY } from './state';
 
-export const registerCounterEvents: ReflexModule<ReflexRegistrar<AppContracts>> = (registrar) => {
+export const registerCounterEvents: UkladModule<UkladRegistrar<AppContracts>> = (registrar) => {
   registrar.regEvent(appIds.events.counterIncrement, ({ draftState }) => {
     draftState.counterValue += 1;
   });

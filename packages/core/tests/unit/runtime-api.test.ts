@@ -1,20 +1,20 @@
-import type { ReflexContracts } from '../../src/contracts';
+import type { UkladContracts } from '../../src/contracts';
 import {
   clearRuntimeSubsForHotReload,
-  createReflexRuntime as createProductionRuntime,
-  createReflexRuntimeForTests as createReflexRuntime,
+  createUkladRuntime as createProductionRuntime,
+  createUkladRuntimeForTests as createUkladRuntime,
   getRuntimeClient,
   getRuntimeAdminForTests,
   getRuntimeCoreForTests,
-  type ReflexRuntime,
+  type UkladRuntime,
   type RuntimeEventHandler,
 } from '../../src/runtime/runtime';
-import { createReflexInspector } from '../../src/devtools';
+import { createUkladInspector } from '../../src/devtools';
 import { waitForScheduled } from './test-utils';
 
 import type { Interceptor } from '../../src/types';
 
-interface CounterContracts extends ReflexContracts {
+interface CounterContracts extends UkladContracts {
   state: { count: number; label: string };
   events: {
     increment: [amount: number];
@@ -28,7 +28,7 @@ interface CounterContracts extends ReflexContracts {
 }
 
 function createCounterRuntime(runtimeId: string, count: number) {
-  const runtime = createReflexRuntime<CounterContracts>({
+  const runtime = createUkladRuntime<CounterContracts>({
     initialState: { count, label: runtimeId },
     runtimeId,
     name: `Runtime ${runtimeId}`,
@@ -47,7 +47,7 @@ function createCounterRuntime(runtimeId: string, count: number) {
   return runtime;
 }
 
-function admin<TContracts extends ReflexContracts>(runtime: ReflexRuntime<TContracts>) {
+function admin<TContracts extends UkladContracts>(runtime: UkladRuntime<TContracts>) {
   return getRuntimeAdminForTests(runtime);
 }
 
@@ -113,7 +113,7 @@ describe('instance-scoped runtime', () => {
   });
 
   it('keeps registration behind registerModule even for the test runtime facade', () => {
-    const testRuntime = createReflexRuntime({
+    const testRuntime = createUkladRuntime({
       initialState: { count: 0, label: 'test-registration-boundary-admin' },
       runtimeId: 'test-registration-boundary-admin',
     });
@@ -143,7 +143,7 @@ describe('instance-scoped runtime', () => {
     const client = getRuntimeClient(runtime);
 
     expect(() => clearRuntimeSubsForHotReload(client as never)).toThrow(
-      'setupSubsHotReload requires a runtime created by createReflexRuntime()',
+      'setupSubsHotReload requires a runtime created by createUkladRuntime()',
     );
 
     runtime.dispose();
@@ -196,7 +196,7 @@ describe('instance-scoped runtime', () => {
         return context;
       },
     };
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       initialState: { count: 0 },
       runtimeId: 'configured-runtime-policy',
       equalityCheck: alwaysChanged,
@@ -239,7 +239,7 @@ describe('instance-scoped runtime', () => {
   });
 
   it('uses the configured equality policy for unconfigured computed subscriptions', () => {
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       initialState: { count: 0 },
       runtimeId: 'configured-runtime-equality',
       equalityCheck: () => false,
@@ -268,7 +268,7 @@ describe('instance-scoped runtime', () => {
 
   it('rejects invalid or duplicate construction-time global interceptors', () => {
     expect(() =>
-      createReflexRuntime({
+      createUkladRuntime({
         initialState: { count: 0 },
         runtimeId: 'invalid-runtime-equality',
         equalityCheck: false as never,
@@ -276,7 +276,7 @@ describe('instance-scoped runtime', () => {
     ).toThrow('runtime equalityCheck must be a function');
 
     expect(() =>
-      createReflexRuntime({
+      createUkladRuntime({
         initialState: { count: 0 },
         runtimeId: 'invalid-runtime-interceptor',
         interceptors: [{ id: 'invalid' }],
@@ -284,7 +284,7 @@ describe('instance-scoped runtime', () => {
     ).toThrow('runtime interceptors must each have a string id and a before or after function');
 
     expect(() =>
-      createReflexRuntime({
+      createUkladRuntime({
         initialState: { count: 0 },
         runtimeId: 'duplicate-runtime-interceptor',
         interceptors: [
@@ -296,7 +296,7 @@ describe('instance-scoped runtime', () => {
   });
 
   it('does not allocate development effect lineage state without an observer', async () => {
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       initialState: { count: 0 },
       runtimeId: 'effect-hot-path',
     });
@@ -329,7 +329,7 @@ describe('instance-scoped runtime', () => {
   });
 
   it('isolates development observer notification failures from event execution', async () => {
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       initialState: { count: 0 },
       runtimeId: 'observer-isolation',
     });
@@ -338,7 +338,7 @@ describe('instance-scoped runtime', () => {
         draftState.count += 1;
       });
     });
-    const detach = createReflexInspector(runtime)
+    const detach = createUkladInspector(runtime)
       .getOperationRuntime()
       .observeExecution({
         accept: () => ({ operationId: 'test-operation', value: {} }),
@@ -365,7 +365,7 @@ describe('instance-scoped runtime', () => {
   });
 
   it('continues ordinary dispatch when a development observer rejects acceptance', async () => {
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       initialState: { count: 0 },
       runtimeId: 'observer-acceptance',
     });
@@ -374,7 +374,7 @@ describe('instance-scoped runtime', () => {
         draftState.count += 1;
       });
     });
-    const detach = createReflexInspector(runtime)
+    const detach = createUkladInspector(runtime)
       .getOperationRuntime()
       .observeExecution({
         accept: () => {
@@ -395,7 +395,7 @@ describe('instance-scoped runtime', () => {
       await runtime.flush();
       expect(runtime.getState().count).toBe(1);
       expect(() =>
-        createReflexInspector(runtime)
+        createUkladInspector(runtime)
           .getOperationRuntime()
           .dispatch(['increment'] as never),
       ).toThrow('operation dispatch could not be accepted');
@@ -440,8 +440,8 @@ describe('instance-scoped runtime', () => {
     expect(firstValues).toEqual([1, 3]);
     expect(secondValues).toEqual([10, 15]);
 
-    const firstInspector = createReflexInspector(first);
-    const secondInspector = createReflexInspector(second);
+    const firstInspector = createUkladInspector(first);
+    const secondInspector = createUkladInspector(second);
     expect(firstInspector).toMatchObject({
       apiVersion: 2,
       runtimeId: 'first',
@@ -565,13 +565,13 @@ describe('instance-scoped runtime', () => {
 
   it('rejects invalid runtime state values at creation and restore boundaries', () => {
     expect(() =>
-      createReflexRuntime({ initialState: null, runtimeId: 'invalid-null-state' } as any),
+      createUkladRuntime({ initialState: null, runtimeId: 'invalid-null-state' } as any),
     ).toThrow('initialState must be a non-null, non-array object');
     expect(() =>
-      createReflexRuntime({ initialState: [], runtimeId: 'invalid-array-state' } as any),
+      createUkladRuntime({ initialState: [], runtimeId: 'invalid-array-state' } as any),
     ).toThrow('initialState must be a non-null, non-array object');
     expect(() =>
-      createReflexRuntime({ initialState: 1, runtimeId: 'invalid-primitive-state' } as any),
+      createUkladRuntime({ initialState: 1, runtimeId: 'invalid-primitive-state' } as any),
     ).toThrow('initialState must be a non-null, non-array object');
 
     const runtime = createCounterRuntime('restore-validation', 3);
@@ -611,11 +611,11 @@ describe('instance-scoped runtime', () => {
   });
 
   it('rejects non-string runtime identities at the JavaScript boundary', () => {
-    expect(() => createReflexRuntime({ initialState: {}, runtimeId: 1 } as any)).toThrow(
+    expect(() => createUkladRuntime({ initialState: {}, runtimeId: 1 } as any)).toThrow(
       'runtimeId must be 1-128 characters',
     );
     expect(() =>
-      createReflexRuntime({ initialState: {}, runtimeId: 'valid-id', name: 1 } as any),
+      createUkladRuntime({ initialState: {}, runtimeId: 'valid-id', name: 1 } as any),
     ).toThrow('runtime name must be between 1 and 128 characters');
   });
 
@@ -661,7 +661,7 @@ describe('instance-scoped runtime', () => {
   });
 
   it('refuses to dispose a feature while its subscription graph is active', () => {
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       initialState: { value: 1 },
       runtimeId: 'active-module',
     });
@@ -684,7 +684,7 @@ describe('instance-scoped runtime', () => {
   });
 
   it('disposes an inactive feature while an unrelated subscription remains active', () => {
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       initialState: { feature: 1, shell: 2 },
       runtimeId: 'unrelated-active-module',
     });
@@ -710,10 +710,10 @@ describe('instance-scoped runtime', () => {
     const second = createCounterRuntime('trace-second', 0);
     const firstTraces: Array<{ id: number; tags?: Record<string, unknown> }> = [];
     const secondTraces: Array<{ id: number; tags?: Record<string, unknown> }> = [];
-    const removeFirst = createReflexInspector(first).subscribeTraces((traces) => {
+    const removeFirst = createUkladInspector(first).subscribeTraces((traces) => {
       firstTraces.push(...traces);
     });
-    const removeSecond = createReflexInspector(second).subscribeTraces((traces) => {
+    const removeSecond = createUkladInspector(second).subscribeTraces((traces) => {
       secondTraces.push(...traces);
     });
 
@@ -741,7 +741,7 @@ describe('instance-scoped runtime', () => {
 
   it('terminally disposes an explicit runtime', () => {
     const runtime = createCounterRuntime('disposed', 0);
-    const inspector = createReflexInspector(runtime);
+    const inspector = createUkladInspector(runtime);
     const removeTraceListener = inspector.subscribeTraces(() => {});
     runtime.dispose();
     runtime.dispose();
@@ -761,7 +761,7 @@ describe('instance-scoped runtime', () => {
   it('disposing one runtime leaves other runtime state and inspectors usable', () => {
     const disposed = createCounterRuntime('dispose-first', 1);
     const surviving = createCounterRuntime('dispose-second', 10);
-    const survivingInspector = createReflexInspector(surviving);
+    const survivingInspector = createUkladInspector(surviving);
 
     disposed.dispose();
 

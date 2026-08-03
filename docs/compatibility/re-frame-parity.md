@@ -1,8 +1,8 @@
 # Re-frame parity tradeoffs
 
-Reflex keeps re-frame's durable ideas, but JavaScript does not have
+Uklad keeps re-frame's durable ideas, but JavaScript does not have
 ClojureScript's persistent values, structural equality, value-semantic vectors,
-or Reagent reactions. This document records the mechanisms Reflex currently
+or Reagent reactions. This document records the mechanisms Uklad currently
 uses to close those gaps and where each mechanism helps or hurts.
 
 This is a decision aid for the current 0.x implementation, not a promise that
@@ -17,7 +17,7 @@ every mechanism should survive 1.0.
 
 ## At a glance
 
-| Re-frame goal                    | Current Reflex mechanism                                                    | Main benefit                                                | Main cost                                                                        | Direction                               |
+| Re-frame goal                    | Current Uklad mechanism                                                    | Main benefit                                                | Main cost                                                                        | Direction                               |
 | -------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------- |
 | One immutable application state  | One state per runtime, updated through Immer                                | Ergonomic immutable transitions and structural sharing      | Proxy/value-model constraints and update cost                                    | **Keep, tune**                          |
 | Reactive derived data            | A custom cached subscription DAG                                            | Coherent, selective recomputation                           | Considerable lifecycle and cache complexity                                      | **Keep, measure**                       |
@@ -35,8 +35,8 @@ every mechanism should survive 1.0.
 - **Description:** Each runtime owns one state object. Event handlers receive an
   Immer draft; normal execution uses `produce`, while observed execution uses
   `produceWithPatches` only when patches are requested. See
-  [`runner.ts`](../../packages/reflex/src/events/runner.ts), [`immer.ts`](../../packages/reflex/src/core/immer.ts), and
-  [`state.ts`](../../packages/reflex/src/runtime/state.ts).
+  [`runner.ts`](../../packages/core/src/events/runner.ts), [`immer.ts`](../../packages/core/src/core/immer.ts), and
+  [`state.ts`](../../packages/core/src/runtime/state.ts).
 - **Why:** This approximates re-frame's immutable `app-db` while letting
   JavaScript authors write direct-looking mutations.
 - **Pros:** Structural sharing makes top-level `Object.is` checks cheap; no-op
@@ -59,8 +59,8 @@ every mechanism should survive 1.0.
 - **Description:** Registered subscriptions form a static DAG per serialized
   query. Active graphs update in one topological push wave; dormant graphs use
   a memoized pull; unused computed nodes are evicted. See
-  [`subscription-runtime.ts`](../../packages/reflex/src/runtime/subscriptions/subscription-runtime.ts)
-  and [`engine.ts`](../../packages/reflex/src/runtime/subscriptions/engine.ts).
+  [`subscription-runtime.ts`](../../packages/core/src/runtime/subscriptions/subscription-runtime.ts)
+  and [`engine.ts`](../../packages/core/src/runtime/subscriptions/engine.ts).
 - **Why:** This recreates re-frame's derived reactions without depending on
   React and guarantees that every listener sees a settled generation.
 - **Pros:** Shared dependencies run once, fan-in sees coherent inputs,
@@ -83,8 +83,8 @@ every mechanism should survive 1.0.
   subscriptions use `fast-deep-equal` by default and retain the previous
   result object when equal. A runtime or individual subscription can instead
   use `shallowEqual`, `Object.is`, or a custom comparator. See
-  [`equality.ts`](../../packages/reflex/src/core/equality.ts) and
-  [`cell.ts`](../../packages/reflex/src/runtime/subscriptions/cell.ts).
+  [`equality.ts`](../../packages/core/src/core/equality.ts) and
+  [`cell.ts`](../../packages/core/src/runtime/subscriptions/cell.ts).
 - **Why:** It approximates ClojureScript `=` and allows a compute function to
   allocate an equivalent result without waking React or downstream
   subscriptions.
@@ -107,10 +107,10 @@ every mechanism should survive 1.0.
 - **Description:** A query such as `['todo/by-id', 42]` is cached and rebound in
   React under `JSON.stringify(query)`. Development mode warns about values
   known not to survive that encoding. See
-  [`keys.ts`](../../packages/reflex/src/runtime/subscriptions/keys.ts) and
-  [`use-subscription.ts`](../../packages/reflex/src/react/use-subscription.ts).
+  [`keys.ts`](../../packages/core/src/runtime/subscriptions/keys.ts) and
+  [`use-subscription.ts`](../../packages/core/src/react/use-subscription.ts).
 - **Why:** Re-frame vectors have value semantics and can be map keys. JavaScript
-  arrays do not, so Reflex needs a stable primitive key.
+  arrays do not, so Uklad needs a stable primitive key.
 - **Pros:** The key is simple, deterministic for JSON-safe inputs, readable in
   diagnostics, and reusable by both the graph cache and React binding.
 - **Cons:** `undefined`, functions, symbols, non-finite numbers, `Map`, `Set`,
@@ -131,8 +131,8 @@ every mechanism should survive 1.0.
   `dispatch()` is called. The current 0.x implementation gives queued and
   delayed work structured-clone ownership; `dispatchSync` consumes its vector
   immediately. See
-  [`event-runtime.ts`](../../packages/reflex/src/runtime/event-runtime.ts) and
-  [`types.ts`](../../packages/reflex/src/types.ts).
+  [`event-runtime.ts`](../../packages/core/src/runtime/event-runtime.ts) and
+  [`types.ts`](../../packages/core/src/types.ts).
 - **Why:** Re-frame events are immutable data values. Agent-authored code can
   follow that contract directly, so copying every event is defensive overhead
   rather than required application logic.
@@ -158,8 +158,8 @@ every mechanism should survive 1.0.
   runs on a later host task. Events added during a run wait for another queue
   cycle; event metadata can pause work until a yield or render boundary.
   `dispatchSync()` is an idle-only escape hatch. See
-  [`router.ts`](../../packages/reflex/src/events/router.ts) and
-  [`event-runtime.ts`](../../packages/reflex/src/runtime/event-runtime.ts).
+  [`router.ts`](../../packages/core/src/events/router.ts) and
+  [`event-runtime.ts`](../../packages/core/src/runtime/event-runtime.ts).
 - **Why:** This follows re-frame's event router, prevents reentrant transitions,
   preserves order, and naturally batches bursts of UI events.
 - **Pros:** State transitions are serialized, one failure does not discard
@@ -181,7 +181,7 @@ every mechanism should survive 1.0.
 - **Description:** Global and event-local interceptors run `before` and `after`
   around a handler through a generic `Context` containing coeffects, effects,
   queue, stack, and transition state. See
-  [`interceptors-executor.ts`](../../packages/reflex/src/events/interceptors-executor.ts).
+  [`interceptors-executor.ts`](../../packages/core/src/events/interceptors-executor.ts).
 - **Why:** This mirrors re-frame and provides one extension point for
   coeffects, policy, logging, validation, and other cross-cutting behavior.
 - **Pros:** Ordering is explicit, behavior is composable, and applications can
@@ -201,11 +201,11 @@ every mechanism should survive 1.0.
 ## 8. Effects and coeffects as data — Keep, evolve
 
 - **Description:** Handlers receive injected environmental inputs and return
-  effect tuples. Reflex commits the candidate state before executing effects;
+  effect tuples. Uklad commits the candidate state before executing effects;
   synchronous failures are isolated, while promises and delayed work are
-  currently detached. See [`execution.ts`](../../packages/reflex/src/events/execution.ts),
-  [`effect-executor.ts`](../../packages/reflex/src/events/effect-executor.ts), and
-  [`built-in-effects.ts`](../../packages/reflex/src/events/built-in-effects.ts).
+  currently detached. See [`execution.ts`](../../packages/core/src/events/execution.ts),
+  [`effect-executor.ts`](../../packages/core/src/events/effect-executor.ts), and
+  [`built-in-effects.ts`](../../packages/core/src/events/built-in-effects.ts).
 - **Why:** This is re-frame's main purity boundary: domain transitions describe
   external work instead of performing it directly.
 - **Pros:** Handlers are portable and easy to test; effect intent is visible to
@@ -223,7 +223,7 @@ every mechanism should survive 1.0.
   event queue.
 - **Deviation from re-frame:** `reg-cofx` hands the handler the whole coeffects
   map and trusts whatever it returns, so the key a coeffect writes is knowable
-  only by running it. Reflex instead has the handler return one value under a
+  only by running it. Uklad instead has the handler return one value under a
   declared provider id. An event may bind that provider to an explicit local
   input name, so the contract still types the provider while the handler avoids
   awkward string-key access. The binding is declared at event registration,
@@ -237,9 +237,9 @@ every mechanism should survive 1.0.
   `renderState`. Consecutive commits coalesce behind a render-oriented
   scheduler; publication promotes the latest head, diffs top-level keys with
   `Object.is`, settles the DAG, and then notifies `useSyncExternalStore`.
-  `dispatchSync()` publishes inline. See [`state.ts`](../../packages/reflex/src/runtime/state.ts),
-  [`scheduling.ts`](../../packages/reflex/src/core/scheduling.ts), and
-  [`use-subscription.ts`](../../packages/reflex/src/react/use-subscription.ts).
+  `dispatchSync()` publishes inline. See [`state.ts`](../../packages/core/src/runtime/state.ts),
+  [`scheduling.ts`](../../packages/core/src/core/scheduling.ts), and
+  [`use-subscription.ts`](../../packages/core/src/react/use-subscription.ts).
 - **Why:** The design batches renders while ensuring newly mounted and already
   active subscriptions cannot observe different state generations.
 - **Pros:** React sees a coherent snapshot, bursts produce one notification
@@ -261,9 +261,9 @@ every mechanism should survive 1.0.
 - **Description:** Every explicit runtime owns its state, queue, handlers,
   subscription graph, tracing, timers, and registry. IDs are registered
   dynamically; duplicates fail; `registerModule()` records opaque handles for
-  safe reverse-order disposal. See [`runtime.ts`](../../packages/reflex/src/runtime/runtime.ts),
-  [`registrations.ts`](../../packages/reflex/src/runtime/registrations.ts), and
-  [`reflex-runtime.md`](../architecture/reflex-runtime.md).
+  safe reverse-order disposal. See [`runtime.ts`](../../packages/core/src/runtime/runtime.ts),
+  [`registrations.ts`](../../packages/core/src/runtime/registrations.ts), and
+  [`uklad-runtime.md`](../architecture/uklad-runtime.md).
 - **Why:** Dynamic `reg-*` APIs preserve re-frame's module model, while explicit
   runtime ownership fixes the isolation limits of package-global state.
 - **Pros:** SSR requests, tests, widgets, stories, and agent sandboxes can be
@@ -299,6 +299,6 @@ those principles, not the principles themselves.
 
 ## Related documents
 
-- [Reflex architecture](../architecture/reflex-runtime.md)
+- [Uklad architecture](../architecture/uklad-runtime.md)
 - [Subscription runtime](../architecture/subscription-runtime.md)
 - [Foundation ADR](../architecture/foundation-adr.md)

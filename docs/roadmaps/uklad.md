@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Positioning:** Reflex is the deterministic application runtime for agentic React and React Native apps — observable and verifiable by humans and agents.
+> **Positioning:** Uklad is the deterministic application runtime for agentic React and React Native apps — observable and verifiable by humans and agents.
 
 The runtime core is credible: concurrent-safe React bindings, a memoized subscription DAG, effects-as-data, tracing, a headless runtime, and an MCP verification loop. The bottleneck is productization, proof, and distribution — not additional state-management surface area. What's missing is everything that lets an architecture or security team say yes, and evidence that the AI-agent advantage is real rather than claimed.
 
@@ -22,7 +22,7 @@ Detailed trackers this document links into:
   priority order combining AI-native requirements with human/API work
   re-ranked by its value to agents.
 - [docs/roadmaps/devtools.md](devtools.md) — DevTools + MCP tool backlog; its non-operation backlog remains authoritative.
-- [docs/roadmaps/historical-reflex.md](historical-reflex.md) — previous roadmap; its **agent indexing model** remains valid reference material.
+- [docs/roadmaps/historical-uklad.md](historical-uklad.md) — previous roadmap; its **agent indexing model** remains valid reference material.
 - [Redux Toolkit and Zustand feature parity](../compatibility/redux-zustand-parity.md) — compatibility guidance extracted from the historical roadmap.
 - [docs/agent-development/workflow.md](../agent-development/workflow.md) — the canonical agent scenario new tools are justified against.
 
@@ -30,7 +30,7 @@ The immediate architecture gate is no longer “more trace tooling.” It is the
 core operation spine: exact invocation/event identities, committed and
 published revisions, causal completion, structured state/effect results,
 lookup, and retry safety. Supervised async tasks follow that spine before
-Reflex makes a production-grade agent-runtime claim. Persistence,
+Uklad makes a production-grade agent-runtime claim. Persistence,
 productization, and distribution continue in parallel where they do not freeze
 the old trace-derived completion contract.
 
@@ -45,8 +45,8 @@ and examples must stay synchronized with the evolving runtime contract. The
 current milestone is to review the published experimental surface; stable 1.0
 support remains deferred until the redesign and release gates are complete.
 
-- [x] Synchronize root/package READMEs and examples with the current API (`createReflexInspector`, current DevTools setup, and the canonical application structure).
-- [x] Fix the swapped Best Practices / API Reference links in [packages/reflex/README.md](../../packages/reflex/README.md).
+- [x] Synchronize root/package READMEs and examples with the current API (`createUkladInspector`, current DevTools setup, and the canonical application structure).
+- [x] Fix the swapped Best Practices / API Reference links in [packages/core/README.md](../../packages/core/README.md).
 - [ ] Decide how the central `docs/` tree should be distributed with future package releases; package tarballs currently contain package code and package-facing READMEs, while deep documentation remains in the monorepo.
 - [x] Pin MCP package versions in the shipped agent templates.
 - [ ] Prepare coordinated prerelease versions and release notes after the experimental redesign reaches a release candidate.
@@ -66,31 +66,31 @@ These items do not win an evaluation by themselves, but each removes a common re
   mistakes surface immediately; this matters double for AI-generated code.
 - [ ] **Release and support baseline.** `SECURITY.md` is present; remaining work includes `CHANGELOG.md`, a support/compatibility matrix, coordinated release automation, npm provenance/trusted publishing, and a documented deprecation policy. Define supported React, React Native, TypeScript, Node/headless, browser, Metro, and Hermes versions.
 - [ ] **Runtime performance baseline.** Add repeatable benchmarks and CI budgets for dispatch throughput, broad and deep subscription graphs, 1k/10k active subscriptions, mount/unmount churn, memory retention, large derived collections under deep versus shallow equality, React render counts, AI-token-frequency updates, Hermes performance, and bundle size.
-- [ ] **Internal agent eval baseline.** Run scripted Reflex tasks with MCP connected versus file-tools-only, scored on success rate, turns, tokens, wall time, and deterministic acceptance tests. Use this as the fitness function for DevTools work; do not publish cross-library claims yet.
+- [ ] **Internal agent eval baseline.** Run scripted Uklad tasks with MCP connected versus file-tools-only, scored on success rate, turns, tokens, wall time, and deterministic acceptance tests. Use this as the fitness function for DevTools work; do not publish cross-library claims yet.
 
 ## Phase 2 — Instance-scoped runtime (the quarter's architecture project, gates 1.0 RC)
 
 The state and registries now live behind explicit runtime scopes
-([state.ts](../../packages/reflex/src/runtime/state.ts),
-[registry.ts](../../packages/reflex/src/runtime/registry.ts)). This enables
+([state.ts](../../packages/core/src/runtime/state.ts),
+[registry.ts](../../packages/core/src/runtime/registry.ts)). This enables
 SSR/per-request stores, microfrontends, embedded widgets, parallel tests,
 Storybook isolation, and multiple agent sandboxes side by side.
 
 Target shape:
 
 ```ts
-const runtime = createReflexRuntime<Contracts>({ initialState });
+const runtime = createUkladRuntime<Contracts>({ initialState });
 
 runtime.registerModule(feature);
 
-<ReflexProvider runtime={runtime}>
+<UkladProvider runtime={runtime}>
   <App />
-</ReflexProvider>;
+</UkladProvider>;
 ```
 
 - [x] **Runtime RFC first.** Define ownership and lifecycle for the state heads, event queue, handler registries, event metadata, global interceptors, subscription engine/cache, tracing, schedulers, built-ins, reset behavior, and DevTools inspector. Specify compatibility and migration constraints before moving code.
-- [x] `createReflexRuntime` + `ReflexProvider`; applications explicitly own their runtime and no package-global facade is created.
-- [x] `@flexsurfer/reflex/vanilla` and `/react` entrypoints.
+- [x] `createUkladRuntime` + `UkladProvider`; applications explicitly own their runtime and no package-global facade is created.
+- [x] `@ukladjs/core/vanilla` and `/react` entrypoints.
 - [x] Store-local typed contracts as an alternative to global module augmentation.
 - [x] Public `watchSubscription` for non-React consumers (services, headless logic).
 - [x] Scoped feature registration returning an idempotent disposer; safe lazy loading and HMR without clearing every handler.
@@ -110,22 +110,22 @@ runtime.registerModule(feature);
 
 This phase begins once the instance API is stable enough that persistence, templates, examples, and public benchmarks will not be rewritten around a moving foundation.
 
-- [x] **Synchronous persistence beta.** `@flexsurfer/reflex-persist` provides
+- [x] **Synchronous persistence beta.** `@ukladjs/persist` provides
   instance-aware root persistence, versioned migrations, hydration barriers,
   transforms, redaction-safe errors, and module disposal for synchronous
   storage. Async storage, SSR integration, custom merge behavior, and multiple
   attachments per runtime remain open follow-up work.
-- [ ] **`create-reflex-app` scaffolder.** Generate the canonical convention:
-  `app/reflex/catalog.ts`, `contracts.ts`, `initial-state.ts`, `runtime.ts`,
+- [ ] **`create-uklad-app` scaffolder.** Generate the canonical convention:
+  `app/uklad/catalog.ts`, `contracts.ts`, `initial-state.ts`, `runtime.ts`,
   `bindings.ts`, feature modules, platform effect/coeffect registrations,
   dev-only inspector wiring, and the agent router files.
-- [ ] **Official Expo reference app, built by agents using the Reflex toolkit.** Include Metro/Hermes CI, AsyncStorage + SecureStore adapters, hydration migrations, background transitions, reconnect handling, and an offline command outbox. Dogfood the workflow in a public demo showing an agent building and verifying the application with metrics on screen.
-- [ ] **Public agent benchmark.** Compare the same tested tasks in Reflex, Zustand, and Redux Toolkit only after the internal harness is stable. Fix model and tool versions, publish prompts and source, use identical acceptance tests and time limits, run multiple repetitions, disclose failures and variance, and make the harness reproducible.
-- [ ] **MCP backlog prioritized by harness data** (tracked in [docs/roadmaps/devtools.md](devtools.md)): `get_client_logs`, `find_state_changes(path)`, `sinceId` pagination with explicit cursor-reset responses, `reflex-map` static manifest + source locations through MCP, shape mode, snapshot/restore, `explain_event`, deterministic replay, and runtime schema validation for external tool payloads. Predicted winners remain hypotheses until measured.
+- [ ] **Official Expo reference app, built by agents using the Uklad toolkit.** Include Metro/Hermes CI, AsyncStorage + SecureStore adapters, hydration migrations, background transitions, reconnect handling, and an offline command outbox. Dogfood the workflow in a public demo showing an agent building and verifying the application with metrics on screen.
+- [ ] **Public agent benchmark.** Compare the same tested tasks in Uklad, Zustand, and Redux Toolkit only after the internal harness is stable. Fix model and tool versions, publish prompts and source, use identical acceptance tests and time limits, run multiple repetitions, disclose failures and variance, and make the harness reproducible.
+- [ ] **MCP backlog prioritized by harness data** (tracked in [docs/roadmaps/devtools.md](devtools.md)): `get_client_logs`, `find_state_changes(path)`, `sinceId` pagination with explicit cursor-reset responses, `uklad-map` static manifest + source locations through MCP, shape mode, snapshot/restore, `explain_event`, deterministic replay, and runtime schema validation for external tool payloads. Predicted winners remain hypotheses until measured.
 
-## Phase 4 — Supervised async tasks (`@flexsurfer/reflex-tasks`)
+## Phase 4 — Supervised async tasks (`@ukladjs/tasks`)
 
-Effects return `void` and only synchronous exceptions are caught ([types.ts](../../packages/reflex/src/types.ts) `EffectHandler`, [built-in-effects.ts](../../packages/reflex/src/events/built-in-effects.ts)) — insufficient for LLM streams, tool calls, approvals, reconnects, and concurrent agents. Effects stay declarative data; tasks add supervision. Tasks are built after instance-scoping because each task tree belongs to a runtime instance.
+Effects return `void` and only synchronous exceptions are caught ([types.ts](../../packages/core/src/types.ts) `EffectHandler`, [built-in-effects.ts](../../packages/core/src/events/built-in-effects.ts)) — insufficient for LLM streams, tool calls, approvals, reconnects, and concurrent agents. Effects stay declarative data; tasks add supervision. Tasks are built after instance-scoping because each task tree belongs to a runtime instance.
 
 Minimal core first:
 
@@ -141,7 +141,7 @@ Then, driven by real demand: retry/backoff, deduplication, `leading`/`queue`/`pa
 Final 1.0 is a stability commitment, not a reward for completing one architecture project.
 
 - [ ] Run the release candidate in real applications, including at least one web app and the Expo reference app, through a defined stability period.
-- [ ] Publish migration guides from Reflex `0.x`, Redux Toolkit, and Zustand, including incremental coexistence and rollback strategies.
+- [ ] Publish migration guides from Uklad `0.x`, Redux Toolkit, and Zustand, including incremental coexistence and rollback strategies.
 - [ ] Verify the security policy, compatibility matrix, release automation, provenance, deprecation policy, and runtime/DevTools/MCP protocol negotiation.
 - [ ] Meet the documented runtime performance, memory, bundle-size, React render-count, Metro, and Hermes budgets.
 - [ ] Confirm explicit runtime ownership and store-local contract APIs are stable and documented.
@@ -153,14 +153,14 @@ Code alone does not move adoption. Every phase above should produce a publishabl
 
 - [ ] Publish the reproducible cross-library agent benchmark and its methodology.
 - [ ] Publish the agent-builds-an-app video with metrics on screen.
-- [ ] Maintain "Reflex for Redux users" and "Reflex for Zustand users" migration-oriented documentation.
+- [ ] Maintain "Uklad for Redux users" and "Uklad for Zustand users" migration-oriented documentation.
 - [ ] Pursue prominent listings in the Claude Code / Codex plugin marketplaces.
 - [ ] Reach the re-frame diaspora: a small community of senior engineers aligned with the architecture. "Re-frame for TypeScript, now with an agent loop" is a message they can amplify.
 
 ## Explicit non-goals
 
-- **No RTK Query clone.** Officially document and test the TanStack Query pairing instead. Redux Toolkit's async/caching ecosystem is mature; Reflex should concentrate on deterministic workflows, local domain state, and observability.
-- **No tiny-bundle competition with Zustand.** Reflex sells architecture, observability, and verifiability, not minimum bytes.
+- **No RTK Query clone.** Officially document and test the TanStack Query pairing instead. Redux Toolkit's async/caching ecosystem is mature; Uklad should concentrate on deterministic workflows, local domain state, and observability.
+- **No tiny-bundle competition with Zustand.** Uklad sells architecture, observability, and verifiability, not minimum bytes.
 - **No undo/redo promise until history semantics are specified.** Patches make a prototype easy, but production history requires limits, transactions, effect policy, persistence interaction, sensitive-data handling, and migration semantics.
 - **Entity/normalization helpers, per-call-site equality options, and further unmeasured MCP tools** remain backlog until the eval harness or real users demonstrate need.
 

@@ -1,6 +1,6 @@
 import type { Id } from '../types';
 
-export const REGISTRATION_COLLISION_CODE = 'REFLEX_REGISTRATION_COLLISION';
+export const REGISTRATION_COLLISION_CODE = 'UKLAD_REGISTRATION_COLLISION';
 
 /** Stable duplicate-registration error exposed to package integrations. */
 export class RegistrationCollisionError extends Error {
@@ -8,7 +8,7 @@ export class RegistrationCollisionError extends Error {
   readonly registrationId: string;
 
   constructor(id: Id) {
-    super(`[reflex] Registration '${String(id)}' is already registered.`);
+    super(`[uklad] Registration '${String(id)}' is already registered.`);
     this.name = 'RegistrationCollisionError';
     this.registrationId = String(id);
   }
@@ -92,7 +92,7 @@ export class RegistrationStore<T> {
   registerSystemOverride(id: Id, value: T): RegistrationHandle {
     if (this.entries.get(id)?.token !== undefined) this.throwDuplicate(id);
     if (!this.systemValues.has(id)) {
-      throw new Error(`[reflex] Cannot override unknown system registration '${String(id)}'.`);
+      throw new Error(`[uklad] Cannot override unknown system registration '${String(id)}'.`);
     }
     return this.install(id, value);
   }

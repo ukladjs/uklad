@@ -16,7 +16,7 @@ import { replaceDefaultEqualityCheck } from './equality';
 let patchesPluginEnabled = false;
 
 /**
- * Reflex owns state through its event API, not through recursive runtime
+ * Uklad owns state through its event API, not through recursive runtime
  * freezes. Keep Immer's development and production paths alike: an event
  * commit must not walk the complete state graph solely to detect a later
  * authoring mistake.
@@ -40,7 +40,7 @@ export function current<T>(value: T): T {
 /**
  * Enable Immer support for `Map` and `Set` values.
  *
- * When Reflex still uses its default equality function, this also selects the
+ * When Uklad still uses its default equality function, this also selects the
  * ES6-aware comparer. A user-installed equality function is left untouched.
  */
 export function enableMapSet(): void {

@@ -27,7 +27,7 @@ export function observeDevelopmentExecution(
   observer: DevelopmentExecutionObserver,
 ): () => void {
   if (OBSERVERS.has(runtime)) {
-    throw new Error('[reflex] A development execution observer is already installed.');
+    throw new Error('[uklad] A development execution observer is already installed.');
   }
 
   const probe: RuntimeProbe = {

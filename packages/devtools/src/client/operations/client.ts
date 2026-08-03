@@ -65,6 +65,6 @@ async function waitForOperation(
     throw error;
   }
   const operation = coordinator.get(operationId);
-  if (!operation) throw new Error(`[Reflex Devtools] operation '${operationId}' was not retained.`);
+  if (!operation) throw new Error(`[Uklad Devtools] operation '${operationId}' was not retained.`);
   return { operation };
 }

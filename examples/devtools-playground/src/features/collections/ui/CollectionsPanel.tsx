@@ -1,5 +1,5 @@
-import { useRuntime, useSubscription } from '../../../app/reflex/bindings';
-import { appIds } from '../../../app/reflex/catalog';
+import { useRuntime, useSubscription } from '../../../app/uklad/bindings';
+import { appIds } from '../../../app/uklad/catalog';
 
 function CollectionsPanel() {
   const runtime = useRuntime();

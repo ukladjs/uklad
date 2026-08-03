@@ -1,7 +1,7 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 
 /**
  * Events that exist to produce interesting devtools traces.
@@ -9,7 +9,7 @@ import type { AppContracts } from '../../app/reflex/contracts';
  * Nothing here belongs in a real application; it is the feature that
  * deliberately misbehaves so the inspector has something to show.
  */
-export const registerDiagnosticsEvents: ReflexModule<ReflexRegistrar<AppContracts>> = (
+export const registerDiagnosticsEvents: UkladModule<UkladRegistrar<AppContracts>> = (
   registrar,
 ) => {
   // The effect handler dispatches the follow-up event after this handler

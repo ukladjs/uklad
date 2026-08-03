@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const persistRoot = path.resolve(here, '..', '..');
-const reflexRoot = path.resolve(persistRoot, '..', 'reflex');
+const ukladRoot = path.resolve(persistRoot, '..', 'core');
 const fixtureSource = path.join(here, 'fixture');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
@@ -42,34 +42,34 @@ function compiler(name) {
 }
 
 function main() {
-  if (!fs.existsSync(path.join(reflexRoot, 'dist', 'index.mjs'))) {
-    throw new Error('Reflex dist is missing. Build @flexsurfer/reflex before this check.');
+  if (!fs.existsSync(path.join(ukladRoot, 'dist', 'index.mjs'))) {
+    throw new Error('Uklad dist is missing. Build @ukladjs/core before this check.');
   }
   if (!fs.existsSync(path.join(persistRoot, 'dist', 'index.mjs'))) {
-    throw new Error('reflex-persist dist is missing. Run the package build before this check.');
+    throw new Error('uklad-persist dist is missing. Run the package build before this check.');
   }
 
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reflex-persist-consumer-'));
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'uklad-persist-consumer-'));
   try {
     process.env.npm_config_cache = path.join(workDir, '.npm-cache');
     process.env.npm_config_update_notifier = 'false';
     // `npm publish --dry-run` exports npm_config_dry_run=true to lifecycle scripts, and
     // prepublishOnly runs this check: without the override npm pack writes no tarball.
     process.env.npm_config_dry_run = 'false';
-    const reflexTarball = pack(reflexRoot, workDir);
+    const ukladTarball = pack(ukladRoot, workDir);
     const persistTarball = pack(persistRoot, workDir);
     const consumerDir = path.join(workDir, 'consumer');
     fs.cpSync(fixtureSource, consumerDir, { recursive: true });
     fs.writeFileSync(
       path.join(consumerDir, 'package.json'),
       `${JSON.stringify(
-        { name: 'reflex-persist-package-consumer', version: '0.0.0', private: true },
+        { name: 'uklad-persist-package-consumer', version: '0.0.0', private: true },
         null,
         2,
       )}\n`,
     );
 
-    console.log('[package] installing separately packed Reflex and reflex-persist tarballs');
+    console.log('[package] installing separately packed Uklad and uklad-persist tarballs');
     run(
       npm,
       [
@@ -78,7 +78,7 @@ function main() {
         '--no-fund',
         '--no-save',
         '--omit=peer',
-        reflexTarball,
+        ukladTarball,
         persistTarball,
       ],
       consumerDir,

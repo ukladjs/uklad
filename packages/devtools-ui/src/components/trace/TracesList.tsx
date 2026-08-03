@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import type { TraceItem } from '../../types/Trace';
 import TraceListItem from './TraceListItem';
-import { useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@ukladjs/core';
 
 export default function TracesList() {
     const eventsEndRef = useRef<HTMLDivElement>(null);

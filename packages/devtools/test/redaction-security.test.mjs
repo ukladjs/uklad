@@ -5,7 +5,7 @@ import {
   createKeyRedactor,
   redactDevtoolsEvent,
 } from '../dist/redaction.js';
-import { reflexReplacer } from '../dist/serialization.js';
+import { ukladReplacer } from '../dist/serialization.js';
 
 function syntheticCredentials() {
   return {
@@ -97,7 +97,7 @@ test('raw Errors are normalized and scrubbed before Error.toJSON can run', () =>
   });
 
   const redacted = createKeyRedactor()({ failure: error });
-  const serialized = JSON.stringify(redacted, reflexReplacer);
+  const serialized = JSON.stringify(redacted, ukladReplacer);
   const details = redacted.failure['[Error]'];
 
   assert.equal(toJSONCalls, 0);
@@ -121,7 +121,7 @@ test('structured errors are scrubbed after custom hooks across devtools event pa
   };
   const traceEvent = redactDevtoolsEvent(
     {
-      type: 'reflex-traces',
+      type: 'uklad-traces',
       payload: [{
         tags: {
           error: {
@@ -147,7 +147,7 @@ test('structured errors are scrubbed after custom hooks across devtools event pa
   );
   const evalEvent = redactDevtoolsEvent(
     {
-      type: 'reflex-eval-sub-result',
+      type: 'uklad-eval-sub-result',
       payload: {
         evalId: 'eval-1',
         error: {
@@ -161,7 +161,7 @@ test('structured errors are scrubbed after custom hooks across devtools event pa
   );
   const subscriptionEvent = redactDevtoolsEvent(
     {
-      type: 'reflex-active-subs',
+      type: 'uklad-active-subs',
       payload: {
         account: {
           '[SubscriptionError]': `Subscription failed normally: ${credentials.jwt}`,

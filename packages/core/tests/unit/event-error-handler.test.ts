@@ -5,10 +5,10 @@
  * failure and rethrows it. `clearEventErrorHandler` must restore that baseline
  * rather than leave the runtime with no handler at all.
  */
-import { createReflexRuntimeForTests } from '../../src/runtime/runtime';
+import { createUkladRuntimeForTests } from '../../src/runtime/runtime';
 
 function createRuntime(runtimeId: string) {
-  const runtime = createReflexRuntimeForTests({ initialState: { count: 0 }, runtimeId });
+  const runtime = createUkladRuntimeForTests({ initialState: { count: 0 }, runtimeId });
   runtime.registerModule((registrar) => {
     registrar.regEvent('boom', () => {
       throw new Error('handler exploded');

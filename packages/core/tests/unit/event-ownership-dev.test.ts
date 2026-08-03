@@ -6,10 +6,10 @@
 // IS_DEV is captured at import time; Jest hoists this mock for this boundary.
 jest.mock('../../src/core/environment', () => ({ IS_DEV: true }));
 
-import { createReflexRuntimeForTests } from '../../src/runtime/runtime';
+import { createUkladRuntimeForTests } from '../../src/runtime/runtime';
 
 function createRuntime() {
-  const runtime = createReflexRuntimeForTests({
+  const runtime = createUkladRuntimeForTests({
     initialState: { seen: null as unknown },
     runtimeId: `own-${Math.random().toString(36).slice(2)}`,
   });

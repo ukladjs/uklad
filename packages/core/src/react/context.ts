@@ -1,21 +1,21 @@
 import { createContext, createElement, useContext } from 'react';
 
 import { getRuntimeClient } from '../runtime/runtime';
-import type { ReflexRuntimeClient } from '../runtime/api';
+import type { UkladRuntimeClient } from '../runtime/api';
 
 import type { ReactElement } from 'react';
-import type { PermissiveReflexContracts, ReflexContracts } from '../contracts';
-import type { ReflexProviderProps } from './types';
+import type { PermissiveUkladContracts, UkladContracts } from '../contracts';
+import type { UkladProviderProps } from './types';
 
-export type { ReflexProviderProps } from './types';
+export type { UkladProviderProps } from './types';
 
-const ReflexRuntimeContext = createContext<ReflexRuntimeClient<ReflexContracts> | null>(null);
+const UkladRuntimeContext = createContext<UkladRuntimeClient<UkladContracts> | null>(null);
 
-/** Select a Reflex runtime for every descendant Reflex hook. */
-export function ReflexProvider({ runtime, children }: ReflexProviderProps): ReactElement {
+/** Select a Uklad runtime for every descendant Uklad hook. */
+export function UkladProvider({ runtime, children }: UkladProviderProps): ReactElement {
   return createElement(
-    ReflexRuntimeContext.Provider,
-    { value: getRuntimeClient(runtime) as ReflexRuntimeClient<ReflexContracts> },
+    UkladRuntimeContext.Provider,
+    { value: getRuntimeClient(runtime) as UkladRuntimeClient<UkladContracts> },
     children,
   );
 }
@@ -28,15 +28,15 @@ export function ReflexProvider({ runtime, children }: ReflexProviderProps): Reac
  * runtime a provider actually supplied. Passing a contract the provided runtime
  * was not built for compiles and then misreports `dispatch`.
  *
- * Use the `useRuntime` returned by `createReflexHooks<TContracts>()` to get the
+ * Use the `useRuntime` returned by `createUkladHooks<TContracts>()` to get the
  * same client checked against the contract its paired provider enforces.
  */
-export function useReflexRuntime<
-  TContracts extends ReflexContracts = PermissiveReflexContracts,
->(): ReflexRuntimeClient<TContracts> {
-  const runtime = useContext(ReflexRuntimeContext);
+export function useUkladRuntime<
+  TContracts extends UkladContracts = PermissiveUkladContracts,
+>(): UkladRuntimeClient<TContracts> {
+  const runtime = useContext(UkladRuntimeContext);
   if (!runtime) {
-    throw new Error('[reflex] Reflex hooks require a <ReflexProvider runtime={...}> ancestor.');
+    throw new Error('[uklad] Uklad hooks require a <UkladProvider runtime={...}> ancestor.');
   }
-  return runtime as unknown as ReflexRuntimeClient<TContracts>;
+  return runtime as unknown as UkladRuntimeClient<TContracts>;
 }

@@ -3,10 +3,10 @@ import type {
   ContractDispatchVector,
   ContractSubscribeVector,
   ContractSubscriptionParamsAreValid,
-  CreateReflexRuntimeOptions,
-  ReflexContracts,
-  ReflexDisposer,
-  ReflexModule,
+  CreateUkladRuntimeOptions,
+  UkladContracts,
+  UkladDisposer,
+  UkladModule,
   WatchSubscriptionListener,
   WatchSubscriptionOptions,
 } from '../contracts';
@@ -40,10 +40,10 @@ import type { HandlerRegistry } from './handler-types';
 import type { RegistrationHandle } from './registrations';
 import type { SubscriptionDiagnostic } from './subscriptions/types';
 import type {
-  ReflexRuntime,
-  ReflexRuntimeAdmin,
-  ReflexRuntimeClient,
-  ReflexRegistrar,
+  UkladRuntime,
+  UkladRuntimeAdmin,
+  UkladRuntimeClient,
+  UkladRegistrar,
   RuntimeStateRevisions,
   RuntimeSubscriptionHandler,
 } from './api';
@@ -60,10 +60,10 @@ import type {
 } from '../types';
 
 export type {
-  ReflexRegistrar,
-  ReflexRuntime,
-  ReflexRuntimeAdmin,
-  ReflexRuntimeClient,
+  UkladRegistrar,
+  UkladRuntime,
+  UkladRuntimeAdmin,
+  UkladRuntimeClient,
   RuntimeEventHandler,
   RuntimeStateRevisions,
   RuntimeSubscriptionHandler,
@@ -71,49 +71,49 @@ export type {
 
 interface ModuleInstallation {
   readonly registrations: RegistrationHandle[];
-  cleanup: ReflexDisposer | undefined;
+  cleanup: UkladDisposer | undefined;
   disposed: boolean;
 }
 
 type RuntimeFacadeRole = 'owner' | 'client';
 
 interface RuntimeBinding {
-  readonly implementation: ReflexRuntimeImplementation<any>;
+  readonly implementation: UkladRuntimeImplementation<any>;
   readonly role: RuntimeFacadeRole;
 }
 
 /** Private identity table for the frozen facades produced by this module. */
 const RUNTIME_BINDINGS = new WeakMap<object, RuntimeBinding>();
 
-type StateInferredContracts<TState extends Record<string, any>> = ReflexContracts & {
+type StateInferredContracts<TState extends Record<string, any>> = UkladContracts & {
   readonly state: TState;
 };
 
 type NonArrayRuntimeOptions<TState extends Record<string, any>> =
-  CreateReflexRuntimeOptions<TState> & (TState extends readonly any[] ? never : unknown);
+  CreateUkladRuntimeOptions<TState> & (TState extends readonly any[] ? never : unknown);
 
 /** Make an invalid subscription-parameter contract fail at typed runtime creation. */
 type SubscriptionParameterContractGuard<TContracts> =
   ContractSubscriptionParamsAreValid<TContracts> extends true
     ? unknown
-    : { readonly __reflexSubscriptionParamsMustBeScalars: never };
+    : { readonly __ukladSubscriptionParamsMustBeScalars: never };
 
-class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
+class UkladRuntimeImplementation<TContracts extends UkladContracts> {
   /** The only owner of this runtime's mutable engine services. */
   readonly #core: RuntimeCore;
   private activeInstallation: ModuleInstallation | null = null;
   private readonly installations = new Set<ModuleInstallation>();
-  private readonly watches = new Set<ReflexDisposer>();
-  private readonly renderSubscriptions = new Set<ReflexDisposer>();
-  private clientRuntime: ReflexRuntimeClient<TContracts> | undefined;
+  private readonly watches = new Set<UkladDisposer>();
+  private readonly renderSubscriptions = new Set<UkladDisposer>();
+  private clientRuntime: UkladRuntimeClient<TContracts> | undefined;
 
-  constructor(core: RuntimeCore, options: CreateReflexRuntimeOptions<ContractState<TContracts>>) {
+  constructor(core: RuntimeCore, options: CreateUkladRuntimeOptions<ContractState<TContracts>>) {
     const { initialState, equalityCheck, interceptors } = options;
     assertStateRecord(initialState, 'initialState');
     this.#core = core;
     if (equalityCheck !== undefined) {
       if (typeof equalityCheck !== 'function') {
-        throw new TypeError('[reflex] runtime equalityCheck must be a function.');
+        throw new TypeError('[uklad] runtime equalityCheck must be a function.');
       }
       core.subscriptions.equalityCheck = equalityCheck;
     }
@@ -129,24 +129,24 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return this.#core;
   }
 
-  createPublicRuntime(): ReflexRuntime<TContracts> {
+  createPublicRuntime(): UkladRuntime<TContracts> {
     const client = this.getClientForInternalUse();
     return Object.freeze({
       ...client,
       runtimeInstanceId: this.runtimeInstanceId,
       registerModule: this.registerModule.bind(this),
       dispose: this.dispose.bind(this),
-    }) as ReflexRuntime<TContracts>;
+    }) as UkladRuntime<TContracts>;
   }
 
-  getClientForInternalUse(): ReflexRuntimeClient<TContracts> {
+  getClientForInternalUse(): UkladRuntimeClient<TContracts> {
     this.clientRuntime ??= Object.freeze({
       runtimeId: this.runtimeId,
       runtimeName: this.runtimeName,
       dispatch: this.dispatch.bind(this),
       debounceAndDispatch: this.debounceAndDispatch.bind(this),
       throttleAndDispatch: this.throttleAndDispatch.bind(this),
-    }) as ReflexRuntimeClient<TContracts>;
+    }) as UkladRuntimeClient<TContracts>;
     return this.clientRuntime!;
   }
 
@@ -177,7 +177,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     assertStateRecord(nextState, 'restoreState nextState');
     if (!this.#core.events.isIdle || this.#core.events.handlingEventId !== null) {
       throw new Error(
-        `[reflex] Cannot restore runtime '${this.runtimeId}' while an event is pending or being handled. Await runtime.flush() first.`,
+        `[uklad] Cannot restore runtime '${this.runtimeId}' while an event is pending or being handled. Await runtime.flush() first.`,
       );
     }
     this.#core.subscriptions.assertPublicationAllowed();
@@ -210,7 +210,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     this.recordRegistration(this.#core.events.registerEvent(id, handler as any, options));
   }
 
-  regEffect(id: Id, handler: (value: any, runtime: ReflexRuntimeClient<any>) => void): void {
+  regEffect(id: Id, handler: (value: any, runtime: UkladRuntimeClient<any>) => void): void {
     this.assertUsable();
     this.recordRegistration(this.#core.registry.fx.register(id, handler));
   }
@@ -267,13 +267,13 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     query: ContractSubscribeVector<TContracts>,
     listener: WatchSubscriptionListener<any>,
     options: WatchSubscriptionOptions = {},
-  ): ReflexDisposer {
+  ): UkladDisposer {
     this.assertUsable();
     assertRegisteredSubscription(this.#core, query);
     const subscription = this.#core.subscriptions.getOrCreate(query as SubVector);
     if (!subscription) {
       throw new Error(
-        `[reflex] Failed to build the subscription graph for '${String((query as SubVector)[0])}' in runtime '${this.runtimeId}'.`,
+        `[uklad] Failed to build the subscription graph for '${String((query as SubVector)[0])}' in runtime '${this.runtimeId}'.`,
       );
     }
 
@@ -314,13 +314,13 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     query: ContractSubscribeVector<TContracts>,
     listener: () => void,
     componentName: string = 'react component',
-  ): ReflexDisposer {
+  ): UkladDisposer {
     this.assertUsable();
     assertRegisteredSubscription(this.#core, query);
     const subscription = this.#core.subscriptions.getOrCreate(query as SubVector);
     if (!subscription) {
       throw new Error(
-        `[reflex] Failed to build the subscription graph for '${String((query as SubVector)[0])}' in runtime '${this.runtimeId}'.`,
+        `[uklad] Failed to build the subscription graph for '${String((query as SubVector)[0])}' in runtime '${this.runtimeId}'.`,
       );
     }
 
@@ -439,17 +439,17 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return this.#core.subscriptions.diagnostics();
   }
 
-  registerModule(module: ReflexModule<ReflexRegistrar<TContracts>>): ReflexDisposer {
+  registerModule(module: UkladModule<UkladRegistrar<TContracts>>): UkladDisposer {
     return this.installModule(module, () => this.createRegistrar());
   }
 
   private installModule<TRegistrar>(
-    module: ReflexModule<TRegistrar>,
+    module: UkladModule<TRegistrar>,
     createRegistrar: () => TRegistrar,
-  ): ReflexDisposer {
+  ): UkladDisposer {
     this.assertUsable();
     if (this.activeInstallation) {
-      throw new Error('[reflex] registerModule installers cannot be nested.');
+      throw new Error('[uklad] registerModule installers cannot be nested.');
     }
 
     const installation: ModuleInstallation = {
@@ -473,9 +473,9 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     return () => this.disposeInstallation(installation);
   }
 
-  private createRegistrar(): ReflexRegistrar<TContracts> {
+  private createRegistrar(): UkladRegistrar<TContracts> {
     return Object.freeze({
-      regEvent: this.regEvent.bind(this) as ReflexRegistrar<TContracts>['regEvent'],
+      regEvent: this.regEvent.bind(this) as UkladRegistrar<TContracts>['regEvent'],
       regEffect: this.regEffect.bind(this),
       regCoeffect: this.regCoeffect.bind(this),
       regRootSub: this.regRootSub.bind(this),
@@ -487,7 +487,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     if (isRuntimeDisposed(this.#core)) return;
     if (this.#core.events.isRunning) {
       throw new Error(
-        `[reflex] Cannot dispose runtime '${this.runtimeId}' while its event queue is synchronously running. Dispose after the current event or runtime.flush() settles.`,
+        `[uklad] Cannot dispose runtime '${this.runtimeId}' while its event queue is synchronously running. Dispose after the current event or runtime.flush() settles.`,
       );
     }
 
@@ -503,7 +503,7 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
     this.#core.events.clearRateLimits();
     this.#core.events.clearDelayedEffects();
     this.#core.events.dispose();
-    const disposeError = new Error(`[reflex] Runtime '${this.runtimeId}' was disposed.`);
+    const disposeError = new Error(`[uklad] Runtime '${this.runtimeId}' was disposed.`);
     markRuntimeDisposed(this.#core);
     notifyRuntimeProbe(this.#core, 'runtimeDisposed', disposeError);
     disposeTracing(this.#core);
@@ -548,18 +548,18 @@ class ReflexRuntimeImplementation<TContracts extends ReflexContracts> {
   }
 }
 
-export function createReflexRuntime<
-  TContracts extends ReflexContracts,
+export function createUkladRuntime<
+  TContracts extends UkladContracts,
   TState extends ContractState<TContracts> = ContractState<TContracts>,
 >(
   options: NonArrayRuntimeOptions<TState> & SubscriptionParameterContractGuard<TContracts>,
-): ReflexRuntime<TContracts>;
-export function createReflexRuntime<TState extends Record<string, any>>(
+): UkladRuntime<TContracts>;
+export function createUkladRuntime<TState extends Record<string, any>>(
   options: NonArrayRuntimeOptions<TState>,
-): ReflexRuntime<StateInferredContracts<TState>>;
-export function createReflexRuntime(options: CreateReflexRuntimeOptions<any>): ReflexRuntime<any> {
+): UkladRuntime<StateInferredContracts<TState>>;
+export function createUkladRuntime(options: CreateUkladRuntimeOptions<any>): UkladRuntime<any> {
   const core = createRuntimeCore(options);
-  const implementation = new ReflexRuntimeImplementation(core, options);
+  const implementation = new UkladRuntimeImplementation(core, options);
   const runtime = implementation.createPublicRuntime();
   const client = implementation.getClientForInternalUse();
   core.effectRuntime = client;
@@ -569,23 +569,22 @@ export function createReflexRuntime(options: CreateReflexRuntimeOptions<any>): R
 }
 
 /** @internal Test-only owner facade with administrative operations attached. */
-export function createReflexRuntimeForTests<
-  TContracts extends ReflexContracts,
+export function createUkladRuntimeForTests<
+  TContracts extends UkladContracts,
   TState extends ContractState<TContracts> = ContractState<TContracts>,
 >(
   options: NonArrayRuntimeOptions<TState> & SubscriptionParameterContractGuard<TContracts>,
-): ReflexRuntime<TContracts> & ReflexRuntimeAdmin<TContracts>;
-export function createReflexRuntimeForTests<TState extends Record<string, any>>(
+): UkladRuntime<TContracts> & UkladRuntimeAdmin<TContracts>;
+export function createUkladRuntimeForTests<TState extends Record<string, any>>(
   options: NonArrayRuntimeOptions<TState>,
-): ReflexRuntime<StateInferredContracts<TState>> &
-  ReflexRuntimeAdmin<StateInferredContracts<TState>>;
-export function createReflexRuntimeForTests(
-  options: CreateReflexRuntimeOptions<any>,
-): ReflexRuntime<any> & ReflexRuntimeAdmin<any> {
-  const owner = createReflexRuntime(options);
+): UkladRuntime<StateInferredContracts<TState>> & UkladRuntimeAdmin<StateInferredContracts<TState>>;
+export function createUkladRuntimeForTests(
+  options: CreateUkladRuntimeOptions<any>,
+): UkladRuntime<any> & UkladRuntimeAdmin<any> {
+  const owner = createUkladRuntime(options);
   const implementation = getRuntimeOwnerImplementation(
     owner,
-    '[reflex] Expected a runtime created by createReflexRuntime().',
+    '[uklad] Expected a runtime created by createUkladRuntime().',
   );
   const testRuntime = Object.freeze({
     ...owner,
@@ -615,109 +614,109 @@ export function createReflexRuntimeForTests(
     getSubscriptionDiagnostics: implementation.getSubscriptionDiagnostics.bind(implementation),
   });
   RUNTIME_BINDINGS.set(testRuntime, { implementation, role: 'owner' });
-  return testRuntime as unknown as ReflexRuntime<any> & ReflexRuntimeAdmin<any>;
+  return testRuntime as unknown as UkladRuntime<any> & UkladRuntimeAdmin<any>;
 }
 
 /** @internal Test-only access for focused engine subsystem tests. */
-export function getRuntimeCoreForTests<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntime<TContracts>,
+export function getRuntimeCoreForTests<TContracts extends UkladContracts>(
+  runtime: UkladRuntime<TContracts>,
 ): RuntimeCore {
   return getRuntimeOwnerImplementation(
     runtime,
-    '[reflex] Expected a runtime created by createReflexRuntime().',
+    '[uklad] Expected a runtime created by createUkladRuntime().',
   ).getCoreForInternalUse();
 }
 
 /** @internal Administrative access used by testing and development adapters. */
-export function getRuntimeAdminForTests<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntime<TContracts>,
-): ReflexRuntimeAdmin<TContracts> {
+export function getRuntimeAdminForTests<TContracts extends UkladContracts>(
+  runtime: UkladRuntime<TContracts>,
+): UkladRuntimeAdmin<TContracts> {
   return getRuntimeOwnerImplementation(
     runtime,
-    '[reflex] Expected a runtime created by createReflexRuntime().',
-  ) as unknown as ReflexRuntimeAdmin<TContracts>;
+    '[uklad] Expected a runtime created by createUkladRuntime().',
+  ) as unknown as UkladRuntimeAdmin<TContracts>;
 }
 
 /** @internal Core access used by the separate DevTools entrypoint. */
 export function getRuntimeCoreForDevtools(runtime: object): RuntimeCore {
   return getRuntimeOwnerImplementation(
     runtime,
-    '[reflex] DevTools require a runtime created by createReflexRuntime().',
+    '[uklad] DevTools require a runtime created by createUkladRuntime().',
   ).getCoreForInternalUse();
 }
 
 /** @internal Return the stable app-consumer facade for a runtime owner. */
-export function getRuntimeClient<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntime<TContracts>,
-): ReflexRuntimeClient<TContracts> {
+export function getRuntimeClient<TContracts extends UkladContracts>(
+  runtime: UkladRuntime<TContracts>,
+): UkladRuntimeClient<TContracts> {
   return getRuntimeOwnerImplementation(
     runtime,
-    '[reflex] ReflexProvider requires a runtime created by createReflexRuntime().',
-  ).getClientForInternalUse() as ReflexRuntimeClient<TContracts>;
+    '[uklad] UkladProvider requires a runtime created by createUkladRuntime().',
+  ).getClientForInternalUse() as UkladRuntimeClient<TContracts>;
 }
 
 /** @internal Normalize an owner or client facade to the stable client identity. */
-export function getRuntimeClientForInternalUse<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntimeClient<TContracts>,
-): ReflexRuntimeClient<TContracts> {
+export function getRuntimeClientForInternalUse<TContracts extends UkladContracts>(
+  runtime: UkladRuntimeClient<TContracts>,
+): UkladRuntimeClient<TContracts> {
   return getRuntimeImplementation(
     runtime,
-    '[reflex] Expected a runtime created by createReflexRuntime().',
-  ).getClientForInternalUse() as ReflexRuntimeClient<TContracts>;
+    '[uklad] Expected a runtime created by createUkladRuntime().',
+  ).getClientForInternalUse() as UkladRuntimeClient<TContracts>;
 }
 
 /** @internal Subscription access used by the React binding without widening its client API. */
-export function getSubscriptionValueForInternalUse<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntimeClient<TContracts>,
+export function getSubscriptionValueForInternalUse<TContracts extends UkladContracts>(
+  runtime: UkladRuntimeClient<TContracts>,
   query: ContractSubscribeVector<TContracts>,
 ): unknown {
   return getRuntimeImplementation(
     runtime,
-    '[reflex] Expected a runtime created by createReflexRuntime().',
+    '[uklad] Expected a runtime created by createUkladRuntime().',
   ).getSubscriptionValue(query as SubVector);
 }
 
 /** @internal Subscription access used by the React binding without widening its client API. */
-export function watchSubscriptionForInternalUse<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntimeClient<TContracts>,
+export function watchSubscriptionForInternalUse<TContracts extends UkladContracts>(
+  runtime: UkladRuntimeClient<TContracts>,
   query: ContractSubscribeVector<TContracts>,
   listener: WatchSubscriptionListener<any>,
   options?: WatchSubscriptionOptions,
-): ReflexDisposer {
+): UkladDisposer {
   return getRuntimeImplementation(
     runtime,
-    '[reflex] Expected a runtime created by createReflexRuntime().',
+    '[uklad] Expected a runtime created by createUkladRuntime().',
   ).watchSubscription(query as SubVector, listener, options);
 }
 
 /** @internal Register the React binding as a render listener. */
 export function subscribeForRender(
-  runtime: ReflexRuntimeClient<any>,
+  runtime: UkladRuntimeClient<any>,
   query: ContractSubscribeVector<any>,
   listener: () => void,
   componentName?: string,
-): ReflexDisposer {
+): UkladDisposer {
   return getRuntimeImplementation(
     runtime,
-    '[reflex] React subscriptions require a runtime created by createReflexRuntime().',
+    '[uklad] React subscriptions require a runtime created by createUkladRuntime().',
   ).subscribeForRender(query, listener, componentName);
 }
 
 /** @internal Clear one explicit runtime's subscriptions for an imminent HMR remount. */
-export function clearRuntimeSubsForHotReload<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntime<TContracts>,
+export function clearRuntimeSubsForHotReload<TContracts extends UkladContracts>(
+  runtime: UkladRuntime<TContracts>,
   subscriptionIds?: readonly Id[],
 ): void {
   getRuntimeOwnerImplementation(
     runtime,
-    '[reflex] setupSubsHotReload requires a runtime created by createReflexRuntime().',
+    '[uklad] setupSubsHotReload requires a runtime created by createUkladRuntime().',
   ).clearSubsForHotReload(subscriptionIds);
 }
 
 function getRuntimeOwnerImplementation(
   runtime: object,
   errorMessage: string,
-): ReflexRuntimeImplementation<any> {
+): UkladRuntimeImplementation<any> {
   const binding = RUNTIME_BINDINGS.get(runtime);
   if (binding?.role !== 'owner') throw new Error(errorMessage);
   return binding.implementation;
@@ -726,7 +725,7 @@ function getRuntimeOwnerImplementation(
 function getRuntimeImplementation(
   runtime: object,
   errorMessage: string,
-): ReflexRuntimeImplementation<any> {
+): UkladRuntimeImplementation<any> {
   const binding = RUNTIME_BINDINGS.get(runtime);
   if (!binding) throw new Error(errorMessage);
   return binding.implementation;

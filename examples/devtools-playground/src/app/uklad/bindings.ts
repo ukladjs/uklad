@@ -1,4 +1,4 @@
-import { createReflexHooks } from '@flexsurfer/reflex/react';
+import { createUkladHooks } from '@ukladjs/core/react';
 
 import type { AppContracts } from './contracts';
 
@@ -10,8 +10,8 @@ import type { AppContracts } from './contracts';
  * without repeating a generic argument each time.
  *
  * The provider comes from the same call as the hooks, which is what ties the
- * two together: only a `ReflexRuntime<AppContracts>` satisfies it, so the
+ * two together: only a `UkladRuntime<AppContracts>` satisfies it, so the
  * contract these hooks are checked against is the one the runtime beneath them
  * was actually built for.
  */
-export const { ReflexProvider, useSubscription, useRuntime } = createReflexHooks<AppContracts>();
+export const { UkladProvider, useSubscription, useRuntime } = createUkladHooks<AppContracts>();

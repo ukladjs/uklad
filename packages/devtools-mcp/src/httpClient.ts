@@ -4,9 +4,9 @@
 
 import { isIP } from 'node:net';
 
-export const REFLEX_DEVTOOLS_PROTOCOL_VERSION = 2;
-const PROTOCOL_HEADER = 'Reflex-DevTools-Protocol-Version';
-const CLIENT_HEADER = 'X-Reflex-Client';
+export const UKLAD_DEVTOOLS_PROTOCOL_VERSION = 2;
+const PROTOCOL_HEADER = 'Uklad-DevTools-Protocol-Version';
+const CLIENT_HEADER = 'X-Uklad-Client';
 
 export interface DevToolsAPIConfig {
   serverUrl: string;
@@ -18,7 +18,7 @@ export interface DevToolsAPIConfig {
 
 export class DevToolsServerUnavailableError extends Error {
   constructor(public readonly serverUrl: string) {
-    super('No Reflex DevTools server is connected.');
+    super('No Uklad DevTools server is connected.');
     this.name = 'DevToolsServerUnavailableError';
   }
 }
@@ -26,8 +26,8 @@ export class DevToolsServerUnavailableError extends Error {
 export class DevToolsProtocolMismatchError extends Error {
   constructor(public readonly received: unknown) {
     super(
-      `Incompatible Reflex DevTools protocol. Expected ` +
-      `${REFLEX_DEVTOOLS_PROTOCOL_VERSION}, received ${String(received)}.`,
+      `Incompatible Uklad DevTools protocol. Expected ` +
+      `${UKLAD_DEVTOOLS_PROTOCOL_VERSION}, received ${String(received)}.`,
     );
     this.name = 'DevToolsProtocolMismatchError';
   }
@@ -42,12 +42,12 @@ export function isDevToolsServerUnavailableError(
 export function devToolsServerUnavailableBody(retryTool: string) {
   const command = 'npm run devtools:mcp';
   return {
-    error: 'No Reflex DevTools server is connected.',
+    error: 'No Uklad DevTools server is connected.',
     message: [
-      'No Reflex DevTools server is connected.',
+      'No Uklad DevTools server is connected.',
       'Start the project-local DevTools script from the project root (or use the detected package manager equivalent):',
       `  ${command}`,
-      'If the script is missing, add "devtools:mcp": "reflex-devtools --mcp --host 127.0.0.1 --port 4000 --allow-origin http://localhost:5173" to package.json (replace the origin with the browser app\'s exact dev-server origin, or omit it for headless-only use).',
+      'If the script is missing, add "devtools:mcp": "uklad-devtools --mcp --host 127.0.0.1 --port 4000 --allow-origin http://localhost:5173" to package.json (replace the origin with the browser app\'s exact dev-server origin, or omit it for headless-only use).',
       `Then reload the app and retry ${retryTool}.`,
     ].join('\n'),
     command,
@@ -114,7 +114,7 @@ export class DevToolsAPIClient {
       config.serverUrl,
       config.allowInsecureRemote ?? false,
     );
-    this.clientName = config.clientName ?? 'reflex-devtools-mcp';
+    this.clientName = config.clientName ?? 'uklad-devtools-mcp';
     this.requestTimeoutMs = config.requestTimeoutMs ?? 10_000;
     this.token = config.token ?? null;
   }
@@ -143,7 +143,7 @@ export class DevToolsAPIClient {
         signal: AbortSignal.timeout(this.requestTimeoutMs),
         headers: {
           'Content-Type': 'application/json',
-          [PROTOCOL_HEADER]: String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+          [PROTOCOL_HEADER]: String(UKLAD_DEVTOOLS_PROTOCOL_VERSION),
           [CLIENT_HEADER]: this.clientName,
         },
         body: JSON.stringify({ role: 'mcp' }),
@@ -157,13 +157,13 @@ export class DevToolsAPIClient {
       throw new Error(
         body?.error
         || `DevTools session bootstrap failed with HTTP ${response.status}. ` +
-          'Remote servers require REFLEX_DEVTOOLS_MCP_TOKEN.',
+          'Remote servers require UKLAD_DEVTOOLS_MCP_TOKEN.',
       );
     }
     if (
       response.headers.get(PROTOCOL_HEADER)
-        !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
-      || body?.protocolVersion !== REFLEX_DEVTOOLS_PROTOCOL_VERSION
+        !== String(UKLAD_DEVTOOLS_PROTOCOL_VERSION)
+      || body?.protocolVersion !== UKLAD_DEVTOOLS_PROTOCOL_VERSION
       || typeof body?.token !== 'string'
     ) {
       throw new DevToolsProtocolMismatchError(body?.protocolVersion);
@@ -181,7 +181,7 @@ export class DevToolsAPIClient {
     headers.set('Authorization', `Bearer ${token}`);
     headers.set(
       PROTOCOL_HEADER,
-      String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+      String(UKLAD_DEVTOOLS_PROTOCOL_VERSION),
     );
     headers.set(CLIENT_HEADER, this.clientName);
 
@@ -198,7 +198,7 @@ export class DevToolsAPIClient {
     }
 
     const responseVersion = response.headers.get(PROTOCOL_HEADER);
-    if (responseVersion !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)) {
+    if (responseVersion !== String(UKLAD_DEVTOOLS_PROTOCOL_VERSION)) {
       throw new DevToolsProtocolMismatchError(responseVersion ?? 'missing');
     }
 
@@ -352,7 +352,7 @@ export class DevToolsAPIClient {
       ? ''
       : `?runtimeId=${encodeURIComponent(runtimeId)}`;
     const body = await this.responseBody(await this.fetch(`/api/status${suffix}`));
-    if (body?.protocol?.version !== REFLEX_DEVTOOLS_PROTOCOL_VERSION) {
+    if (body?.protocol?.version !== UKLAD_DEVTOOLS_PROTOCOL_VERSION) {
       throw new DevToolsProtocolMismatchError(body?.protocol?.version);
     }
     return body;
@@ -366,7 +366,7 @@ export class DevToolsAPIClient {
       });
       const body: any = await response.json().catch(() => null);
       return response.ok
-        && body?.protocolVersion === REFLEX_DEVTOOLS_PROTOCOL_VERSION;
+        && body?.protocolVersion === UKLAD_DEVTOOLS_PROTOCOL_VERSION;
     } catch {
       return false;
     }

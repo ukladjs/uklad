@@ -9,7 +9,7 @@
     "noEmit": true,
     "types": [],
     "paths": {
-      "@flexsurfer/reflex": ["../../../dist/index.d.mts"]
+      "@ukladjs/core": ["../../../dist/index.d.mts"]
     }
   },
   "include": ["./*.ts"]

@@ -21,7 +21,7 @@ export interface GetStateParams extends RuntimeSelectionParams {
 export function getStateTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'get_state',
-    description: 'Retrieve current Reflex state state. Pass a path for a narrow slice; omit it only for intentionally small state because a full dump spends context. This does NOT include computed subscription values — use get_active_subs for mounted values.',
+    description: 'Retrieve current Uklad state state. Pass a path for a narrow slice; omit it only for intentionally small state because a full dump spends context. This does NOT include computed subscription values — use get_active_subs for mounted values.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -1,5 +1,5 @@
-[mcp_servers.reflex-devtools]
+[mcp_servers.uklad-devtools]
 command = "npx"
-args = ["--yes", "--package=@flexsurfer/reflex-devtools-mcp@0.1.13", "reflex-devtools-mcp", "--host", "127.0.0.1", "--port", "4000"]
+args = ["--yes", "--package=@ukladjs/devtools-mcp@0.1.13", "uklad-devtools-mcp", "--host", "127.0.0.1", "--port", "4000"]
 startup_timeout_sec = 60
 tool_timeout_sec = 60

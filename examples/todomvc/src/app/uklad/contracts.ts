@@ -1,4 +1,4 @@
-import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
+import type { UkladContracts } from '@ukladjs/core/vanilla';
 
 import type { Todo, TodoId, TodosById, TodosShowing } from '../../features/todos/state';
 import type { appIds, stateKeys } from './catalog';
@@ -22,7 +22,7 @@ export interface AppState {
  * Declaring the contract is what makes `dispatch`, `regEvent`, `regSub`, and
  * `useSubscription` check ids, parameters, and results against one source of
  * truth. It describes the whole application rather than one feature: feature
- * modules are typed against `ReflexRegistrar<AppContracts>` and may freely
+ * modules are typed against `UkladRegistrar<AppContracts>` and may freely
  * depend on another feature's ids.
  *
  * `effects` is deliberately absent — TodoMVC's own event handlers return no
@@ -30,7 +30,7 @@ export interface AppState {
  * section out keeps those permissive instead of asserting a list this app does
  * not own.
  */
-export interface AppContracts extends ReflexContracts {
+export interface AppContracts extends UkladContracts {
   state: AppState;
 
   /** One entry per provider id: what it is injected with, and what it contributes. */

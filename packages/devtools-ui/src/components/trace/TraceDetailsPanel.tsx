@@ -1,4 +1,4 @@
-import { useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@ukladjs/core';
 import type { TraceItem } from '../../types/Trace';
 import TraceEventDetails from './TraceEventDetails';
 import TraceRenderDetails from './TraceRenderDetails';

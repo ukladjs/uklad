@@ -6,11 +6,11 @@
  */
 jest.mock('../../src/core/environment', () => ({ IS_DEV: false }));
 
-import { createReflexRuntimeForTests } from '../../src/runtime/runtime';
+import { createUkladRuntimeForTests } from '../../src/runtime/runtime';
 
 describe('dispatched events outside development', () => {
   it('neither copies nor freezes the dispatched payload', async () => {
-    const runtime = createReflexRuntimeForTests({
+    const runtime = createUkladRuntimeForTests({
       initialState: { seen: null as unknown },
       runtimeId: 'own-prod',
     });

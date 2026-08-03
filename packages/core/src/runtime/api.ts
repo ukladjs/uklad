@@ -16,10 +16,10 @@ import type {
   ContractSubscriptionParams,
   ContractSubscriptionResult,
   ContractSubscriptionVector,
-  PermissiveReflexContracts,
-  ReflexContracts,
-  ReflexDisposer,
-  ReflexModule,
+  PermissiveUkladContracts,
+  UkladContracts,
+  UkladDisposer,
+  UkladModule,
   WatchSubscriptionListener,
   WatchSubscriptionOptions,
 } from '../contracts';
@@ -37,7 +37,7 @@ import type {
 } from '../types';
 
 export type RuntimeEventHandler<
-  TContracts extends ReflexContracts,
+  TContracts extends UkladContracts,
   TId extends string,
   TBindings extends ContractNamedCoeffectBindings<TContracts> = Record<never, never>,
 > = (
@@ -52,12 +52,12 @@ export type RuntimeEventHandler<
  * sides agree on: this signature checks the producer, and the same entry types
  * the event-local binding that consumes it.
  */
-export type RuntimeCoeffectHandler<TContracts extends ReflexContracts, TId extends string> = (
+export type RuntimeCoeffectHandler<TContracts extends UkladContracts, TId extends string> = (
   arg: ContractCoeffectArg<TContracts, TId>,
   coeffects: CoeffectReadContext,
 ) => ContractCoeffectValue<TContracts, TId>;
 
-export type RuntimeSubscriptionHandler<TContracts extends ReflexContracts, TId extends string> = (
+export type RuntimeSubscriptionHandler<TContracts extends UkladContracts, TId extends string> = (
   ...values: any[]
 ) => ContractSubscriptionResult<TContracts, TId>;
 
@@ -72,9 +72,7 @@ export interface RuntimeStateRevisions {
  * consumers. It deliberately excludes registration, reset, inspection, and
  * terminal lifecycle operations.
  */
-export interface ReflexRuntimeClient<
-  TContracts extends ReflexContracts = PermissiveReflexContracts,
-> {
+export interface UkladRuntimeClient<TContracts extends UkladContracts = PermissiveUkladContracts> {
   readonly runtimeId: string;
   readonly runtimeName: string;
 
@@ -84,7 +82,7 @@ export interface ReflexRuntimeClient<
 }
 
 /** Registration-only capability passed to feature modules. */
-export interface ReflexRegistrar<TContracts extends ReflexContracts = PermissiveReflexContracts> {
+export interface UkladRegistrar<TContracts extends UkladContracts = PermissiveUkladContracts> {
   /**
    * Register an event with event-local coeffect bindings.
    *
@@ -110,7 +108,7 @@ export interface ReflexRegistrar<TContracts extends ReflexContracts = Permissive
     id: TId,
     handler: (
       value: ContractEffectParams<TContracts, TId>,
-      runtime: ReflexRuntimeClient<TContracts>,
+      runtime: UkladRuntimeClient<TContracts>,
     ) => void,
   ): void;
   /**
@@ -183,19 +181,17 @@ export interface ReflexRegistrar<TContracts extends ReflexContracts = Permissive
  * Production runtime owned by the application root. Administrative and
  * development-only operations are intentionally absent from this surface.
  */
-export interface ReflexRuntime<
-  TContracts extends ReflexContracts = PermissiveReflexContracts,
-> extends ReflexRuntimeClient<TContracts> {
+export interface UkladRuntime<
+  TContracts extends UkladContracts = PermissiveUkladContracts,
+> extends UkladRuntimeClient<TContracts> {
   readonly runtimeInstanceId: string;
 
-  registerModule(module: ReflexModule<ReflexRegistrar<TContracts>>): ReflexDisposer;
+  registerModule(module: UkladModule<UkladRegistrar<TContracts>>): UkladDisposer;
   dispose(): void;
 }
 
 /** Internal administrative view used only by testing and DevTools adapters. */
-export interface ReflexRuntimeAdmin<
-  TContracts extends ReflexContracts = PermissiveReflexContracts,
-> {
+export interface UkladRuntimeAdmin<TContracts extends UkladContracts = PermissiveUkladContracts> {
   getState(): ContractState<TContracts>;
   flush(): Promise<void>;
   dispatchSync(event: ContractDispatchVector<TContracts>): void;
@@ -208,7 +204,7 @@ export interface ReflexRuntimeAdmin<
     query: ContractSubscriptionVector<TContracts, TId>,
     listener: WatchSubscriptionListener<ContractSubscriptionResult<TContracts, TId>>,
     options?: WatchSubscriptionOptions,
-  ): ReflexDisposer;
+  ): UkladDisposer;
   /**
    * Append a hook around every event's transition.
    *

@@ -1,7 +1,7 @@
-# Reflex Persist architecture (compact spec)
+# Uklad Persist architecture (compact spec)
 
-`@flexsurfer/reflex-persist` attaches one persistence module to one explicit
-`ReflexRuntime`. It is an ordinary external consumer of Reflex: application
+`@ukladjs/persist` attaches one persistence module to one explicit
+`UkladRuntime`. It is an ordinary external consumer of Uklad: application
 state changes only through events, storage calls only happen in effects, and
 the module owns no private runtime hooks.
 
@@ -16,14 +16,14 @@ configured state root is stored independently in a versioned envelope.
 
 The package owns configuration validation, storage adapters, codecs,
 migrations, lifecycle barriers, diagnostics, and the persistence protocol. It
-uses only documented Reflex APIs:
+uses only documented Uklad APIs:
 
 - `registerModule()` for attachment-scoped installation and cleanup;
 - events, effects, coeffects, subscriptions, and one global interceptor;
 - `getState()` only to read current committed state in a post-commit write
   effect.
 
-It does **not** import Reflex internals, mutate a runtime's state head directly,
+It does **not** import Uklad internals, mutate a runtime's state head directly,
 register watches, or require a persistence-specific core hook. There is one
 attachment per runtime in beta.1; duplicate attachments and protocol ID
 collisions fail before installation.
@@ -104,9 +104,9 @@ exports during beta.
 | `types.ts`    | Public storage, option, handle, diagnostic, and strict-contract types                                         |
 | `adapters.ts` | Browser `localStorage` and in-memory synchronous adapters                                                     |
 | `config.ts`   | Static option validation and frozen normalized key configuration                                              |
-| `codec.ts`    | Versioned envelope codec, recursive JSON validation, migrations, and transforms; no Reflex runtime dependency |
+| `codec.ts`    | Versioned envelope codec, recursive JSON validation, migrations, and transforms; no Uklad runtime dependency |
 | `protocol.ts` | Registration collision checks and validation of internal event/effect payloads                                |
-| `persist.ts`  | Attachment-local state, Reflex registration, lifecycle barriers, writer, and handle implementation            |
+| `persist.ts`  | Attachment-local state, Uklad registration, lifecycle barriers, writer, and handle implementation            |
 
 The dependency direction is inward: `codec.ts` and `config.ts` are pure
 configuration/data code; `protocol.ts` describes boundary messages; only

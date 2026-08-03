@@ -58,7 +58,7 @@ export class EventQueue<WorkItem = EventVector> {
     this.queue = [];
     this.queueHead = 0;
     if (dropped.length > 0) {
-      this.onDrop(dropped, 'queue-dropped', new Error('[reflex] Event queue was purged.'));
+      this.onDrop(dropped, 'queue-dropped', new Error('[uklad] Event queue was purged.'));
     }
   }
 
@@ -93,7 +93,7 @@ export class EventQueue<WorkItem = EventVector> {
     this.queue = [];
     this.queueHead = 0;
     this.fsmState = 'idle';
-    const error = new Error('[reflex] Runtime disposed before its event queue became idle.');
+    const error = new Error('[uklad] Runtime disposed before its event queue became idle.');
     if (dropped.length > 0) this.onDrop(dropped, 'disposed', error);
     this.settleIdle(error);
   }
@@ -149,7 +149,7 @@ export class EventQueue<WorkItem = EventVector> {
       default:
         consoleLog(
           'error',
-          `[reflex] router state transition not found. ${this.fsmState} ${trigger}`,
+          `[uklad] router state transition not found. ${this.fsmState} ${trigger}`,
         );
         return;
     }
@@ -171,7 +171,7 @@ export class EventQueue<WorkItem = EventVector> {
     } catch (error: unknown) {
       this.consumeFirstEvent();
       this.runError ??= error;
-      consoleLog('error', '[reflex] event processing exception:', error);
+      consoleLog('error', '[uklad] event processing exception:', error);
       return true;
     }
   }

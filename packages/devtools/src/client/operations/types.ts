@@ -1,10 +1,10 @@
-import type { ReflexInspector } from '../types.js';
+import type { UkladInspector } from '../types.js';
 import type { OperationEventVector } from './runtime.js';
 
 /**
  * Immutable, DevTools-owned record of a dispatched operation.
  *
- * This mirrors Reflex's canonical coordinator snapshot. It deliberately
+ * This mirrors Uklad's canonical coordinator snapshot. It deliberately
  * contains no trace, retry, or delivery timing data. Evidence such as effects
  * is collected through optional DevTools lifecycle observation.
  *
@@ -73,8 +73,8 @@ export interface OperationClient {
   get(operationId: string): OperationSnapshot | undefined;
 }
 
-/** Optional DevTools capability backed directly by Reflex's coordinator. */
-export interface ReflexOperationInspector extends ReflexInspector {
+/** Optional DevTools capability backed directly by Uklad's coordinator. */
+export interface UkladOperationInspector extends UkladInspector {
   readonly operationApiVersion: 1;
   readonly runtimeInstanceId: string;
   startEvent(event: OperationEventVector): OperationHandle;

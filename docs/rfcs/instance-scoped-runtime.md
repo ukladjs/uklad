@@ -1,4 +1,4 @@
-# RFC: Instance-scoped Reflex runtime
+# RFC: Instance-scoped Uklad runtime
 
 - **Status:** Implemented; release acceptance awaits Phase 1 performance budgets
 - **Last updated:** 2026-07-17
@@ -7,13 +7,13 @@
 
 ## Summary
 
-Reflex state belongs to an explicit `ReflexRuntime` instance. An instance owns every mutable part of event processing, subscriptions, diagnostics, and tracing. Applications can create one runtime per browser root, request, embedded widget, Storybook story, test, or agent sandbox without sharing state through module globals.
+Uklad state belongs to an explicit `UkladRuntime` instance. An instance owns every mutable part of event processing, subscriptions, diagnostics, and tracing. Applications can create one runtime per browser root, request, embedded widget, Storybook story, test, or agent sandbox without sharing state through module globals.
 
 ```tsx
-import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import { ReflexProvider, useSubscription } from '@flexsurfer/reflex/react';
+import { createUkladRuntime } from '@ukladjs/core/vanilla';
+import { UkladProvider, useSubscription } from '@ukladjs/core/react';
 
-const runtime = createReflexRuntime({
+const runtime = createUkladRuntime({
   initialState: { count: 0 },
   runtimeId: 'counter-widget',
   name: 'Counter widget',
@@ -28,9 +28,9 @@ const disposeFeature = runtime.registerModule((scope) => {
 
 function Root() {
   return (
-    <ReflexProvider runtime={runtime}>
+    <UkladProvider runtime={runtime}>
       <App />
-    </ReflexProvider>
+    </UkladProvider>
   );
 }
 ```
@@ -58,20 +58,20 @@ No instance operation consults an ambient “current runtime.” Scheduled work 
 ### Creation and identity
 
 ```ts
-const runtime = createReflexRuntime<Contracts>({
+const runtime = createUkladRuntime<Contracts>({
   initialState,
   runtimeId?: string,
   name?: string,
 });
 ```
 
-`runtimeId` is immutable and identifies the runtime in DevTools and reconnects for the lifetime of the application runtime. Callers that need identity to survive reloads supply it; otherwise Reflex generates a process-unique ID. Simultaneously connected runtimes must use distinct IDs; reusing an ID deliberately means “this is the next session of the same runtime” and supersedes its prior DevTools connection. `name` is an immutable human-readable label and defaults to the ID.
+`runtimeId` is immutable and identifies the runtime in DevTools and reconnects for the lifetime of the application runtime. Callers that need identity to survive reloads supply it; otherwise Uklad generates a process-unique ID. Simultaneously connected runtimes must use distinct IDs; reusing an ID deliberately means “this is the next session of the same runtime” and supersedes its prior DevTools connection. `name` is an immutable human-readable label and defaults to the ID.
 
 The production runtime exposes state reads, dispatch, subscriptions, registration,
 module installation, scheduling helpers, and disposal. Feature modules receive a
 registration-only capability; they do not receive the owning runtime. State
 restore, tracing, registry inspection, resets, diagnostics, and inspector
-creation live behind the separate `@flexsurfer/reflex/devtools` and testing
+creation live behind the separate `@ukladjs/core/devtools` and testing
 adapters.
 
 ### Store-local contracts
@@ -79,7 +79,7 @@ adapters.
 Global module augmentation remains supported by the compatibility facade. New code can instead define a local contract:
 
 ```ts
-interface Contracts extends ReflexContracts {
+interface Contracts extends UkladContracts {
   state: { count: number };
   events: {
     'count/increment': [amount?: number];
@@ -107,7 +107,7 @@ replacing its handler. HMR must dispose the old module (or use the scoped
 subscription HMR clear) before evaluating registrations from the new module.
 Framework effects cannot be overridden through ordinary registration.
 
-A subscription definition cannot be removed while one of its graphs is active. Applications must unmount/unwatch consumers before disposing the feature; Reflex fails loudly instead of leaving a partially detached graph. Repeated disposal is a no-op. These rules make route-level lazy loading and dispose-then-install HMR deterministic.
+A subscription definition cannot be removed while one of its graphs is active. Applications must unmount/unwatch consumers before disposing the feature; Uklad fails loudly instead of leaving a partially detached graph. Repeated disposal is a no-op. These rules make route-level lazy loading and dispose-then-install HMR deterministic.
 
 ### Subscription reads and watches
 
@@ -145,9 +145,9 @@ handle-and-publish boundary.
 
 ### React binding
 
-`<ReflexProvider runtime={runtime}>` selects a runtime for descendant Reflex hooks. Providers may be nested, and the nearest one wins. `useSubscription` uses the nearest provider and throws when no provider is present.
+`<UkladProvider runtime={runtime}>` selects a runtime for descendant Uklad hooks. Providers may be nested, and the nearest one wins. `useSubscription` uses the nearest provider and throws when no provider is present.
 
-The package-level provider and hook read one context whose type is fixed when the context is created, so they can only check against the ambient `DefaultContracts`. An application that owns several runtimes calls `createReflexHooks<TContracts>()`, which returns a provider and hooks over a private context. The provider accepts only a `ReflexRuntime<TContracts>`, so the contract the hooks are checked against is the one the runtime beneath them was built for; a runtime supplied through some other provider is a missing provider to those hooks, and throws rather than resolving to a value of the wrong type. The bound provider also selects the runtime for the package-level context, so hot-reload helpers and untyped hooks work beneath it without a second provider.
+The package-level provider and hook read one context whose type is fixed when the context is created, so they can only check against the ambient `DefaultContracts`. An application that owns several runtimes calls `createUkladHooks<TContracts>()`, which returns a provider and hooks over a private context. The provider accepts only a `UkladRuntime<TContracts>`, so the contract the hooks are checked against is the one the runtime beneath them was built for; a runtime supplied through some other provider is a missing provider to those hooks, and throws rather than resolving to a value of the wrong type. The bound provider also selects the runtime for the package-level context, so hot-reload helpers and untyped hooks work beneath it without a second provider.
 
 ## Lifecycle and reset
 
@@ -157,9 +157,9 @@ Creation installs fresh framework built-ins (`dispatch`, `dispatch-later`, `now`
 
 ## Entrypoints
 
-- `@flexsurfer/reflex/vanilla` contains the instance runtime and all non-React APIs and types. Importing it must not load React.
-- `@flexsurfer/reflex/react` contains `ReflexProvider`, runtime context access, `useSubscription`, and hot-reload helpers.
-- `@flexsurfer/reflex` remains the compatibility entrypoint and re-exports both surfaces.
+- `@ukladjs/core/vanilla` contains the instance runtime and all non-React APIs and types. Importing it must not load React.
+- `@ukladjs/core/react` contains `UkladProvider`, runtime context access, `useSubscription`, and hot-reload helpers.
+- `@ukladjs/core` remains the compatibility entrypoint and re-exports both surfaces.
 
 ## Package entrypoint
 

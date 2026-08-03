@@ -5,18 +5,18 @@
  * vanilla API. Application code should use the production runtime client;
  * integrations should depend on the smallest capability they need here.
  */
-import { createReflexRuntimeForTests, getRuntimeAdminForTests } from './runtime/runtime';
+import { createUkladRuntimeForTests, getRuntimeAdminForTests } from './runtime/runtime';
 
 /** @internal Test-only owner facade with administrative operations attached. */
-export { createReflexRuntimeForTests };
+export { createUkladRuntimeForTests };
 
-import type { ReflexRuntime } from './runtime/api';
-import type { ReflexContracts } from './contracts';
+import type { UkladRuntime } from './runtime/api';
+import type { UkladContracts } from './contracts';
 import type { ContractDispatchVector, ContractState } from './contracts';
 import type { Interceptor } from './types';
 
-export function getRuntimeIntegration<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntime<TContracts>,
+export function getRuntimeIntegration<TContracts extends UkladContracts>(
+  runtime: UkladRuntime<TContracts>,
 ): {
   readonly getState: () => ContractState<TContracts>;
   readonly flush: () => Promise<void>;

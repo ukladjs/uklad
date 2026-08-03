@@ -1,7 +1,7 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds, stateKeys } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds, stateKeys } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 
 /**
  * The `todos` reactive graph.
@@ -16,7 +16,7 @@ import type { AppContracts } from '../../app/reflex/contracts';
  * inferred from the dependency list: no parameter annotations, and a reordered
  * dependency list is a compile error rather than a silent argument swap.
  */
-export const registerTodosSubscriptions: ReflexModule<ReflexRegistrar<AppContracts>> = (
+export const registerTodosSubscriptions: UkladModule<UkladRegistrar<AppContracts>> = (
   registrar,
 ) => {
   registrar.regRootSub(appIds.subscriptions.todosById, stateKeys.todosById);

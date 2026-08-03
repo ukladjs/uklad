@@ -10,26 +10,26 @@ const expectedRuntimeExports = [
   'DISPATCH_LATER',
   'HotReloadWrapper',
   'clearHotReloadCallbacks',
-  'createReflexHooks',
-  'createReflexRuntime',
+  'createUkladHooks',
+  'createUkladRuntime',
   'current',
   'enableMapSet',
   'isRegistrationCollisionError',
   'original',
-  'ReflexProvider',
+  'UkladProvider',
   'registerHotReloadCallback',
   'setupSubsHotReload',
   'shallowEqual',
   'triggerHotReload',
   'useHotReload',
   'useHotReloadKey',
-  'useReflexRuntime',
+  'useUkladRuntime',
   'useSubscription',
 ].sort();
 const expectedVanillaRuntimeExports = [
   'DISPATCH',
   'DISPATCH_LATER',
-  'createReflexRuntime',
+  'createUkladRuntime',
   'current',
   'enableMapSet',
   'isRegistrationCollisionError',
@@ -38,15 +38,15 @@ const expectedVanillaRuntimeExports = [
 ].sort();
 const expectedReactRuntimeExports = [
   'HotReloadWrapper',
-  'ReflexProvider',
+  'UkladProvider',
   'clearHotReloadCallbacks',
-  'createReflexHooks',
+  'createUkladHooks',
   'registerHotReloadCallback',
   'setupSubsHotReload',
   'triggerHotReload',
   'useHotReload',
   'useHotReloadKey',
-  'useReflexRuntime',
+  'useUkladRuntime',
   'useSubscription',
 ].sort();
 const removedLegacyExports = [
@@ -201,7 +201,7 @@ describe('Package Consumption Tests', () => {
       process.stdout.write(JSON.stringify({
         vanillaKeys: Object.keys(vanilla).sort(),
         reactKeys: Object.keys(react).sort(),
-        sameProvider: root.ReflexProvider === react.ReflexProvider,
+        sameProvider: root.UkladProvider === react.UkladProvider,
         devtoolsKeys: Object.keys(devtools).sort(),
         testingKeys: Object.keys(testing).sort(),
       }));
@@ -216,8 +216,8 @@ describe('Package Consumption Tests', () => {
       vanillaKeys: expectedVanillaRuntimeExports,
       reactKeys: expectedReactRuntimeExports,
       sameProvider: true,
-      devtoolsKeys: ['createReflexInspector'],
-      testingKeys: ['createReflexTestHarness'],
+      devtoolsKeys: ['createUkladInspector'],
+      testingKeys: ['createUkladTestHarness'],
     });
   });
 
@@ -240,16 +240,16 @@ describe('Package Consumption Tests', () => {
 
     expect(Object.keys(vanilla).sort()).toEqual(expectedVanillaRuntimeExports);
     expect(Object.keys(react).sort()).toEqual(expectedReactRuntimeExports);
-    expect(root.ReflexProvider).toBe(react.ReflexProvider);
-    expect(Object.keys(devtools).sort()).toEqual(['createReflexInspector']);
-    expect(Object.keys(testing).sort()).toEqual(['createReflexTestHarness']);
+    expect(root.UkladProvider).toBe(react.UkladProvider);
+    expect(Object.keys(devtools).sort()).toEqual(['createUkladInspector']);
+    expect(Object.keys(testing).sort()).toEqual(['createUkladTestHarness']);
   });
 
   test('Node with unset NODE_ENV warns when CJS and ESM initialize separate runtimes', () => {
     const warnings = loadBothModuleFormatsWithNodeEnv(undefined);
     expect(warnings).toEqual([
       expect.stringContaining(
-        'Multiple copies of @flexsurfer/reflex detected in the same JavaScript realm',
+        'Multiple copies of @ukladjs/core detected in the same JavaScript realm',
       ),
     ]);
   });
@@ -258,7 +258,7 @@ describe('Package Consumption Tests', () => {
     const warnings = loadBothModuleFormatsWithNodeEnv('development');
     expect(warnings).toEqual([
       expect.stringContaining(
-        'Multiple copies of @flexsurfer/reflex detected in the same JavaScript realm',
+        'Multiple copies of @ukladjs/core detected in the same JavaScript realm',
       ),
     ]);
   });
@@ -286,11 +286,11 @@ describe('Package Consumption Tests', () => {
 
     expect(allDts).toContain('interface SubscriptionDiagnostic');
     expect(allDts).toContain('interface EventRegistrationOptions');
-    expect(allDts).toContain('interface ReflexInspector');
+    expect(allDts).toContain('interface UkladInspector');
     expect(allDcts).toContain('interface EventRegistrationOptions');
-    expect(allDcts).toContain('interface ReflexInspector');
-    expect(vanillaDtsFile).toContain('createReflexRuntime');
-    expect(reactDtsFile).toContain('ReflexProvider');
+    expect(allDcts).toContain('interface UkladInspector');
+    expect(vanillaDtsFile).toContain('createUkladRuntime');
+    expect(reactDtsFile).toContain('UkladProvider');
     removedLegacyExports.forEach((name) => {
       expect(dtsFile).not.toMatch(new RegExp(`\\b${name}\\b`));
       expect(dctsFile).not.toMatch(new RegExp(`\\b${name}\\b`));

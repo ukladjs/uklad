@@ -1,6 +1,6 @@
 # Subscription runtime
 
-Reflex has one subscription runtime built around an opaque `SubscriptionNode`.
+Uklad has one subscription runtime built around an opaque `SubscriptionNode`.
 React, the STATE, the registry, and devtools never receive mutable runtime nodes.
 They use narrow operations for reads, subscriptions, STATE publication, lifecycle,
 and cache-only diagnostics.

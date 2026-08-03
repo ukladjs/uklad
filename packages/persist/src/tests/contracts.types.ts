@@ -1,11 +1,11 @@
-import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
-import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
+import { createUkladRuntime } from '@ukladjs/core/vanilla';
+import { createUkladTestHarness } from '@ukladjs/core/testing';
+import type { UkladContracts } from '@ukladjs/core/vanilla';
 
 import { PERSIST_IDS, memoryStorageAdapter, persist } from '../index';
 import type { AsyncPersistStorage, PersistContracts, PersistData, PersistStatus } from '../index';
 
-interface AppContracts extends ReflexContracts {
+interface AppContracts extends UkladContracts {
   readonly state: {
     readonly todos: Map<number, { readonly title: string }>;
     readonly ready: boolean;
@@ -20,10 +20,10 @@ interface AppContracts extends ReflexContracts {
 
 type AppWithPersist = PersistContracts<AppContracts>;
 
-const runtime = createReflexRuntime<AppWithPersist>({
+const runtime = createUkladRuntime<AppWithPersist>({
   initialState: { todos: new Map(), ready: false },
 });
-const testHarness = createReflexTestHarness(runtime);
+const testHarness = createUkladTestHarness(runtime);
 const handle = persist(runtime, {
   storage: memoryStorageAdapter(),
   keys: [

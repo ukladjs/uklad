@@ -3,7 +3,7 @@
  *
  * `EventRegistrationOptions.interceptors` puts `Interceptor` on the public
  * surface, `Interceptor` puts `InterceptorContext` there, and `ErrorHandler`
- * pulls in `ReflexError` -> `InterceptorErrorData` -> `InterceptorDirection`.
+ * pulls in `UkladError` -> `InterceptorErrorData` -> `InterceptorDirection`.
  * Exporting only the outermost name compiles fine for inline callbacks but
  * blocks the case these types exist for: writing a reusable, separately
  * declared interceptor or error handler.
@@ -11,16 +11,16 @@
  * This suite imports only from the package entrypoint, so a type dropped from
  * the export list fails here rather than in a consumer's project.
  */
-import { createReflexRuntime } from '../../src/vanilla';
+import { createUkladRuntime } from '../../src/vanilla';
 import type {
   ErrorHandler,
-  ReflexContracts,
+  UkladContracts,
   EventRegistrationOptions,
   Interceptor,
   InterceptorContext,
   InterceptorDirection,
   InterceptorErrorData,
-  ReflexError,
+  UkladError,
 } from '../../src/vanilla';
 
 interface AppState extends Record<string, any> {
@@ -31,7 +31,7 @@ interface AppState extends Record<string, any> {
 // that same state. `Interceptor<T>` is invariant in `T` — it appears in both
 // the parameter and the return of `before`/`after` — so the unparameterized
 // `Interceptor` is the portable form for runtimes without a state contract.
-interface AuditContracts extends ReflexContracts {
+interface AuditContracts extends UkladContracts {
   state: AppState;
 }
 
@@ -72,10 +72,10 @@ function describeFailure(data: InterceptorErrorData): string {
   return `${data.interceptor}:${direction}:${data.originalError.message}`;
 }
 
-const reportFailures: ErrorHandler = (originalError: Error, reflexError: ReflexError) => {
+const reportFailures: ErrorHandler = (originalError: Error, ukladError: UkladError) => {
   void originalError.message;
-  void describeFailure(reflexError.data);
-  void reflexError.cause;
+  void describeFailure(ukladError.data);
+  void ukladError.cause;
 };
 
 // ---- and both compose into the public registration surface --------------
@@ -90,7 +90,7 @@ const namedOptions: EventRegistrationOptions<AppState> = {
   interceptors: [withAudit('named-events')],
 };
 
-const runtime = createReflexRuntime<AuditContracts>({ initialState: { audited: 0 } });
+const runtime = createUkladRuntime<AuditContracts>({ initialState: { audited: 0 } });
 runtime.registerModule((registrar) => {
   registrar.regEvent(
     'audit/bump',

@@ -9,13 +9,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
-import { enableMapSet } from '@flexsurfer/reflex/vanilla';
-import { createReflexInspector } from '@flexsurfer/reflex/devtools';
-import { enableDevtools } from '@flexsurfer/reflex-devtools';
+import { enableMapSet } from '@ukladjs/core/vanilla';
+import { createUkladInspector } from '@ukladjs/core/devtools';
+import { enableDevtools } from '@ukladjs/devtools';
 
-import { ReflexProvider } from './app/reflex/bindings';
-import { registerFeatureModules } from './app/reflex/register';
-import { createPlaygroundRuntime } from './app/reflex/runtime';
+import { UkladProvider } from './app/uklad/bindings';
+import { registerFeatureModules } from './app/uklad/register';
+import { createPlaygroundRuntime } from './app/uklad/runtime';
 import App from './app/ui/App';
 import { registerWebCoeffects, webCoeffectModes } from './platform/web/coeffects';
 import { registerWebEffects, webEffectModes } from './platform/web/effects';
@@ -32,7 +32,7 @@ registerFeatureModules(browserRuntime);
 browserRuntime.registerModule(registerWebEffects);
 browserRuntime.registerModule(registerWebCoeffects);
 
-enableDevtools(createReflexInspector(browserRuntime), {
+enableDevtools(createUkladInspector(browserRuntime), {
   operations: true,
   runtime: 'browser',
   effectMode: 'real',
@@ -41,8 +41,8 @@ enableDevtools(createReflexInspector(browserRuntime), {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ReflexProvider runtime={browserRuntime}>
+    <UkladProvider runtime={browserRuntime}>
       <App />
-    </ReflexProvider>
+    </UkladProvider>
   </React.StrictMode>,
 );

@@ -1,6 +1,6 @@
 import { loadSettings } from "./utils/settingsStorage";
 
-/** Create fresh dashboard state for its explicitly owned Reflex runtime. */
+/** Create fresh dashboard state for its explicitly owned Uklad runtime. */
 export function createDevtoolsState() {
   return {
     state: "",

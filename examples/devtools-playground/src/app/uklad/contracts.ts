@@ -1,4 +1,4 @@
-import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
+import type { UkladContracts } from '@ukladjs/core/vanilla';
 
 import type {
   CollectionUser,
@@ -80,11 +80,11 @@ export type AppEventVector = {
  * The complete type contract for this application's runtime.
  *
  * It describes the whole application rather than one feature: every feature
- * module is typed against `ReflexRegistrar<AppContracts>`, which is what makes
+ * module is typed against `UkladRegistrar<AppContracts>`, which is what makes
  * cross-feature dispatch — `diagnostics/dispatch-from-effect` ultimately
  * incrementing a `counter` root — a checked call rather than a loose string.
  */
-export interface AppContracts extends ReflexContracts {
+export interface AppContracts extends UkladContracts {
   readonly state: AppState;
   readonly events: AppEvents;
 

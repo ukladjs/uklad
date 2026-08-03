@@ -2,7 +2,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
 import type { IncomingMessage } from 'node:http';
 import {
-  REFLEX_DEVTOOLS_WS_PROTOCOL,
+  UKLAD_DEVTOOLS_WS_PROTOCOL,
   type DevtoolsClientRole,
 } from '../protocol.js';
 
@@ -25,7 +25,7 @@ function validateConfiguredToken(
   if (token === undefined) return randomBytes(32).toString('base64url');
   if (Buffer.byteLength(token, 'utf8') < 32) {
     throw new Error(
-      `[Reflex Devtools] The configured ${role} token must be at least 32 bytes.`,
+      `[Uklad Devtools] The configured ${role} token must be at least 32 bytes.`,
     );
   }
   return token;
@@ -48,7 +48,7 @@ export function readBearerToken(request: IncomingMessage): string | null {
 export function hasSupportedWebSocketProtocol(
   request: IncomingMessage,
 ): boolean {
-  return readWebSocketProtocols(request).includes(REFLEX_DEVTOOLS_WS_PROTOCOL);
+  return readWebSocketProtocols(request).includes(UKLAD_DEVTOOLS_WS_PROTOCOL);
 }
 
 function readWebSocketProtocols(request: IncomingMessage): string[] {
@@ -147,7 +147,7 @@ export function normalizeAllowedOrigins(
       parsed = new URL(origin);
     } catch {
       throw new Error(
-        `[Reflex Devtools] allowedOrigins entries must be exact origins without paths: ${origin}`,
+        `[Uklad Devtools] allowedOrigins entries must be exact origins without paths: ${origin}`,
       );
     }
     if (
@@ -156,7 +156,7 @@ export function normalizeAllowedOrigins(
       || origin === 'null'
     ) {
       throw new Error(
-        `[Reflex Devtools] allowedOrigins entries must be exact HTTP(S) origins without paths: ${origin}`,
+        `[Uklad Devtools] allowedOrigins entries must be exact HTTP(S) origins without paths: ${origin}`,
       );
     }
     normalized.add(parsed.origin);

@@ -1,12 +1,12 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { enableMapSet } from '@flexsurfer/reflex/vanilla';
-import { HotReloadWrapper } from '@flexsurfer/reflex/react';
+import { enableMapSet } from '@ukladjs/core/vanilla';
+import { HotReloadWrapper } from '@ukladjs/core/react';
 
-import { ReflexProvider } from './app/reflex/bindings';
-import { registerFeatureModules } from './app/reflex/register';
-import { createAppRuntime } from './app/reflex/runtime';
+import { UkladProvider } from './app/uklad/bindings';
+import { registerFeatureModules } from './app/uklad/register';
+import { createAppRuntime } from './app/uklad/runtime';
 import { TodoApp } from './features/todos/ui/TodoApp';
 import { registerWebCoeffects } from './platform/web/coeffects';
 import { registerWebPersistence } from './platform/web/persistence';
@@ -31,9 +31,9 @@ if (import.meta.hot) {
 }
 
 if (import.meta.env.DEV) {
-  void import('@flexsurfer/reflex-devtools').then(({ enableDevtools }) => {
-    void import('@flexsurfer/reflex/devtools').then(({ createReflexInspector }) => {
-      enableDevtools(createReflexInspector(appRuntime));
+  void import('@ukladjs/devtools').then(({ enableDevtools }) => {
+    void import('@ukladjs/core/devtools').then(({ createUkladInspector }) => {
+      enableDevtools(createUkladInspector(appRuntime));
     });
   });
 }
@@ -65,11 +65,11 @@ void persistence.whenHydrated().catch(() => {
 const USE_STRICT_MODE = true;
 const app = (
   // HotReloadWrapper forces a remount when subscriptions are hot reloaded.
-  <ReflexProvider runtime={appRuntime}>
+  <UkladProvider runtime={appRuntime}>
     <HotReloadWrapper>
       <TodoApp />
     </HotReloadWrapper>
-  </ReflexProvider>
+  </UkladProvider>
 );
 
 createRoot(document.getElementById('root')!).render(

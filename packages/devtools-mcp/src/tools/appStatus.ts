@@ -70,7 +70,7 @@ export function appStatusTool(apiClient: DevToolsAPIClient) {
         if (!response.appConnected) {
           hints.push('No app is connected. Start one — a browser tab, or a headless state runtime (a src/headless.ts entry run under tsx/vite-node) for browserless work.');
         } else if (response.runtime == null && response.mcpEnabled) {
-          hints.push('The connected app has not reported runtime info — its @flexsurfer/reflex-devtools SDK likely predates runtime reporting.');
+          hints.push('The connected app has not reported runtime info — its @ukladjs/devtools SDK likely predates runtime reporting.');
         } else if (response.tracing === false) {
           hints.push('Tracing is off in the app, so dispatch outcomes will come back "unknown". Open the devtools UI or restart the server with --mcp to keep tracing on.');
         }

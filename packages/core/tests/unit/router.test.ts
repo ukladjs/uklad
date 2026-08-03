@@ -213,7 +213,7 @@ describe('EventQueue', () => {
 
       expect(getTestLogCalls().error).toHaveLength(1);
       expect(
-        getTestLogCalls().error.some((call) => call[0] === '[reflex] event processing exception:'),
+        getTestLogCalls().error.some((call) => call[0] === '[uklad] event processing exception:'),
       ).toBe(true);
       expect(
         getTestLogCalls().error.some((call) =>
@@ -257,9 +257,7 @@ describe('EventQueue', () => {
       (testQueue as any).fsmTrigger('invalid-trigger' as any);
 
       expect(getTestLogCalls().error.length).toBe(1);
-      expect(getTestLogCalls().error[0]![0]).toContain(
-        '[reflex] router state transition not found',
-      );
+      expect(getTestLogCalls().error[0]![0]).toContain('[uklad] router state transition not found');
     });
 
     test('handles exception mid-queue without crashing on subsequent events', async () => {
@@ -402,7 +400,7 @@ describe('Global dispatch function', () => {
 
     expect(getTestLogCalls().error.length).toBe(7);
     getTestLogCalls().error.forEach((errorCall) => {
-      expect(errorCall[0]).toBe('[reflex] invalid dispatch event vector.');
+      expect(errorCall[0]).toBe('[uklad] invalid dispatch event vector.');
     });
   });
 

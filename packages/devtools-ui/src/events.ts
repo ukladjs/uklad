@@ -1,4 +1,4 @@
-import { current } from "@flexsurfer/reflex";
+import { current } from "@ukladjs/core";
 import { applyPatches, enablePatches } from "immer";
 import type { Badge, Trace, TraceItem } from './types/Trace';
 import type { DevtoolsRuntimeSummary } from './types/Runtime';
@@ -296,7 +296,7 @@ regEvent('update-active-subs', ({ draftState }, activeSubs: any, runtimeId: stri
     }
 
     for (const [key, value] of Object.entries(activeSubs)) {
-        if (value === "reflex-tool-sub-disposed") {
+        if (value === "uklad-tool-sub-disposed") {
             delete draftState.activeSubs[key];
         } else {
             draftState.activeSubs[key] = value;

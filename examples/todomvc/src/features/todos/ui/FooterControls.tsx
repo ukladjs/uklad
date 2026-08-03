@@ -1,7 +1,7 @@
 import React from 'react';
 
-import { appIds } from '../../../app/reflex/catalog';
-import { useRuntime, useSubscription } from '../../../app/reflex/bindings';
+import { appIds } from '../../../app/uklad/catalog';
+import { useRuntime, useSubscription } from '../../../app/uklad/bindings';
 import type { TodosShowing } from '../state';
 
 export const FooterControls: React.FC = () => {

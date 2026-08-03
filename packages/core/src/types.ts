@@ -246,12 +246,12 @@ export interface InterceptorErrorData {
   eventV?: EventVector;
 }
 
-export interface ReflexError extends Error {
+export interface UkladError extends Error {
   data: InterceptorErrorData;
   cause: Error;
 }
 
-export type ErrorHandler = (originalError: Error, reflexError: ReflexError) => void;
+export type ErrorHandler = (originalError: Error, ukladError: UkladError) => void;
 
 // Subscriptions
 

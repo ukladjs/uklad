@@ -1,8 +1,8 @@
 {
-  "name": "@flexsurfer/reflex-devtools-playground",
+  "name": "@ukladjs/devtools-playground",
   "version": "0.0.0",
   "private": true,
-  "description": "Example app demonstrating Reflex Devtools",
+  "description": "Example app demonstrating Uklad Devtools",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,8 +14,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@flexsurfer/reflex": "workspace:*",
-    "@flexsurfer/reflex-devtools": "workspace:*",
+    "@ukladjs/core": "workspace:*",
+    "@ukladjs/devtools": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

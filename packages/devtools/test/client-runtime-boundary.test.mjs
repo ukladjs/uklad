@@ -22,7 +22,7 @@ async function collectJavaScriptFiles(directory) {
   return files;
 }
 
-test('built DevTools client has no runtime import of Reflex', async () => {
+test('built DevTools client has no runtime import of Uklad', async () => {
   const clientFiles = await collectJavaScriptFiles(path.join(packageDir, 'dist/client'));
   const files = [
     ...clientFiles,
@@ -30,10 +30,10 @@ test('built DevTools client has no runtime import of Reflex', async () => {
     path.join(packageDir, 'dist/serialization.js'),
   ];
   const runtimeImportPatterns = [
-    /\bfrom\s+['"]@flexsurfer\/reflex(?:\/[^'"]*)?['"]/,
-    /\bimport\s+['"]@flexsurfer\/reflex(?:\/[^'"]*)?['"]/,
-    /\bimport\s*\(\s*['"]@flexsurfer\/reflex(?:\/[^'"]*)?['"]/,
-    /\brequire\s*\(\s*['"]@flexsurfer\/reflex(?:\/[^'"]*)?['"]/,
+    /\bfrom\s+['"]@ukladjs\/core(?:\/[^'"]*)?['"]/,
+    /\bimport\s+['"]@ukladjs\/core(?:\/[^'"]*)?['"]/,
+    /\bimport\s*\(\s*['"]@ukladjs\/core(?:\/[^'"]*)?['"]/,
+    /\brequire\s*\(\s*['"]@ukladjs\/core(?:\/[^'"]*)?['"]/,
   ];
 
   for (const file of files) {
@@ -44,16 +44,16 @@ test('built DevTools client has no runtime import of Reflex', async () => {
   }
 });
 
-test('DevTools package keeps Reflex out of its published runtime dependencies', async () => {
+test('DevTools package keeps Uklad out of its published runtime dependencies', async () => {
   const packageJson = JSON.parse(await readFile(path.join(packageDir, 'package.json'), 'utf8'));
 
-  assert.equal(packageJson.dependencies?.['@flexsurfer/reflex'], undefined);
-  assert.equal(packageJson.devDependencies?.['@flexsurfer/reflex'], 'workspace:*');
-  assert.equal(packageJson.peerDependencies?.['@flexsurfer/reflex'], undefined);
+  assert.equal(packageJson.dependencies?.['@ukladjs/core'], undefined);
+  assert.equal(packageJson.devDependencies?.['@ukladjs/core'], 'workspace:*');
+  assert.equal(packageJson.peerDependencies?.['@ukladjs/core'], undefined);
 });
 
 test('the published client declaration exports the structural inspector protocol', async () => {
   const declaration = await readFile(path.join(packageDir, 'dist/client/index.d.ts'), 'utf8');
 
-  assert.match(declaration, /export type \{[\s\S]*ReflexInspector[\s\S]*\} from '\.\/types\.js';/);
+  assert.match(declaration, /export type \{[\s\S]*UkladInspector[\s\S]*\} from '\.\/types\.js';/);
 });

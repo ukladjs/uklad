@@ -1,11 +1,11 @@
-import { isRegistrationCollisionError } from '@flexsurfer/reflex/vanilla';
-import { getRuntimeIntegration } from '@flexsurfer/reflex/internal';
+import { isRegistrationCollisionError } from '@ukladjs/core/vanilla';
+import { getRuntimeIntegration } from '@ukladjs/core/internal';
 import type {
   ContractState,
-  PermissiveReflexContracts,
-  ReflexContracts,
-  ReflexRuntime,
-} from '@flexsurfer/reflex/vanilla';
+  PermissiveUkladContracts,
+  UkladContracts,
+  UkladRuntime,
+} from '@ukladjs/core/vanilla';
 
 import { encodeEnvelope, ignoreThenable, isThenable, stageEntry, type StagedEntry } from './codec';
 import { normalizeOptions } from './config';
@@ -37,7 +37,7 @@ import type {
   SyncPersistStorage,
 } from './types';
 
-type Runtime = ReflexRuntime<PermissiveReflexContracts>;
+type Runtime = UkladRuntime<PermissiveUkladContracts>;
 type PersistEffect = [id: string] | [id: string, value: unknown];
 type LifecycleState = PersistStatus | 'disposed';
 
@@ -52,23 +52,23 @@ interface PurgeWaiter extends Waiter {
 }
 
 const attachedRuntimes = new WeakSet<object>();
-const HYDRATION_ERROR = '[reflex-persist] Hydration failed.';
-const DISPOSED_ERROR = '[reflex-persist] Disposed before operation completed.';
-const PURGE_ERROR = '[reflex-persist] Purge failed.';
-const EFFECT_AUTHORIZATION = '__reflexPersistAuthorization';
+const HYDRATION_ERROR = '[uklad-persist] Hydration failed.';
+const DISPOSED_ERROR = '[uklad-persist] Disposed before operation completed.';
+const PURGE_ERROR = '[uklad-persist] Purge failed.';
+const EFFECT_AUTHORIZATION = '__ukladPersistAuthorization';
 
 /** Attach one persistence module to a runtime. */
-export function persist<TContracts extends ReflexContracts>(
-  targetRuntime: ReflexRuntime<TContracts>,
+export function persist<TContracts extends UkladContracts>(
+  targetRuntime: UkladRuntime<TContracts>,
   options: PersistOptions<ContractState<TContracts>>,
 ): PersistHandle {
   if (typeof targetRuntime !== 'object' || targetRuntime === null) {
-    throw new Error('[reflex-persist] persist() requires a Reflex runtime.');
+    throw new Error('[uklad-persist] persist() requires a Uklad runtime.');
   }
 
   const runtimeIdentity = targetRuntime as object;
   if (attachedRuntimes.has(runtimeIdentity)) {
-    throw new Error('[reflex-persist] A persistence module is already attached to this runtime.');
+    throw new Error('[uklad-persist] A persistence module is already attached to this runtime.');
   }
 
   const normalized = normalizeOptions(options as unknown as PersistOptions<AnyState>);
@@ -129,12 +129,12 @@ export function persist<TContracts extends ReflexContracts>(
 
   const reportDiagnostic = (value: PersistDiagnostic): void => {
     const keySuffix = value.key === undefined ? '' : ` for key '${value.key}'`;
-    console.warn(`[reflex-persist] ${value.code} during ${value.phase}${keySuffix}.`);
+    console.warn(`[uklad-persist] ${value.code} during ${value.phase}${keySuffix}.`);
     if (!onError) return;
     try {
       onError(value);
     } catch {
-      console.warn('[reflex-persist] onError callback failed.');
+      console.warn('[uklad-persist] onError callback failed.');
     }
   };
 
@@ -659,7 +659,7 @@ export function persist<TContracts extends ReflexContracts>(
       cleanup();
     }
     if (isRegistrationCollisionError(error)) {
-      throw new Error('[reflex-persist] Protocol registration collision.', { cause: error });
+      throw new Error('[uklad-persist] Protocol registration collision.', { cause: error });
     }
     throw error;
   }
@@ -669,7 +669,7 @@ export function persist<TContracts extends ReflexContracts>(
     hydrate(): void {
       if (disposed) throw new Error(DISPOSED_ERROR);
       if (purgeInFlight || purgeWaiters.length > 0) {
-        throw new Error('[reflex-persist] Cannot hydrate while purge is in progress.');
+        throw new Error('[uklad-persist] Cannot hydrate while purge is in progress.');
       }
       if (isSync) {
         try {
@@ -707,7 +707,7 @@ export function persist<TContracts extends ReflexContracts>(
       if (disposed) return Promise.reject(new Error(DISPOSED_ERROR));
       if (lifecycleState === 'hydrating') {
         return Promise.reject(
-          new Error('[reflex-persist] Cannot purge while hydration is in progress.'),
+          new Error('[uklad-persist] Cannot purge while hydration is in progress.'),
         );
       }
 

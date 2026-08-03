@@ -1,6 +1,6 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import type { AppContracts } from '../../app/reflex/contracts';
+import type { AppContracts } from '../../app/uklad/contracts';
 import { registerTodosEvents } from './events';
 import { registerTodosSubscriptions } from './subscriptions';
 
@@ -12,7 +12,7 @@ import { registerTodosSubscriptions } from './subscriptions';
  * installed and disposed together. Platform effects and coeffects are
  * deliberately absent: those are selected by the entry point.
  */
-export const todosModule: ReflexModule<ReflexRegistrar<AppContracts>> = (registrar) => {
+export const todosModule: UkladModule<UkladRegistrar<AppContracts>> = (registrar) => {
   registerTodosEvents(registrar);
   registerTodosSubscriptions(registrar);
 };

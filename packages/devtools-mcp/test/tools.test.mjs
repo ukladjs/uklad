@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   DevToolsAPIClient,
   DevToolsServerUnavailableError,
-  REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+  UKLAD_DEVTOOLS_PROTOCOL_VERSION,
 } from '../dist/httpClient.js';
 import { appStatusTool } from '../dist/tools/appStatus.js';
 import { dispatchEventTool } from '../dist/tools/dispatchEvent.js';
@@ -16,8 +16,8 @@ import { getHandlersTool } from '../dist/tools/getHandlers.js';
 import { getTraceTool } from '../dist/tools/getTrace.js';
 import { getTracesTool } from '../dist/tools/getTraces.js';
 
-const PROTOCOL_HEADER = 'reflex-devtools-protocol-version';
-const CLIENT_HEADER = 'x-reflex-client';
+const PROTOCOL_HEADER = 'uklad-devtools-protocol-version';
+const CLIENT_HEADER = 'x-uklad-client';
 const SESSION_TOKEN = 'unit-test-mcp-token';
 
 function parseToolResult(result) {
@@ -26,13 +26,13 @@ function parseToolResult(result) {
 
 function jsonResponse(
   body,
-  { status = 200, protocolVersion = REFLEX_DEVTOOLS_PROTOCOL_VERSION } = {},
+  { status = 200, protocolVersion = UKLAD_DEVTOOLS_PROTOCOL_VERSION } = {},
 ) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'Content-Type': 'application/json',
-      'Reflex-DevTools-Protocol-Version': String(protocolVersion),
+      'Uklad-DevTools-Protocol-Version': String(protocolVersion),
     },
   });
 }
@@ -57,8 +57,8 @@ test('app_status reports a healthy headless session without hints', async () => 
         capabilities: ['inspect', 'dispatch'],
         readOnly: false,
         protocol: {
-          version: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
-          runtimeVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+          version: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
+          runtimeVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
           inspectorApiVersion: 2,
         },
         security: {
@@ -82,7 +82,7 @@ test('app_status reports a healthy headless session without hints', async () => 
   assert.deepEqual(body.handlers, { event: 14, fx: 3, cofx: 1, sub: 9 });
   assert.deepEqual(body.capabilities, ['inspect', 'dispatch']);
   assert.equal(body.readOnly, false);
-  assert.equal(body.protocol.version, REFLEX_DEVTOOLS_PROTOCOL_VERSION);
+  assert.equal(body.protocol.version, UKLAD_DEVTOOLS_PROTOCOL_VERSION);
   assert.equal(body.security.authenticated, true);
   assert.equal('hints' in body, false);
   assert.equal('connectedApps' in body, false);
@@ -111,7 +111,7 @@ test('every MCP tool accepts runtimeId, routes it, and surfaces runtime identity
         traceCount: 1,
         capabilities: ['inspect', 'dispatch'],
         readOnly: false,
-        protocol: { version: REFLEX_DEVTOOLS_PROTOCOL_VERSION },
+        protocol: { version: UKLAD_DEVTOOLS_PROTOCOL_VERSION },
         security: { authenticated: true },
       };
     },
@@ -287,7 +287,7 @@ test('app_status explains a disconnected, read-only app and a missing --mcp flag
         capabilities: ['inspect'],
         readOnly: true,
         protocol: {
-          version: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+          version: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
           runtimeVersion: null,
           inspectorApiVersion: null,
         },
@@ -326,7 +326,7 @@ test('get_handlers tells the agent how to start the DevTools server when unreach
   const body = parseToolResult(result);
 
   assert.equal(result.isError, true);
-  assert.equal(body.error, 'No Reflex DevTools server is connected.');
+  assert.equal(body.error, 'No Uklad DevTools server is connected.');
   assert.match(body.message, /Start the project-local DevTools script from the project root/);
   assert.match(body.message, /npm run devtools:mcp/);
   assert.match(body.message, /If the script is missing, add "devtools:mcp"/);
@@ -595,14 +595,14 @@ test('DevToolsAPIClient sends runtimeId in read queries and mutation bodies', as
     const response = url.pathname === '/api/status'
       ? {
           success: true,
-          protocol: { version: REFLEX_DEVTOOLS_PROTOCOL_VERSION },
+          protocol: { version: UKLAD_DEVTOOLS_PROTOCOL_VERSION },
         }
       : { success: true };
     return new Response(JSON.stringify(response), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Reflex-DevTools-Protocol-Version': String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
+        'Uklad-DevTools-Protocol-Version': String(UKLAD_DEVTOOLS_PROTOCOL_VERSION),
       },
     });
   };
@@ -661,7 +661,7 @@ test('DevToolsAPIClient surfaces trace lookup errors from the server body', asyn
     });
 
     if (init.method === 'POST' && url.pathname === '/auth/session') {
-      assert.equal(headers.get(PROTOCOL_HEADER), String(REFLEX_DEVTOOLS_PROTOCOL_VERSION));
+      assert.equal(headers.get(PROTOCOL_HEADER), String(UKLAD_DEVTOOLS_PROTOCOL_VERSION));
       assert.equal(headers.get(CLIENT_HEADER), 'mcp-unit-test');
       assert.equal(headers.get('authorization'), null);
       assert.deepEqual(JSON.parse(String(init.body)), { role: 'mcp' });
@@ -670,14 +670,14 @@ test('DevToolsAPIClient surfaces trace lookup errors from the server body', asyn
         role: 'mcp',
         token: SESSION_TOKEN,
         capabilities: ['inspect'],
-        protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+        protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
       });
     }
 
     assert.equal(init.method ?? 'GET', 'GET');
     assert.equal(`${url.pathname}${url.search}`, '/api/traces/99?runtimeId=runtime-b');
     assert.equal(headers.get('authorization'), `Bearer ${SESSION_TOKEN}`);
-    assert.equal(headers.get(PROTOCOL_HEADER), String(REFLEX_DEVTOOLS_PROTOCOL_VERSION));
+    assert.equal(headers.get(PROTOCOL_HEADER), String(UKLAD_DEVTOOLS_PROTOCOL_VERSION));
     assert.equal(headers.get(CLIENT_HEADER), 'mcp-unit-test');
     return jsonResponse(
       {
@@ -725,13 +725,13 @@ test('DevToolsAPIClient uses an explicit token and validates status protocol met
     assert.equal(init.method ?? 'GET', 'GET');
     assert.equal(url.pathname, '/api/status');
     assert.equal(headers.get('authorization'), 'Bearer configured-token');
-    assert.equal(headers.get(PROTOCOL_HEADER), String(REFLEX_DEVTOOLS_PROTOCOL_VERSION));
+    assert.equal(headers.get(PROTOCOL_HEADER), String(UKLAD_DEVTOOLS_PROTOCOL_VERSION));
     assert.equal(headers.get(CLIENT_HEADER), 'remote-mcp');
     return jsonResponse({
       success: true,
       capabilities: ['inspect'],
       protocol: {
-        version: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+        version: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
         runtimeVersion: null,
         inspectorApiVersion: null,
       },
@@ -760,7 +760,7 @@ test('DevToolsAPIClient rejects incompatible protocol response headers', async (
     assert.equal(headers.get('authorization'), 'Bearer configured-token');
     return jsonResponse(
       { success: true },
-      { protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION + 1 },
+      { protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION + 1 },
     );
   };
 
@@ -773,7 +773,7 @@ test('DevToolsAPIClient rejects incompatible protocol response headers', async (
     await assert.rejects(
       () => apiClient.getTrace(1),
       new RegExp(
-        `Incompatible Reflex DevTools protocol.*received ${REFLEX_DEVTOOLS_PROTOCOL_VERSION + 1}`,
+        `Incompatible Uklad DevTools protocol.*received ${UKLAD_DEVTOOLS_PROTOCOL_VERSION + 1}`,
       ),
     );
   } finally {
@@ -790,7 +790,7 @@ test('DevToolsAPIClient rejects incompatible protocol metadata in /api/status', 
       success: true,
       capabilities: ['inspect'],
       protocol: {
-        version: REFLEX_DEVTOOLS_PROTOCOL_VERSION + 1,
+        version: UKLAD_DEVTOOLS_PROTOCOL_VERSION + 1,
         runtimeVersion: null,
         inspectorApiVersion: null,
       },
@@ -806,7 +806,7 @@ test('DevToolsAPIClient rejects incompatible protocol metadata in /api/status', 
     await assert.rejects(
       () => apiClient.getStatus(),
       new RegExp(
-        `Incompatible Reflex DevTools protocol.*received ${REFLEX_DEVTOOLS_PROTOCOL_VERSION + 1}`,
+        `Incompatible Uklad DevTools protocol.*received ${UKLAD_DEVTOOLS_PROTOCOL_VERSION + 1}`,
       ),
     );
   } finally {

@@ -4,10 +4,10 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 
-import { ReflexProvider } from '../../src/react/context';
+import { UkladProvider } from '../../src/react/context';
 import { useSubscription } from '../../src/react/use-subscription';
 import {
-  createReflexRuntimeForTests as createReflexRuntime,
+  createUkladRuntimeForTests as createUkladRuntime,
   getRuntimeAdminForTests,
 } from '../../src/runtime/runtime';
 
@@ -15,7 +15,7 @@ const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80)
 
 describe('React subscription tracing', () => {
   it('records hook notifications as render traces rather than watches', async () => {
-    const runtime = createReflexRuntime({ initialState: { value: 1 }, runtimeId: 'render-trace' });
+    const runtime = createUkladRuntime({ initialState: { value: 1 }, runtimeId: 'render-trace' });
     const traces: Array<{ opType?: string }> = [];
     runtime.registerModule((registrar) => {
       registrar.regRootSub('value', 'value');
@@ -30,7 +30,7 @@ describe('React subscription tracing', () => {
     admin.registerTraceCallback('react-render-trace', (batch) => traces.push(...batch));
 
     const wrapper = ({ children }: { children: ReactNode }) =>
-      createElement(ReflexProvider, { runtime }, children);
+      createElement(UkladProvider, { runtime }, children);
     const hook = renderHook(() => useSubscription<number>(['value']), { wrapper });
 
     act(() => {

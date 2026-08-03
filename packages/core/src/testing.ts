@@ -16,20 +16,20 @@ import type {
   ContractSubscriptionParams,
   ContractSubscriptionResult,
   ContractSubscriptionVector,
-  ReflexDisposer,
-  PermissiveReflexContracts,
-  ReflexContracts,
+  UkladDisposer,
+  PermissiveUkladContracts,
+  UkladContracts,
   WatchSubscriptionOptions,
 } from './contracts';
 import type {
-  ReflexRuntime,
+  UkladRuntime,
   RuntimeCoeffectHandler,
   RuntimeEventHandler,
   RuntimeSubscriptionHandler,
 } from './runtime/api';
 import type { SubDepsHandler } from './types';
 
-export interface ReflexTestHarness<TContracts extends ReflexContracts = PermissiveReflexContracts> {
+export interface UkladTestHarness<TContracts extends UkladContracts = PermissiveUkladContracts> {
   getState(): ContractState<TContracts>;
   flush(): Promise<void>;
   dispatchSync(event: ContractDispatchVector<TContracts>): void;
@@ -61,13 +61,13 @@ export interface ReflexTestHarness<TContracts extends ReflexContracts = Permissi
       previous?: ContractSubscriptionResult<TContracts, TId>,
     ) => void,
     options?: WatchSubscriptionOptions,
-  ): ReflexDisposer;
+  ): UkladDisposer;
 }
 
 /** Create a frozen, explicitly test-only view over one runtime owner. */
-export function createReflexTestHarness<TContracts extends ReflexContracts>(
-  runtime: ReflexRuntime<TContracts>,
-): ReflexTestHarness<TContracts> {
+export function createUkladTestHarness<TContracts extends UkladContracts>(
+  runtime: UkladRuntime<TContracts>,
+): UkladTestHarness<TContracts> {
   const admin = getRuntimeAdminForTests(runtime);
   return Object.freeze({
     getState: admin.getState.bind(admin),
@@ -81,7 +81,7 @@ export function createReflexTestHarness<TContracts extends ReflexContracts>(
     getSubscriptionDependencies: (id: string) => admin.getHandlers().subDeps[id],
     getSubscriptionValue: admin.getSubscriptionValue.bind(admin),
     watchSubscription: admin.watchSubscription.bind(admin),
-  }) as ReflexTestHarness<TContracts>;
+  }) as UkladTestHarness<TContracts>;
 }
 
 export type { SubDepsHandler };

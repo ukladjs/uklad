@@ -5,19 +5,19 @@ import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { StorageRetentionError, TraceStorage } from './storage.js';
-import { mapSetReflexReplacer, reflexReplacer, reflexReviver } from '../serialization.js';
+import { mapSetUkladReplacer, ukladReplacer, ukladReviver } from '../serialization.js';
 import { createKeyRedactor, redactDevtoolsEvent, type DevtoolsRedaction } from '../redaction.js';
 import {
-  REFLEX_DEVTOOLS_CLIENT_HEADER,
-  REFLEX_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES,
-  REFLEX_DEVTOOLS_MAX_RUNTIME_PAYLOAD_BYTES,
-  REFLEX_DEVTOOLS_PROTOCOL_HEADER,
-  REFLEX_DEVTOOLS_PROTOCOL_VERSION,
-  REFLEX_DEVTOOLS_RUNTIME_ERROR_TYPE,
-  REFLEX_DEVTOOLS_RUNTIME_ID_HEADER,
-  REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER,
-  REFLEX_DEVTOOLS_TELEMETRY_DROPPED_CODE,
-  REFLEX_DEVTOOLS_WS_PROTOCOL,
+  UKLAD_DEVTOOLS_CLIENT_HEADER,
+  UKLAD_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES,
+  UKLAD_DEVTOOLS_MAX_RUNTIME_PAYLOAD_BYTES,
+  UKLAD_DEVTOOLS_PROTOCOL_HEADER,
+  UKLAD_DEVTOOLS_PROTOCOL_VERSION,
+  UKLAD_DEVTOOLS_RUNTIME_ERROR_TYPE,
+  UKLAD_DEVTOOLS_RUNTIME_ID_HEADER,
+  UKLAD_DEVTOOLS_RUNTIME_SESSION_HEADER,
+  UKLAD_DEVTOOLS_TELEMETRY_DROPPED_CODE,
+  UKLAD_DEVTOOLS_WS_PROTOCOL,
   type DevtoolsCapability,
   type DevtoolsClientRole,
   type DevtoolsRuntimeSummary,
@@ -47,8 +47,8 @@ export type {
   TraceRedactor,
 } from '../redaction.js';
 export {
-  REFLEX_DEVTOOLS_PROTOCOL_VERSION,
-  REFLEX_DEVTOOLS_RUNTIME_ID_HEADER,
+  UKLAD_DEVTOOLS_PROTOCOL_VERSION,
+  UKLAD_DEVTOOLS_RUNTIME_ID_HEADER,
 } from '../protocol.js';
 export type {
   DevtoolsCapability,
@@ -223,7 +223,7 @@ function boundedInteger(
 ): number {
   const resolved = value ?? fallback;
   if (!Number.isInteger(resolved) || resolved < 1 || resolved > maximum) {
-    throw new Error(`[Reflex Devtools] ${name} must be an integer from 1 to ${maximum}.`);
+    throw new Error(`[Uklad Devtools] ${name} must be an integer from 1 to ${maximum}.`);
   }
   return resolved;
 }
@@ -235,7 +235,7 @@ function uniqueCapabilities(
   const result = new Set<DevtoolsCapability>();
   for (const capability of capabilities ?? ['inspect']) {
     if (!supported.has(capability)) {
-      throw new Error(`[Reflex Devtools] Unknown capability: ${capability}`);
+      throw new Error(`[Uklad Devtools] Unknown capability: ${capability}`);
     }
     result.add(capability);
   }
@@ -247,7 +247,7 @@ function jsonBodyParser(limit: number) {
     inflate: false,
     limit,
     strict: true,
-    reviver: reflexReviver,
+    reviver: ukladReviver,
   });
 }
 
@@ -290,24 +290,24 @@ export class DevtoolsServer {
     if (!loopbackOnly) {
       if (!config.allowRemote) {
         throw new Error(
-          `[Reflex Devtools] Refusing non-loopback host "${host}". ` +
+          `[Uklad Devtools] Refusing non-loopback host "${host}". ` +
             'Use allowRemote only with explicit credentials, Host/Origin allowlists, and a trusted TLS boundary.',
         );
       }
       if (!config.allowedHosts?.length) {
         throw new Error(
-          '[Reflex Devtools] Non-loopback binding requires at least one exact allowedHosts entry.',
+          '[Uklad Devtools] Non-loopback binding requires at least one exact allowedHosts entry.',
         );
       }
       if (!config.allowedOrigins?.length) {
         throw new Error(
-          '[Reflex Devtools] Non-loopback binding requires at least one exact allowedOrigins entry.',
+          '[Uklad Devtools] Non-loopback binding requires at least one exact allowedOrigins entry.',
         );
       }
       for (const role of ['runtime', 'ui', 'mcp'] as const) {
         if (!config.tokens?.[role]) {
           throw new Error(
-            `[Reflex Devtools] Non-loopback binding requires an explicit ${role} token.`,
+            `[Uklad Devtools] Non-loopback binding requires an explicit ${role} token.`,
           );
         }
       }
@@ -327,8 +327,8 @@ export class DevtoolsServer {
       maxRuntimePayloadBytes: boundedInteger(
         'maxRuntimePayloadBytes',
         config.maxRuntimePayloadBytes,
-        REFLEX_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES,
-        REFLEX_DEVTOOLS_MAX_RUNTIME_PAYLOAD_BYTES,
+        UKLAD_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES,
+        UKLAD_DEVTOOLS_MAX_RUNTIME_PAYLOAD_BYTES,
       ),
       maxPendingActions: boundedInteger(
         'maxPendingActions',
@@ -360,7 +360,7 @@ export class DevtoolsServer {
       const parsed = parseHostHeader(configuredHost);
       if (!parsed || parsed !== normalizeHost(configuredHost)) {
         throw new Error(
-          '[Reflex Devtools] allowedHosts entries must be exact host names without ports, credentials, or paths.',
+          '[Uklad Devtools] allowedHosts entries must be exact host names without ports, credentials, or paths.',
         );
       }
       allowedHosts.add(parsed);
@@ -384,7 +384,7 @@ export class DevtoolsServer {
     }
 
     if (this.config.enableMCP) {
-      console.log('[Reflex Devtools] MCP inspection enabled - trace storage active');
+      console.log('[Uklad Devtools] MCP inspection enabled - trace storage active');
     }
 
     const filename = fileURLToPath(import.meta.url);
@@ -403,14 +403,14 @@ export class DevtoolsServer {
       maxPayload: this.config.maxRuntimePayloadBytes,
       perMessageDeflate: false,
       handleProtocols: (protocols) =>
-        protocols.has(REFLEX_DEVTOOLS_WS_PROTOCOL) ? REFLEX_DEVTOOLS_WS_PROTOCOL : false,
+        protocols.has(UKLAD_DEVTOOLS_WS_PROTOCOL) ? UKLAD_DEVTOOLS_WS_PROTOCOL : false,
     });
     this.uiWss = new WebSocketServer({
       noServer: true,
       maxPayload: this.config.maxControlPayloadBytes,
       perMessageDeflate: false,
       handleProtocols: (protocols) =>
-        protocols.has(REFLEX_DEVTOOLS_WS_PROTOCOL) ? REFLEX_DEVTOOLS_WS_PROTOCOL : false,
+        protocols.has(UKLAD_DEVTOOLS_WS_PROTOCOL) ? UKLAD_DEVTOOLS_WS_PROTOCOL : false,
     });
 
     this.setupMiddleware();
@@ -420,7 +420,7 @@ export class DevtoolsServer {
 
   private setupMiddleware(): void {
     this.app.use((req, res, next) => {
-      res.setHeader('Reflex-DevTools-Protocol-Version', String(REFLEX_DEVTOOLS_PROTOCOL_VERSION));
+      res.setHeader('Uklad-DevTools-Protocol-Version', String(UKLAD_DEVTOOLS_PROTOCOL_VERSION));
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Referrer-Policy', 'no-referrer');
       res.setHeader('X-Frame-Options', 'DENY');
@@ -498,16 +498,16 @@ export class DevtoolsServer {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Vary', 'Origin');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Expose-Headers', 'Reflex-DevTools-Protocol-Version');
+        res.setHeader('Access-Control-Expose-Headers', 'Uklad-DevTools-Protocol-Version');
         res.setHeader(
           'Access-Control-Allow-Headers',
           [
             'Authorization',
             'Content-Type',
-            'Reflex-DevTools-Protocol-Version',
-            'X-Reflex-Client',
-            'X-Reflex-Runtime-Id',
-            'X-Reflex-Runtime-Session',
+            'Uklad-DevTools-Protocol-Version',
+            'X-Uklad-Client',
+            'X-Uklad-Runtime-Id',
+            'X-Uklad-Runtime-Session',
           ].join(', '),
         );
         res.setHeader('Access-Control-Max-Age', '600');
@@ -525,7 +525,7 @@ export class DevtoolsServer {
     this.app.get('/health', (_req, res) => {
       res.json({
         status: 'ok',
-        protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+        protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
         authenticationRequired: true,
         timestamp: Date.now(),
       });
@@ -581,7 +581,7 @@ export class DevtoolsServer {
           role,
           token: this.tokens[role],
           capabilities: role === 'runtime' ? [] : [...this.capabilities],
-          protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+          protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
         });
       },
     );
@@ -622,7 +622,7 @@ export class DevtoolsServer {
         capabilities: [...auth.capabilities],
         readOnly: !auth.capabilities.has('dispatch') && !auth.capabilities.has('restore'),
         protocol: {
-          version: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+          version: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
           runtimeVersion: runtime.metadata?.protocolVersion ?? null,
           inspectorApiVersion: runtime.metadata?.inspectorApiVersion ?? null,
           operationApiVersion: runtime.metadata?.operationApiVersion ?? null,
@@ -924,7 +924,7 @@ export class DevtoolsServer {
         const result = this.processInboundRuntimeEvent(
           req.body,
           runtime.runtimeId,
-          String(req.headers[REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER]),
+          String(req.headers[UKLAD_DEVTOOLS_RUNTIME_SESSION_HEADER]),
         );
         if (result.status === 'invalid') {
           res.status(422).json({
@@ -1003,16 +1003,16 @@ export class DevtoolsServer {
     res: Response,
     next: NextFunction,
   ): void => {
-    const supplied = req.headers[REFLEX_DEVTOOLS_PROTOCOL_HEADER];
+    const supplied = req.headers[UKLAD_DEVTOOLS_PROTOCOL_HEADER];
     if (
-      this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_PROTOCOL_HEADER) !== 1 ||
-      supplied !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
+      this.headerCount(req.rawHeaders, UKLAD_DEVTOOLS_PROTOCOL_HEADER) !== 1 ||
+      supplied !== String(UKLAD_DEVTOOLS_PROTOCOL_VERSION)
     ) {
       res.status(426).json({
         success: false,
         code: 'PROTOCOL_MISMATCH',
-        error: 'Unsupported Reflex DevTools protocol version.',
-        supportedVersions: [REFLEX_DEVTOOLS_PROTOCOL_VERSION],
+        error: 'Unsupported Uklad DevTools protocol version.',
+        supportedVersions: [UKLAD_DEVTOOLS_PROTOCOL_VERSION],
       });
       return;
     }
@@ -1041,16 +1041,16 @@ export class DevtoolsServer {
     auditedAction?: AuditRecord['action'],
   ) {
     return (req: Request, res: Response, next: NextFunction): void => {
-      const suppliedVersion = req.headers[REFLEX_DEVTOOLS_PROTOCOL_HEADER];
+      const suppliedVersion = req.headers[UKLAD_DEVTOOLS_PROTOCOL_HEADER];
       if (
-        this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_PROTOCOL_HEADER) !== 1 ||
-        suppliedVersion !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
+        this.headerCount(req.rawHeaders, UKLAD_DEVTOOLS_PROTOCOL_HEADER) !== 1 ||
+        suppliedVersion !== String(UKLAD_DEVTOOLS_PROTOCOL_VERSION)
       ) {
         res.status(426).json({
           success: false,
           code: 'PROTOCOL_MISMATCH',
-          error: 'Unsupported Reflex DevTools protocol version.',
-          supportedVersions: [REFLEX_DEVTOOLS_PROTOCOL_VERSION],
+          error: 'Unsupported Uklad DevTools protocol version.',
+          supportedVersions: [UKLAD_DEVTOOLS_PROTOCOL_VERSION],
         });
         return;
       }
@@ -1061,7 +1061,7 @@ export class DevtoolsServer {
         !token ||
         !tokensEqual(token, this.tokens[role])
       ) {
-        res.setHeader('WWW-Authenticate', 'Bearer realm="reflex-devtools"');
+        res.setHeader('WWW-Authenticate', 'Bearer realm="uklad-devtools"');
         res.status(401).json({
           success: false,
           code: 'AUTH_REQUIRED',
@@ -1073,7 +1073,7 @@ export class DevtoolsServer {
       const auth: AuthContext = {
         role,
         capabilities: role === 'runtime' ? new Set() : this.capabilities,
-        client: this.sanitizeClientHeader(req.headers[REFLEX_DEVTOOLS_CLIENT_HEADER], role),
+        client: this.sanitizeClientHeader(req.headers[UKLAD_DEVTOOLS_CLIENT_HEADER], role),
       };
       res.locals.auth = auth;
 
@@ -1109,12 +1109,12 @@ export class DevtoolsServer {
     res: Response,
     next: NextFunction,
   ): void => {
-    const runtimeId = req.headers[REFLEX_DEVTOOLS_RUNTIME_ID_HEADER];
-    const sessionId = req.headers[REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER];
+    const runtimeId = req.headers[UKLAD_DEVTOOLS_RUNTIME_ID_HEADER];
+    const sessionId = req.headers[UKLAD_DEVTOOLS_RUNTIME_SESSION_HEADER];
     const runtime = typeof runtimeId === 'string' ? this.runtimes.get(runtimeId) : undefined;
     if (
-      this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_RUNTIME_ID_HEADER) !== 1 ||
-      this.headerCount(req.rawHeaders, REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER) !== 1 ||
+      this.headerCount(req.rawHeaders, UKLAD_DEVTOOLS_RUNTIME_ID_HEADER) !== 1 ||
+      this.headerCount(req.rawHeaders, UKLAD_DEVTOOLS_RUNTIME_SESSION_HEADER) !== 1 ||
       typeof runtimeId !== 'string' ||
       typeof sessionId !== 'string' ||
       !runtime ||
@@ -1178,7 +1178,7 @@ export class DevtoolsServer {
         return;
       }
 
-      const url = new URL(req.url ?? '/', 'http://reflex.invalid');
+      const url = new URL(req.url ?? '/', 'http://uklad.invalid');
       const target =
         url.pathname === '/sdk' ? this.sdkWss : url.pathname === '/ui' ? this.uiWss : null;
       if (!target) {
@@ -1218,7 +1218,7 @@ export class DevtoolsServer {
           sessionId: randomUUID(),
           runtimeId,
           runtimeName,
-          protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+          protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
           inspectorApiVersion,
           ...(operationApiVersion === 1 ? { operationApiVersion, runtimeInstanceId } : {}),
         });
@@ -1230,7 +1230,7 @@ export class DevtoolsServer {
         const auth: AuthContext = {
           role: 'ui',
           capabilities: this.capabilities,
-          client: 'reflex-devtools-ui',
+          client: 'uklad-devtools-ui',
         };
         this.activateUiSocket(ws, req, auth);
       });
@@ -1271,9 +1271,9 @@ export class DevtoolsServer {
       }
 
       const valid =
-        message?.type === 'reflex-auth' &&
+        message?.type === 'uklad-auth' &&
         message.payload?.role === role &&
-        message.payload?.protocolVersion === REFLEX_DEVTOOLS_PROTOCOL_VERSION &&
+        message.payload?.protocolVersion === UKLAD_DEVTOOLS_PROTOCOL_VERSION &&
         typeof message.payload?.token === 'string' &&
         tokensEqual(message.payload.token, this.tokens[role]);
       if (!valid) {
@@ -1344,7 +1344,7 @@ export class DevtoolsServer {
     this.sendToSocket(ws, {
       type: 'devtools-server-hello',
       payload: {
-        protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+        protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
         runtimeSessionId: metadata.sessionId,
         runtimeId: runtime.runtimeId,
         runtimeName: runtime.runtimeName,
@@ -1373,7 +1373,7 @@ export class DevtoolsServer {
       }
       let event: any;
       try {
-        event = JSON.parse(this.rawDataToString(data), reflexReviver);
+        event = JSON.parse(this.rawDataToString(data), ukladReviver);
       } catch {
         ws.close(1007, 'Invalid JSON');
         return;
@@ -1426,8 +1426,8 @@ export class DevtoolsServer {
     this.sendToSocket(ws, {
       type: 'devtools-connected',
       payload: {
-        message: 'Connected to Reflex Devtools',
-        protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+        message: 'Connected to Uklad Devtools',
+        protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
         runtimes: this.runtimeSummaries(),
         selectedRuntimeId: metadata.selectedRuntimeId,
         capabilities: [...auth.capabilities],
@@ -1762,7 +1762,7 @@ export class DevtoolsServer {
         code: 'OPERATION_CAPABILITY_UNAVAILABLE',
         error:
           'This runtime does not expose the operation snapshot capability. ' +
-          'Enable DevTools with enableDevtools(createReflexInspector(runtime), { operations: true }).',
+          'Enable DevTools with enableDevtools(createUkladInspector(runtime), { operations: true }).',
         ...this.runtimeResponseIdentity(runtime),
       });
       return;
@@ -1962,7 +1962,7 @@ export class DevtoolsServer {
       event = redactDevtoolsEvent(candidate, this.redaction, 'server');
     } catch {
       console.error(
-        `[Reflex Devtools] Redaction failed for event type ${candidate.type}; payload dropped.`,
+        `[Uklad Devtools] Redaction failed for event type ${candidate.type}; payload dropped.`,
       );
       return {
         status: 'dropped',
@@ -1974,21 +1974,21 @@ export class DevtoolsServer {
     }
 
     try {
-      if (event.type === 'reflex-dispatch-result') {
+      if (event.type === 'uklad-dispatch-result') {
         this.resolveDispatch(event.payload, runtimeId, runtimeSessionId);
         return { status: 'accepted' };
       }
-      if (event.type === 'reflex-operation-result') {
+      if (event.type === 'uklad-operation-result') {
         this.resolveOperation(event.payload, runtimeId, runtimeSessionId);
         return { status: 'accepted' };
       }
-      if (event.type === 'reflex-eval-sub-result') {
+      if (event.type === 'uklad-eval-sub-result') {
         this.resolveSubEval(event.payload, runtimeId, runtimeSessionId);
         return { status: 'accepted' };
       }
 
       const retentionRejected = this.processStorageEvent(runtime, event);
-      if (event.type === 'reflex-runtime-info') {
+      if (event.type === 'uklad-runtime-info') {
         this.notifyUiRuntimeStatus();
       }
       this.broadcastEventToUI(runtime, event);
@@ -2004,7 +2004,7 @@ export class DevtoolsServer {
     } catch (error) {
       if (error instanceof StorageRetentionError) {
         console.warn(
-          `[Reflex Devtools] Retention limit rejected event type ${candidate.type}; payload dropped.`,
+          `[Uklad Devtools] Retention limit rejected event type ${candidate.type}; payload dropped.`,
         );
         return {
           status: 'dropped',
@@ -2015,7 +2015,7 @@ export class DevtoolsServer {
         };
       }
       console.error(
-        `[Reflex Devtools] Internal processing failure for runtime event type ${candidate.type}.`,
+        `[Uklad Devtools] Internal processing failure for runtime event type ${candidate.type}.`,
       );
       return { status: 'internal-error' };
     }
@@ -2024,25 +2024,25 @@ export class DevtoolsServer {
   private processStorageEvent(runtime: RuntimeEntry, event: any): boolean {
     const storage = runtime.snapshot;
     switch (event.type) {
-      case 'reflex-traces':
+      case 'uklad-traces':
         if (Array.isArray(event.payload)) {
           return storage.addTraces(event.payload);
         }
         break;
-      case 'reflex-state':
+      case 'uklad-state':
         if (event.payload !== undefined) {
           storage.updateState(event.payload);
         }
         break;
-      case 'reflex-active-subs':
+      case 'uklad-active-subs':
         if (event.payload && typeof event.payload === 'object') {
           storage.updateActiveSubs(event.payload);
         }
         break;
-      case 'reflex-handler-keys':
+      case 'uklad-handler-keys':
         if (event.payload) storage.updateHandlerKeys(event.payload);
         break;
-      case 'reflex-runtime-info':
+      case 'uklad-runtime-info':
         if (event.payload) storage.updateRuntimeInfo(event.payload);
         break;
     }
@@ -2314,36 +2314,36 @@ export class DevtoolsServer {
     const traces = storage.getTraces();
     if (traces.length === 0) {
       this.sendTaggedRuntimeEventToUi(client, runtime, {
-        type: 'reflex-traces',
+        type: 'uklad-traces',
         payload: [],
         timestamp: Date.now(),
       });
     } else {
       for (let index = 0; index < traces.length; index += 200) {
         this.sendTaggedRuntimeEventToUi(client, runtime, {
-          type: 'reflex-traces',
+          type: 'uklad-traces',
           payload: traces.slice(index, index + 200),
           timestamp: Date.now(),
         });
       }
     }
     this.sendTaggedRuntimeEventToUi(client, runtime, {
-      type: 'reflex-state',
+      type: 'uklad-state',
       payload: storage.getState(),
       timestamp: Date.now(),
     });
     this.sendTaggedRuntimeEventToUi(client, runtime, {
-      type: 'reflex-active-subs',
+      type: 'uklad-active-subs',
       payload: storage.getActiveSubs(),
       timestamp: Date.now(),
     });
     this.sendTaggedRuntimeEventToUi(client, runtime, {
-      type: 'reflex-handler-keys',
+      type: 'uklad-handler-keys',
       payload: storage.getHandlerKeys(),
       timestamp: Date.now(),
     });
     this.sendTaggedRuntimeEventToUi(client, runtime, {
-      type: 'reflex-runtime-info',
+      type: 'uklad-runtime-info',
       payload: storage.getRuntimeInfo(),
       timestamp: Date.now(),
     });
@@ -2365,7 +2365,7 @@ export class DevtoolsServer {
           ...event,
           ...this.runtimeResponseIdentity(runtime),
         },
-        reflexReplacer,
+        ukladReplacer,
       );
     } catch {
       return;
@@ -2416,7 +2416,7 @@ export class DevtoolsServer {
 
   private runtimeTelemetryDropPayload(drop: RuntimeTelemetryDrop): RuntimeTelemetryDroppedPayload {
     return {
-      code: REFLEX_DEVTOOLS_TELEMETRY_DROPPED_CODE,
+      code: UKLAD_DEVTOOLS_TELEMETRY_DROPPED_CODE,
       reason: drop.reason,
       eventType: drop.eventType,
     };
@@ -2424,7 +2424,7 @@ export class DevtoolsServer {
 
   private sendRuntimeTelemetryNotice(client: WebSocket, drop: RuntimeTelemetryDrop): void {
     this.sendToSocket(client, {
-      type: REFLEX_DEVTOOLS_RUNTIME_ERROR_TYPE,
+      type: UKLAD_DEVTOOLS_RUNTIME_ERROR_TYPE,
       payload: this.runtimeTelemetryDropPayload(drop),
       timestamp: Date.now(),
     });
@@ -2440,7 +2440,7 @@ export class DevtoolsServer {
       id: randomUUID(),
       timestamp: Date.now(),
       sessionEpoch: runtime?.sessionEpoch ?? 0,
-      protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+      protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
     });
     this.auditRecords.push(fullRecord);
     if (this.auditRecords.length > this.config.maxAuditRecords) {
@@ -2449,10 +2449,10 @@ export class DevtoolsServer {
     if (this.config.onAuditRecord) {
       try {
         void Promise.resolve(this.config.onAuditRecord(fullRecord)).catch(() =>
-          console.error('[Reflex Devtools] Audit sink failed.'),
+          console.error('[Uklad Devtools] Audit sink failed.'),
         );
       } catch {
-        console.error('[Reflex Devtools] Audit sink failed.');
+        console.error('[Uklad Devtools] Audit sink failed.');
       }
     }
   }
@@ -2498,21 +2498,21 @@ export class DevtoolsServer {
 
   private validRuntimeEvent(event: any): boolean {
     switch (event.type) {
-      case 'reflex-traces':
+      case 'uklad-traces':
         return this.validTraceBatch(event.payload);
-      case 'reflex-state':
+      case 'uklad-state':
         return event.payload !== undefined;
-      case 'reflex-active-subs':
+      case 'uklad-active-subs':
         return this.validActiveSubscriptions(event.payload);
-      case 'reflex-handler-keys':
+      case 'uklad-handler-keys':
         return this.validHandlerKeys(event.payload);
-      case 'reflex-runtime-info':
+      case 'uklad-runtime-info':
         return this.validRuntimeInfo(event.payload);
-      case 'reflex-dispatch-result':
+      case 'uklad-dispatch-result':
         return this.validDispatchResult(event.payload);
-      case 'reflex-operation-result':
+      case 'uklad-operation-result':
         return this.validOperationResult(event.payload);
-      case 'reflex-eval-sub-result':
+      case 'uklad-eval-sub-result':
         return this.validSubEvaluationResult(event.payload);
       default:
         return false;
@@ -2609,7 +2609,7 @@ export class DevtoolsServer {
     }
     if (
       payload.protocolVersion !== undefined &&
-      payload.protocolVersion !== REFLEX_DEVTOOLS_PROTOCOL_VERSION
+      payload.protocolVersion !== UKLAD_DEVTOOLS_PROTOCOL_VERSION
     ) {
       return false;
     }
@@ -2869,7 +2869,7 @@ export class DevtoolsServer {
   }
 
   private sendSerialized(res: Response, value: unknown): void {
-    res.type('application/json').send(JSON.stringify(value, mapSetReflexReplacer));
+    res.type('application/json').send(JSON.stringify(value, mapSetUkladReplacer));
   }
 
   private sendInternalError(res: Response, error: unknown): void {
@@ -2886,7 +2886,7 @@ export class DevtoolsServer {
         // accessor replace the generic error response with another failure.
       }
     }
-    console.error(`[Reflex Devtools] Internal server error (request ${requestId}; ${errorName}).`);
+    console.error(`[Uklad Devtools] Internal server error (request ${requestId}; ${errorName}).`);
     res.status(500).json({
       success: false,
       code: 'INTERNAL_ERROR',
@@ -2932,9 +2932,9 @@ export class DevtoolsServer {
         this.server.removeListener('error', reject);
         const address = this.server.address();
         const port = address && typeof address === 'object' ? address.port : this.config.port;
-        console.log(`[Reflex Devtools] Dashboard: http://${this.config.host}:${port}`);
+        console.log(`[Uklad Devtools] Dashboard: http://${this.config.host}:${port}`);
         console.log(
-          `[Reflex Devtools] Capabilities: ${[...this.capabilities].join(', ') || 'none'}`,
+          `[Uklad Devtools] Capabilities: ${[...this.capabilities].join(', ') || 'none'}`,
         );
         this.startHeartbeat();
         resolve();
@@ -2966,7 +2966,7 @@ export class DevtoolsServer {
         websocketServersClosed += 1;
         if (websocketServersClosed !== 2) return;
         this.server.close(() => {
-          console.log('[Reflex Devtools] Server stopped');
+          console.log('[Uklad Devtools] Server stopped');
           resolve();
         });
       };

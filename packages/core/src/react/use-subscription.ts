@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react';
 
 import { getSubVectorKey } from '../runtime/subscriptions/keys';
-import { useReflexRuntime } from './context';
+import { useUkladRuntime } from './context';
 
 import type {
   ContractSubscribeVector,
@@ -11,13 +11,13 @@ import type {
   DefaultContracts,
 } from '../contracts';
 import { getSubscriptionValueForInternalUse, subscribeForRender } from '../runtime/runtime';
-import type { ReflexRuntimeClient } from '../runtime/api';
+import type { UkladRuntimeClient } from '../runtime/api';
 import type { SubVector } from '../types';
 
-export type { ReflexBindings, ReflexHooks } from './types';
+export type { UkladBindings, UkladHooks } from './types';
 
 /**
- * Subscribe a React component to the nearest Reflex runtime.
+ * Subscribe a React component to the nearest Uklad runtime.
  *
  * A changed serialized vector or provider runtime rebinds the external store.
  * A provider is required so every hook reads from an explicit runtime owner.
@@ -25,7 +25,7 @@ export type { ReflexBindings, ReflexHooks } from './types';
  * This entry point checks against the ambient `DefaultContracts`, because a
  * React context type is fixed when the context is created and so cannot carry
  * a per-runtime contract. Applications owning more than one runtime should use
- * `createReflexHooks<TContracts>()` instead, which pairs a provider and hooks
+ * `createUkladHooks<TContracts>()` instead, which pairs a provider and hooks
  * over a private context so the contract they are checked against is the one
  * the provided runtime was built for.
  */
@@ -41,13 +41,13 @@ export function useSubscription<T>(
   subVector: SubVector,
   componentName: string = 'react component',
 ): T {
-  const runtime = useReflexRuntime();
+  const runtime = useUkladRuntime();
   return useRuntimeSubscription(runtime, subVector, componentName);
 }
 
 /** @internal Shared subscription store used by every React entry point. */
 export function useRuntimeSubscription<T>(
-  runtime: ReflexRuntimeClient<any>,
+  runtime: UkladRuntimeClient<any>,
   subVector: SubVector,
   componentName: string,
 ): T {

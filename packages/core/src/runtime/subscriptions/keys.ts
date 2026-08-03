@@ -24,7 +24,7 @@ export function getSubVectorKey(subVector: SubVector): string {
       warnedNonSerializableSubIds.add(subId);
       consoleLog(
         'warn',
-        `[reflex] subscription '${subId}' called with a param that does not survive JSON.stringify (undefined, function, Symbol, BigInt, Map, Set, RegExp, non-finite number or circular reference, possibly nested). Subscription cache keys are JSON-serialized, so such params can collide, return stale data, or throw. Pass plain serializable values (ids, strings, numbers) instead.`,
+        `[uklad] subscription '${subId}' called with a param that does not survive JSON.stringify (undefined, function, Symbol, BigInt, Map, Set, RegExp, non-finite number or circular reference, possibly nested). Subscription cache keys are JSON-serialized, so such params can collide, return stale data, or throw. Pass plain serializable values (ids, strings, numbers) instead.`,
       );
     }
   }

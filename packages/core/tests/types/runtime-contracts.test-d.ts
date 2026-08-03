@@ -1,9 +1,9 @@
-import { createReflexHooks } from '../../src/react';
-import { createReflexRuntime } from '../../src/vanilla';
-import { createReflexTestHarness } from '../../src/testing';
-import type { ReflexContracts } from '../../src/vanilla';
+import { createUkladHooks } from '../../src/react';
+import { createUkladRuntime } from '../../src/vanilla';
+import { createUkladTestHarness } from '../../src/testing';
+import type { UkladContracts } from '../../src/vanilla';
 
-interface CounterContracts extends ReflexContracts {
+interface CounterContracts extends UkladContracts {
   state: { count: number };
   events: {
     increment: [amount: number];
@@ -18,11 +18,11 @@ interface CounterContracts extends ReflexContracts {
   };
 }
 
-const runtime = createReflexRuntime<CounterContracts>({
+const runtime = createUkladRuntime<CounterContracts>({
   initialState: { count: 0 },
   runtimeId: 'typed-counter',
 });
-const testHarness = createReflexTestHarness(runtime);
+const testHarness = createUkladTestHarness(runtime);
 
 runtime.registerModule((registrar) => {
   registrar.regEvent('increment', ({ draftState }, amount) => {
@@ -61,7 +61,7 @@ runtime.registerModule((registrar) => {
 // followed by the subscription's own parameters. All of it is inferred from the
 // dependency function's returned tuple.
 
-interface GraphContracts extends ReflexContracts {
+interface GraphContracts extends UkladContracts {
   state: { todos: Todo[]; showing: Showing };
   subscriptions: {
     todos: { params: []; result: Todo[] };
@@ -77,7 +77,7 @@ interface Todo {
 }
 type Showing = 'all' | 'active' | 'done';
 
-const graph = createReflexRuntime<GraphContracts>({
+const graph = createUkladRuntime<GraphContracts>({
   initialState: { todos: [], showing: 'all' },
   runtimeId: 'typed-graph',
 });
@@ -202,7 +202,7 @@ graph.registerModule((registrar) => {
 // checked against the subscription result like a named key would be — while a
 // narrower named property still wins at its own key.
 
-interface IndexedContracts extends ReflexContracts {
+interface IndexedContracts extends UkladContracts {
   state: { [key: string]: number | string; total: number };
   subscriptions: {
     total: { params: []; result: number };
@@ -210,7 +210,7 @@ interface IndexedContracts extends ReflexContracts {
   };
 }
 
-const indexed = createReflexRuntime<IndexedContracts>({ initialState: { total: 0 } });
+const indexed = createUkladRuntime<IndexedContracts>({ initialState: { total: 0 } });
 indexed.registerModule((registrar) => {
   // `entry` declares the full index value, so any key backs it.
   registrar.regRootSub('entry', 'any-key');
@@ -226,7 +226,7 @@ indexed.registerModule((registrar) => {
 // a key every variant declares. `keyof` over a union keeps only the shared
 // keys, which would leave a disjoint state looking undeclared.
 
-interface UnionStateContracts extends ReflexContracts {
+interface UnionStateContracts extends UkladContracts {
   state:
     | { status: 'loading'; items: readonly string[] }
     | { status: 'ready'; items: readonly string[]; error: string };
@@ -236,7 +236,7 @@ interface UnionStateContracts extends ReflexContracts {
   };
 }
 
-const union = createReflexRuntime<UnionStateContracts>({
+const union = createUkladRuntime<UnionStateContracts>({
   initialState: { status: 'loading', items: [] },
 });
 union.registerModule((registrar) => {
@@ -252,12 +252,12 @@ union.registerModule((registrar) => {
 // index signature declares what every id it admits accepts, so one requiring
 // parameters leaves no id a root subscription can serve.
 
-interface ParameterizedSubContracts extends ReflexContracts {
+interface ParameterizedSubContracts extends UkladContracts {
   state: { value: number };
   subscriptions: Record<string, { params: [factor: number]; result: number }>;
 }
 
-const parameterized = createReflexRuntime<ParameterizedSubContracts>({
+const parameterized = createUkladRuntime<ParameterizedSubContracts>({
   initialState: { value: 0 },
 });
 parameterized.registerModule((registrar) => {
@@ -267,7 +267,7 @@ parameterized.registerModule((registrar) => {
 
 // A named entry under an open index signature is read through its own
 // declaration rather than the index signature's.
-interface MixedSubContracts extends ReflexContracts {
+interface MixedSubContracts extends UkladContracts {
   state: { value: number };
   subscriptions: {
     [id: string]: { params: readonly any[]; result: any };
@@ -275,7 +275,7 @@ interface MixedSubContracts extends ReflexContracts {
   };
 }
 
-const mixedSubs = createReflexRuntime<MixedSubContracts>({ initialState: { value: 0 } });
+const mixedSubs = createUkladRuntime<MixedSubContracts>({ initialState: { value: 0 } });
 mixedSubs.registerModule((registrar) => {
   registrar.regRootSub('plain', 'value');
 });
@@ -286,7 +286,7 @@ mixedSubs.registerModule((registrar) => {
 
 // Typed arrays and variadic tuples still describe parameter-bearing queries;
 // only the permissive `any[]` fallback is open to root registrations.
-interface ArrayParamContracts extends ReflexContracts {
+interface ArrayParamContracts extends UkladContracts {
   state: { value: number };
   subscriptions: {
     many: { params: number[]; result: number };
@@ -294,7 +294,7 @@ interface ArrayParamContracts extends ReflexContracts {
   };
 }
 
-const arrayParams = createReflexRuntime<ArrayParamContracts>({ initialState: { value: 0 } });
+const arrayParams = createUkladRuntime<ArrayParamContracts>({ initialState: { value: 0 } });
 arrayParams.registerModule((registrar) => {
   // @ts-expect-error A typed array permits argument-bearing queries.
   registrar.regRootSub('many', 'value');
@@ -304,7 +304,7 @@ arrayParams.registerModule((registrar) => {
 
 // A union-valued index cannot promise an arbitrary id is parameterless, but a
 // narrower named entry can still make that promise for itself.
-interface UnionIndexSubContracts extends ReflexContracts {
+interface UnionIndexSubContracts extends UkladContracts {
   state: { value: number };
   subscriptions: {
     [id: string]: { params: []; result: number } | { params: [factor: number]; result: number };
@@ -312,7 +312,7 @@ interface UnionIndexSubContracts extends ReflexContracts {
   };
 }
 
-const unionIndexSubs = createReflexRuntime<UnionIndexSubContracts>({ initialState: { value: 0 } });
+const unionIndexSubs = createUkladRuntime<UnionIndexSubContracts>({ initialState: { value: 0 } });
 unionIndexSubs.registerModule((registrar) => {
   registrar.regRootSub('plain', 'value');
 });
@@ -324,7 +324,7 @@ unionIndexSubs.registerModule((registrar) => {
 // A state may declare a numeric key; `state['0']` and `state[0]` are one
 // property at runtime, so the numeric-string source resolves onto it.
 
-interface NumericKeyContracts extends ReflexContracts {
+interface NumericKeyContracts extends UkladContracts {
   state: { 0: string };
   subscriptions: {
     first: { params: []; result: string };
@@ -332,7 +332,7 @@ interface NumericKeyContracts extends ReflexContracts {
   };
 }
 
-const numeric = createReflexRuntime<NumericKeyContracts>({ initialState: { 0: '' } });
+const numeric = createUkladRuntime<NumericKeyContracts>({ initialState: { 0: '' } });
 numeric.registerModule((registrar) => {
   registrar.regRootSub('first', '0');
 });
@@ -348,12 +348,12 @@ numeric.registerModule((registrar) => {
 // Only the canonical string form of a numeric key names the same JavaScript
 // property. Constrained template inference also accepts strings like `01` by
 // widening the inferred value to `number`, so the contract requires a round trip.
-interface NumberIndexedStateContracts extends ReflexContracts {
+interface NumberIndexedStateContracts extends UkladContracts {
   state: Record<number, string>;
   subscriptions: { first: { params: []; result: string } };
 }
 
-const numberIndexed = createReflexRuntime<NumberIndexedStateContracts>({
+const numberIndexed = createUkladRuntime<NumberIndexedStateContracts>({
   initialState: { 1: 'one' },
 });
 numberIndexed.registerModule((registrar) => {
@@ -386,14 +386,14 @@ runtime.registerModule((registrar) => {
   registrar.regEffect('log', (value: number) => void value);
 });
 
-const hooks = createReflexHooks<CounterContracts>();
+const hooks = createUkladHooks<CounterContracts>();
 const hookResult: number = hooks.useSubscription(['scaled', 2]);
 void hookResult;
 // @ts-expect-error Locally typed hooks reject invalid subscription params.
 hooks.useSubscription(['scaled', 'two']);
 
-const inferred = createReflexRuntime({ initialState: { ready: true } });
-const ready: boolean = createReflexTestHarness(inferred).getState().ready;
+const inferred = createUkladRuntime({ initialState: { ready: true } });
+const ready: boolean = createUkladTestHarness(inferred).getState().ready;
 void ready;
 
 // Undeclared contract sections stay permissive, so the pairing above narrows a
@@ -413,18 +413,18 @@ inferred.registerModule((registrar) => {
 
 // A runtime that declares no state at all accepts any pair, which is what the
 // untyped entry points and JavaScript consumers rely on.
-const untyped = createReflexRuntime({ initialState: {} });
+const untyped = createUkladRuntime({ initialState: {} });
 untyped.registerModule((registrar) => {
   registrar.regRootSub('any/sub', 'any-key');
 });
 
 // @ts-expect-error Runtime states must be top-level object records.
-createReflexRuntime({ initialState: null });
+createUkladRuntime({ initialState: null });
 // @ts-expect-error Runtime states must be top-level object records.
-createReflexRuntime({ initialState: 1 });
+createUkladRuntime({ initialState: 1 });
 // @ts-expect-error Runtime states must not be top-level arrays.
-createReflexRuntime({ initialState: [] });
+createUkladRuntime({ initialState: [] });
 // @ts-expect-error Runtime ids are strings at both typed and JavaScript boundaries.
-createReflexRuntime({ initialState: {}, runtimeId: 1 });
+createUkladRuntime({ initialState: {}, runtimeId: 1 });
 // @ts-expect-error Runtime names are strings at both typed and JavaScript boundaries.
-createReflexRuntime({ initialState: {}, name: 1 });
+createUkladRuntime({ initialState: {}, name: 1 });

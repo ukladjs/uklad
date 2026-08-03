@@ -664,7 +664,7 @@ describe('regEvent with cofx', () => {
           { coeffects: [['now']] as any },
         ),
       ).toThrow(
-        "[reflex] event coeffects must be an object of local bindings, for example { now: 'system/now' }.",
+        "[uklad] event coeffects must be an object of local bindings, for example { now: 'system/now' }.",
       );
     });
   });
@@ -1059,9 +1059,9 @@ describe('regEvent with cofx', () => {
       await waitForScheduled();
 
       expect(errorHandler).toHaveBeenCalled();
-      const [originalError, reflexError] = errorHandler.mock.calls[0];
+      const [originalError, ukladError] = errorHandler.mock.calls[0];
       expect(originalError.message).toBe('Global interceptor error');
-      expect(reflexError.data.interceptor).toBe('faulty-global');
+      expect(ukladError.data.interceptor).toBe('faulty-global');
     });
   });
 });

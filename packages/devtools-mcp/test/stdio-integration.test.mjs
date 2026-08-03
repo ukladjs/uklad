@@ -10,8 +10,8 @@ import { loopbackListenSkipReason } from '../../../scripts/test/loopback-listen.
 
 const CLI_PATH = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
 const PROTOCOL_VERSION = 2;
-const PROTOCOL_HEADER = 'reflex-devtools-protocol-version';
-const CLIENT_HEADER = 'x-reflex-client';
+const PROTOCOL_HEADER = 'uklad-devtools-protocol-version';
+const CLIENT_HEADER = 'x-uklad-client';
 const SESSION_TOKEN = 'fake-mcp-session-token';
 const RUNTIME_ID = 'integration-runtime';
 const RUNTIME_NAME = 'Integration runtime';
@@ -39,7 +39,7 @@ async function readJson(req) {
 function sendJson(res, status, body) {
   res.writeHead(status, {
     'Content-Type': 'application/json',
-    'Reflex-DevTools-Protocol-Version': String(PROTOCOL_VERSION),
+    'Uklad-DevTools-Protocol-Version': String(PROTOCOL_VERSION),
   });
   res.end(JSON.stringify(body));
 }
@@ -52,7 +52,7 @@ function assertProtocolHeaders(req) {
   );
   assert.match(
     req.headers[CLIENT_HEADER] || '',
-    /^reflex-devtools-mcp\/\d+\.\d+\.\d+$/,
+    /^uklad-devtools-mcp\/\d+\.\d+\.\d+$/,
     `${req.method} ${req.url} should identify the MCP client`,
   );
 }
@@ -301,7 +301,7 @@ async function startFakeDevtoolsServer({
 
 async function connectMCP(fakeDevtools) {
   const client = new Client(
-    { name: 'reflex-devtools-mcp-integration-test', version: '0.0.0' },
+    { name: 'uklad-devtools-mcp-integration-test', version: '0.0.0' },
     { capabilities: {} },
   );
   const transport = new StdioClientTransport({
@@ -339,7 +339,7 @@ test('stdio MCP server lists dispatch_event for a read-only session and denies t
     );
     const dispatchTool = tools.tools.find(({ name }) => name === 'dispatch_event');
     assert.deepEqual(dispatchTool.annotations, {
-      title: 'Dispatch Reflex event',
+      title: 'Dispatch Uklad event',
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
@@ -423,7 +423,7 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
     );
     const dispatchTool = tools.tools.find(({ name }) => name === 'dispatch_event');
     assert.deepEqual(dispatchTool.annotations, {
-      title: 'Dispatch Reflex event',
+      title: 'Dispatch Uklad event',
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,
@@ -432,7 +432,7 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
     assert.equal(dispatchTool.inputSchema.additionalProperties, false);
     const dispatchAndWaitTool = tools.tools.find(({ name }) => name === 'dispatch_and_wait');
     assert.deepEqual(dispatchAndWaitTool.annotations, {
-      title: 'Dispatch Reflex event',
+      title: 'Dispatch Uklad event',
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,

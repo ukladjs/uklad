@@ -1,8 +1,8 @@
 // Import from the subpath entrypoints: each entrypoint emits its own copy of
 // the runtime types, so a runtime created through the package root cannot be
-// inferred by packages (such as reflex-persist) that type against `/vanilla`.
-import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+// inferred by packages (such as uklad-persist) that type against `/vanilla`.
+import { createUkladRuntime } from '@ukladjs/core/vanilla';
+import type { UkladRuntime } from '@ukladjs/core/vanilla';
 
 import type { AppContracts } from './contracts';
 import { createAppState } from './initial-state';
@@ -21,8 +21,8 @@ export interface CreateAppRuntimeOptions {
  */
 export function createAppRuntime(
   options: CreateAppRuntimeOptions = {},
-): ReflexRuntime<AppContracts> {
-  return createReflexRuntime<AppContracts>({
+): UkladRuntime<AppContracts> {
+  return createUkladRuntime<AppContracts>({
     initialState: createAppState(),
     runtimeId: options.runtimeId ?? 'todomvc',
     name: options.name ?? 'TodoMVC',

@@ -62,7 +62,7 @@ function main() {
     throw new Error('dist/ is missing. Run `npm run build` before the legacy consumer checks.');
   }
 
-  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'reflex-legacy-consumer-'));
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'uklad-legacy-consumer-'));
   const env = {
     ...process.env,
     npm_config_cache: path.join(workDir, 'npm-cache'),
@@ -76,7 +76,7 @@ function main() {
     fs.mkdirSync(vanillaConsumerDir);
     fs.writeFileSync(
       path.join(vanillaConsumerDir, 'package.json'),
-      `${JSON.stringify({ name: 'reflex-vanilla-consumer', version: '0.0.0', private: true }, null, 2)}\n`,
+      `${JSON.stringify({ name: 'uklad-vanilla-consumer', version: '0.0.0', private: true }, null, 2)}\n`,
     );
     console.log('[legacy] installing the vanilla entrypoint without React');
     run(
@@ -92,12 +92,12 @@ function main() {
         '--eval',
         `import assert from 'node:assert/strict';
          import { createRequire } from 'node:module';
-         import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
-         import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
+         import { createUkladRuntime } from '@ukladjs/core/vanilla';
+         import { createUkladTestHarness } from '@ukladjs/core/testing';
          const require = createRequire(import.meta.url);
          assert.throws(() => require.resolve('react'));
-         const runtime = createReflexRuntime({ initialState: { count: 0 }, runtimeId: 'packed-vanilla' });
-         const testHarness = createReflexTestHarness(runtime);
+         const runtime = createUkladRuntime({ initialState: { count: 0 }, runtimeId: 'packed-vanilla' });
+         const testHarness = createUkladTestHarness(runtime);
          runtime.registerModule((registrar) => {
            registrar.regEvent('increment', ({ draftState }) => { draftState.count += 1; });
          });
@@ -113,7 +113,7 @@ function main() {
     fs.cpSync(fixtureSource, consumerDir, { recursive: true });
     fs.writeFileSync(
       path.join(consumerDir, 'package.json'),
-      `${JSON.stringify({ name: 'reflex-legacy-consumer', version: '0.0.0', private: true }, null, 2)}\n`,
+      `${JSON.stringify({ name: 'uklad-legacy-consumer', version: '0.0.0', private: true }, null, 2)}\n`,
     );
 
     console.log('[legacy] installing the packed tarball into a fresh consumer project');

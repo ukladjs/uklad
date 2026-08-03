@@ -4,12 +4,12 @@
 import { cleanup, render, renderHook, act } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 
-import { ReflexProvider, useReflexRuntime } from '../../src/react/context';
+import { UkladProvider, useUkladRuntime } from '../../src/react/context';
 import { useSubscription } from '../../src/react/use-subscription';
-import { createReflexRuntimeForTests, type ReflexRuntime } from '../../src/runtime/runtime';
+import { createUkladRuntimeForTests, type UkladRuntime } from '../../src/runtime/runtime';
 
 function createValueRuntime(runtimeId: string, value: number) {
-  const runtime = createReflexRuntimeForTests({ initialState: { value }, runtimeId });
+  const runtime = createUkladRuntimeForTests({ initialState: { value }, runtimeId });
   runtime.registerModule((registrar) => {
     registrar.regRootSub('value', 'value');
   });
@@ -21,13 +21,13 @@ function createValueRuntime(runtimeId: string, value: number) {
   return runtime;
 }
 
-function provider(runtime: ReflexRuntime<any>) {
+function provider(runtime: UkladRuntime<any>) {
   return function RuntimeWrapper({ children }: { children: ReactNode }) {
-    return createElement(ReflexProvider, { runtime }, children);
+    return createElement(UkladProvider, { runtime }, children);
   };
 }
 
-describe('ReflexProvider', () => {
+describe('UkladProvider', () => {
   afterEach(() => cleanup());
 
   it('selects independent sibling runtimes', () => {
@@ -55,14 +55,14 @@ describe('ReflexProvider', () => {
   });
 
   it('provides a distinct runtime-enforced client facade', () => {
-    const runtime = createReflexRuntimeForTests({
+    const runtime = createUkladRuntimeForTests({
       initialState: { value: 1 },
       runtimeId: 'provider-client-facade',
     });
     runtime.registerModule((registrar) => {
       registrar.regRootSub('value', 'value');
     });
-    const hook = renderHook(() => useReflexRuntime(), {
+    const hook = renderHook(() => useUkladRuntime(), {
       wrapper: provider(runtime),
     });
     const client = hook.result.current as unknown as Record<string, unknown>;
@@ -99,14 +99,14 @@ describe('ReflexProvider', () => {
 
     const view = render(
       createElement(
-        ReflexProvider,
+        UkladProvider,
         { runtime: outer },
-        createElement(ReflexProvider, { runtime: inner }, createElement(Value)),
+        createElement(UkladProvider, { runtime: inner }, createElement(Value)),
       ),
     );
     expect(view.container.textContent).toBe('4');
 
-    view.rerender(createElement(ReflexProvider, { runtime: outer }, createElement(Value)));
+    view.rerender(createElement(UkladProvider, { runtime: outer }, createElement(Value)));
     expect(view.container.textContent).toBe('3');
 
     view.unmount();

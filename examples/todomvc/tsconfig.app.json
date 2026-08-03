@@ -12,14 +12,14 @@
     // resolves to the built dist instead of source, which yields a second copy
     // of the runtime types that cannot be inferred against the first.
     "paths": {
-      "@flexsurfer/reflex": ["../../packages/reflex/src/index.ts"],
-      "@flexsurfer/reflex/vanilla": ["../../packages/reflex/src/vanilla.ts"],
-      "@flexsurfer/reflex/react": ["../../packages/reflex/src/react.ts"],
-      "@flexsurfer/reflex/devtools": ["../../packages/reflex/src/devtools.ts"],
-      "@flexsurfer/reflex/testing": ["../../packages/reflex/src/testing.ts"],
-      "@flexsurfer/reflex/internal": ["../../packages/reflex/src/internal.ts"],
-      "@flexsurfer/reflex-persist": ["../../packages/reflex-persist/src/index.ts"],
-      "@flexsurfer/reflex-devtools": ["../../packages/reflex-devtools/src/index.ts"]
+      "@ukladjs/core": ["../../packages/core/src/index.ts"],
+      "@ukladjs/core/vanilla": ["../../packages/core/src/vanilla.ts"],
+      "@ukladjs/core/react": ["../../packages/core/src/react.ts"],
+      "@ukladjs/core/devtools": ["../../packages/core/src/devtools.ts"],
+      "@ukladjs/core/testing": ["../../packages/core/src/testing.ts"],
+      "@ukladjs/core/internal": ["../../packages/core/src/internal.ts"],
+      "@ukladjs/persist": ["../../packages/persist/src/index.ts"],
+      "@ukladjs/devtools": ["../../packages/devtools/src/index.ts"]
     },
     "allowArbitraryExtensions": true,
     /* Bundler mode */

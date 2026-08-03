@@ -1,19 +1,19 @@
-# ADR-001: Reflex Foundation and Application-Contract-First Authoring
+# ADR-001: Uklad Foundation and Application-Contract-First Authoring
 
 - **Status:** Provisional
 - **Date:** 2026-07-23
-- **Scope:** Reflex core and application authoring before 1.0
-- **Mandatory review:** Before the execution model is declared stable or Reflex reaches 1.0
+- **Scope:** Uklad core and application authoring before 1.0
+- **Mandatory review:** Before the execution model is declared stable or Uklad reaches 1.0
 
 ## Context
 
-Reflex began as a TypeScript port of re-frame. Its current architecture has
+Uklad began as a TypeScript port of re-frame. Its current architecture has
 valuable, well-tested semantics, but it also carries mechanisms that were chosen
 for re-frame compatibility: positional event vectors, an asynchronous event
 queue, event cascades, a generic interceptor pipeline, dynamic registration, and
 render-scheduled state publication.
 
-Reflex does not yet have an established external user base or a public 1.0
+Uklad does not yet have an established external user base or a public 1.0
 compatibility contract. This gives the project room to improve its architecture,
 but replacing every mechanism at once would combine several independent risks:
 
@@ -27,7 +27,7 @@ but replacing every mechanism at once would combine several independent risks:
 The project therefore needs to distinguish its durable architectural principles
 from the current mechanisms that implement them.
 
-Reflex is intentionally designed for AI-assisted and agent-authored
+Uklad is intentionally designed for AI-assisted and agent-authored
 development. Agents are the primary authoring and maintenance clients, while
 applications, tests, developer tools, and remote gateways remain runtime
 clients. This is not an excuse to weaken runtime correctness; it means the
@@ -45,7 +45,7 @@ untrusted boundaries still require explicit validation or ownership.
 
 ### 1. Stable foundation
 
-Reflex retains the architectural principles that made re-frame reliable in
+Uklad retains the architectural principles that made re-frame reliable in
 large applications:
 
 - One immutable application state per runtime.
@@ -67,10 +67,10 @@ scheduler.
 ### 2. AI-first authoring, integrity boundaries, and a fast production core
 
 AI-first is an architectural constraint, not only a documentation preference.
-Reflex targets applications authored and maintained through agent skills. The
+Uklad targets applications authored and maintained through agent skills. The
 application catalog, complete `AppContracts`, registrar calls, types,
 templates, tests, and agent instructions together form the authoring contract
-that lets Reflex avoid unnecessary defensive work while keeping violations
+that lets Uklad avoid unnecessary defensive work while keeping violations
 visible.
 
 Production event processing and subscription recomputation are trusted hot
@@ -123,7 +123,7 @@ deep-walk every payload or monitor every event and subscription callback.
 
 ### 3. The current application model is canonical; executor mechanics remain provisional
 
-Application-authored Reflex code uses one application catalog, one complete
+Application-authored Uklad code uses one application catalog, one complete
 `AppContracts`, event vectors, and registrar-installed modules. This is the
 canonical authoring model for applications, templates, and agents.
 
@@ -246,7 +246,7 @@ declared by `AppContracts`, the affected entry must be marked as partially
 verified until the runtime can enforce the declaration.
 
 Machine-readable metadata is useful only when it describes actual runtime
-boundaries. Reflex must prefer an honest partial contract over a complete-looking
+boundaries. Uklad must prefer an honest partial contract over a complete-looking
 manifest that execution can bypass.
 
 ### 7. Environmental inputs and effects remain explicit
@@ -318,7 +318,7 @@ general semantic scheduler.
 
 ### 10. React and headless execution remain separate concerns
 
-Reflex core must remain usable without React, `document`,
+Uklad core must remain usable without React, `document`,
 `requestAnimationFrame`, or a browser event loop.
 
 The existing committed-state and published-state distinction may remain during
@@ -429,7 +429,7 @@ be evaluated independently.
 ### Freeze the current event architecture as permanent
 
 Treat vectors, the asynchronous queue, interceptors, coeffects, dynamic
-registration, event cascades, and scheduled publication as stable Reflex
+registration, event cascades, and scheduled publication as stable Uklad
 concepts.
 
 This is rejected. Those mechanisms may continue to prove useful, but they must
@@ -518,7 +518,7 @@ The provisional status must not continue indefinitely by default.
 - [Invariant enforcement matrix](invariant-enforcement-matrix.md)
 - [Application authoring rules](application-authoring-rules.md)
 - [Canonical application structure](canonical-app-structure.md)
-- [Reflex architecture](reflex-runtime.md)
+- [Uklad architecture](uklad-runtime.md)
 - [Re-frame parity tradeoffs](../compatibility/re-frame-parity.md)
 - [Agent-first priorities](../agent-development/priorities.md)
 - [Agent operation RFC](../rfcs/agent-operations.md)

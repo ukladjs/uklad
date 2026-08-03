@@ -1,6 +1,6 @@
 import { useTheme } from '../contexts/ThemeContext';
 import { useCallback } from 'react';
-import { useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@ukladjs/core';
 import ConnectionStatus from './ConnectionStatus';
 import type { DevtoolsRuntimeSummary } from '../types/Runtime';
 import { dispatch } from '../runtime';
@@ -24,7 +24,7 @@ export default function Header() {
         <header className="bg-base-200 border-b border-base-300 shadow-lg flex items-center gap-4 px-4 py-2">
             <div className="flex min-w-0 flex-1 items-center gap-3">
                 <ConnectionStatus />
-                <h1 className="shrink-0 whitespace-nowrap text-sm font-semibold">Reflex Devtools</h1>
+                <h1 className="shrink-0 whitespace-nowrap text-sm font-semibold">Uklad Devtools</h1>
                 <div className="min-w-0 flex-1 overflow-hidden">
                     <select
                         aria-label="Selected runtime"

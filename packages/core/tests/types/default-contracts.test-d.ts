@@ -1,18 +1,18 @@
 /**
  * Compile-time tests for the ambient `DefaultContracts` anchor.
  *
- * `DefaultContracts` is a `ReflexContracts`, not a parallel type system: the
+ * `DefaultContracts` is a `UkladContracts`, not a parallel type system: the
  * same declaration is usable as an explicit type argument. What it adds is a
  * binding for the package-level entry points that cannot take one — chiefly
  * `useSubscription`, since a React context type is fixed at creation.
  *
  * Run with `npm run test:types` — tsc fails if a positive case stops compiling
  * or an `@ts-expect-error` case starts compiling. Consumers of the published
- * package augment '@flexsurfer/reflex' instead of the relative path used here
+ * package augment '@ukladjs/core' instead of the relative path used here
  * (see tests/types/dist for that variant).
  */
-import { createReflexHooks, createReflexRuntime, useSubscription } from '../../src/index';
-import { createReflexTestHarness } from '../../src/testing';
+import { createUkladHooks, createUkladRuntime, useSubscription } from '../../src/index';
+import { createUkladTestHarness } from '../../src/testing';
 import type { CoEffects, DefaultContracts, EventRegistrationOptions } from '../../src/index';
 
 interface Todo {
@@ -41,8 +41,8 @@ declare module '../../src/contracts' {
 }
 
 // The ambient declaration is a normal contract: usable as a type argument.
-const runtime = createReflexRuntime<DefaultContracts>({ initialState: { todos: [] } });
-const testHarness = createReflexTestHarness(runtime);
+const runtime = createUkladRuntime<DefaultContracts>({ initialState: { todos: [] } });
+const testHarness = createUkladTestHarness(runtime);
 
 // ---- dispatch --------------------------------------------------------
 
@@ -74,7 +74,7 @@ useSubscription(['todos/by-id', 'seven']);
 useSubscription(['todos/by-id']);
 
 // Locally typed hooks stay available and agree with the ambient anchor.
-const local = createReflexHooks<DefaultContracts>();
+const local = createUkladHooks<DefaultContracts>();
 const alsoAll: Todo[] = local.useSubscription(['todos/all']);
 void alsoAll;
 

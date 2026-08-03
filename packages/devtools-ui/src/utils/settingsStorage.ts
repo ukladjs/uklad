@@ -5,7 +5,7 @@ export interface Settings {
   showTimestamps: boolean;
 }
 
-const SETTINGS_KEY = 'reflex-devtools-settings';
+const SETTINGS_KEY = 'uklad-devtools-settings';
 
 const DEFAULT_SETTINGS: Settings = {
   showRenders: false,

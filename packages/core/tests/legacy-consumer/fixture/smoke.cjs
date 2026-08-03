@@ -1,18 +1,18 @@
 // Runtime smoke test for CommonJS consumers: drives a real event -> state ->
 // subscription cycle against the packed tarball, not the repo sources.
 const assert = require('node:assert');
-const reflex = require('@flexsurfer/reflex');
-const reflexReact = require('@flexsurfer/reflex/react');
-const reflexVanilla = require('@flexsurfer/reflex/vanilla');
-const reflexTesting = require('@flexsurfer/reflex/testing');
+const uklad = require('@ukladjs/core');
+const ukladReact = require('@ukladjs/core/react');
+const ukladVanilla = require('@ukladjs/core/vanilla');
+const ukladTesting = require('@ukladjs/core/testing');
 
-assert.strictEqual(typeof reflex.createReflexRuntime, 'function');
-assert.strictEqual(typeof reflex.useSubscription, 'function');
-assert.strictEqual(reflex.defaultRuntime, undefined);
-assert.strictEqual(reflex.ReflexProvider, reflexReact.ReflexProvider);
+assert.strictEqual(typeof uklad.createUkladRuntime, 'function');
+assert.strictEqual(typeof uklad.useSubscription, 'function');
+assert.strictEqual(uklad.defaultRuntime, undefined);
+assert.strictEqual(uklad.UkladProvider, ukladReact.UkladProvider);
 
-const runtime = reflex.createReflexRuntime({ initialState: { count: 0 } });
-const testHarness = reflexTesting.createReflexTestHarness(runtime);
+const runtime = uklad.createUkladRuntime({ initialState: { count: 0 } });
+const testHarness = ukladTesting.createUkladTestHarness(runtime);
 runtime.registerModule((registrar) => {
   registrar.regEvent('inc', ({ draftState }) => {
     draftState.count += 1;

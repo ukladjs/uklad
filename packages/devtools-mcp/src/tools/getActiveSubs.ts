@@ -21,7 +21,7 @@ export interface GetActiveSubsParams extends RuntimeSelectionParams {
 export function getActiveSubsTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'get_active_subs',
-    description: 'Get all active subscriptions in the Reflex application, including mounted root subscriptions and active dependencies. Use filter to keep the response narrow.',
+    description: 'Get all active subscriptions in the Uklad application, including mounted root subscriptions and active dependencies. Use filter to keep the response narrow.',
     inputSchema: {
       type: 'object',
       properties: {

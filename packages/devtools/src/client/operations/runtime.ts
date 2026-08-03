@@ -1,4 +1,4 @@
-/** Structural operation port supplied by a runtime-bound Reflex inspector. */
+/** Structural operation port supplied by a runtime-bound Uklad inspector. */
 export type OperationEventVector = [string, ...any[]];
 
 export interface DevtoolsExecutionObserver {

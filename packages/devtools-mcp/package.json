@@ -1,13 +1,13 @@
 {
-  "name": "@flexsurfer/reflex-devtools-mcp",
+  "name": "@ukladjs/devtools-mcp",
   "version": "0.1.13",
-  "description": "MCP server for Reflex DevTools - enables AI assistants to inspect traces and dispatch events",
+  "description": "MCP server for Uklad DevTools - enables AI assistants to inspect traces and dispatch events",
   "author": "flexsurfer",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/flexsurfer/reflex.git",
-    "directory": "packages/reflex-devtools-mcp"
+    "url": "git+https://github.com/ukladjs/uklad.git",
+    "directory": "packages/devtools-mcp"
   },
   "publishConfig": {
     "access": "public"
@@ -16,7 +16,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "reflex-devtools-mcp": "dist/cli.js"
+    "uklad-devtools-mcp": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -46,7 +46,7 @@
     "devtools",
     "debugging",
     "ai",
-    "reflex",
+    "uklad",
     "model-context-protocol"
   ]
 }

@@ -1,25 +1,25 @@
-import { createReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import { createReflexInspector } from '@flexsurfer/reflex/devtools';
-import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
+import { createUkladRuntime } from '@ukladjs/core/vanilla';
+import { createUkladInspector } from '@ukladjs/core/devtools';
+import { createUkladTestHarness } from '@ukladjs/core/testing';
 import {
-  ReflexProvider,
-  createReflexHooks,
-  useReflexRuntime,
+  UkladProvider,
+  createUkladHooks,
+  useUkladRuntime,
   useSubscription as useReactSubscription,
-} from '@flexsurfer/reflex/react';
+} from '@ukladjs/core/react';
 import type {
   EventRegistrationOptions,
-  ReflexInspector,
-  ReflexInspectorSnapshot,
+  UkladInspector,
+  UkladInspectorSnapshot,
   Trace,
-} from '@flexsurfer/reflex';
+} from '@ukladjs/core';
 
 const options: EventRegistrationOptions = { coeffects: { now: 'now' } };
 const namedOptions: EventRegistrationOptions<{ package: string }> = {
   coeffects: { now: 'system/now' },
 };
 const trace: Trace | undefined = undefined;
-const runtime = createReflexRuntime({ initialState: { package: 'esm' } });
+const runtime = createUkladRuntime({ initialState: { package: 'esm' } });
 runtime.registerModule((registrar) => {
   registrar.regEvent('package/esm', () => undefined);
   registrar.regEvent('package/esm-named', ({ coeffects: { now } }) => void now, {
@@ -27,13 +27,13 @@ runtime.registerModule((registrar) => {
   });
 });
 runtime.dispatch(['package/esm']);
-const inspector: ReflexInspector = createReflexInspector(runtime);
-const testHarness = createReflexTestHarness(runtime);
+const inspector: UkladInspector = createUkladInspector(runtime);
+const testHarness = createUkladTestHarness(runtime);
 const runtimeState: unknown = testHarness.getState();
-const snapshot: ReflexInspectorSnapshot = inspector.getSnapshot();
+const snapshot: UkladInspectorSnapshot = inspector.getSnapshot();
 const removeTraceListener = inspector.subscribeTraces(() => {});
 const removeSubscriptionListener = testHarness.watchSubscription(['package/esm'], () => {});
-const hooks = createReflexHooks();
+const hooks = createUkladHooks();
 
 void options;
 void namedOptions;
@@ -41,8 +41,8 @@ void trace;
 void snapshot;
 void testHarness.getEventHandler('package/esm');
 void runtimeState;
-void ReflexProvider;
-void useReflexRuntime;
+void UkladProvider;
+void useUkladRuntime;
 void useReactSubscription;
 void hooks;
 removeTraceListener();

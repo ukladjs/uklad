@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately through
-[GitHub private vulnerability reporting](https://github.com/flexsurfer/reflex/security/advisories/new).
+[GitHub private vulnerability reporting](https://github.com/ukladjs/uklad/security/advisories/new).
 Do not open a public issue or pull request for a suspected vulnerability.
 
 A useful report includes the affected package and version, a reproduction or
@@ -14,17 +14,17 @@ anything is published.
 
 ## Supported versions
 
-Reflex is pre-1.0. Security fixes land in the latest published version of each
+Uklad is pre-1.0. Security fixes land in the latest published version of each
 package; older `0.x` releases are not patched.
 
 ## Scope
 
 In scope are the published packages:
 
-- [`@flexsurfer/reflex`](packages/reflex) — the runtime.
-- [`@flexsurfer/reflex-devtools`](packages/reflex-devtools) — the DevTools SDK,
+- [`@ukladjs/core`](packages/core) — the runtime.
+- [`@ukladjs/devtools`](packages/devtools) — the DevTools SDK,
   server, CLI, and the embedded dashboard UI.
-- [`@flexsurfer/reflex-devtools-mcp`](packages/reflex-devtools-mcp) — the MCP
+- [`@ukladjs/devtools-mcp`](packages/devtools-mcp) — the MCP
   bridge.
 
 Example applications and private workspace packages are out of scope, but
@@ -38,8 +38,8 @@ data or exposed to untrusted networks. Its threat model, security defaults
 (authentication, loopback-only binding, read-only capabilities, redaction,
 bounded payloads, audit records), and remote-access hardening guidance are
 documented in the
-[DevTools security model](packages/reflex-devtools/README.md#security-model)
-and the [MCP bridge README](packages/reflex-devtools-mcp/README.md).
+[DevTools security model](packages/devtools/README.md#security-model)
+and the [MCP bridge README](packages/devtools-mcp/README.md).
 
 Two boundaries documented there are worth restating: loopback binding is a
 machine/network-namespace boundary, not a same-user boundary, and

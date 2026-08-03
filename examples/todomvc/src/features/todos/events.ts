@@ -1,7 +1,7 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 import type { Todo, TodoId, TodosById } from './state';
 
 /**
@@ -11,7 +11,7 @@ import type { Todo, TodoId, TodosById } from './state';
  * the environment. Persistence is contributed by the storage module, so no
  * handler here mentions localStorage.
  */
-export const registerTodosEvents: ReflexModule<ReflexRegistrar<AppContracts>> = (registrar) => {
+export const registerTodosEvents: UkladModule<UkladRegistrar<AppContracts>> = (registrar) => {
   registrar.regEvent(
     appIds.events.todosAdd,
     ({ draftState, coeffects: { now } }, title) => {

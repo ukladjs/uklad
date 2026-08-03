@@ -89,7 +89,7 @@ export class SubscriptionRuntime {
     if (typeof computeFn !== 'function' || typeof depsFn !== 'function') {
       consoleLog(
         'error',
-        `[reflex] Subscription '${id}' must specify both depsFn and computeFn. Register direct state subscriptions with regRootSub().`,
+        `[uklad] Subscription '${id}' must specify both depsFn and computeFn. Register direct state subscriptions with regRootSub().`,
       );
       return undefined;
     }
@@ -107,7 +107,7 @@ export class SubscriptionRuntime {
     if (typeof sourceKey !== 'string') {
       consoleLog(
         'error',
-        `[reflex] Root subscription '${id}' must specify a sourceKey. Call regRootSub(id, sourceKey).`,
+        `[uklad] Root subscription '${id}' must specify a sourceKey. Call regRootSub(id, sourceKey).`,
       );
       return undefined;
     }
@@ -125,13 +125,13 @@ export class SubscriptionRuntime {
     const resolve = (query: SubVector): SubscriptionNode<any> | undefined => {
       const subId = query[0];
       if (!runtime.registry.sub.has(subId)) {
-        consoleLog('error', `[reflex] no sub handler registered for: ${subId}`);
+        consoleLog('error', `[uklad] no sub handler registered for: ${subId}`);
         return undefined;
       }
 
       const rootSource = this.rootSubSourceById.get(subId);
       if (rootSource !== undefined && query.length !== 1) {
-        throw new Error(`[reflex] Root subscription '${subId}' does not accept parameters.`);
+        throw new Error(`[uklad] Root subscription '${subId}' does not accept parameters.`);
       }
 
       const key = getSubVectorKey(query);
@@ -145,25 +145,21 @@ export class SubscriptionRuntime {
         return existing;
       }
       if (buildingKeys.has(key)) {
-        throw new Error(`[reflex] Circular subscription dependency detected at ${key}.`);
+        throw new Error(`[uklad] Circular subscription dependency detected at ${key}.`);
       }
 
       const params = query.length > 1 ? query.slice(1) : [];
       const depsFn = runtime.registry.subDeps.get(subId) as SubDepsHandler;
       if (typeof depsFn !== 'function') {
-        throw new Error(`[reflex] Subscription '${subId}' has no dependency handler.`);
+        throw new Error(`[uklad] Subscription '${subId}' has no dependency handler.`);
       }
       const dependencyVectors = depsFn(...(params as any[]));
       if (!Array.isArray(dependencyVectors)) {
-        throw new Error(
-          `[reflex] Subscription '${subId}' dependency handler must return an array.`,
-        );
+        throw new Error(`[uklad] Subscription '${subId}' dependency handler must return an array.`);
       }
       for (const dependencyVector of dependencyVectors) {
         if (!Array.isArray(dependencyVector) || typeof dependencyVector[0] !== 'string') {
-          throw new Error(
-            `[reflex] Subscription '${subId}' returned an invalid dependency vector.`,
-          );
+          throw new Error(`[uklad] Subscription '${subId}' returned an invalid dependency vector.`);
         }
       }
 
@@ -205,7 +201,7 @@ export class SubscriptionRuntime {
           frame.dependencyKeys.push(getSubVectorKey(dependencyVector));
         } else if (frames.length === depth) {
           throw new Error(
-            `[reflex] Subscription '${frame.subId}' depends on missing subscription '${dependencyVector[0]}'.`,
+            `[uklad] Subscription '${frame.subId}' depends on missing subscription '${dependencyVector[0]}'.`,
           );
         }
         continue;
@@ -249,7 +245,7 @@ export class SubscriptionRuntime {
     }
 
     throw new Error(
-      '[reflex] Invariant violation: subscription graph construction ended without producing a subscription.',
+      '[uklad] Invariant violation: subscription graph construction ended without producing a subscription.',
     );
   }
 
@@ -356,7 +352,7 @@ export class SubscriptionRuntime {
       const node = this.subscriptionCache.get(key)?.node;
       if (node && this.engine.inspect(node).active) {
         throw new Error(
-          `[reflex] Cannot clear subscription '${subId}' while its subscription graph is active.`,
+          `[uklad] Cannot clear subscription '${subId}' while its subscription graph is active.`,
         );
       }
     }
@@ -379,7 +375,7 @@ export class SubscriptionRuntime {
     if (conflictingSubId !== undefined && conflictingSubId !== id) {
       consoleLog(
         'error',
-        `[reflex] Subscription '${id}' was not registered. Root key '${sourceKey}' is already used by subscription '${conflictingSubId}'.`,
+        `[uklad] Subscription '${id}' was not registered. Root key '${sourceKey}' is already used by subscription '${conflictingSubId}'.`,
       );
       return undefined;
     }
@@ -399,7 +395,7 @@ export class SubscriptionRuntime {
     runtime.registry.sub.assertAvailable(id);
     runtime.registry.subDeps.assertAvailable(id);
     if (this.hasCachedId(id)) {
-      const message = `[reflex] Cannot register subscription '${id}' while a cached query for that id exists. Clear the subscription before registering it again.`;
+      const message = `[uklad] Cannot register subscription '${id}' while a cached query for that id exists. Clear the subscription before registering it again.`;
       consoleLog('error', message);
       throw new Error(message);
     }
@@ -468,7 +464,7 @@ export class SubscriptionRuntime {
   ): void {
     if (this.subscriptionCache.has(key)) {
       throw new Error(
-        `[reflex] Subscription cache invariant violated: duplicate canonical key ${key}.`,
+        `[uklad] Subscription cache invariant violated: duplicate canonical key ${key}.`,
       );
     }
     const ownedDependencyKeys = [...dependencyKeys];

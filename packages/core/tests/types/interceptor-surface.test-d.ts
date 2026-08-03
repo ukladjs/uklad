@@ -9,13 +9,13 @@
  * must not expose the pipeline's own bookkeeping — otherwise the before/after
  * execution model becomes frozen public API.
  */
-import { createReflexRuntimeForTests } from '../../src/internal';
-import { createReflexRuntime } from '../../src/vanilla';
+import { createUkladRuntimeForTests } from '../../src/internal';
+import { createUkladRuntime } from '../../src/vanilla';
 import type { Interceptor, InterceptorContext } from '../../src/types';
 
-const runtime = createReflexRuntime({ initialState: { count: 0 } });
+const runtime = createUkladRuntime({ initialState: { count: 0 } });
 
-const configuredRuntime = createReflexRuntime({
+const configuredRuntime = createUkladRuntime({
   initialState: { count: 0 },
   equalityCheck: () => false,
   interceptors: [
@@ -30,7 +30,7 @@ const configuredRuntime = createReflexRuntime({
 });
 configuredRuntime.dispose();
 
-createReflexRuntime({
+createUkladRuntime({
   initialState: { count: 0 },
   // @ts-expect-error equalityCheck must be a function
   equalityCheck: false,
@@ -62,7 +62,7 @@ runtime.addInterceptor({ id: 'nope' });
 
 // ---- administrative surface -----------------------------------------
 
-const admin = createReflexRuntimeForTests({ initialState: { count: 0 } });
+const admin = createUkladRuntimeForTests({ initialState: { count: 0 } });
 
 admin.addInterceptor({
   id: 'audit',

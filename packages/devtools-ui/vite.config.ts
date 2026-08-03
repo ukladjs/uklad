@@ -8,8 +8,8 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom'],
     alias: {
-      '@flexsurfer/reflex': fileURLToPath(
-        new URL('../reflex/src/index.ts', import.meta.url),
+      '@ukladjs/core': fileURLToPath(
+        new URL('../core/src/index.ts', import.meta.url),
       ),
     },
   },

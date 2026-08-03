@@ -229,7 +229,7 @@ describe('debounce', () => {
     ])('%s rejects malformed event vectors', (api, rateLimitedDispatch) => {
       for (const bad of ['test-event', [], [42], null, undefined]) {
         expect(() => rateLimitedDispatch(bad as any, 100)).toThrow(
-          `[reflex] ${api} expects a non-empty event vector starting with an event id string.`,
+          `[uklad] ${api} expects a non-empty event vector starting with an event id string.`,
         );
       }
       expect(mockDispatch).not.toHaveBeenCalled();
@@ -253,7 +253,7 @@ describe('debounce', () => {
 
       for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -1, '100', undefined]) {
         expect(() => rateLimitedDispatch(event, bad as any)).toThrow(
-          `[reflex] ${api} expects a finite, non-negative duration in milliseconds, received ${String(bad)}.`,
+          `[uklad] ${api} expects a finite, non-negative duration in milliseconds, received ${String(bad)}.`,
         );
       }
       expect(mockDispatch).not.toHaveBeenCalled();

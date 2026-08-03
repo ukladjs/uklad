@@ -1,5 +1,5 @@
-import { useRuntime } from '../../../app/reflex/bindings';
-import { appIds } from '../../../app/reflex/catalog';
+import { useRuntime } from '../../../app/uklad/bindings';
+import { appIds } from '../../../app/uklad/catalog';
 
 /**
  * Buttons that deliberately misbehave, so the devtools has something to show:

@@ -2,9 +2,9 @@ jest.mock('../../src/core/environment', () => ({ IS_DEV: true }));
 
 import { registerRuntimeInstance } from '../../src/duplicate-package-detection';
 
-const RUNTIME_MARKER_KEY = Symbol.for('@flexsurfer/reflex/runtime');
+const RUNTIME_MARKER_KEY = Symbol.for('@ukladjs/core/runtime');
 
-describe('duplicate Reflex runtime detection', () => {
+describe('duplicate Uklad runtime detection', () => {
   beforeEach(() => {
     Reflect.deleteProperty(globalThis, RUNTIME_MARKER_KEY);
   });
@@ -29,7 +29,7 @@ describe('duplicate Reflex runtime detection', () => {
     expect(getTestLogCalls().warn).toEqual([
       [
         expect.stringContaining(
-          'Multiple copies of @flexsurfer/reflex detected in the same JavaScript realm',
+          'Multiple copies of @ukladjs/core detected in the same JavaScript realm',
         ),
       ],
     ]);
@@ -37,6 +37,6 @@ describe('duplicate Reflex runtime detection', () => {
     expect(getTestLogCalls().warn[0]![0]).toContain(
       'do not mix providers, hooks, or runtime helpers',
     );
-    expect(getTestLogCalls().warn[0]![0]).toContain('single copy of @flexsurfer/reflex');
+    expect(getTestLogCalls().warn[0]![0]).toContain('single copy of @ukladjs/core');
   });
 });

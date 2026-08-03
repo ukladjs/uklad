@@ -1,38 +1,38 @@
-import { reflexReplacer } from '../serialization.js';
+import { ukladReplacer } from '../serialization.js';
 import {
   createKeyRedactor,
   redactDevtoolsEvent,
   type DevtoolsRedaction,
 } from '../redaction.js';
 import {
-  REFLEX_DEVTOOLS_CLIENT_HEADER,
-  REFLEX_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES,
-  REFLEX_DEVTOOLS_MAX_RUNTIME_PAYLOAD_BYTES,
-  REFLEX_DEVTOOLS_PROTOCOL_HEADER,
-  REFLEX_DEVTOOLS_PROTOCOL_VERSION,
-  REFLEX_DEVTOOLS_RUNTIME_ERROR_TYPE,
-  REFLEX_DEVTOOLS_RUNTIME_ID_HEADER,
-  REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER,
-  REFLEX_DEVTOOLS_TELEMETRY_DROPPED_CODE,
-  REFLEX_DEVTOOLS_WS_PROTOCOL,
+  UKLAD_DEVTOOLS_CLIENT_HEADER,
+  UKLAD_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES,
+  UKLAD_DEVTOOLS_MAX_RUNTIME_PAYLOAD_BYTES,
+  UKLAD_DEVTOOLS_PROTOCOL_HEADER,
+  UKLAD_DEVTOOLS_PROTOCOL_VERSION,
+  UKLAD_DEVTOOLS_RUNTIME_ERROR_TYPE,
+  UKLAD_DEVTOOLS_RUNTIME_ID_HEADER,
+  UKLAD_DEVTOOLS_RUNTIME_SESSION_HEADER,
+  UKLAD_DEVTOOLS_TELEMETRY_DROPPED_CODE,
+  UKLAD_DEVTOOLS_WS_PROTOCOL,
   type DevtoolsRuntimeKind,
   type RuntimeTelemetryDroppedPayload,
 } from '../protocol.js';
 import { diffSubscriptionDiagnostics } from './subscriptionDiagnostics.js';
 import { acquireOperationInspector } from './operations/inspector.js';
 import type {
-  ReflexInspector,
-  ReflexInspectorSnapshot,
-  ReflexTrace,
+  UkladInspector,
+  UkladInspectorSnapshot,
+  UkladTrace,
 } from './types.js';
 
 export type {
-  ReflexHandlerKeys,
-  ReflexInspector,
-  ReflexInspectorSnapshot,
-  ReflexSubscriptionDiagnostic,
-  ReflexTrace,
-  ReflexTraceCallback,
+  UkladHandlerKeys,
+  UkladInspector,
+  UkladInspectorSnapshot,
+  UkladSubscriptionDiagnostic,
+  UkladTrace,
+  UkladTraceCallback,
 } from './types.js';
 export {
   createKeyRedactor,
@@ -46,8 +46,8 @@ export type {
   TraceRedactor,
 } from '../redaction.js';
 export {
-  REFLEX_DEVTOOLS_PROTOCOL_VERSION,
-  REFLEX_DEVTOOLS_RUNTIME_ID_HEADER,
+  UKLAD_DEVTOOLS_PROTOCOL_VERSION,
+  UKLAD_DEVTOOLS_RUNTIME_ID_HEADER,
 } from '../protocol.js';
 export type {
   DevtoolsCapability,
@@ -99,7 +99,7 @@ export interface DevtoolsConfig {
   effects?: Record<string, string>;
   /**
    * Enable runtime-owned operation snapshots for server-initiated dispatches.
-   * Normal DevTools clients still never import or bundle Reflex.
+   * Normal DevTools clients still never import or bundle Uklad.
    */
   operations?: true;
 }
@@ -142,7 +142,7 @@ interface PendingDispatch {
 }
 
 class DevtoolsClient {
-  private inspector: ReflexInspector;
+  private inspector: UkladInspector;
   private config: DevtoolsConfig;
   private httpBaseUrl: string;
   private webSocketBaseUrl: string;
@@ -161,7 +161,7 @@ class DevtoolsClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private maxRuntimePayloadBytes =
-    REFLEX_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES;
+    UKLAD_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES;
   private readonly emittedDiagnostics = new Set<string>();
   private rejectConnection: ((error: unknown) => void) | null = null;
   private healthController: AbortController | null = null;
@@ -170,7 +170,7 @@ class DevtoolsClient {
   private pendingDispatches: PendingDispatch[] = [];
   private dispatchCorrelations = new WeakMap<object, string>();
 
-  constructor(inspector: ReflexInspector, config: DevtoolsConfig) {
+  constructor(inspector: UkladInspector, config: DevtoolsConfig) {
     this.inspector = inspector;
     this.config = {
       enabled: true,
@@ -205,14 +205,14 @@ class DevtoolsClient {
     // flowing but dispatch impossible — which is far harder to diagnose than
     // an explicit refusal.
     if (typeof WebSocket === 'undefined') {
-      console.warn('[Reflex Devtools] No global WebSocket in this runtime — headless mode requires Node >= 22. Devtools disabled.');
+      console.warn('[Uklad Devtools] No global WebSocket in this runtime — headless mode requires Node >= 22. Devtools disabled.');
       return;
     }
 
     this.serverAvailable = await this.checkServerAvailability();
     if (this.isDisposed) return;
     if (!this.serverAvailable) {
-      console.warn('[Reflex Devtools] Server not available, disabling devtools');
+      console.warn('[Uklad Devtools] Server not available, disabling devtools');
       this.scheduleReconnect();
       return;
     }
@@ -222,7 +222,7 @@ class DevtoolsClient {
       if (this.isDisposed) return;
       if (!this.sessionToken) {
         console.warn(
-          '[Reflex Devtools] Could not obtain a runtime session token. ' +
+          '[Uklad Devtools] Could not obtain a runtime session token. ' +
           'Remote servers require DevtoolsConfig.sessionToken.',
         );
         this.scheduleReconnect();
@@ -235,7 +235,7 @@ class DevtoolsClient {
     } catch (error) {
       if (!this.isDisposed) {
         console.warn(
-          '[Reflex Devtools] Authenticated WebSocket connection failed:',
+          '[Uklad Devtools] Authenticated WebSocket connection failed:',
           error instanceof Error ? error.message : 'Unknown error',
         );
         this.scheduleReconnect();
@@ -291,7 +291,7 @@ class DevtoolsClient {
   }
 
   private mapSubscriptionDiagnostics(
-    snapshot: ReflexInspectorSnapshot,
+    snapshot: UkladInspectorSnapshot,
     resetCache = false,
   ): Record<string, unknown> {
     return diffSubscriptionDiagnostics(
@@ -316,9 +316,9 @@ class DevtoolsClient {
       const response = await fetch(`${this.httpBaseUrl}/health`, request);
       if (!response.ok || this.isDisposed) return false;
       const body = await response.json().catch(() => null);
-      return response.headers.get(REFLEX_DEVTOOLS_PROTOCOL_HEADER)
-          === String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
-        && body?.protocolVersion === REFLEX_DEVTOOLS_PROTOCOL_VERSION;
+      return response.headers.get(UKLAD_DEVTOOLS_PROTOCOL_HEADER)
+          === String(UKLAD_DEVTOOLS_PROTOCOL_VERSION)
+        && body?.protocolVersion === UKLAD_DEVTOOLS_PROTOCOL_VERSION;
     } catch (error) {
       return false;
     } finally {
@@ -339,9 +339,9 @@ class DevtoolsClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        [REFLEX_DEVTOOLS_PROTOCOL_HEADER]:
-          String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
-        [REFLEX_DEVTOOLS_CLIENT_HEADER]: 'reflex-devtools-runtime',
+        [UKLAD_DEVTOOLS_PROTOCOL_HEADER]:
+          String(UKLAD_DEVTOOLS_PROTOCOL_VERSION),
+        [UKLAD_DEVTOOLS_CLIENT_HEADER]: 'uklad-devtools-runtime',
       },
       body: JSON.stringify({ role: 'runtime' }),
       redirect: 'error',
@@ -356,9 +356,9 @@ class DevtoolsClient {
       const body = await response.json().catch(() => null);
       if (
         !response.ok
-        || response.headers.get(REFLEX_DEVTOOLS_PROTOCOL_HEADER)
-          !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
-        || body?.protocolVersion !== REFLEX_DEVTOOLS_PROTOCOL_VERSION
+        || response.headers.get(UKLAD_DEVTOOLS_PROTOCOL_HEADER)
+          !== String(UKLAD_DEVTOOLS_PROTOCOL_VERSION)
+        || body?.protocolVersion !== UKLAD_DEVTOOLS_PROTOCOL_VERSION
         || typeof body?.token !== 'string'
       ) {
         return null;
@@ -380,7 +380,7 @@ class DevtoolsClient {
       }
 
       const wsUrl = `${this.webSocketBaseUrl}/sdk`;
-      const ws = new WebSocket(wsUrl, [REFLEX_DEVTOOLS_WS_PROTOCOL]);
+      const ws = new WebSocket(wsUrl, [UKLAD_DEVTOOLS_WS_PROTOCOL]);
       this.ws = ws;
       let settled = false;
 
@@ -417,11 +417,11 @@ class DevtoolsClient {
         try {
           const operationCapability = this.operationCapability();
           ws.send(JSON.stringify({
-            type: 'reflex-auth',
+            type: 'uklad-auth',
             payload: {
               role: 'runtime',
               token: this.sessionToken,
-              protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+              protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
               inspectorApiVersion: this.inspector.apiVersion,
               runtimeId: this.inspector.runtimeId,
               runtimeName: this.inspector.runtimeName,
@@ -449,7 +449,7 @@ class DevtoolsClient {
             const sessionEpoch = message.payload?.sessionEpoch;
             if (
               message.payload?.protocolVersion
-                !== REFLEX_DEVTOOLS_PROTOCOL_VERSION
+                !== UKLAD_DEVTOOLS_PROTOCOL_VERSION
               || !validRuntimeIdentityText(
                 runtimeSessionId,
                 MAX_RUNTIME_SESSION_ID_LENGTH,
@@ -461,7 +461,7 @@ class DevtoolsClient {
               || !Number.isInteger(runtimePayloadBytes)
               || runtimePayloadBytes < 1
               || runtimePayloadBytes
-                > REFLEX_DEVTOOLS_MAX_RUNTIME_PAYLOAD_BYTES
+                > UKLAD_DEVTOOLS_MAX_RUNTIME_PAYLOAD_BYTES
             ) {
               ws.close(1002, 'Invalid DevTools server hello');
               rejectOnce(new Error('DevTools protocol handshake failed'));
@@ -543,7 +543,7 @@ class DevtoolsClient {
     if (this.isDisposed) return;
 
     if (
-      message.type === REFLEX_DEVTOOLS_RUNTIME_ERROR_TYPE
+      message.type === UKLAD_DEVTOOLS_RUNTIME_ERROR_TYPE
       && isRuntimeTelemetryDroppedPayload(message.payload)
     ) {
       this.reportRuntimeTelemetryDrop(message.payload);
@@ -570,21 +570,21 @@ class DevtoolsClient {
       }
 
       // MCP dispatches carry a dispatchId and expect the event's trace back
-      // (reflex-dispatch-result). UI dispatches don't. Register the watcher
+      // (uklad-dispatch-result). UI dispatches don't. Register the watcher
       // before dispatching so the trace can't slip past it.
       if (dispatchId != null) {
         if (this.isTracingEnabled) {
           const timeout = setTimeout(() => {
             this.pendingDispatches = this.pendingDispatches.filter(p => p.dispatchId !== dispatchId);
             this.sendEvent({
-              type: 'reflex-dispatch-result',
+              type: 'uklad-dispatch-result',
               payload: { dispatchId, reason: `no trace observed for '${eventName}' within ${DISPATCH_TRACE_TIMEOUT_MS}ms` }
             });
           }, DISPATCH_TRACE_TIMEOUT_MS);
           this.pendingDispatches.push({ dispatchId, eventId: eventName, timeout });
         } else {
           this.sendEvent({
-            type: 'reflex-dispatch-result',
+            type: 'uklad-dispatch-result',
             payload: { dispatchId, reason: 'tracing is disabled in the app, outcome not observed' }
           });
         }
@@ -624,7 +624,7 @@ class DevtoolsClient {
     const operation = this.operationCapability();
     if (!operation) {
       await this.sendEvent({
-        type: 'reflex-operation-result',
+        type: 'uklad-operation-result',
         payload: {
           dispatchId,
           error: 'The runtime does not expose the negotiated operation snapshot capability.',
@@ -635,12 +635,12 @@ class DevtoolsClient {
     try {
       const result = await operation.executeEvent(event);
       await this.sendEvent({
-        type: 'reflex-operation-result',
+        type: 'uklad-operation-result',
         payload: { dispatchId, result },
       });
     } catch (error) {
       await this.sendEvent({
-        type: 'reflex-operation-result',
+        type: 'uklad-operation-result',
         payload: {
           dispatchId,
           error: error instanceof Error ? error.message : String(error),
@@ -657,7 +657,7 @@ class DevtoolsClient {
       : 'Check the server-side redaction hook; the unredacted value was not retained.';
     this.warnOnce(
       `${payload.code}:${payload.reason}:${payload.eventType}`,
-      `[Reflex Devtools] Server dropped ${safeEventType(payload.eventType)} telemetry (${payload.reason}). ${action}`,
+      `[Uklad Devtools] Server dropped ${safeEventType(payload.eventType)} telemetry (${payload.reason}). ${action}`,
     );
   }
 
@@ -670,7 +670,7 @@ class DevtoolsClient {
       : '';
     this.warnOnce(
       `websocket-close:${normalizedCode}:${safeReason}`,
-      `[Reflex Devtools] WebSocket closed abnormally (code ${normalizedCode}${safeReason ? `, reason: ${safeReason}` : ''}). Reconnecting with bounded backoff.${payloadGuidance}`,
+      `[Uklad Devtools] WebSocket closed abnormally (code ${normalizedCode}${safeReason ? `, reason: ${safeReason}` : ''}). Reconnecting with bounded backoff.${payloadGuidance}`,
     );
   }
 
@@ -687,7 +687,7 @@ class DevtoolsClient {
     try {
       if (!this.inspector.getSnapshot().handlerKeys.sub.includes(id)) {
         await this.sendEvent({
-          type: 'reflex-eval-sub-result',
+          type: 'uklad-eval-sub-result',
           payload: {
             evalId,
             error: {
@@ -701,12 +701,12 @@ class DevtoolsClient {
 
       const value = this.inspector.evaluateSubscription([id, ...args]);
       await this.sendEvent({
-        type: 'reflex-eval-sub-result',
+        type: 'uklad-eval-sub-result',
         payload: { evalId, value }
       });
     } catch (error) {
       await this.sendEvent({
-        type: 'reflex-eval-sub-result',
+        type: 'uklad-eval-sub-result',
         payload: {
           evalId,
           error: {
@@ -722,7 +722,7 @@ class DevtoolsClient {
   // outcome. FIFO by event id: if the app happens to dispatch the same event
   // concurrently, the earliest trace wins — acceptable ambiguity for a
   // dev-only observation channel.
-  private async reportDispatchResults(traces: readonly ReflexTrace[]): Promise<void> {
+  private async reportDispatchResults(traces: readonly UkladTrace[]): Promise<void> {
     if (this.pendingDispatches.length === 0) return;
 
     for (const trace of traces) {
@@ -745,7 +745,7 @@ class DevtoolsClient {
       }
       clearTimeout(pending.timeout);
       await this.sendEvent({
-        type: 'reflex-dispatch-result',
+        type: 'uklad-dispatch-result',
         payload: { dispatchId: pending.dispatchId, trace }
       });
     }
@@ -762,14 +762,14 @@ class DevtoolsClient {
         // outcome referencing a trace id resolves — ws.send preserves order
         // by itself, but the HTTP fallback does not. sendEvent never rejects.
         await this.sendEvent({
-          type: 'reflex-traces',
-          component: 'Reflex',
+          type: 'uklad-traces',
+          component: 'Uklad',
           payload: traces
         });
         if (this.isDisposed) return;
         await this.sendEvent({
-          type: 'reflex-active-subs',
-          component: 'Reflex',
+          type: 'uklad-active-subs',
+          component: 'Uklad',
           payload: this.mapSubscriptionDiagnostics(this.inspector.getSnapshot())
         });
         await this.reportDispatchResults(traces);
@@ -779,18 +779,18 @@ class DevtoolsClient {
 
     const snapshot = this.inspector.getSnapshot();
     this.sendEvent({
-      type: 'reflex-state',
-      component: 'Reflex',
+      type: 'uklad-state',
+      component: 'Uklad',
       payload: snapshot.state
     });
     this.sendEvent({
-      type: 'reflex-active-subs',
-      component: 'Reflex',
+      type: 'uklad-active-subs',
+      component: 'Uklad',
       payload: this.mapSubscriptionDiagnostics(snapshot, true)
     });
     this.sendEvent({
-      type: 'reflex-handler-keys',
-      component: 'Reflex',
+      type: 'uklad-handler-keys',
+      component: 'Uklad',
       payload: snapshot.handlerKeys
     });
     this.sendRuntimeInfo();
@@ -802,13 +802,13 @@ class DevtoolsClient {
   // server's view never goes stale.
   private sendRuntimeInfo(): void {
     // Omit unset optional fields instead of sending them as undefined: the
-    // reflexReplacer serializes undefined to the string 'undefined', which the
+    // ukladReplacer serializes undefined to the string 'undefined', which the
     // server's runtime-info schema rejects (e.g. effects must be a record),
     // closing the socket and forcing a reconnect loop.
     const payload: Record<string, unknown> = {
       runtime: this.config.runtime,
       tracing: this.isTracingEnabled,
-      protocolVersion: REFLEX_DEVTOOLS_PROTOCOL_VERSION,
+      protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
       inspectorApiVersion: this.inspector.apiVersion,
       ...(this.operationCapability() ? { operationApiVersion: 1 } : {}),
     };
@@ -819,8 +819,8 @@ class DevtoolsClient {
       payload.effects = this.config.effects;
     }
     this.sendEvent({
-      type: 'reflex-runtime-info',
-      component: 'Reflex',
+      type: 'uklad-runtime-info',
+      component: 'Uklad',
       payload,
     });
   }
@@ -837,7 +837,7 @@ class DevtoolsClient {
         clearTimeout(pending.timeout);
         if (notifyServer) {
           this.sendEvent({
-            type: 'reflex-dispatch-result',
+            type: 'uklad-dispatch-result',
             payload: { dispatchId: pending.dispatchId, reason: 'tracing stopped before the outcome was observed' }
           });
         }
@@ -898,13 +898,13 @@ class DevtoolsClient {
 
   private serializeEventData(obj: any): string {
     try {
-      return JSON.stringify(obj, reflexReplacer);
+      return JSON.stringify(obj, ukladReplacer);
     } catch (error) {
-      console.error('[Reflex Devtools] Error serializing object:', error);
+      console.error('[Uklad Devtools] Error serializing object:', error);
       if (error instanceof Error && error.message.includes("Cannot perform 'get' on a proxy that has been revoked")) {
-        console.warn('[Reflex Devtools] ⚠️ Important: When passing data from draftState to effects, always use the current() function to get the current (final) value. The draftState object is an Immer draft proxy that will be finalized after the event completes, so passing draftState data directly to effects will result in the empty proxy object.');
+        console.warn('[Uklad Devtools] ⚠️ Important: When passing data from draftState to effects, always use the current() function to get the current (final) value. The draftState object is an Immer draft proxy that will be finalized after the event completes, so passing draftState data directly to effects will result in the empty proxy object.');
       }
-      return JSON.stringify({ __reflex_type: 'SerializationError', error: 'Serialization failed' });
+      return JSON.stringify({ __uklad_type: 'SerializationError', error: 'Serialization failed' });
     }
   }
 
@@ -925,7 +925,7 @@ class DevtoolsClient {
       );
     } catch {
       console.error(
-        `[Reflex Devtools] Redaction failed for event type ${event.type}; payload dropped.`,
+        `[Uklad Devtools] Redaction failed for event type ${event.type}; payload dropped.`,
       );
       return;
     }
@@ -935,7 +935,7 @@ class DevtoolsClient {
     if (serializedBytes > this.maxRuntimePayloadBytes) {
       this.warnOnce(
         `payload-limit:${event.type}:${this.maxRuntimePayloadBytes}`,
-        `[Reflex Devtools] Dropped ${safeEventType(event.type)} telemetry before transport: serialized size ${serializedBytes} bytes exceeds the negotiated ${this.maxRuntimePayloadBytes}-byte runtime limit. Reduce the inspected state/trace batch or raise maxRuntimePayloadBytes on the trusted devtools server.`,
+        `[Uklad Devtools] Dropped ${safeEventType(event.type)} telemetry before transport: serialized size ${serializedBytes} bytes exceeds the negotiated ${this.maxRuntimePayloadBytes}-byte runtime limit. Reduce the inspected state/trace batch or raise maxRuntimePayloadBytes on the trusted devtools server.`,
       );
       return;
     }
@@ -962,11 +962,11 @@ class DevtoolsClient {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.sessionToken}`,
-        [REFLEX_DEVTOOLS_PROTOCOL_HEADER]:
-          String(REFLEX_DEVTOOLS_PROTOCOL_VERSION),
-        [REFLEX_DEVTOOLS_CLIENT_HEADER]: 'reflex-devtools-runtime',
-        [REFLEX_DEVTOOLS_RUNTIME_ID_HEADER]: this.inspector.runtimeId,
-        [REFLEX_DEVTOOLS_RUNTIME_SESSION_HEADER]:
+        [UKLAD_DEVTOOLS_PROTOCOL_HEADER]:
+          String(UKLAD_DEVTOOLS_PROTOCOL_VERSION),
+        [UKLAD_DEVTOOLS_CLIENT_HEADER]: 'uklad-devtools-runtime',
+        [UKLAD_DEVTOOLS_RUNTIME_ID_HEADER]: this.inspector.runtimeId,
+        [UKLAD_DEVTOOLS_RUNTIME_SESSION_HEADER]:
           this.runtimeSessionId ?? '',
       },
       body: serializedEvent,
@@ -985,13 +985,13 @@ class DevtoolsClient {
         ? responseBody.notice ?? responseBody
         : null;
       const responseVersion = response.headers.get(
-        REFLEX_DEVTOOLS_PROTOCOL_HEADER,
+        UKLAD_DEVTOOLS_PROTOCOL_HEADER,
       );
       if (
         response.status === 401
         || response.status === 409
         || response.status === 426
-        || responseVersion !== String(REFLEX_DEVTOOLS_PROTOCOL_VERSION)
+        || responseVersion !== String(UKLAD_DEVTOOLS_PROTOCOL_VERSION)
       ) {
         this.serverAvailable = false;
         this.stopTracing(false);
@@ -1001,14 +1001,14 @@ class DevtoolsClient {
         this.reportRuntimeTelemetryDrop(runtimeDrop);
       } else if (!response.ok) {
         console.warn(
-          `[Reflex Devtools] Runtime event was rejected with HTTP ${response.status}.`,
+          `[Uklad Devtools] Runtime event was rejected with HTTP ${response.status}.`,
         );
       }
     } catch (error) {
       if (controller?.signal.aborted || isAbortError(error) || this.isDisposed) {
         return;
       }
-      console.warn('[Reflex Devtools] Server not available, disabling devtools');
+      console.warn('[Uklad Devtools] Server not available, disabling devtools');
       this.serverAvailable = false;
       this.stopTracing(false);
       this.scheduleReconnect();
@@ -1042,7 +1042,7 @@ export function logEvent(event: EventPayload, runtimeId?: string): void {
     if (!warnedAboutAmbiguousLogEvent) {
       warnedAboutAmbiguousLogEvent = true;
       console.warn(
-        '[Reflex Devtools] logEvent() requires runtimeId when multiple runtime clients are enabled; telemetry was not sent.',
+        '[Uklad Devtools] logEvent() requires runtimeId when multiple runtime clients are enabled; telemetry was not sent.',
       );
     }
     return;
@@ -1082,7 +1082,7 @@ function isRuntimeTelemetryDroppedPayload(
 ): value is RuntimeTelemetryDroppedPayload {
   if (!value || typeof value !== 'object') return false;
   const payload = value as Partial<RuntimeTelemetryDroppedPayload>;
-  return payload.code === REFLEX_DEVTOOLS_TELEMETRY_DROPPED_CODE
+  return payload.code === UKLAD_DEVTOOLS_TELEMETRY_DROPPED_CODE
     && (
       payload.reason === 'redaction-failed'
       || payload.reason === 'retention-limit'
@@ -1138,7 +1138,7 @@ function normalizeHttpBaseUrl(
     || url.hash
   ) {
     throw new Error(
-      '[Reflex Devtools] serverUrl must be an http(s) URL without credentials, query, or fragment.',
+      '[Uklad Devtools] serverUrl must be an http(s) URL without credentials, query, or fragment.',
     );
   }
   if (
@@ -1147,7 +1147,7 @@ function normalizeHttpBaseUrl(
     && !allowInsecureRemote
   ) {
     throw new Error(
-      '[Reflex Devtools] Refusing to send a runtime token over remote plaintext HTTP. ' +
+      '[Uklad Devtools] Refusing to send a runtime token over remote plaintext HTTP. ' +
       'Use HTTPS, a loopback SSH tunnel, or set allowInsecureRemote only on a trusted network.',
     );
   }
@@ -1170,8 +1170,8 @@ function isLoopbackHostname(hostname: string): boolean {
       && Number(octet) <= 255);
 }
 
-function assertInspector(inspector: ReflexInspector): void {
-  const candidate = inspector as Partial<ReflexInspector> | null | undefined;
+function assertInspector(inspector: UkladInspector): void {
+  const candidate = inspector as Partial<UkladInspector> | null | undefined;
   const hasMethods =
     typeof candidate?.getSnapshot === 'function' &&
     typeof candidate.subscribeTraces === 'function' &&
@@ -1184,7 +1184,7 @@ function assertInspector(inspector: ReflexInspector): void {
 
   if (candidate?.apiVersion !== 2 || !hasMethods || !hasIdentity) {
     throw new Error(
-      '[Reflex Devtools] The supplied inspector must implement the compatible Reflex inspector protocol.',
+      '[Uklad Devtools] The supplied inspector must implement the compatible Uklad inspector protocol.',
     );
   }
 }
@@ -1197,11 +1197,11 @@ function validRuntimeIdentityText(value: unknown, maxLength: number): value is s
 }
 
 export function enableDevtools(
-  inspector: ReflexInspector,
+  inspector: UkladInspector,
   config?: DevtoolsConfig,
 ): () => void;
 export function enableDevtools(
-  inspector: ReflexInspector,
+  inspector: UkladInspector,
   config: DevtoolsConfig = {},
 ): () => void {
   assertInspector(inspector);
@@ -1213,7 +1213,7 @@ export function enableDevtools(
   const nextClient = new DevtoolsClient(operationInspector, config);
   registerClient(inspector.runtimeId, nextClient);
   void nextClient.init().catch((error: unknown) => {
-    console.error('[Reflex Devtools] Failed to initialize:', error);
+    console.error('[Uklad Devtools] Failed to initialize:', error);
     nextClient.dispose();
     operationAttachment?.dispose();
     unregisterClient(inspector.runtimeId, nextClient);

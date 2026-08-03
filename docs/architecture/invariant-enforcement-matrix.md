@@ -1,13 +1,13 @@
-# Reflex invariant enforcement matrix
+# Uklad invariant enforcement matrix
 
 - **Status:** Working canonical policy
 - **Last updated:** 2026-08-02
-- **Scope:** Reflex application authoring, runtime composition, production event
+- **Scope:** Uklad application authoring, runtime composition, production event
   execution, subscription publication, external ingress, and agent guidance
 
 ## Purpose
 
-This document assigns every important Reflex invariant to an enforcement layer.
+This document assigns every important Uklad invariant to an enforcement layer.
 It is the normative companion to the
 [Foundation ADR](foundation-adr.md), the
 [canonical application structure](canonical-app-structure.md), and the

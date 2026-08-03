@@ -1,4 +1,4 @@
-import type { ReflexDisposer, ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import type { UkladDisposer, UkladRuntime } from '@ukladjs/core/vanilla';
 
 import { collectionsModule } from '../../features/collections/module';
 import { counterModule } from '../../features/counter/module';
@@ -18,7 +18,7 @@ const featureModules = [counterModule, usersModule, collectionsModule, diagnosti
  * disposal — that is organizational, not runtime isolation: they all share
  * this runtime's state and reactive graph.
  */
-export function registerFeatureModules(runtime: ReflexRuntime<AppContracts>): ReflexDisposer {
+export function registerFeatureModules(runtime: UkladRuntime<AppContracts>): UkladDisposer {
   const disposers = featureModules.map((module) => runtime.registerModule(module));
   return () => {
     for (const disposeModule of disposers.reverse()) disposeModule();

@@ -1,8 +1,8 @@
-import { enableMapSet } from '@flexsurfer/reflex/vanilla';
-import { createReflexRuntimeForTests as createReflexRuntime } from '@flexsurfer/reflex/internal';
-import { createReflexInspector } from '@flexsurfer/reflex/devtools';
-import type { Trace } from '@flexsurfer/reflex/vanilla';
-import type { ReflexContracts } from '@flexsurfer/reflex/vanilla';
+import { enableMapSet } from '@ukladjs/core/vanilla';
+import { createUkladRuntimeForTests as createUkladRuntime } from '@ukladjs/core/internal';
+import { createUkladInspector } from '@ukladjs/core/devtools';
+import type { Trace } from '@ukladjs/core/vanilla';
+import type { UkladContracts } from '@ukladjs/core/vanilla';
 
 import { PERSIST_IDS, localStorageAdapter, persist } from '../index';
 import type {
@@ -87,7 +87,7 @@ function entry(version: number, data: unknown): string {
 let runtimeCounter = 0;
 function makeRuntime<TState extends Record<string, any>>(initialState: TState) {
   runtimeCounter += 1;
-  return createReflexRuntime<ReflexContracts & { readonly state: TState }>({
+  return createUkladRuntime<UkladContracts & { readonly state: TState }>({
     initialState,
     runtimeId: `persist-test-${runtimeCounter}`,
   } as never);
@@ -113,8 +113,8 @@ describe('persist', () => {
 
   it('starts idle, then synchronously hydrates, migrates, and rewrites only migrated keys', async () => {
     const memory = createMemoryStorage({
-      'reflex/todos': entry(1, ['a', 'b']),
-      'reflex/settings': entry(2, { theme: 'dark' }),
+      'uklad/todos': entry(1, ['a', 'b']),
+      'uklad/settings': entry(2, { theme: 'dark' }),
     });
     const runtime = makeRuntime({ todos: [] as string[], settings: {}, ui: 'untouched' });
     const handle = persist(runtime, {
@@ -140,15 +140,15 @@ describe('persist', () => {
       [PERSIST_IDS.STATUS]: 'hydrated',
     });
     expect(memory.setCalls).toBe(1);
-    expect(memory.data.get('reflex/todos')).toBe(entry(2, ['A', 'B']));
-    expect(memory.data.get('reflex/settings')).toBe(entry(2, { theme: 'dark' }));
+    expect(memory.data.get('uklad/todos')).toBe(entry(2, ['A', 'B']));
+    expect(memory.data.get('uklad/settings')).toBe(entry(2, { theme: 'dark' }));
 
     handle.dispose();
     runtime.dispose();
   });
 
   it('never echoes hydration and does not require configured roots to be subscriptions', () => {
-    const memory = createMemoryStorage({ 'reflex/todos': entry(1, ['stored']) });
+    const memory = createMemoryStorage({ 'uklad/todos': entry(1, ['stored']) });
     const runtime = makeRuntime({ todos: [] as string[] });
     const handle = persist(runtime, { storage: memory.storage, keys: ['todos'] });
 
@@ -163,7 +163,7 @@ describe('persist', () => {
   it('ignores forged internal write effects before hydration', () => {
     const original = entry(1, 41);
     const diagnostics: PersistDiagnostic[] = [];
-    const memory = createMemoryStorage({ 'reflex/count': original });
+    const memory = createMemoryStorage({ 'uklad/count': original });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, {
       storage: memory.storage,
@@ -176,7 +176,7 @@ describe('persist', () => {
 
     runtime.dispatchSync(['forge/write']);
 
-    expect(memory.data.get('reflex/count')).toBe(original);
+    expect(memory.data.get('uklad/count')).toBe(original);
     expect(memory.setCalls).toBe(0);
     expect(diagnostics).toEqual([{ code: 'invalid-completion', phase: 'lifecycle' }]);
     handle.dispose();
@@ -184,7 +184,7 @@ describe('persist', () => {
   });
 
   it('rejects malformed direct internal completions without changing the gate', () => {
-    const memory = createMemoryStorage({ 'reflex/count': entry(1, 41) });
+    const memory = createMemoryStorage({ 'uklad/count': entry(1, 41) });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
 
@@ -227,9 +227,9 @@ describe('persist', () => {
     await runtime.flush();
 
     expect(memory.setCalls).toBe(1);
-    expect(memory.data.get('reflex/todos')).toBe(entry(1, ['write me']));
-    expect(memory.data.has('reflex/settings')).toBe(false);
-    expect(memory.data.has('reflex/ui')).toBe(false);
+    expect(memory.data.get('uklad/todos')).toBe(entry(1, ['write me']));
+    expect(memory.data.has('uklad/settings')).toBe(false);
+    expect(memory.data.has('uklad/ui')).toBe(false);
     handle.dispose();
     runtime.dispose();
   });
@@ -237,7 +237,7 @@ describe('persist', () => {
   it('rejects non-JSON serializer output without overwriting storage', async () => {
     const original = entry(1, { theme: 'old' });
     const diagnostics: PersistDiagnostic[] = [];
-    const memory = createMemoryStorage({ 'reflex/settings': original });
+    const memory = createMemoryStorage({ 'uklad/settings': original });
     const runtime = makeRuntime({ settings: { theme: 'light' } });
     const handle = persist(runtime, {
       storage: memory.storage,
@@ -259,7 +259,7 @@ describe('persist', () => {
     runtime.dispatch(['settings/change']);
     await runtime.flush();
 
-    expect(memory.data.get('reflex/settings')).toBe(original);
+    expect(memory.data.get('uklad/settings')).toBe(original);
     expect(memory.setCalls).toBe(0);
     expect(diagnostics).toContainEqual({
       code: 'serialize-failed',
@@ -272,7 +272,7 @@ describe('persist', () => {
 
   it('rejects a serializer toJSON escape hatch and validates the encoded envelope', async () => {
     const original = entry(1, { theme: 'old' });
-    const memory = createMemoryStorage({ 'reflex/settings': original });
+    const memory = createMemoryStorage({ 'uklad/settings': original });
     const runtime = makeRuntime({ settings: { theme: 'light' } });
     const handle = persist(runtime, {
       storage: memory.storage,
@@ -297,7 +297,7 @@ describe('persist', () => {
     runtime.dispatch(['settings/change']);
     await runtime.flush();
 
-    expect(memory.data.get('reflex/settings')).toBe(original);
+    expect(memory.data.get('uklad/settings')).toBe(original);
     expect(memory.setCalls).toBe(0);
     handle.dispose();
     runtime.dispose();
@@ -323,11 +323,11 @@ describe('persist', () => {
     await runtime.flush();
     expect(memory.setCalls).toBe(0);
 
-    memory.data.set('reflex/value', entry(1, 'stale'));
+    memory.data.set('uklad/value', entry(1, 'stale'));
     runtime.dispatch(['value/delete']);
     await runtime.flush();
     expect(memory.removeCalls).toBe(1);
-    expect(memory.data.has('reflex/value')).toBe(false);
+    expect(memory.data.has('uklad/value')).toBe(false);
     handle.dispose();
     runtime.dispose();
   });
@@ -335,7 +335,7 @@ describe('persist', () => {
   it('round-trips transformed Map roots with key-specific types', async () => {
     type Todo = { id: number; title: string; done: boolean };
     const memory = createMemoryStorage({
-      'reflex/todos': entry(1, [
+      'uklad/todos': entry(1, [
         [1, { id: 1, title: 'stored', done: false }],
         [2, { id: 2, title: 'also stored', done: true }],
       ]),
@@ -366,7 +366,7 @@ describe('persist', () => {
     runtime.dispatch(['todos/add', { id: 3, title: 'new', done: false }]);
     await runtime.flush();
 
-    const stored = JSON.parse(memory.data.get('reflex/todos')!) as { data: [number, Todo][] };
+    const stored = JSON.parse(memory.data.get('uklad/todos')!) as { data: [number, Todo][] };
     expect(stored.data[2]).toEqual([3, { id: 3, title: 'new', done: false }]);
     handle.dispose();
     runtime.dispose();
@@ -394,7 +394,7 @@ describe('persist', () => {
   it('settles sync hydration waiters when a later interceptor aborts the event', async () => {
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, {
-      storage: createMemoryStorage({ 'reflex/count': entry(1, 41) }).storage,
+      storage: createMemoryStorage({ 'uklad/count': entry(1, 41) }).storage,
       keys: ['count'],
     });
     runtime.addInterceptor({
@@ -419,8 +419,8 @@ describe('persist', () => {
     const originalTodos = entry(1, ['old']);
     const originalSettings = 'CORRUPT_SECRET_VALUE';
     const memory = createMemoryStorage({
-      'reflex/todos': originalTodos,
-      'reflex/settings': originalSettings,
+      'uklad/todos': originalTodos,
+      'uklad/settings': originalSettings,
     });
     const runtime = makeRuntime({ todos: [] as string[], settings: {} });
     const handle = persist(runtime, {
@@ -441,12 +441,12 @@ describe('persist', () => {
     expect(runtime.getState().todos).toEqual(['old']);
     expect(statusOf(runtime)).toBe('failed');
     expect(memory.setCalls).toBe(0);
-    expect(memory.data.get('reflex/todos')).toBe(originalTodos);
-    expect(memory.data.get('reflex/settings')).toBe(originalSettings);
+    expect(memory.data.get('uklad/todos')).toBe(originalTodos);
+    expect(memory.data.get('uklad/settings')).toBe(originalSettings);
     handle.dispose();
     runtime.dispose();
 
-    const deserializeMemory = createMemoryStorage({ 'reflex/todos': originalTodos });
+    const deserializeMemory = createMemoryStorage({ 'uklad/todos': originalTodos });
     const deserializeRuntime = makeRuntime({ todos: ['initial'] });
     const deserializeHandle = persist(deserializeRuntime, {
       storage: deserializeMemory.storage,
@@ -464,7 +464,7 @@ describe('persist', () => {
     deserializeHandle.hydrate();
     expect(deserializeRuntime.getState().todos).toEqual(['initial']);
     expect(deserializeMemory.setCalls).toBe(0);
-    expect(deserializeMemory.data.get('reflex/todos')).toBe(originalTodos);
+    expect(deserializeMemory.data.get('uklad/todos')).toBe(originalTodos);
     deserializeHandle.dispose();
     deserializeRuntime.dispose();
   });
@@ -472,7 +472,7 @@ describe('persist', () => {
   it('rejects non-JSON migration output without publishing or erasing the original entry', () => {
     const original = entry(1, { count: 1 });
     const diagnostics: PersistDiagnostic[] = [];
-    const memory = createMemoryStorage({ 'reflex/settings': original });
+    const memory = createMemoryStorage({ 'uklad/settings': original });
     const runtime = makeRuntime({ settings: { count: 0 } });
     const handle = persist(runtime, {
       storage: memory.storage,
@@ -486,7 +486,7 @@ describe('persist', () => {
 
     expect(runtime.getState().settings).toEqual({ count: 0 });
     expect(statusOf(runtime)).toBe('failed');
-    expect(memory.data.get('reflex/settings')).toBe(original);
+    expect(memory.data.get('uklad/settings')).toBe(original);
     expect(memory.setCalls).toBe(0);
     expect(memory.removeCalls).toBe(0);
     expect(diagnostics).toEqual([{ code: 'migration-failed', phase: 'migrate', key: 'settings' }]);
@@ -498,9 +498,9 @@ describe('persist', () => {
     const migrate = jest.fn((_key: string, data: unknown) => data as string);
     const diagnostics: PersistDiagnostic[] = [];
     const memory = createMemoryStorage({
-      'reflex/missingData': JSON.stringify({ v: 1 }),
-      'reflex/fractional': JSON.stringify({ v: 1.5, data: true }),
-      'reflex/future': entry(3, 'future'),
+      'uklad/missingData': JSON.stringify({ v: 1 }),
+      'uklad/fractional': JSON.stringify({ v: 1.5, data: true }),
+      'uklad/future': entry(3, 'future'),
     });
     const runtime = makeRuntime({ missingData: 'initial', fractional: false, future: 'initial' });
     const handle = persist(runtime, {
@@ -528,7 +528,7 @@ describe('persist', () => {
   it('settles waiters through both raw synchronous and queued hydrate dispatch', async () => {
     const syncRuntime = makeRuntime({ count: 0 });
     const syncHandle = persist(syncRuntime, {
-      storage: createMemoryStorage({ 'reflex/count': entry(1, 1) }).storage,
+      storage: createMemoryStorage({ 'uklad/count': entry(1, 1) }).storage,
       keys: ['count'],
     });
     const syncPending = syncHandle.whenHydrated();
@@ -540,7 +540,7 @@ describe('persist', () => {
 
     const queuedRuntime = makeRuntime({ count: 0 });
     const queuedHandle = persist(queuedRuntime, {
-      storage: createMemoryStorage({ 'reflex/count': entry(1, 2) }).storage,
+      storage: createMemoryStorage({ 'uklad/count': entry(1, 2) }).storage,
       keys: ['count'],
     });
     const queuedPending = queuedHandle.whenHydrated();
@@ -552,7 +552,7 @@ describe('persist', () => {
   });
 
   it('treats repeated hydration as an idempotent no-op', () => {
-    const memory = createMemoryStorage({ 'reflex/count': entry(1, 10) });
+    const memory = createMemoryStorage({ 'uklad/count': entry(1, 10) });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
     runtime.registerModule((registrar) => {
@@ -563,7 +563,7 @@ describe('persist', () => {
 
     handle.hydrate();
     runtime.dispatchSync(['count/set', 20]);
-    memory.data.set('reflex/count', entry(1, 5));
+    memory.data.set('uklad/count', entry(1, 5));
     const readsAfterFirstAttempt = memory.getCalls;
 
     handle.hydrate();
@@ -614,7 +614,7 @@ describe('persist', () => {
   });
 
   it('shares cleanup with runtime disposal and ignores an in-flight async read', async () => {
-    const deferred = createDeferredAsyncStorage({ 'reflex/count': entry(1, 7) });
+    const deferred = createDeferredAsyncStorage({ 'uklad/count': entry(1, 7) });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, {
       storage: deferred.storage,
@@ -663,7 +663,7 @@ describe('persist', () => {
   });
 
   it('purges corrupt entries as explicit recovery and reopens writes', async () => {
-    const memory = createMemoryStorage({ 'reflex/count': 'CORRUPT_PURGE_SECRET' });
+    const memory = createMemoryStorage({ 'uklad/count': 'CORRUPT_PURGE_SECRET' });
     const runtime = makeRuntime({ count: 0 });
     runtime.registerModule((registrar) => {
       registrar.regEvent('count/bump', ({ draftState }) => {
@@ -676,12 +676,12 @@ describe('persist', () => {
 
     await expect(handle.purge()).resolves.toBeUndefined();
     expect(statusOf(runtime)).toBe('hydrated');
-    expect(memory.data.has('reflex/count')).toBe(false);
+    expect(memory.data.has('uklad/count')).toBe(false);
     await expect(handle.whenHydrated()).resolves.toBeUndefined();
 
     runtime.dispatch(['count/bump']);
     await runtime.flush();
-    expect(memory.data.get('reflex/count')).toBe(entry(1, 1));
+    expect(memory.data.get('uklad/count')).toBe(entry(1, 1));
     handle.dispose();
     runtime.dispose();
   });
@@ -855,7 +855,7 @@ describe('persist', () => {
   it('reports only sanitized key/phase diagnostics', () => {
     const secret = 'RAW_TOP_SECRET_12345';
     const diagnostics: PersistDiagnostic[] = [];
-    const memory = createMemoryStorage({ 'reflex/count': secret });
+    const memory = createMemoryStorage({ 'uklad/count': secret });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, {
       storage: memory.storage,
@@ -873,10 +873,10 @@ describe('persist', () => {
   });
 
   it('attributes interceptor-contributed WRITE to the causing event trace', async () => {
-    const memory = createMemoryStorage({ 'reflex/count': entry(1, 41) });
+    const memory = createMemoryStorage({ 'uklad/count': entry(1, 41) });
     const runtime = makeRuntime({ count: 0 });
     const collected: Trace[] = [];
-    const removeTraceListener = createReflexInspector(runtime).subscribeTraces((traces) =>
+    const removeTraceListener = createUkladInspector(runtime).subscribeTraces((traces) =>
       collected.push(...traces),
     );
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
@@ -902,7 +902,7 @@ describe('persist', () => {
   });
 
   it('uses the context snapshot for writer change detection', () => {
-    const memory = createMemoryStorage({ 'reflex/count': entry(1, 41) });
+    const memory = createMemoryStorage({ 'uklad/count': entry(1, 41) });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
     runtime.registerModule((registrar) => {
@@ -916,13 +916,13 @@ describe('persist', () => {
 
     // The writer compares context.previousState and context.newState. The
     // persisted value must reflect the committed generation.
-    expect(memory.data.get('reflex/count')).toBe(entry(1, 42));
+    expect(memory.data.get('uklad/count')).toBe(entry(1, 42));
     handle.dispose();
     runtime.dispose();
   });
 
   it('attaches persistence to an explicitly owned runtime', async () => {
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       initialState: { count: 0 },
       runtimeId: 'persist-explicit-attachment',
     });
@@ -931,7 +931,7 @@ describe('persist', () => {
         (draftState as { count: number }).count += 1;
       });
     });
-    const memory = createMemoryStorage({ 'reflex/count': entry(1, 40) });
+    const memory = createMemoryStorage({ 'uklad/count': entry(1, 40) });
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
 
     handle.hydrate();
@@ -940,13 +940,13 @@ describe('persist', () => {
     await runtime.flush();
 
     expect((runtime.getState() as { count: number }).count).toBe(42);
-    expect(memory.data.get('reflex/count')).toBe(entry(1, 42));
+    expect(memory.data.get('uklad/count')).toBe(entry(1, 42));
     handle.dispose();
     runtime.dispose();
   });
 
   it('keeps the experimental async read gated and settles through its event chain', async () => {
-    const deferred = createDeferredAsyncStorage({ 'reflex/count': entry(1, 100) });
+    const deferred = createDeferredAsyncStorage({ 'uklad/count': entry(1, 100) });
     const runtime = makeRuntime({ count: 0, ui: { ready: false } });
     const handle = persist(runtime, {
       storage: deferred.storage,
@@ -974,7 +974,7 @@ describe('persist', () => {
   });
 
   it('rejects a purge queued immediately behind experimental async hydration', async () => {
-    const deferred = createDeferredAsyncStorage({ 'reflex/count': entry(1, 100) });
+    const deferred = createDeferredAsyncStorage({ 'uklad/count': entry(1, 100) });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, {
       storage: deferred.storage,
@@ -1024,7 +1024,7 @@ describe('persist', () => {
   });
 
   it('fails experimental hydration when a later interceptor prevents READ from starting', async () => {
-    const deferred = createDeferredAsyncStorage({ 'reflex/count': entry(1, 100) });
+    const deferred = createDeferredAsyncStorage({ 'uklad/count': entry(1, 100) });
     const runtime = makeRuntime({ count: 0 });
     const handle = persist(runtime, {
       storage: deferred.storage,

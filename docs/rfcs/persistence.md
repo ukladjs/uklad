@@ -1,9 +1,9 @@
-# RFC: `@flexsurfer/reflex-persist` — persistence as Reflex primitives
+# RFC: `@ukladjs/persist` — persistence as Uklad primitives
 
-- **Status:** `0.1.0-beta.1` candidate implemented in [packages/reflex-persist](../../packages/reflex-persist) (unpublished) and dogfooded in [examples/todomvc](../../examples/todomvc); remaining unchecked release gates below are authoritative
+- **Status:** `0.1.0-beta.1` candidate implemented in [packages/persist](../../packages/persist) (unpublished) and dogfooded in [examples/todomvc](../../examples/todomvc); remaining unchecked release gates below are authoritative
 - **Last updated:** 2026-07-19
-- **Depends on:** the instance-scoped runtime ([instance-scoped-runtime.md](instance-scoped-runtime.md)) plus the generic post-handler/effect guarantees shipping in `@flexsurfer/reflex@0.1.27`; Reflex must be published before this beta
-- **Roadmap slot:** Phase 3, "Persistence + versioned migrations" ([Reflex roadmap](../roadmaps/reflex.md))
+- **Depends on:** the instance-scoped runtime ([instance-scoped-runtime.md](instance-scoped-runtime.md)) plus the generic post-handler/effect guarantees shipping in `@ukladjs/core@0.1.27`; Uklad must be published before this beta
+- **Roadmap slot:** Phase 3, "Persistence + versioned migrations" ([Uklad roadmap](../roadmaps/uklad.md))
 
 Two earlier drafts (method-driven, then dispatch-driven with a whole-state envelope and `partialize`) are superseded. An expert review of the second draft surfaced six findings; rather than patch each one, the scope was reset to the actual problem, which dissolves most of them — the rest are tracked under **Beyond `beta.2`** below.
 
@@ -14,27 +14,27 @@ Two earlier drafts (method-driven, then dispatch-driven with a whole-state envel
 
 ## Architectural boundary
 
-`@flexsurfer/reflex-persist` is an ordinary external consumer of Reflex, not a privileged integration. It may own persistence-specific machinery such as adapters, migrations, queues, retries, barriers, and its public handle API, but every interaction with a runtime goes through documented public `@flexsurfer/reflex` APIs: events, effects, coeffects, global interceptors, subscriptions, and `registerModule()` lifecycle. It must not import Reflex internals, access private registries or pipeline state, mutate internal state heads, or require persistence-specific behavior in Reflex core.
+`@ukladjs/persist` is an ordinary external consumer of Uklad, not a privileged integration. It may own persistence-specific machinery such as adapters, migrations, queues, retries, barriers, and its public handle API, but every interaction with a runtime goes through documented public `@ukladjs/core` APIs: events, effects, coeffects, global interceptors, subscriptions, and `registerModule()` lifecycle. It must not import Uklad internals, access private registries or pipeline state, mutate internal state heads, or require persistence-specific behavior in Uklad core.
 
-If persistence exposes a missing capability, Reflex may add a generic public primitive useful to any library; it must not add a special `reflex-persist` hook. `PersistHandle` is the primary typed and lifecycle-aware API, while public persist event IDs remain an optional low-level protocol for direct dispatch, DevTools, MCP, and composition. Both routes must produce the same observable Reflex state transitions.
+If persistence exposes a missing capability, Uklad may add a generic public primitive useful to any library; it must not add a special `uklad-persist` hook. `PersistHandle` is the primary typed and lifecycle-aware API, while public persist event IDs remain an optional low-level protocol for direct dispatch, DevTools, MCP, and composition. Both routes must produce the same observable Uklad state transitions.
 
 ## Design: integration through public primitives
 
-The library expresses its observable work through primitives Reflex already ships — ordinary handlers plus one registered global interceptor, with no private pipeline hooks:
+The library expresses its observable work through primitives Uklad already ships — ordinary handlers plus one registered global interceptor, with no private pipeline hooks:
 
 | Kind        | Id                        | Role                                                                                                    |
 | ----------- | ------------------------- | ------------------------------------------------------------------------------------------------------- |
-| event       | `reflex-persist/attach`   | internal: publishes a fresh attachment-scoped `'idle'` gate                                             |
-| event       | `reflex-persist/hydrate`  | public: sync storage uses a coeffect-injected snapshot and publishes roots + terminal status atomically |
-| event       | `reflex-persist/purge`    | public recovery control; removes configured entries through an effect                                   |
+| event       | `uklad-persist/attach`   | internal: publishes a fresh attachment-scoped `'idle'` gate                                             |
+| event       | `uklad-persist/hydrate`  | public: sync storage uses a coeffect-injected snapshot and publishes roots + terminal status atomically |
+| event       | `uklad-persist/purge`    | public recovery control; removes configured entries through an effect                                   |
 | event       | `loaded` / `failed`       | authenticated internal completions for the experimental async route; excluded from the public contract  |
-| interceptor | `reflex-persist/writer`   | global `after`: contributes a write effect per configured root the causing event changed                |
-| effect      | `reflex-persist/write`    | serializes one root from the committed state and calls `storage.setItem` — post-commit by construction  |
+| interceptor | `uklad-persist/writer`   | global `after`: contributes a write effect per configured root the causing event changed                |
+| effect      | `uklad-persist/write`    | serializes one root from the committed state and calls `storage.setItem` — post-commit by construction  |
 | effect      | `complete` / `settle`     | authenticated internal lifecycle effects; make handle and raw-dispatch barriers equivalent              |
-| coeffect    | `reflex-persist/snapshot` | catches all synchronous reads and injects a staged success/failure snapshot                             |
-| sub         | `reflex-persist`          | status root: `'idle' \| 'hydrating' \| 'hydrated' \| 'failed'`                                          |
+| coeffect    | `uklad-persist/snapshot` | catches all synchronous reads and injects a staged success/failure snapshot                             |
+| sub         | `uklad-persist`          | status root: `'idle' \| 'hydrating' \| 'hydrated' \| 'failed'`                                          |
 
-**Keys are state root keys — and the writer is an interceptor, not a watch.** The first dogfood iteration watched each key's subscription and dispatched a `store` event on change. That design had a causality hole found immediately in TodoMVC's traces: hydration itself changes the keys, the watches fire, and the just-read snapshot is echoed straight back to storage — a value watch knows _that_ a key changed but never _why_. The writer interceptor sees `coeffects.event`, so it skips persistence protocol events by identity, detects root changes with `Object.is` against the not-yet-committed previous state head, and contributes `['reflex-persist/write', { key }]` effects to the causing event. Effects execute in `do-fx` after the commit, and the write effect serializes from the committed state — so writes stay post-commit, a serialization error cannot abort an application event, and each write is attributed to the event that caused it in the trace log. Keys do not need registered subscriptions.
+**Keys are state root keys — and the writer is an interceptor, not a watch.** The first dogfood iteration watched each key's subscription and dispatched a `store` event on change. That design had a causality hole found immediately in TodoMVC's traces: hydration itself changes the keys, the watches fire, and the just-read snapshot is echoed straight back to storage — a value watch knows _that_ a key changed but never _why_. The writer interceptor sees `coeffects.event`, so it skips persistence protocol events by identity, detects root changes with `Object.is` against the not-yet-committed previous state head, and contributes `['uklad-persist/write', { key }]` effects to the causing event. Effects execute in `do-fx` after the commit, and the write effect serializes from the committed state — so writes stay post-commit, a serialization error cannot abort an application event, and each write is attributed to the event that caused it in the trace log. Keys do not need registered subscriptions.
 
 ```ts
 const handle = persist(runtime, {
@@ -44,10 +44,10 @@ const handle = persist(runtime, {
   migrate: (key, data, from) => …,
 });
 
-runtime.dispatchSync(['reflex-persist/hydrate']); // terminal before this returns
+runtime.dispatchSync(['uklad-persist/hydrate']); // terminal before this returns
 // handle.hydrate() is the primary typed form; repeated calls are no-ops
 
-useSubscription(['reflex-persist']); // status, like any other state
+useSubscription(['uklad-persist']); // status, like any other state
 ```
 
 The runtime argument is mandatory: `persist(runtime, options)`. Applications pass
@@ -59,7 +59,7 @@ process-global state.
 
 ## Storage layout
 
-One entry per key: `<prefix>/<percent-encoded-root-key>` → `{"v":<configured-version>,"data":…}` (prefix defaults to `reflex`; version defaults to `1`). The envelope is a non-null object with own `v` and `data` fields; `v` is a positive safe integer. Consequences:
+One entry per key: `<prefix>/<percent-encoded-root-key>` → `{"v":<configured-version>,"data":…}` (prefix defaults to `uklad`; version defaults to `1`). The envelope is a non-null object with own `v` and `data` fields; `v` is a positive safe integer. Consequences:
 
 - A change to `todos` writes only `todos` — no whole-state blob, no `partialize` concept.
 - The envelope carries `v` from day one. `migrate(key, data, fromVersion)` runs on serialized data only when `fromVersion < version`; future versions fail without calling it. Current-version `deserialize` runs afterward.
@@ -69,7 +69,7 @@ One entry per key: `<prefix>/<percent-encoded-root-key>` → `{"v":<configured-v
 
 ## Boot flows
 
-- **Supported beta flow — browser CSR + sync storage**: attach publishes `'idle'`; `dispatchSync(['reflex-persist/hydrate'])` reads, validates, migrates, overlays roots, and reaches `'hydrated'` or `'failed'` before returning. Applications must hydrate before domain events that may change persisted roots.
+- **Supported beta flow — browser CSR + sync storage**: attach publishes `'idle'`; `dispatchSync(['uklad-persist/hydrate'])` reads, validates, migrates, overlays roots, and reaches `'hydrated'` or `'failed'` before returning. Applications must hydrate before domain events that may change persisted roots.
 - **Failure**: read/parse/validate/migrate/deserialize failure publishes `'failed'`, rejects `whenHydrated()`, preserves every original storage entry, and keeps writes closed. `await handle.purge()` removes configured entries and changes the current state into the source for future writes only when every removal succeeds.
 - **Not a beta.1 product claim**: async storage and SSR integration remain experimental/deferred. The generic async path requires the explicit `experimentalAsync: true` opt-in for continued development, but it has no ordering or durability guarantee until `beta.2`.
 
@@ -84,9 +84,9 @@ One entry per key: `<prefix>/<percent-encoded-root-key>` → `{"v":<configured-v
 
 Legend: ✅ has it · ⚠️ partial, indirect, or prototype quality · ❌ missing. Baseline checked 2026-07-19 against the [Redux Persist README](https://github.com/rt2zz/redux-persist#readme) and [Zustand persist documentation](https://zustand.docs.pmnd.rs/reference/integrations/persisting-store-data). This is a behavioral benchmark, not a requirement to copy either API.
 
-| Feature                             | Redux Persist (usual RTK pairing)                  | Zustand `persist`                                     | `reflex-persist` v0                                     | Direction                                                                                      |
+| Feature                             | Redux Persist (usual RTK pairing)                  | Zustand `persist`                                     | `uklad-persist` v0                                     | Direction                                                                                      |
 | ----------------------------------- | -------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Basic persist + rehydrate           | ✅ `persistReducer` + `persistStore`               | ✅ `persist` middleware                               | ✅ root-key writer + hydrate events                     | Keep the Reflex-native protocol; harden failure and lifecycle paths before publishing          |
+| Basic persist + rehydrate           | ✅ `persistReducer` + `persistStore`               | ✅ `persist` middleware                               | ✅ root-key writer + hydrate events                     | Keep the Uklad-native protocol; harden failure and lifecycle paths before publishing          |
 | Selective / partial persistence     | ✅ allowlist, denylist, nested persists            | ✅ `partialize`                                       | ✅ configured root keys stored as independent entries   | Root keys are the core model; use per-key transforms for deeper projection                     |
 | Sync and async storage              | ✅ Promise-based storage engines; web/RN ecosystem | ✅ sync or async custom storage                       | ✅ sync adapters; async requires an experimental opt-in | Add official AsyncStorage only with ordered writes; SecureStore remains deferred               |
 | Manual / deferred hydration         | ✅ `manualPersist` + `persistor.persist()`         | ✅ `skipHydration` + `rehydrate()`                    | ✅ `handle.hydrate()` or public hydrate event           | Keep raw dispatch as low-level protocol and `PersistHandle` as the primary API                 |
@@ -124,7 +124,7 @@ Scope: browser CSR, synchronous localStorage, memory storage for tests, one `per
 - [x] Reject duplicate/empty/reserved keys, invalid versions, protocol collisions, and a second attachment before installation.
 - [x] Make handle disposal and runtime disposal share module cleanup; pending work settles, late reads are ignored, and reattach publishes a fresh closed `idle` gate.
 - [x] Preserve no-hydration-echo and write/remove exactly configured roots whose identities changed according to `Object.is`.
-- [x] Authenticate library-owned events/effects, validate completion payloads, and settle handle operations when Reflex drops queued lifecycle work after an earlier event failure.
+- [x] Authenticate library-owned events/effects, validate completion payloads, and settle handle operations when Uklad drops queued lifecycle work after an earlier event failure.
 
 #### Failure and recovery
 
@@ -132,20 +132,20 @@ Scope: browser CSR, synchronous localStorage, memory storage for tests, one `per
 - [x] Expose failed status and `purge()` recovery in TodoMVC instead of remaining silently non-persistent.
 - [x] Report sanitized key/phase/code diagnostics without raw values or user-thrown messages.
 
-#### Reflex and public API contract
+#### Uklad and public API contract
 
-- [x] Document and test the generic Reflex guarantees consumed here: `newState` is read-only after the handler, interceptors append to (not replace) the shared effect list, and `do-fx` commits before executing it.
+- [x] Document and test the generic Uklad guarantees consumed here: `newState` is read-only after the handler, interceptors append to (not replace) the shared effect list, and `do-fx` commits before executing it.
 - [x] Include final interceptor-contributed effects in the causing event's trace and assert the writer's exact WRITE tuple.
 - [x] Keep `PersistHandle` primary and ship `PersistContracts<T>` for strict raw hydrate/purge/status use; internal completion events stay outside that contract.
-- [x] Enforce the architectural boundary with imports only from the public `@flexsurfer/reflex/vanilla` entrypoint and no persist-specific core hook.
+- [x] Enforce the architectural boundary with imports only from the public `@ukladjs/core/vanilla` entrypoint and no persist-specific core hook.
 
 #### Product and release gates
 
 - [x] Scope TodoMVC event and subscription HMR cleanup to module-owned IDs so persistence registrations survive either module's replacement.
 - [x] Add a TodoMVC integration flow: preload envelope → hydrate → mutate → one root write → reload restores its `Map`.
 - [x] Cover unavailable localStorage, corrupt JSON/deserialize, lossy transforms, migration atomicity, forged internals, queue drops, direct dispatch, duplicate attach, disposal, reattach, purge, and diagnostics in acceptance tests.
-- [x] Build `reflex-persist` after Reflex and before TodoMVC; include package checks, coverage, and tarball dry-run in CI.
-- [x] Test the actual tarball as ESM and CJS with TS6/TS7 and a separately packed Reflex peer.
+- [x] Build `uklad-persist` after Uklad and before TodoMVC; include package checks, coverage, and tarball dry-run in CI.
+- [x] Test the actual tarball as ESM and CJS with TS6/TS7 and a separately packed Uklad peer.
 - [x] Compile strict contract/key/transform examples against public types and limit README claims to supported beta.1 behavior.
 
 ### `0.1.0-beta.2` — async-safe persistence
@@ -184,13 +184,13 @@ This release inherits every `beta.1` gate. AsyncStorage becomes supported only a
 | Full SSR integration + React gate   | Sync beta is CSR-only; async beta defines storage semantics first                                                    |
 | Multiple configs per runtime        | Beta rejects duplicates; add a runtime coordinator when a real second-config use case exists                         |
 | `restoreState` coordination         | Document as unsupported during beta persistence activity, then define attempt/write-gate interaction from real usage |
-| Pause/resume and mutable options    | Not needed for correctness; avoid copying competitor APIs without a demonstrated Reflex use case                     |
+| Pause/resume and mutable options    | Not needed for correctness; avoid copying competitor APIs without a demonstrated Uklad use case                     |
 | Throttling and background lifecycle | Additive over the ordered per-key queue after durability is correct                                                  |
 | Adapter batching (`multiGet`)       | Performance optimization that must not shape the minimum adapter contract                                            |
 
 ## Prototype findings and beta hardening
 
-The spike graduated into the package: its scenarios and beta regressions live in [packages/reflex-persist/src/tests/persist.test.ts](../../packages/reflex-persist/src/tests/persist.test.ts), including the Map round trip discovered by TodoMVC. Persistence itself still uses only public Reflex APIs. Beta hardening added generic Reflex guarantees—not persistence hooks—for read-only post-handler `newState`, append-only interceptor effects, module cleanup ordering, and final-effect trace capture.
+The spike graduated into the package: its scenarios and beta regressions live in [packages/persist/src/tests/persist.test.ts](../../packages/persist/src/tests/persist.test.ts), including the Map round trip discovered by TodoMVC. Persistence itself still uses only public Uklad APIs. Beta hardening added generic Uklad guarantees—not persistence hooks—for read-only post-handler `newState`, append-only interceptor effects, module cleanup ordering, and final-effect trace capture.
 
 1. Happy-path sync route: one synchronous `dispatchSync` hydrates, overlays roots, migrates, and re-stores migrated keys via post-commit write effects — zero awaits.
 2. Per-key writes: changing one configured key writes exactly one storage entry; unconfigured keys never write.
@@ -208,7 +208,7 @@ Calibration: the suite now establishes beta.1 sync failure atomicity, lifecycle 
 
 - Real state values are not always JSON-safe (TodoMVC's `todos` is a `Map`) — config keys accept per-key `serialize`/`deserialize` transforms.
 - Replacing the hand-rolled persistence deleted the `local-store-todos` coeffect, the `todos-to-local-store` effect, and a storage-effect return from six event handlers; `INIT_APP` became unnecessary. Handlers now never mention storage.
-- Monorepo examples that alias `@flexsurfer/reflex` to source must also alias the `/vanilla` subpath and `@flexsurfer/reflex-persist` itself — otherwise the bundle carries two reflex copies and persistence attaches to the wrong default runtime ([examples/todomvc/vite.config.ts](../../examples/todomvc/vite.config.ts)).
+- Monorepo examples that alias `@ukladjs/core` to source must also alias the `/vanilla` subpath and `@ukladjs/persist` itself — otherwise the bundle carries two uklad copies and persistence attaches to the wrong default runtime ([examples/todomvc/vite.config.ts](../../examples/todomvc/vite.config.ts)).
 - Verified in-browser: add todo → per-key envelope written; reload → hydrated before first paint; toggle done → stored with zero storage code in the handler.
 - **The watch-based writer shipped with an echo bug**, spotted in the trace log on the first real boot with stored data: hydration changed `todos`, the value watch fired, and a `store` event wrote the just-read snapshot straight back. Value watches lack causality — they see _that_ a key changed, never _why_. The writer became a global interceptor (event identity → hydration skipped by construction), which also moved writes onto the causing event's trace and dropped the extra `store` event and the "keys must be sub ids" requirement.
 

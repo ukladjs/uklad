@@ -1,11 +1,11 @@
-# RFC: Authoritative operations for agent-driven Reflex runtimes
+# RFC: Authoritative operations for agent-driven Uklad runtimes
 
 - **Status:** Proposed design; the current implementation is the smaller
   coordinator snapshot described below
 - **Last updated:** 2026-07-23
-- **Scope:** Reflex core, Inspector, DevTools server/SDK, MCP, headless adapters,
+- **Scope:** Uklad core, Inspector, DevTools server/SDK, MCP, headless adapters,
   and the future production command plane
-- **Decision owner:** Reflex maintainers
+- **Decision owner:** Uklad maintainers
 - **Compatibility:** additive API first; intentional queue-correctness changes must
   land before 1.0 with migration notes
 
@@ -20,7 +20,7 @@
 
 ## Summary
 
-Reflex should treat an agent invocation as a first-class **operation**, not as
+Uklad should treat an agent invocation as a first-class **operation**, not as
 an event name followed by a search through traces.
 
 An operation is created before its root event is enqueued. It has a stable
@@ -176,10 +176,10 @@ instrumented surface. Their additions are important prior art:
   explicit; and
 - instrumented macros capture source provenance.
 
-Reflex should adopt the intent, not mechanically copy the boundary. re-frame's
+Uklad should adopt the intent, not mechanically copy the boundary. re-frame's
 documented fallback without tracing uses post-event callbacks and a quiet
 window, cannot await asynchronous effects, and returns epoch bookkeeping rather
-than a full state/effect/result record. Reflex can make causal envelopes and
+than a full state/effect/result record. Uklad can make causal envelopes and
 pending-work accounting native from the start. Its result must also distinguish
 handler output from state actually committed after the interceptor pipeline.
 
@@ -202,8 +202,8 @@ with tracing disabled. [A2A tasks](https://a2a-protocol.org/latest/specification
 similarly separate task identity, status, history, artifacts, retrieval, and
 conversation context.
 
-The lesson is not to adopt one external task state machine as Reflex's domain
-model. Reflex should own a richer operation record and adapt it to MCP Tasks,
+The lesson is not to adopt one external task state machine as Uklad's domain
+model. Uklad should own a richer operation record and adapt it to MCP Tasks,
 A2A, HTTP long-running operations, or a direct in-process API.
 
 ### Reliability and distributed operations
@@ -230,7 +230,7 @@ and the [transactional outbox
 pattern](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html)
 also reinforce that deterministic state progression and external activity
 acknowledgement are separate. External I/O may happen before its completion is
-durably known. Reflex therefore needs effect intent and attempt identities and
+durably known. Uklad therefore needs effect intent and attempt identities and
 must not promise exactly-once delivery without a durable inbox/outbox or a
 downstream idempotency contract.
 
@@ -246,7 +246,7 @@ are business/runtime truth; trace and span IDs are optional links.
 [Playwright](https://playwright.dev/docs/actionability) demonstrates the value
 of condition-based waiting, isolated concurrent contexts, fixture-backed
 network behavior, compact semantic observations, and rich traces around an
-authoritative action result. Reflex should similarly prefer exact pending-work
+authoritative action result. Uklad should similarly prefer exact pending-work
 accounting over sleeps, expose named subscriptions rather than dump state, and
 state whether headless effects were real, stubbed, fixture-backed, or
 suppressed.
@@ -274,7 +274,7 @@ These names are normative.
 | `runtimeInstanceId`     | Unique lifetime of one in-memory runtime/ledger.                                                 | Core runtime; changes on restart.                                          |
 | `sessionEpoch`          | DevTools connection/storage generation. It may change on reconnect without a runtime restart.    | DevTools server.                                                           |
 
-Do not call causal event groups “epochs”; Reflex already uses epoch/session
+Do not call causal event groups “epochs”; Uklad already uses epoch/session
 language elsewhere. Do not reuse the current DevTools `dispatchId` as an
 operation ID. During migration it remains a transport correlation field and is
 eventually renamed `requestCorrelationId` or removed.
@@ -291,7 +291,7 @@ gateway (MCP / HTTP / direct API)
           |
           | trusted invocation envelope
           v
-Reflex operation coordinator --------------------------+
+Uklad operation coordinator --------------------------+
   operation ledger, idempotency, revisions, budgets    |
           |                                              |
           v                                              |
@@ -454,7 +454,7 @@ Version 1 joins work by explicit pending-count accounting:
 - each occurrence decrements the count exactly once on success, failure,
   queue-drop, or runtime disposal;
 - zero pending occurrences closes the causal cascade;
-- Reflex synchronously publishes the latest committed revision;
+- Uklad synchronously publishes the latest committed revision;
 - requested observations run against that published revision; and
 - the immutable terminal receipt is retained and waiters resolve.
 
@@ -683,7 +683,7 @@ from the operation/effect identity when their contract supports it.
 ### Semantic observations
 
 Agents usually care about what the application now derives, not every leaf in
-a patch. `observe` accepts registered subscription queries only. Reflex
+a patch. `observe` accepts registered subscription queries only. Uklad
 publishes first, evaluates each query at the reported `publishedRevision`, and
 returns a bounded/redacted value or structured query error.
 
@@ -804,7 +804,7 @@ observations can legitimately include B's earlier committed state. Work that
 must not share this state should use isolated runtime instances; work that can
 share it should use revisions/preconditions and domain idempotency.
 
-Before 1.0, Reflex should also correct two existing ordering hazards:
+Before 1.0, Uklad should also correct two existing ordering hazards:
 
 - `dispatchSync` must not overtake accepted queued work; and
 - one failed operation must not purge unrelated operations.
@@ -892,7 +892,7 @@ must take the explicitly labeled legacy trace path; new SDKs use operation
 messages only after both peers advertise `operationApiVersion: 1`.
 
 ```ts
-interface ReflexInspectorV2 {
+interface UkladInspectorV2 {
   readonly apiVersion: 2;
   readonly operationApiVersion?: 1;
   readonly runtimeInstanceId?: string;
@@ -908,7 +908,7 @@ interface ReflexInspectorV2 {
 Once the legacy path is retired, the mandatory surface may become v3:
 
 ```ts
-interface ReflexInspectorV3 {
+interface UkladInspectorV3 {
   readonly apiVersion: 3;
   executeEvent(
     event: [string, ...unknown[]],
@@ -953,8 +953,8 @@ must not be confused with runtime lifetime.
 the core receipt. Add `get_operation`. Both declare `outputSchema` and return
 `structuredContent`; a concise JSON text copy remains for older clients.
 
-When MCP Tasks are negotiated, a long-running Reflex operation can be exposed
-as a task. Reflex operation identity, authorization, retention, and result
+When MCP Tasks are negotiated, a long-running Uklad operation can be exposed
+as a task. Uklad operation identity, authorization, retention, and result
 remain authoritative because MCP Tasks are still experimental and generic.
 
 The production tool is eventually `execute_command`, backed only by explicitly
@@ -1045,7 +1045,7 @@ joining explicit.
 ### Promise exactly-once behavior
 
 Rejected. A crash can occur after external I/O but before acknowledgement.
-Reflex can provide durable state/effect intent and stable attempt IDs, while
+Uklad can provide durable state/effect intent and stable attempt IDs, while
 exactly-once business behavior still requires idempotent downstream contracts
 or reconciliation.
 
@@ -1222,7 +1222,7 @@ or reconciliation.
 - Evaluations cover duplicate IDs, response loss, concurrent actors, stale
   writes, dangerous effects, large results, runtime restart, and adversarial
   payloads.
-- Reflex does not claim production-grade autonomous execution until the release
+- Uklad does not claim production-grade autonomous execution until the release
   gates below pass.
 
 ## Release gates for an agent-operation claim

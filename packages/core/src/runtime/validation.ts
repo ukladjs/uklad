@@ -10,7 +10,7 @@ export function assertStateRecord(
   field: 'initialState' | 'restoreState nextState',
 ): asserts value is Record<string, any> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error(`[reflex] ${field} must be a non-null, non-array object.`);
+    throw new Error(`[uklad] ${field} must be a non-null, non-array object.`);
   }
 }
 
@@ -22,22 +22,22 @@ export function assertStateRecord(
  */
 export function assertCoeffectId(id: unknown): asserts id is string {
   if (typeof id !== 'string' || id.length === 0) {
-    throw new Error('[reflex] regCoeffect expects a non-empty coeffect id string.');
+    throw new Error('[uklad] regCoeffect expects a non-empty coeffect id string.');
   }
   if (RUNTIME_OWNED_COEFFECT_IDS.includes(id as (typeof RUNTIME_OWNED_COEFFECT_IDS)[number])) {
     throw new Error(
-      `[reflex] '${id}' is a runtime-owned coeffect and cannot be registered with regCoeffect().`,
+      `[uklad] '${id}' is a runtime-owned coeffect and cannot be registered with regCoeffect().`,
     );
   }
   if (id === '__proto__') {
-    throw new Error("[reflex] '__proto__' is not a valid coeffect id.");
+    throw new Error("[uklad] '__proto__' is not a valid coeffect id.");
   }
 }
 
 /** Reject operations against a terminal runtime. */
 export function assertRuntimeUsable(runtime: RuntimeCore): void {
   if (isRuntimeDisposed(runtime)) {
-    throw new Error(`[reflex] Runtime '${runtime.identity.runtimeId}' has been disposed.`);
+    throw new Error(`[uklad] Runtime '${runtime.identity.runtimeId}' has been disposed.`);
   }
 }
 
@@ -52,12 +52,12 @@ export function assertDispatchableEvent(
 ): void {
   if (!isEventVector(event)) {
     throw new Error(
-      `[reflex] ${api} expects a non-empty event vector starting with an event id string.`,
+      `[uklad] ${api} expects a non-empty event vector starting with an event id string.`,
     );
   }
   if (!runtime.registry.event.has(event[0])) {
     throw new Error(
-      `[reflex] No event handler registered for '${event[0]}' in runtime '${runtime.identity.runtimeId}'. Register it with regEvent() before dispatching.`,
+      `[uklad] No event handler registered for '${event[0]}' in runtime '${runtime.identity.runtimeId}'. Register it with regEvent() before dispatching.`,
     );
   }
 }
@@ -75,7 +75,7 @@ export function assertRateLimitDuration(
 ): asserts durationMs is number {
   if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) {
     throw new Error(
-      `[reflex] ${api} expects a finite, non-negative duration in milliseconds, received ${String(durationMs)}.`,
+      `[uklad] ${api} expects a finite, non-negative duration in milliseconds, received ${String(durationMs)}.`,
     );
   }
 }
@@ -84,12 +84,12 @@ export function assertRateLimitDuration(
 export function assertRegisteredSubscription(runtime: RuntimeCore, query: unknown): void {
   if (!Array.isArray(query) || query.length === 0 || typeof query[0] !== 'string') {
     throw new Error(
-      '[reflex] Subscription queries must be non-empty vectors starting with a subscription id string.',
+      '[uklad] Subscription queries must be non-empty vectors starting with a subscription id string.',
     );
   }
   if (!runtime.registry.sub.has(query[0])) {
     throw new Error(
-      `[reflex] No subscription registered for '${query[0]}' in runtime '${runtime.identity.runtimeId}'. Register it with regRootSub() or regSub() before use.`,
+      `[uklad] No subscription registered for '${query[0]}' in runtime '${runtime.identity.runtimeId}'. Register it with regRootSub() or regSub() before use.`,
     );
   }
 }

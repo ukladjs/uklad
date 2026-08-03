@@ -43,7 +43,7 @@ export function executeEventEnvelope(runtime: RuntimeCore, envelope: ExecutionEn
     let transitionError = result.error;
     if (result.status === 'missing-handler') {
       const missingHandlerError = new Error(`no event handler registered for: ${event[0]}`);
-      consoleLog('error', '[reflex] no event handler registered for:', event[0]);
+      consoleLog('error', '[uklad] no event handler registered for:', event[0]);
       transitionError = missingHandlerError;
     }
 

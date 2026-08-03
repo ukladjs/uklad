@@ -1,17 +1,17 @@
 # Agent-first priorities
 
-> **Purpose:** Re-rank Reflex work when AI agents are the primary users, while
+> **Purpose:** Re-rank Uklad work when AI agents are the primary users, while
 > retaining the human-facing improvements that make agent-written applications
 > easier to generate, review, operate, and maintain.
 
-This document is a prioritization companion to the main [roadmap](../roadmaps/reflex.md).
+This document is a prioritization companion to the main [roadmap](../roadmaps/uklad.md).
 The roadmap remains the implementation status tracker. This document defines
 the product order and the decision lens: when an agent requirement and a human
 ergonomics requirement compete, which one should happen first and why?
 
 The target position is:
 
-> **Reflex is a deterministic, policy-enforced command runtime whose state can
+> **Uklad is a deterministic, policy-enforced command runtime whose state can
 > drive React.** Humans can use it directly, but its contracts, execution model,
 > and evidence are designed so an AI agent does not have to guess what is legal,
 > what happened, or whether retrying is safe.
@@ -20,7 +20,7 @@ The target position is:
 
 ## 1. Audiences
 
-Reflex has three related audiences. They share the same core, but they do not
+Uklad has three related audiences. They share the same core, but they do not
 need the same product surface.
 
 ### Coding and verification agents
@@ -62,7 +62,7 @@ resulting codebase easier to verify.
 
 The DevTools MCP should remain a **development control plane**. A production
 runtime agent should use a separate, policy-enforced **command plane**, even if
-both are backed by the same Reflex runtime and contract registry.
+both are backed by the same Uklad runtime and contract registry.
 
 ---
 
@@ -70,7 +70,7 @@ both are backed by the same Reflex runtime and contract registry.
 
 | Priority | Meaning                                                                                                                       |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **P0**   | Required before Reflex can make strong agent-safety, determinism, or verification claims.                                     |
+| **P0**   | Required before Uklad can make strong agent-safety, determinism, or verification claims.                                     |
 | **P1**   | High-leverage agent capability or coding-agent productivity work. Expected before 1.0 unless evidence clearly demotes it.     |
 | **P2**   | Human/API/productization improvement that materially helps agent-generated applications but does not define execution safety. |
 | **P3**   | Ecosystem parity, convenience, or polish. Build only when evaluations or adoption demonstrate demand.                         |
@@ -212,7 +212,7 @@ Required properties:
 - required coeffects, possible emitted effects, and declared state paths;
 - generated TypeScript types rather than separately maintained payload maps;
 - build-generated source locations, call sites, and selector dependencies;
-- an authoritative `.reflex/contract.json` plus a compact human fallback.
+- an authoritative `.uklad/contract.json` plus a compact human fallback.
 
 Static and runtime manifests should expose the same contract hash so an agent
 can detect stale knowledge after a rebuild or reconnect.
@@ -296,7 +296,7 @@ Serialization through one queue is not sufficient protection.
 - Document the deduplication scope: runtime session, persisted application, or
   downstream service.
 
-Reflex must not promise exactly-once external I/O from an in-memory ledger.
+Uklad must not promise exactly-once external I/O from an in-memory ledger.
 Durable workflows require an inbox/outbox or downstream systems that honor the
 propagated idempotency key.
 
@@ -432,7 +432,7 @@ Then add:
 
 ### P1.4 — Add safe preview, approvals, fixtures, and replay
 
-Pure handlers plus effects-as-data make command preview a distinct Reflex
+Pure handlers plus effects-as-data make command preview a distinct Uklad
 advantage:
 
 ```ts
@@ -539,7 +539,7 @@ they improve agent-generated and agent-maintained applications.
 | Static manifest and source locations                       | **P0** contract manifest, **P1** enriched source index | **L**                      | **Medium**                                 | **No**                          | Generated metadata is additive and much more valuable to coding agents than ordinary API prose.                                                         |
 | Templates and scaffolder                                    | **P1**                                                 | **L**                      | **Low**                                    | **No**                          | New-project defaults and documentation can change without breaking existing runtime code.                                                               |
 | Redux/Zustand migration documentation                      | **P3**                                                 | **M**                      | **Low**                                    | **No**                          | Valuable for human adoption, but it does not improve execution correctness.                                                                             |
-| Redux DevTools bridge                                      | **P3**                                                 | **L**                      | **Low**                                    | **No**                          | Familiar human tooling; Reflex's structured receipts and causal agent tools come first.                                                                 |
+| Redux DevTools bridge                                      | **P3**                                                 | **L**                      | **Low**                                    | **No**                          | Familiar human tooling; Uklad's structured receipts and causal agent tools come first.                                                                 |
 | Entity/normalization helpers                               | **P3**                                                 | **M**                      | **Low**                                    | **No**                          | Add only when applications or benchmarks demonstrate recurring agent difficulty.                                                                        |
 | RTK Query equivalent                                       | **Non-goal**                                           | **—**                      | **—**                                      | **—**                           | Keep the TanStack Query integration boundary and focus on deterministic workflows.                                                                      |
 | Zustand-level bundle minimization                          | **Non-goal**                                           | **—**                      | **—**                                      | **—**                           | Agent correctness, observability, and verifiability are the product differentiation.                                                                    |
@@ -675,7 +675,7 @@ dependencies:
 
 ## 7. Release gates for an agent-first claim
 
-Reflex should not claim production-grade agent execution until all of these are
+Uklad should not claim production-grade agent execution until all of these are
 true:
 
 - invalid external inputs cannot reach a handler;
@@ -710,6 +710,6 @@ For an agent-first product, do not spend the next major cycle on:
 - generic multi-command transactions before one-command semantics are sound;
 - time travel or replay that can accidentally repeat real effects.
 
-The durable differentiation is not that an agent can write Reflex syntax more
-quickly. It is that Reflex can eliminate the ambiguity that makes autonomous
+The durable differentiation is not that an agent can write Uklad syntax more
+quickly. It is that Uklad can eliminate the ambiguity that makes autonomous
 agents unsafe and difficult to verify.

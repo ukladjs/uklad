@@ -10,11 +10,11 @@ export default defineConfig({
   resolve: {
     dedupe: ['react', 'react-dom'],
     alias: {
-      '@flexsurfer/reflex': fileURLToPath(
-        new URL('../../packages/reflex/src', import.meta.url),
+      '@ukladjs/core': fileURLToPath(
+        new URL('../../packages/core/src', import.meta.url),
       ),
-      '@flexsurfer/reflex-devtools': fileURLToPath(
-        new URL('../../packages/reflex-devtools/src', import.meta.url),
+      '@ukladjs/devtools': fileURLToPath(
+        new URL('../../packages/devtools/src', import.meta.url),
       ),
     },
   },

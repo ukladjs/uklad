@@ -1,12 +1,12 @@
 import { acquireOperationClient, createOperationClient } from './client.js';
-import type { ReflexInspector } from '../types.js';
+import type { UkladInspector } from '../types.js';
 import type { OperationEventVector } from './runtime.js';
 import type {
   OperationClient,
   OperationHandle,
   OperationSnapshot,
   OperationWaitResult,
-  ReflexOperationInspector,
+  UkladOperationInspector,
 } from './types.js';
 
 /**
@@ -15,21 +15,21 @@ import type {
  * in the DevTools setup instead of importing a second package.
  */
 export function createOperationInspector(
-  inspector: ReflexInspector,
+  inspector: UkladInspector,
   runtime = inspector.getOperationRuntime?.(),
-): ReflexOperationInspector {
+): UkladOperationInspector {
   const operationRuntime = assertOperationRuntime(inspector, runtime);
   return decorateOperationInspector(inspector, operationRuntime, createOperationClient(operationRuntime));
 }
 
 /** DevTools-owned attachment for the optional execution observer. */
 export interface OperationInspectorAttachment {
-  readonly inspector: ReflexOperationInspector;
+  readonly inspector: UkladOperationInspector;
   dispose(): void;
 }
 
 export function acquireOperationInspector(
-  inspector: ReflexInspector,
+  inspector: UkladInspector,
   runtime = inspector.getOperationRuntime?.(),
 ): OperationInspectorAttachment {
   const operationRuntime = assertOperationRuntime(inspector, runtime);
@@ -41,27 +41,27 @@ export function acquireOperationInspector(
 }
 
 function assertOperationRuntime(
-  inspector: ReflexInspector,
-  runtime: ReturnType<NonNullable<ReflexInspector['getOperationRuntime']>> | undefined,
+  inspector: UkladInspector,
+  runtime: ReturnType<NonNullable<UkladInspector['getOperationRuntime']>> | undefined,
 ) {
   if (!runtime) {
     throw new Error(
-      '[Reflex Devtools] operations requires the supplied inspector to expose operation support.',
+      '[Uklad Devtools] operations requires the supplied inspector to expose operation support.',
     );
   }
   if (inspector.runtimeId !== runtime.runtimeId) {
     throw new Error(
-      '[Reflex Devtools] operation support must belong to the runtime passed to enableDevtools().',
+      '[Uklad Devtools] operation support must belong to the runtime passed to enableDevtools().',
     );
   }
   return runtime;
 }
 
 function decorateOperationInspector(
-  inspector: ReflexInspector,
-  runtime: ReturnType<NonNullable<ReflexInspector['getOperationRuntime']>>,
+  inspector: UkladInspector,
+  runtime: ReturnType<NonNullable<UkladInspector['getOperationRuntime']>>,
   operations: OperationClient,
-): ReflexOperationInspector {
+): UkladOperationInspector {
   return Object.freeze({
     ...inspector,
     operationApiVersion: 1 as const,

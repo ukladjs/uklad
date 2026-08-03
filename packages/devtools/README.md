@@ -1,8 +1,4 @@
 <div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="uklad-avatar-dark.png" />
-    <img src="uklad-avatar.png" alt="Uklad" width="160" />
-  </picture>
 
   # 🛠️ Uklad DevTools
 
@@ -13,7 +9,7 @@
   [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ukladjs/uklad/pulls)
 
 
-  <img src="screenshot.png" alt="Uklad DevTools Screenshot" width="100%" />
+  <img src="screenshot.jpg" alt="Uklad DevTools Screenshot" width="100%" />
 </div>
 
 ---

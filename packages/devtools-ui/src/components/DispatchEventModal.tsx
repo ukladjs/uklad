@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@ukladjs/core';
 import type { DevtoolsRuntimeSummary } from '../types/Runtime';
 import { dispatch } from '../runtime';
 

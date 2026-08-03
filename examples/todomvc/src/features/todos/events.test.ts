@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { enableMapSet } from '@flexsurfer/reflex/vanilla';
-import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
-import { createReflexTestHarness } from '@flexsurfer/reflex/testing';
-import type { ReflexTestHarness } from '@flexsurfer/reflex/testing';
+import { enableMapSet } from '@ukladjs/core/vanilla';
+import type { UkladRuntime } from '@ukladjs/core/vanilla';
+import { createUkladTestHarness } from '@ukladjs/core/testing';
+import type { UkladTestHarness } from '@ukladjs/core/testing';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
-import { registerFeatureModules } from '../../app/reflex/register';
-import { createAppRuntime } from '../../app/reflex/runtime';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
+import { registerFeatureModules } from '../../app/uklad/register';
+import { createAppRuntime } from '../../app/uklad/runtime';
 import { createTestClock } from '../../platform/test/coeffects';
 import type { TestClock } from '../../platform/test/coeffects';
 import type { Todo, TodoId } from './state';
@@ -20,8 +20,8 @@ enableMapSet();
 // Persistence is contributed by a separate module (see platform/web), so these
 // handlers only mutate the draft and return no storage effects.
 
-let runtime: ReflexRuntime<AppContracts>;
-let harness: ReflexTestHarness<AppContracts>;
+let runtime: UkladRuntime<AppContracts>;
+let harness: UkladTestHarness<AppContracts>;
 let clock: TestClock;
 
 const todos = (): Map<TodoId, Todo> => harness.getState().todosById;
@@ -31,7 +31,7 @@ beforeEach(() => {
   registerFeatureModules(runtime);
   clock = createTestClock(12_345);
   runtime.registerModule(clock.module);
-  harness = createReflexTestHarness(runtime);
+  harness = createUkladTestHarness(runtime);
 });
 
 afterEach(() => {

@@ -1,4 +1,4 @@
-import { createReflexHooks } from '@flexsurfer/reflex/react';
+import { createUkladHooks } from '@ukladjs/core/react';
 
 import type { AppContracts } from './contracts';
 
@@ -12,4 +12,4 @@ import type { AppContracts } from './contracts';
  * generics, and `useRuntime()` gives them a dispatch checked against the same
  * contract without importing a module-level runtime singleton.
  */
-export const { ReflexProvider, useSubscription, useRuntime } = createReflexHooks<AppContracts>();
+export const { UkladProvider, useSubscription, useRuntime } = createUkladHooks<AppContracts>();

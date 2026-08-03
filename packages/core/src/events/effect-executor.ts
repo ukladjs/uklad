@@ -24,7 +24,7 @@ export function executeEffects(
   effects: unknown,
 ): void {
   if (!Array.isArray(effects)) {
-    consoleLog('warn', `[reflex] effects expects a vector, but was given ${typeof effects}`);
+    consoleLog('warn', `[uklad] effects expects a vector, but was given ${typeof effects}`);
     reportEffect(
       envelope,
       '<invalid>',
@@ -32,7 +32,7 @@ export function executeEffects(
       -1,
       'invalid',
       hasTrackedRuntimeEventCallback(envelope.tracking, 'effect') ? Date.now() : 0,
-      new Error('[reflex] effects expects a vector.'),
+      new Error('[uklad] effects expects a vector.'),
     );
     return;
   }
@@ -40,7 +40,7 @@ export function executeEffects(
   const reporting = hasTrackedRuntimeEventCallback(envelope.tracking, 'effect');
   const effectRuntime = runtime.effectRuntime;
   if (!effectRuntime) {
-    throw new Error('[reflex] Runtime effect capability was not initialized.');
+    throw new Error('[uklad] Runtime effect capability was not initialized.');
   }
 
   for (const [effectIndex, effect] of effects.entries()) {
@@ -50,7 +50,7 @@ export function executeEffects(
       effect.length > 2 ||
       typeof effect[0] !== 'string'
     ) {
-      consoleLog('warn', '[reflex] invalid effect in effects:', effect);
+      consoleLog('warn', '[uklad] invalid effect in effects:', effect);
       reportEffect(
         envelope,
         '<invalid>',
@@ -58,7 +58,7 @@ export function executeEffects(
         effectIndex,
         'invalid',
         reporting ? Date.now() : 0,
-        new Error('[reflex] Invalid effect vector.'),
+        new Error('[uklad] Invalid effect vector.'),
       );
       continue;
     }
@@ -68,7 +68,7 @@ export function executeEffects(
     if (!handler) {
       consoleLog(
         'warn',
-        `[reflex] in 'effects' found ${effectId} which has no associated handler. Ignoring.`,
+        `[uklad] in 'effects' found ${effectId} which has no associated handler. Ignoring.`,
       );
       reportEffect(
         envelope,
@@ -77,7 +77,7 @@ export function executeEffects(
         effectIndex,
         'unhandled',
         reporting ? Date.now() : 0,
-        new Error(`[reflex] No effect handler is registered for '${effectId}'.`),
+        new Error(`[uklad] No effect handler is registered for '${effectId}'.`),
       );
       continue;
     }
@@ -98,7 +98,7 @@ export function executeEffects(
         (effectId === DISPATCH && !isEventVector(value)) ||
         (effectId === DISPATCH_LATER && !isValidDispatchLaterEffect(value));
       const error = invalidDispatch
-        ? new Error(`[reflex] Invalid ${effectId} effect payload.`)
+        ? new Error(`[uklad] Invalid ${effectId} effect payload.`)
         : undefined;
       reportEffect(
         envelope,
@@ -116,7 +116,7 @@ export function executeEffects(
         error,
       );
     } catch (error: unknown) {
-      consoleLog('error', `[reflex] error in effects for ${effectId}:`, error);
+      consoleLog('error', `[uklad] error in effects for ${effectId}:`, error);
       reportEffect(envelope, effectId, value, effectIndex, 'failed', startedAtMs, error);
     }
   }
@@ -140,7 +140,7 @@ function observeDetachedEffect(
   // Adopting the thenable routes a foreign `then` that throws into this same
   // rejection path instead of back into the executor's frame.
   Promise.resolve(result).then(undefined, (error: unknown) => {
-    consoleLog('error', `[reflex] rejected async effect for ${effectId}:`, error);
+    consoleLog('error', `[uklad] rejected async effect for ${effectId}:`, error);
     reportEffect(envelope, effectId, value, effectIndex, 'failed', startedAtMs, error);
   });
 }

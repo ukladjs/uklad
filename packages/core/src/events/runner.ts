@@ -20,7 +20,7 @@ import type {
   EventHandler,
   EventVector,
   InternalInterceptor,
-  ReflexError,
+  UkladError,
   State,
 } from '../types';
 
@@ -45,11 +45,11 @@ export interface EventRunResult {
 }
 
 /** Log and rethrow an unhandled event-pipeline exception. */
-export function defaultErrorHandler(originalError: Error, reflexError: ReflexError): void {
-  consoleLog('error', '[reflex] Interceptor Exception:', {
+export function defaultErrorHandler(originalError: Error, ukladError: UkladError): void {
+  consoleLog('error', '[uklad] Interceptor Exception:', {
     originalError,
-    reflexError,
-    data: reflexError.data,
+    ukladError,
+    data: ukladError.data,
   });
   throw originalError;
 }
@@ -144,7 +144,7 @@ export function createEventHandlerInterceptor(
       if (IS_DEV && containsDraft(effects)) {
         consoleLog(
           'warn',
-          `[reflex] Effects returned by '${String(event[0])}' still contain an Immer draft nested inside a collection or deeply nested object, which the runtime does not unwrap automatically. Drafts are revoked once the handler returns, so the effect handler would receive a dead value. Wrap that value in current() before returning it.`,
+          `[uklad] Effects returned by '${String(event[0])}' still contain an Immer draft nested inside a collection or deeply nested object, which the runtime does not unwrap automatically. Drafts are revoked once the handler returns, so the effect handler would receive a dead value. Wrap that value in current() before returning it.`,
         );
       }
 

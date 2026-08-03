@@ -1,10 +1,10 @@
-# Re-frame Feature Priorities for Reflex
+# Re-frame Feature Priorities for Uklad
 
-> **Status:** Historical planning notes. The active roadmap is [`reflex.md`](../roadmaps/reflex.md); operation design is superseded by [`agent-operations.md`](../rfcs/agent-operations.md).
+> **Status:** Historical planning notes. The active roadmap is [`uklad.md`](../roadmaps/uklad.md); operation design is superseded by [`agent-operations.md`](../rfcs/agent-operations.md).
 
-Initial priority list for bringing the most valuable recent re-frame capabilities to Reflex, evaluated from an AI-agent development perspective.
+Initial priority list for bringing the most valuable recent re-frame capabilities to Uklad, evaluated from an AI-agent development perspective.
 
-The priority is not to reproduce every re-frame API. Reflex already has its own strengths—explicit runtime instances, TypeScript contracts, Immer patches, React integration, persistence, and DevTools/MCP integration. The goal is to add the capabilities that make agent-driven development observable, deterministic, safe, and easy to verify.
+The priority is not to reproduce every re-frame API. Uklad already has its own strengths—explicit runtime instances, TypeScript contracts, Immer patches, React integration, persistence, and DevTools/MCP integration. The goal is to add the capabilities that make agent-driven development observable, deterministic, safe, and easy to verify.
 
 ## Priority summary
 
@@ -62,7 +62,7 @@ The receipt should distinguish at least:
 - timeout;
 - unknown or interrupted session.
 
-Reflex currently has `flush()`, which waits for runtime idleness, and DevTools can infer outcomes from traces. A first-class receipt should become the authoritative result instead of requiring downstream tools to reconstruct causality from trace timing.
+Uklad currently has `flush()`, which waits for runtime idleness, and DevTools can infer outcomes from traces. A first-class receipt should become the authoritative result instead of requiring downstream tools to reconstruct causality from trace timing.
 
 ### 2. Operation protocol and completion semantics
 
@@ -479,7 +479,7 @@ Example:
 
 ```ts
 {
-  reflexVersion: '0.1.27',
+  ukladVersion: '0.1.27',
   traceSchemaVersion: 2,
   supportsSettle: true,
   supportsEffectOverrides: false,

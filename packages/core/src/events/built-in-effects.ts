@@ -20,7 +20,7 @@ export function registerBuiltInEffects(
     if (!isEventVector(value)) {
       consoleLog(
         'error',
-        '[reflex] ignoring bad dispatch value. Expected a vector, but got:',
+        '[uklad] ignoring bad dispatch value. Expected a vector, but got:',
         value,
       );
       return;
@@ -35,18 +35,18 @@ function dispatchLater(
   dispatchEvent: (event: EventVector) => void,
 ): void {
   if (typeof effect !== 'object' || effect === null) {
-    consoleLog('error', '[reflex] ignoring bad dispatch-later value:', effect);
+    consoleLog('error', '[uklad] ignoring bad dispatch-later value:', effect);
     return;
   }
 
   const { ms, dispatch: event } = effect as Partial<DispatchLaterEffect>;
   if (typeof ms !== 'number' || !Number.isFinite(ms) || !isEventVector(event)) {
-    consoleLog('error', '[reflex] ignoring bad dispatch-later value:', effect);
+    consoleLog('error', '[uklad] ignoring bad dispatch-later value:', effect);
     return;
   }
 
   if (ms < 0) {
-    consoleLog('warn', '[reflex] dispatch-later effect with negative delay:', ms);
+    consoleLog('warn', '[uklad] dispatch-later effect with negative delay:', ms);
   }
   const timers = runtime.events.delayedEffectTimers;
   const timeout = setTimeout(

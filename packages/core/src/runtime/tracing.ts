@@ -99,7 +99,7 @@ export function registerTraceCallback(
   if (!state.traceEnabled) {
     consoleLog(
       'warn',
-      '[reflex] [trace] Tracing is not enabled; call enableTracing() before registering callbacks',
+      '[uklad] [trace] Tracing is not enabled; call enableTracing() before registering callbacks',
     );
     return;
   }
@@ -139,8 +139,8 @@ export function mergeOptionalTrace(runtime: RuntimeCore, createTags: () => Trace
 
 /** @internal Register the built-in console trace printer on one runtime. */
 export function enableTracePrint(runtime: RuntimeCore): void {
-  registerTraceCallback(runtime, 'reflex-default-tracer', (batch) => {
-    consoleLog('log', '%c[reflex] [trace] ', 'font-weight: bold; color: blue;', batch);
+  registerTraceCallback(runtime, 'uklad-default-tracer', (batch) => {
+    consoleLog('log', '%c[uklad] [trace] ', 'font-weight: bold; color: blue;', batch);
   });
 }
 
@@ -164,7 +164,7 @@ function getTraceState(runtime: RuntimeCore): TraceState {
 
   const currentState = (): TraceState => {
     const state = TRACE_STATES.get(runtime);
-    if (!state) throw new Error('[reflex] Trace probe used before initialization.');
+    if (!state) throw new Error('[uklad] Trace probe used before initialization.');
     return state;
   };
   const probe: RuntimeProbe = Object.freeze({

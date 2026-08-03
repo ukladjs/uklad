@@ -1,7 +1,7 @@
 import { waitForScheduled } from './test-utils';
 import {
   clearHandlers,
-  createReflexInspector,
+  createUkladInspector,
   disableTracing,
   enableTracing,
   getState,
@@ -19,7 +19,7 @@ import type { Trace } from '../../src/runtime/tracing';
 
 const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80));
 
-describe('Reflex inspector', () => {
+describe('Uklad inspector', () => {
   beforeEach(() => {
     disableTracing();
     clearHandlers();
@@ -38,12 +38,12 @@ describe('Reflex inspector', () => {
     regCoeffect('inspector-coeffect', () => 'inspected');
     regRootSub('count', 'count');
 
-    const inspector = createReflexInspector();
+    const inspector = createUkladInspector();
     const snapshot = inspector.getSnapshot();
 
     expect(inspector.apiVersion).toBe(2);
-    expect(inspector.runtimeId).toBe('reflex-unit-test-runtime');
-    expect(inspector.runtimeName).toBe('Reflex unit-test runtime');
+    expect(inspector.runtimeId).toBe('uklad-unit-test-runtime');
+    expect(inspector.runtimeName).toBe('Uklad unit-test runtime');
     expect(Object.isFrozen(inspector)).toBe(true);
     expect(snapshot.state).toBe(state);
     expect(snapshot.handlerKeys).toEqual({
@@ -72,7 +72,7 @@ describe('Reflex inspector', () => {
       },
     );
 
-    const inspector = createReflexInspector();
+    const inspector = createUkladInspector();
 
     expect(inspector.getSnapshot().subscriptions).toEqual([]);
     expect(computedRuns).toBe(0);
@@ -96,7 +96,7 @@ describe('Reflex inspector', () => {
       draftState.count += amount;
     });
 
-    createReflexInspector().dispatch(['inspector-increment', 3]);
+    createUkladInspector().dispatch(['inspector-increment', 3]);
     await waitForScheduled();
 
     expect(getState<{ count: number }>().count).toBe(3);
@@ -108,7 +108,7 @@ describe('Reflex inspector', () => {
       draftState.count++;
     });
 
-    const inspector = createReflexInspector();
+    const inspector = createUkladInspector();
     const first: Trace[] = [];
     const second: Trace[] = [];
     const removeFirst = inspector.subscribeTraces((traces) => first.push(...traces));
@@ -136,7 +136,7 @@ describe('Reflex inspector', () => {
   });
 
   it('keeps trace ids monotonic while discarding pending traces across lease cycles', async () => {
-    const inspector = createReflexInspector();
+    const inspector = createUkladInspector();
     const firstCycle: Trace[] = [];
     const removeFirst = inspector.subscribeTraces((traces) => firstCycle.push(...traces));
 
@@ -167,7 +167,7 @@ describe('Reflex inspector', () => {
 
   it('keeps inspector tracing active when the manual owner is released', () => {
     enableTracing();
-    const removeTraceListener = createReflexInspector().subscribeTraces(() => {});
+    const removeTraceListener = createUkladInspector().subscribeTraces(() => {});
 
     disableTracing();
     expect(isTraceEnabled()).toBe(true);

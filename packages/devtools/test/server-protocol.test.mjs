@@ -4,7 +4,7 @@ import { request as httpRequest } from 'node:http';
 import WebSocket from 'ws';
 
 import { DevtoolsServer } from '../dist/server/index.js';
-import { reflexReplacer } from '../dist/serialization.js';
+import { ukladReplacer } from '../dist/serialization.js';
 import { loopbackListenSkipReason } from '../../../scripts/test/loopback-listen.mjs';
 
 const activeServers = new Set();
@@ -13,7 +13,7 @@ const sessionsByBaseUrl = new Map();
 const sessionsByWsUrl = new Map();
 
 const PROTOCOL_VERSION = '2';
-const WS_PROTOCOL = 'reflex-devtools.v2';
+const WS_PROTOCOL = 'uklad-devtools.v2';
 const LOOPBACK_LISTEN_SKIP = await loopbackListenSkipReason();
 
 // All but one test in this file start a loopback server.
@@ -42,7 +42,7 @@ async function bootstrapSession(baseUrl, role) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Reflex-DevTools-Protocol-Version': PROTOCOL_VERSION,
+      'Uklad-DevTools-Protocol-Version': PROTOCOL_VERSION,
     },
     body: JSON.stringify({ role }),
   });
@@ -144,7 +144,7 @@ async function connectSdk(
 
   assert.equal(socket.protocol, WS_PROTOCOL);
   socket.send(JSON.stringify({
-    type: 'reflex-auth',
+    type: 'uklad-auth',
     payload: {
       role: 'runtime',
       protocolVersion: 2,
@@ -200,7 +200,7 @@ async function connectUi(wsUrl) {
 
   assert.equal(socket.protocol, WS_PROTOCOL);
   socket.send(JSON.stringify({
-    type: 'reflex-auth',
+    type: 'uklad-auth',
     payload: {
       role: 'ui',
       protocolVersion: 2,
@@ -313,7 +313,7 @@ function rawHttpRequest(baseUrl, path, headers) {
 }
 
 function sendSdkEvent(socket, event) {
-  socket.send(JSON.stringify(event, reflexReplacer));
+  socket.send(JSON.stringify(event, ukladReplacer));
 }
 
 function authenticatedFetch(baseUrl, path, init = {}, role = 'mcp') {
@@ -323,8 +323,8 @@ function authenticatedFetch(baseUrl, path, init = {}, role = 'mcp') {
   if (!headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${session[role].token}`);
   }
-  if (!headers.has('Reflex-DevTools-Protocol-Version')) {
-    headers.set('Reflex-DevTools-Protocol-Version', PROTOCOL_VERSION);
+  if (!headers.has('Uklad-DevTools-Protocol-Version')) {
+    headers.set('Uklad-DevTools-Protocol-Version', PROTOCOL_VERSION);
   }
   return fetch(`${baseUrl}${path}`, { ...init, headers });
 }
@@ -476,7 +476,7 @@ test('protected HTTP APIs reject missing or wrong credentials and protocol misma
 
   let response = await fetch(`${baseUrl}/api/status`, {
     headers: {
-      'Reflex-DevTools-Protocol-Version': PROTOCOL_VERSION,
+      'Uklad-DevTools-Protocol-Version': PROTOCOL_VERSION,
     },
   });
   let body = await response.json();
@@ -487,7 +487,7 @@ test('protected HTTP APIs reject missing or wrong credentials and protocol misma
   response = await fetch(`${baseUrl}/api/status`, {
     headers: {
       Authorization: `Bearer ${'x'.repeat(43)}`,
-      'Reflex-DevTools-Protocol-Version': PROTOCOL_VERSION,
+      'Uklad-DevTools-Protocol-Version': PROTOCOL_VERSION,
     },
   });
   body = await response.json();
@@ -497,7 +497,7 @@ test('protected HTTP APIs reject missing or wrong credentials and protocol misma
   response = await fetch(`${baseUrl}/api/status`, {
     headers: {
       Authorization: `Bearer ${sessions.mcp.token}`,
-      'Reflex-DevTools-Protocol-Version': '999',
+      'Uklad-DevTools-Protocol-Version': '999',
     },
   });
   body = await response.json();
@@ -510,7 +510,7 @@ test('HTTP requests reject disallowed Origin and Host values before API handling
   const { baseUrl, sessions } = await startServer();
   const headers = {
     Authorization: `Bearer ${sessions.mcp.token}`,
-    'Reflex-DevTools-Protocol-Version': PROTOCOL_VERSION,
+    'Uklad-DevTools-Protocol-Version': PROTOCOL_VERSION,
   };
 
   const originResponse = await fetch(`${baseUrl}/api/status`, {
@@ -535,7 +535,7 @@ test('failed or incompatible SDK authentication cannot supersede a valid runtime
   const { baseUrl, wsUrl, sessions } = await startServer();
   const validSocket = await connectSdk(wsUrl, () => {});
   sendSdkEvent(validSocket, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { retained: true },
   });
   await waitForStatus(
@@ -546,7 +546,7 @@ test('failed or incompatible SDK authentication cannot supersede a valid runtime
   const wrongTokenSocket = await openWebSocket(`${wsUrl}/sdk`);
   const wrongTokenClosed = waitForSocketClose(wrongTokenSocket);
   wrongTokenSocket.send(JSON.stringify({
-    type: 'reflex-auth',
+    type: 'uklad-auth',
     payload: {
       role: 'runtime',
       protocolVersion: 2,
@@ -562,7 +562,7 @@ test('failed or incompatible SDK authentication cannot supersede a valid runtime
   const incompatibleSocket = await openWebSocket(`${wsUrl}/sdk`);
   const incompatibleClosed = waitForSocketClose(incompatibleSocket);
   incompatibleSocket.send(JSON.stringify({
-    type: 'reflex-auth',
+    type: 'uklad-auth',
     payload: {
       role: 'runtime',
       protocolVersion: 2,
@@ -578,7 +578,7 @@ test('failed or incompatible SDK authentication cannot supersede a valid runtime
   const unidentifiedSocket = await openWebSocket(`${wsUrl}/sdk`);
   const unidentifiedClosed = waitForSocketClose(unidentifiedSocket);
   unidentifiedSocket.send(JSON.stringify({
-    type: 'reflex-auth',
+    type: 'uklad-auth',
     payload: {
       role: 'runtime',
       protocolVersion: 2,
@@ -613,11 +613,11 @@ test('runtime HTTP fallback rejects a stale session after SDK reconnect', async 
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Reflex-Runtime-Id': firstSocket.runtimeId,
-      'X-Reflex-Runtime-Session': staleSessionId,
+      'X-Uklad-Runtime-Id': firstSocket.runtimeId,
+      'X-Uklad-Runtime-Session': staleSessionId,
     },
     body: JSON.stringify({
-      type: 'reflex-state',
+      type: 'uklad-state',
       payload: { stale: true },
     }),
   }, 'runtime');
@@ -637,7 +637,7 @@ test('oversized runtime trace batches close only the offending socket without cr
   const closed = waitForSocketClose(socket);
 
   sendSdkEvent(socket, {
-    type: 'reflex-traces',
+    type: 'uklad-traces',
     payload: Array.from({ length: 2001 }, (_, id) => ({
       id,
       start: id,
@@ -672,7 +672,7 @@ test('retention-limit rejection sends a bounded notice and keeps the runtime soc
       message.type === 'devtools-error' && message.payload?.code === 'RUNTIME_TELEMETRY_DROPPED',
   );
   sendSdkEvent(socket, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { data: 'x'.repeat(512) },
   });
   const notice = await noticePromise;
@@ -680,13 +680,13 @@ test('retention-limit rejection sends a bounded notice and keeps the runtime soc
   assert.deepEqual(notice.payload, {
     code: 'RUNTIME_TELEMETRY_DROPPED',
     reason: 'retention-limit',
-    eventType: 'reflex-state',
+    eventType: 'uklad-state',
   });
   assert(JSON.stringify(notice).length < 512);
   assert.equal(socket.readyState, WebSocket.OPEN);
 
   sendSdkEvent(socket, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { retained: true },
   });
   const status = await waitForStatus(baseUrl, (candidate) => candidate.stateAvailable === true);
@@ -711,7 +711,7 @@ test('server redaction failure drops telemetry nonfatally with no exception deta
   );
 
   sendSdkEvent(socket, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { value: marker },
   });
   const notice = await noticePromise;
@@ -719,7 +719,7 @@ test('server redaction failure drops telemetry nonfatally with no exception deta
   assert.deepEqual(notice.payload, {
     code: 'RUNTIME_TELEMETRY_DROPPED',
     reason: 'redaction-failed',
-    eventType: 'reflex-state',
+    eventType: 'uklad-state',
   });
   assert.equal(JSON.stringify(notice).includes(marker), false);
   assert.equal(socket.readyState, WebSocket.OPEN);
@@ -750,7 +750,7 @@ test('hard WebSocket frame limits may close oversized senders with 1009', async 
   const closed = waitForSocketClose(socket);
 
   sendSdkEvent(socket, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { data: 'x'.repeat(1024) },
   });
 
@@ -833,9 +833,9 @@ test('server-side redaction prevents state, trace, dispatch, and audit secret le
 
   const sdkSocket = await connectSdk(wsUrl, (message, socket) => {
     assert.equal(message.payload.params[0].password, secret);
-    sendSdkEvent(socket, { type: 'reflex-traces', payload: [trace] });
+    sendSdkEvent(socket, { type: 'uklad-traces', payload: [trace] });
     sendSdkEvent(socket, {
-      type: 'reflex-dispatch-result',
+      type: 'uklad-dispatch-result',
       payload: {
         dispatchId: message.payload.dispatchId,
         trace,
@@ -843,7 +843,7 @@ test('server-side redaction prevents state, trace, dispatch, and audit secret le
     });
   });
   sendSdkEvent(sdkSocket, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: {
       account: {
         displayName: 'Ada',
@@ -905,7 +905,7 @@ test('browser-origin requests cannot bootstrap the MCP principal', async () => {
     headers: {
       'Content-Type': 'application/json',
       Origin: 'http://127.0.0.1:9999',
-      'Reflex-DevTools-Protocol-Version': PROTOCOL_VERSION,
+      'Uklad-DevTools-Protocol-Version': PROTOCOL_VERSION,
     },
     body: JSON.stringify({ role: 'mcp' }),
   });
@@ -923,7 +923,7 @@ test('an unlisted loopback browser origin cannot bootstrap or take over the runt
     headers: {
       'Content-Type': 'application/json',
       Origin: 'http://127.0.0.1:9999',
-      'Reflex-DevTools-Protocol-Version': PROTOCOL_VERSION,
+      'Uklad-DevTools-Protocol-Version': PROTOCOL_VERSION,
     },
     body: JSON.stringify({ role: 'runtime' }),
   });
@@ -1033,7 +1033,7 @@ test('/api/status reports runtime info and bumps sessionEpoch per SDK session', 
   // First SDK session reports a headless runtime with safe adapters
   const socket = await connectSdk(wsUrl, () => {});
   sendSdkEvent(socket, {
-    type: 'reflex-runtime-info',
+    type: 'uklad-runtime-info',
     payload: {
       runtime: 'headless',
       effectMode: 'safe',
@@ -1042,7 +1042,7 @@ test('/api/status reports runtime info and bumps sessionEpoch per SDK session', 
     },
   });
   sendSdkEvent(socket, {
-    type: 'reflex-handler-keys',
+    type: 'uklad-handler-keys',
     payload: { event: ['a', 'b'], fx: ['c'], cofx: [], sub: ['d', 'e', 'f'] },
   });
 
@@ -1088,7 +1088,7 @@ test('a new SDK connection supersedes the previous one instead of double-dispatc
       tags: { event: ['increment-counter'], patches: [], effects: [] },
     };
     sendSdkEvent(socket, {
-      type: 'reflex-dispatch-result',
+      type: 'uklad-dispatch-result',
       payload: { dispatchId: message.payload.dispatchId, trace },
     });
   });
@@ -1190,9 +1190,9 @@ test('/api/dispatch resolves with the observed successful trace', async () => {
     assert.equal(message.payload.eventName, 'increment-counter');
     assert.deepEqual(message.payload.params, [3]);
 
-    sendSdkEvent(socket, { type: 'reflex-traces', payload: [trace] });
+    sendSdkEvent(socket, { type: 'uklad-traces', payload: [trace] });
     sendSdkEvent(socket, {
-      type: 'reflex-dispatch-result',
+      type: 'uklad-dispatch-result',
       payload: { dispatchId: message.payload.dispatchId, trace },
     });
   });
@@ -1252,7 +1252,7 @@ test('/api/dispatch-and-wait returns a canonical operation snapshot from an oper
     (message, client) => {
       assert.equal(message.payload.operation, true);
       sendSdkEvent(client, {
-        type: 'reflex-operation-result',
+        type: 'uklad-operation-result',
         payload: { dispatchId: message.payload.dispatchId, result },
       });
     },
@@ -1312,9 +1312,9 @@ test('/api/dispatch derives failed and effects-failed outcomes from trace tags',
     const trace = traces.shift();
     assert(trace);
 
-    sendSdkEvent(socket, { type: 'reflex-traces', payload: [trace] });
+    sendSdkEvent(socket, { type: 'uklad-traces', payload: [trace] });
     sendSdkEvent(socket, {
-      type: 'reflex-dispatch-result',
+      type: 'uklad-dispatch-result',
       payload: { dispatchId: message.payload.dispatchId, trace },
     });
   });
@@ -1394,7 +1394,7 @@ test('/api/eval-sub returns a one-shot subscription value with Map and Set data'
     assert.equal(message.payload.id, 'user-summary');
     assert.deepEqual(message.payload.args, [7]);
     sendSdkEvent(socket, {
-      type: 'reflex-eval-sub-result',
+      type: 'uklad-eval-sub-result',
       payload: {
         evalId: message.payload.evalId,
         value: {
@@ -1422,7 +1422,7 @@ test('/api/eval-sub surfaces missing handlers and evaluation errors', async () =
   await connectSdk(wsUrl, () => {}, (message, socket) => {
     const missing = message.payload.id === 'missing-sub';
     sendSdkEvent(socket, {
-      type: 'reflex-eval-sub-result',
+      type: 'uklad-eval-sub-result',
       payload: {
         evalId: message.payload.evalId,
         error: missing
@@ -1494,7 +1494,7 @@ test('two runtimes coexist with isolated status, state, handlers, traces, dispat
     (message, socket) => {
       betaDispatches += 1;
       sendSdkEvent(socket, {
-        type: 'reflex-dispatch-result',
+        type: 'uklad-dispatch-result',
         payload: {
           dispatchId: message.payload.dispatchId,
           trace: {
@@ -1511,7 +1511,7 @@ test('two runtimes coexist with isolated status, state, handlers, traces, dispat
     (message, socket) => {
       betaEvals += 1;
       sendSdkEvent(socket, {
-        type: 'reflex-eval-sub-result',
+        type: 'uklad-eval-sub-result',
         payload: {
           evalId: message.payload.evalId,
           value: { owner: 'beta', args: message.payload.args },
@@ -1550,44 +1550,44 @@ test('two runtimes coexist with isolated status, state, handlers, traces, dispat
   );
 
   sendSdkEvent(alpha, {
-    type: 'reflex-runtime-info',
+    type: 'uklad-runtime-info',
     payload: { runtime: 'headless', tracing: true },
   });
   sendSdkEvent(alpha, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { owner: 'alpha', value: 1 },
   });
   sendSdkEvent(alpha, {
-    type: 'reflex-handler-keys',
+    type: 'uklad-handler-keys',
     payload: { event: ['alpha-event'], fx: [], cofx: [], sub: ['alpha-sub'] },
   });
   sendSdkEvent(alpha, {
-    type: 'reflex-active-subs',
+    type: 'uklad-active-subs',
     payload: { '["alpha-sub"]': 'alpha-value' },
   });
   sendSdkEvent(alpha, {
-    type: 'reflex-traces',
+    type: 'uklad-traces',
     payload: [{ id: 7, start: 1, operation: 'alpha-event', opType: 'event' }],
   });
 
   sendSdkEvent(beta, {
-    type: 'reflex-runtime-info',
+    type: 'uklad-runtime-info',
     payload: { runtime: 'browser', tracing: false },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { owner: 'beta', value: 2 },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-handler-keys',
+    type: 'uklad-handler-keys',
     payload: { event: ['beta-event'], fx: ['beta-fx'], cofx: [], sub: [] },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-active-subs',
+    type: 'uklad-active-subs',
     payload: { '["beta-sub"]': 'beta-value' },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-traces',
+    type: 'uklad-traces',
     payload: [{ id: 7, start: 2, operation: 'beta-event', opType: 'event' }],
   });
 
@@ -1693,7 +1693,7 @@ test('same-id reconnect supersedes and clears only that runtime and only its pen
     (message, socket) => {
       betaDispatches += 1;
       sendSdkEvent(socket, {
-        type: 'reflex-dispatch-result',
+        type: 'uklad-dispatch-result',
         payload: { dispatchId: message.payload.dispatchId, reason: 'beta-observed' },
       });
     },
@@ -1702,11 +1702,11 @@ test('same-id reconnect supersedes and clears only that runtime and only its pen
     { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
   );
   sendSdkEvent(firstAlpha, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { owner: 'alpha-before-reconnect' },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { owner: 'beta-retained' },
   });
   await waitForStatus(baseUrl, (status) => status.stateAvailable, 2000, 'runtime-beta');
@@ -1774,11 +1774,11 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
     { runtimeId: 'runtime-beta', runtimeName: 'Runtime Beta' },
   );
   sendSdkEvent(alpha, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { owner: 'alpha-retained' },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { owner: 'beta-retained' },
   });
   await waitForStatus(
@@ -1804,7 +1804,7 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
   const alphaSnapshotPromise = waitForSocketMessage(
     ui,
     (message) =>
-      message.type === 'reflex-state'
+      message.type === 'uklad-state'
       && message.runtimeId === 'runtime-alpha'
       && message.payload?.owner === 'alpha-retained',
   );
@@ -1828,7 +1828,7 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
 
   const retainedAlphaReplayCount = ui.receivedMessages.filter(
     (message) =>
-      message.type === 'reflex-state'
+      message.type === 'uklad-state'
       && message.runtimeId === 'runtime-alpha'
       && message.payload?.owner === 'alpha-retained',
   ).length;
@@ -1865,7 +1865,7 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
   assert.equal(
     ui.receivedMessages.filter(
       (message) =>
-        message.type === 'reflex-state'
+        message.type === 'uklad-state'
         && message.runtimeId === 'runtime-alpha'
         && message.payload?.owner === 'alpha-retained',
     ).length,
@@ -1874,12 +1874,12 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
 
   const betaLiveMessageCount = () => ui.receivedMessages.filter(
     (message) =>
-      message.type === 'reflex-state'
+      message.type === 'uklad-state'
       && message.runtimeId === 'runtime-beta'
       && message.payload?.owner === 'beta-live',
   ).length;
   sendSdkEvent(beta, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { owner: 'beta-live' },
   });
   await waitForRuntimeState(
@@ -1892,12 +1892,12 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
   const alphaLivePromise = waitForSocketMessage(
     ui,
     (message) =>
-      message.type === 'reflex-state'
+      message.type === 'uklad-state'
       && message.runtimeId === 'runtime-alpha'
       && message.payload?.owner === 'alpha-live',
   );
   sendSdkEvent(alpha, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { owner: 'alpha-live' },
   });
   const alphaLive = await alphaLivePromise;
@@ -1907,7 +1907,7 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
   const betaSnapshotPromise = waitForSocketMessage(
     ui,
     (message) =>
-      message.type === 'reflex-state'
+      message.type === 'uklad-state'
       && message.runtimeId === 'runtime-beta'
       && message.payload?.owner === 'beta-live',
   );
@@ -1947,23 +1947,23 @@ test('UI runtime selection replays a minimal snapshot when MCP storage is disabl
   );
 
   sendSdkEvent(beta, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { owner: 'beta', value: 1 },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-active-subs',
+    type: 'uklad-active-subs',
     payload: { '["beta-sub"]': 'beta-value' },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-handler-keys',
+    type: 'uklad-handler-keys',
     payload: { event: ['beta-event'], fx: [], cofx: [], sub: ['beta-sub'] },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-runtime-info',
+    type: 'uklad-runtime-info',
     payload: { runtime: 'headless', tracing: true },
   });
   sendSdkEvent(beta, {
-    type: 'reflex-traces',
+    type: 'uklad-traces',
     payload: [{
       id: 1,
       start: 1,
@@ -1981,21 +1981,21 @@ test('UI runtime selection replays a minimal snapshot when MCP storage is disabl
   const statePromise = waitForSocketMessage(
     ui,
     (message) =>
-      message.type === 'reflex-state'
+      message.type === 'uklad-state'
       && message.runtimeId === 'runtime-beta'
       && message.payload?.value === 2,
   );
   const handlersPromise = waitForSocketMessage(
     ui,
     (message) =>
-      message.type === 'reflex-handler-keys'
+      message.type === 'uklad-handler-keys'
       && message.runtimeId === 'runtime-beta'
       && message.payload?.event?.[0] === 'beta-event',
   );
   const emptyTraceReplayPromise = waitForSocketMessage(
     ui,
     (message) =>
-      message.type === 'reflex-traces'
+      message.type === 'uklad-traces'
       && message.runtimeId === 'runtime-beta'
       && Array.isArray(message.payload)
       && message.payload.length === 0,
@@ -2029,7 +2029,7 @@ test('UI snapshot replay requires inspect capability', async () => {
     { runtimeId: 'runtime-private', runtimeName: 'Private Runtime' },
   );
   sendSdkEvent(runtime, {
-    type: 'reflex-state',
+    type: 'uklad-state',
     payload: { secretProfile: 'must-not-replay' },
   });
   await waitForCondition(
@@ -2044,10 +2044,10 @@ test('UI snapshot replay requires inspect capability', async () => {
   assert.equal(
     ui.receivedMessages.some(
       (message) =>
-        message.type === 'reflex-state' ||
-        message.type === 'reflex-traces' ||
-        message.type === 'reflex-active-subs' ||
-        message.type === 'reflex-handler-keys',
+        message.type === 'uklad-state' ||
+        message.type === 'uklad-traces' ||
+        message.type === 'uklad-active-subs' ||
+        message.type === 'uklad-handler-keys',
     ),
     false,
   );
@@ -2130,7 +2130,7 @@ test('trace lookup rejects a stale session epoch after same-id reconnect', async
     { runtimeId: 'runtime-epoch', runtimeName: 'Runtime Epoch' },
   );
   sendSdkEvent(first, {
-    type: 'reflex-traces',
+    type: 'uklad-traces',
     payload: [{ id: 7, start: 1, operation: 'before', opType: 'event' }],
   });
   await waitForStatus(baseUrl, (status) => status.traceCount === 1, 2000, 'runtime-epoch');
@@ -2149,7 +2149,7 @@ test('trace lookup rejects a stale session epoch after same-id reconnect', async
     { runtimeId: 'runtime-epoch', runtimeName: 'Runtime Epoch' },
   );
   sendSdkEvent(second, {
-    type: 'reflex-traces',
+    type: 'uklad-traces',
     payload: [{ id: 7, start: 2, operation: 'after', opType: 'event' }],
   });
   await waitForStatus(
@@ -2192,7 +2192,7 @@ test('the bounded runtime registry rejects excess live identities and reuses dis
   const excess = await openWebSocket(`${wsUrl}/sdk`);
   const excessClosed = waitForSocketClose(excess);
   excess.send(JSON.stringify({
-    type: 'reflex-auth',
+    type: 'uklad-auth',
     payload: {
       role: 'runtime',
       protocolVersion: 2,

@@ -1,14 +1,14 @@
-import { enableMapSet } from '@flexsurfer/reflex';
+import { enableMapSet } from '@ukladjs/core';
 import { saveSettings } from './utils/settingsStorage';
-import { reflexReviver } from './utils/serialization';
+import { ukladReviver } from './utils/serialization';
 import type { DevtoolsRuntimeSummary } from './types/Runtime';
 import { dispatch, regEffect } from './runtime';
 
 enableMapSet();
 
 const PROTOCOL_VERSION = 2;
-const WS_PROTOCOL = `reflex-devtools.v${PROTOCOL_VERSION}`;
-const PROTOCOL_HEADER = 'Reflex-DevTools-Protocol-Version';
+const WS_PROTOCOL = `uklad-devtools.v${PROTOCOL_VERSION}`;
+const PROTOCOL_HEADER = 'Uklad-DevTools-Protocol-Version';
 
 let wsConnection: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -122,7 +122,7 @@ async function getSessionToken(httpBase: string): Promise<string> {
     headers: {
       'Content-Type': 'application/json',
       [PROTOCOL_HEADER]: String(PROTOCOL_VERSION),
-      'X-Reflex-Client': 'reflex-devtools-ui',
+      'X-Uklad-Client': 'uklad-devtools-ui',
     },
     body: JSON.stringify({ role: 'ui' }),
   });
@@ -182,7 +182,7 @@ async function connectWebSocket(): Promise<void> {
       return;
     }
     wsRef.send(JSON.stringify({
-      type: 'reflex-auth',
+      type: 'uklad-auth',
       payload: {
         role: 'ui',
         token,
@@ -193,7 +193,7 @@ async function connectWebSocket(): Promise<void> {
 
   wsRef.onmessage = (event) => {
     try {
-      const data = JSON.parse(event.data, reflexReviver);
+      const data = JSON.parse(event.data, ukladReviver);
       if (data.type === 'devtools-connected') {
         const acceptedCapabilities = data.payload?.capabilities;
         const runtimes = readRuntimeSummaries(data.payload?.runtimes);
@@ -253,13 +253,13 @@ async function connectWebSocket(): Promise<void> {
           return;
         }
         dispatch(['runtime-selected', data.payload]);
-      } else if (data.type === 'reflex-traces') {
+      } else if (data.type === 'uklad-traces') {
         dispatch(['add-traces', data.payload, data.runtimeId, data.sessionEpoch]);
-      } else if (data.type === 'reflex-state') {
+      } else if (data.type === 'uklad-state') {
         dispatch(['update-state', data.payload, data.runtimeId, data.sessionEpoch]);
-      } else if (data.type === 'reflex-active-subs') {
+      } else if (data.type === 'uklad-active-subs') {
         dispatch(['update-active-subs', data.payload, data.runtimeId, data.sessionEpoch]);
-      } else if (data.type === 'reflex-handler-keys') {
+      } else if (data.type === 'uklad-handler-keys') {
         dispatch(['update-handler-keys', data.payload, data.runtimeId, data.sessionEpoch]);
       }
     } catch (error) {

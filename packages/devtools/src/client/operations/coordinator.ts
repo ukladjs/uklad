@@ -296,7 +296,7 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
     const operation = this.operations.get(reference.operationId);
     const event = operation?.events.get(reference.eventInstanceId);
     if (!operation || !event)
-      throw new Error('[Reflex Devtools] operation observer received an unknown event.');
+      throw new Error('[Uklad Devtools] operation observer received an unknown event.');
     return { operation, event };
   }
 

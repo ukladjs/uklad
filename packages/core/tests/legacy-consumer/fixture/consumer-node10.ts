@@ -2,9 +2,9 @@
 // (webpack 4 / ts-loader era). This resolution mode ignores `exports` and
 // reads the top-level `types` field, so it guards dist/index.d.mts staying
 // consumable there. Must compile under TypeScript 4.9.
-import { createReflexRuntime, useSubscription } from '@flexsurfer/reflex';
+import { createUkladRuntime, useSubscription } from '@ukladjs/core';
 
-const runtime = createReflexRuntime({ initialState: { count: 0 } });
+const runtime = createUkladRuntime({ initialState: { count: 0 } });
 runtime.registerModule((registrar) => {
   registrar.regEvent('legacy/node10', () => undefined);
 });

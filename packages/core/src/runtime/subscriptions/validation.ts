@@ -9,7 +9,7 @@ export function normalizeSubscriptionConfig(
 ): SubConfig | undefined {
   if (config == null) return undefined;
   if (typeof config !== 'object') {
-    consoleLog('warn', `[reflex] Subscription '${id}' config must be an object. Using defaults.`);
+    consoleLog('warn', `[uklad] Subscription '${id}' config must be an object. Using defaults.`);
     return undefined;
   }
   if (config.equalityCheck === undefined || typeof config.equalityCheck === 'function') {
@@ -17,7 +17,7 @@ export function normalizeSubscriptionConfig(
   }
   consoleLog(
     'warn',
-    `[reflex] Subscription '${id}' equalityCheck must be a function. Using the global equality check.`,
+    `[uklad] Subscription '${id}' equalityCheck must be a function. Using the global equality check.`,
   );
   return undefined;
 }

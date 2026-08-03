@@ -1,9 +1,9 @@
-import { localStorageAdapter, persist } from '@flexsurfer/reflex-persist';
-import type { PersistHandle, SyncPersistStorage } from '@flexsurfer/reflex-persist';
-import type { ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import { localStorageAdapter, persist } from '@ukladjs/persist';
+import type { PersistHandle, SyncPersistStorage } from '@ukladjs/persist';
+import type { UkladRuntime } from '@ukladjs/core/vanilla';
 
-import { stateKeys } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { stateKeys } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 import type { Todo, TodoId, TodosById } from '../../features/todos/state';
 
 /**
@@ -32,7 +32,7 @@ export const todosKeyConfig = {
  * render.
  */
 export function registerWebPersistence(
-  runtime: ReflexRuntime<AppContracts>,
+  runtime: UkladRuntime<AppContracts>,
   storage: SyncPersistStorage = localStorageAdapter(),
 ): PersistHandle {
   return persist(runtime, { storage, keys: [todosKeyConfig] });

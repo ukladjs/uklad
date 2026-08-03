@@ -9,7 +9,7 @@ import {
   hasHandler,
   handlerRegistry,
   initState,
-  ReflexTestProvider,
+  UkladTestProvider,
   regEvent,
   regRootSub,
   regSub,
@@ -49,7 +49,7 @@ describe('React Hooks', () => {
   describe('useSubscription', () => {
     it('should return current root subscription value', () => {
       const { result } = renderHook(() => useSubscription(['user']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
 
       expect(result.current).toEqual({
@@ -60,7 +60,7 @@ describe('React Hooks', () => {
 
     it('should return derived subscription value', () => {
       const { result } = renderHook(() => useSubscription(['user-name']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
 
       expect(result.current).toBe('John Doe');
@@ -68,7 +68,7 @@ describe('React Hooks', () => {
 
     it('should return array subscription value', () => {
       const { result } = renderHook(() => useSubscription(['todos']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
 
       expect(result.current).toEqual([{ id: 1, text: 'Test todo', completed: false }]);
@@ -76,7 +76,7 @@ describe('React Hooks', () => {
 
     it('should return computed subscription value', () => {
       const { result } = renderHook(() => useSubscription(['todos-count']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
 
       expect(result.current).toBe(1);
@@ -84,7 +84,7 @@ describe('React Hooks', () => {
 
     it('should return string-based subscription value', () => {
       const { result } = renderHook(() => useSubscription(['user-email-str']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
 
       expect(result.current).toBe('john@example.com');
@@ -92,7 +92,7 @@ describe('React Hooks', () => {
 
     it('should update string-based root subscription when source field changes', async () => {
       const { result } = renderHook(() => useSubscription(['user-email-str']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
 
       expect(result.current).toBe('john@example.com');
@@ -115,7 +115,7 @@ describe('React Hooks', () => {
 
       expectLogCall(
         'error',
-        "[reflex] Subscription 'user-email-str-duplicate' was not registered. Root key 'userEmail' is already used by subscription 'user-email-str'.",
+        "[uklad] Subscription 'user-email-str-duplicate' was not registered. Root key 'userEmail' is already used by subscription 'user-email-str'.",
       );
       expect(hasHandler(handlerRegistry.sub, 'user-email-str-duplicate')).toBe(false);
     });
@@ -130,7 +130,7 @@ describe('React Hooks', () => {
       );
 
       const { result } = renderHook(() => useSubscription(['todo-by-id', 1]), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
 
       expect(result.current).toEqual({
@@ -152,7 +152,7 @@ describe('React Hooks', () => {
       );
 
       const { result } = renderHook(() => useSubscription(['todo-name-by-id', 1]), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
 
       expect(result.current).toBe('Test todo');
@@ -163,7 +163,7 @@ describe('React Hooks', () => {
       const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       expect(() => {
-        renderHook(() => useSubscription(['non-existent-sub']), { wrapper: ReflexTestProvider });
+        renderHook(() => useSubscription(['non-existent-sub']), { wrapper: UkladTestProvider });
       }).toThrow("No subscription registered for 'non-existent-sub'");
 
       consoleError.mockRestore();
@@ -171,7 +171,7 @@ describe('React Hooks', () => {
 
     it('should update when subscription value changes', async () => {
       const { result } = renderHook(() => useSubscription(['todos-count']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
 
       expect(result.current).toBe(1);
@@ -198,7 +198,7 @@ describe('React Hooks', () => {
           userName: useSubscription<string>(['user-name']),
           todosCount: useSubscription<number>(['todos-count']),
         }),
-        { wrapper: ReflexTestProvider },
+        { wrapper: UkladTestProvider },
       );
 
       expect(result.current.user?.name).toBe('John Doe');
@@ -230,7 +230,7 @@ describe('React Hooks', () => {
             'todos',
           ]),
         }),
-        { wrapper: ReflexTestProvider },
+        { wrapper: UkladTestProvider },
       );
 
       expect(result.current.todosCount).toBe(1);
@@ -280,7 +280,7 @@ describe('React Hooks', () => {
         () => ({
           counter: useSubscription(['counter']),
         }),
-        { wrapper: ReflexTestProvider },
+        { wrapper: UkladTestProvider },
       );
 
       expect(result.current.counter).toBe(0);
@@ -337,7 +337,7 @@ describe('React Hooks', () => {
 
       const { result, rerender } = renderHook(
         ({ id }: { id: number }) => useSubscription<string | null>(['todo-text-by-id', id]),
-        { initialProps: { id: 1 }, wrapper: ReflexTestProvider },
+        { initialProps: { id: 1 }, wrapper: UkladTestProvider },
       );
 
       expect(result.current).toBe('First todo');
@@ -364,7 +364,7 @@ describe('React Hooks', () => {
 
     it('should prune cached subscriptions after the last watcher unsubscribes', () => {
       const { unmount } = renderHook(() => useSubscription(['todos-count']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
 
       expect(hasCachedSubscription(JSON.stringify(['todos-count']))).toBe(true);
@@ -381,10 +381,10 @@ describe('React Hooks', () => {
 
     it('should keep shared subscriptions cached while another watcher remains', () => {
       const first = renderHook(() => useSubscription(['todos-count']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
       const second = renderHook(() => useSubscription(['todos-count']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
 
       first.unmount();
@@ -424,7 +424,7 @@ describe('React Hooks', () => {
           observed.push({ a, b });
           return { a, b };
         },
-        { wrapper: ReflexTestProvider },
+        { wrapper: UkladTestProvider },
       );
 
       expect(result.current).toEqual({ a: 10, b: 100 });
@@ -452,7 +452,7 @@ describe('React Hooks', () => {
     it('should resubscribe correctly after a full unmount/remount cycle', async () => {
       const key = JSON.stringify(['todos-count']);
       const first = renderHook(() => useSubscription<number>(['todos-count']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
       expect(first.result.current).toBe(1);
       first.unmount();
@@ -471,7 +471,7 @@ describe('React Hooks', () => {
       await waitForEventAndSubscription();
 
       const second = renderHook(() => useSubscription<number>(['todos-count']), {
-        wrapper: ReflexTestProvider,
+        wrapper: UkladTestProvider,
       });
       expect(second.result.current).toBe(0);
       second.unmount();

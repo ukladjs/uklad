@@ -1,4 +1,4 @@
-import { useSubscription } from '@flexsurfer/reflex';
+import { useSubscription } from '@ukladjs/core';
 import type { DevtoolsRuntimeSummary } from '../types/Runtime';
 
 export default function ConnectionStatus() {

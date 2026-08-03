@@ -165,6 +165,6 @@ describe('dispatchSync', () => {
   it('should reject invalid event vectors without throwing', () => {
     dispatchSync([] as any);
 
-    expectLogCall('error', '[reflex] invalid dispatchSync event vector.');
+    expectLogCall('error', '[uklad] invalid dispatchSync event vector.');
   });
 });

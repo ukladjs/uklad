@@ -1,6 +1,6 @@
 # Stability and versioning
 
-Reflex is published in the 0.x range while its runtime and agent-operation
+Uklad is published in the 0.x range while its runtime and agent-operation
 contracts are still being finalized. Published packages are usable experimental
 releases; they are not a 1.0 compatibility promise.
 
@@ -17,4 +17,4 @@ and workflow.
 
 Before 1.0, the project still needs a complete compatibility matrix, changelog,
 deprecation policy, and release automation. Those are tracked in the
-[Reflex roadmap](../roadmaps/reflex.md).
+[Uklad roadmap](../roadmaps/uklad.md).

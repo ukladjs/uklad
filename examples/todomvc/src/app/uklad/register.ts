@@ -1,5 +1,5 @@
-import { setupSubsHotReload } from '@flexsurfer/reflex/react';
-import type { ReflexDisposer, ReflexRuntime } from '@flexsurfer/reflex/vanilla';
+import { setupSubsHotReload } from '@ukladjs/core/react';
+import type { UkladDisposer, UkladRuntime } from '@ukladjs/core/vanilla';
 
 import { todosModule } from '../../features/todos/module';
 import { appIds } from './catalog';
@@ -8,7 +8,7 @@ import type { AppContracts } from './contracts';
 /** The platform-independent feature modules every runtime installs. */
 const featureModules = [todosModule];
 
-let installed: { runtime: ReflexRuntime<AppContracts>; dispose: ReflexDisposer } | undefined;
+let installed: { runtime: UkladRuntime<AppContracts>; dispose: UkladDisposer } | undefined;
 
 /**
  * Install the application's feature modules on one runtime.
@@ -17,7 +17,7 @@ let installed: { runtime: ReflexRuntime<AppContracts>; dispose: ReflexDisposer }
  * and hot-reload ownership; that is organizational, not runtime isolation —
  * they all share this runtime's state and reactive graph.
  */
-export function registerFeatureModules(runtime: ReflexRuntime<AppContracts>): ReflexDisposer {
+export function registerFeatureModules(runtime: UkladRuntime<AppContracts>): UkladDisposer {
   const disposers = featureModules.map((module) => runtime.registerModule(module));
   const dispose = () => {
     for (const disposeModule of disposers.reverse()) disposeModule();

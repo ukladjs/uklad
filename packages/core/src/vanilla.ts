@@ -1,15 +1,15 @@
 // Detect separately initialized package copies before exposing public state.
 import './duplicate-package-detection';
 
-/** Create the explicit owner of one Reflex application. */
-export { createReflexRuntime } from './runtime/runtime';
+/** Create the explicit owner of one Uklad application. */
+export { createUkladRuntime } from './runtime/runtime';
 
 export { DISPATCH, DISPATCH_LATER } from './events/built-in-effects';
 export { shallowEqual } from './core/equality';
 export { current, enableMapSet, original } from './core/immer';
 export { isRegistrationCollisionError } from './runtime/registrations';
 
-// The contract surface is deliberately small. `ReflexContracts` is what an
+// The contract surface is deliberately small. `UkladContracts` is what an
 // application declares; `DefaultContracts` is the ambient single-runtime
 // binding. The remaining `Contract*` helpers are extraction machinery used to
 // build the runtime signatures — they stay internal to the package, and are
@@ -20,20 +20,20 @@ export type {
   ContractEventPayloads,
   ContractState,
   ContractSubscriptionPayloads,
-  CreateReflexRuntimeOptions,
+  CreateUkladRuntimeOptions,
   DefaultContracts,
-  PermissiveReflexContracts,
-  ReflexContracts,
-  ReflexDisposer,
-  ReflexModule,
+  PermissiveUkladContracts,
+  UkladContracts,
+  UkladDisposer,
+  UkladModule,
   SubscriptionParam,
   WatchSubscriptionListener,
   WatchSubscriptionOptions,
 } from './contracts';
 export type {
-  ReflexRegistrar,
-  ReflexRuntime,
-  ReflexRuntimeClient,
+  UkladRegistrar,
+  UkladRuntime,
+  UkladRuntimeClient,
   RuntimeEventHandler,
   RuntimeSubscriptionHandler,
 } from './runtime/api';
@@ -62,7 +62,7 @@ export type {
   InterceptorContext,
   InterceptorDirection,
   InterceptorErrorData,
-  ReflexError,
+  UkladError,
   SubConfig,
   SubDepsHandler,
   SubHandler,
@@ -76,8 +76,4 @@ export type {
   TraceOptions,
   TraceTags,
 } from './core/tracing-types';
-export type {
-  ReflexHandlerKeys,
-  ReflexInspector,
-  ReflexInspectorSnapshot,
-} from './inspector-types';
+export type { UkladHandlerKeys, UkladInspector, UkladInspectorSnapshot } from './inspector-types';

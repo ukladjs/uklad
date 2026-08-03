@@ -462,11 +462,11 @@ export function redactDevtoolsEvent<T extends { type: string; payload?: any }>(
   );
 
   switch (event.type) {
-    case 'reflex-state':
+    case 'uklad-state':
       return { ...event, payload: withState(event.payload, 'state') };
-    case 'reflex-active-subs':
+    case 'uklad-active-subs':
       return { ...event, payload: withState(event.payload, 'subscription') };
-    case 'reflex-traces':
+    case 'uklad-traces':
       return {
         ...event,
         payload: Array.isArray(event.payload)
@@ -475,14 +475,14 @@ export function redactDevtoolsEvent<T extends { type: string; payload?: any }>(
               .filter((trace) => trace !== null && trace !== undefined)
           : [],
       };
-    case 'reflex-dispatch-result':
+    case 'uklad-dispatch-result':
       return event.payload?.trace
         ? {
             ...event,
             payload: { ...event.payload, trace: withTrace(event.payload.trace) },
           }
         : event;
-    case 'reflex-operation-result':
+    case 'uklad-operation-result':
       return event.payload?.result
         ? {
             ...event,
@@ -492,7 +492,7 @@ export function redactDevtoolsEvent<T extends { type: string; payload?: any }>(
             },
           }
         : event;
-    case 'reflex-eval-sub-result':
+    case 'uklad-eval-sub-result':
       if (!event.payload || typeof event.payload !== 'object') return event;
       if ('error' in event.payload) {
         return {

@@ -1,13 +1,13 @@
-import type { ReflexSubscriptionDiagnostic } from './types.js';
+import type { UkladSubscriptionDiagnostic } from './types.js';
 
-export const DISPOSED_SUBSCRIPTION = 'reflex-tool-sub-disposed';
+export const DISPOSED_SUBSCRIPTION = 'uklad-tool-sub-disposed';
 
 /**
  * Convert the runtime's cache-only diagnostics into the existing devtools
- * delta protocol. The cache belongs to the client connection, not Reflex.
+ * delta protocol. The cache belongs to the client connection, not Uklad.
  */
 export function diffSubscriptionDiagnostics(
-  diagnostics: readonly ReflexSubscriptionDiagnostic[],
+  diagnostics: readonly UkladSubscriptionDiagnostic[],
   versions: Map<string, number>,
   resetCache = false,
 ): Record<string, unknown> {
@@ -30,7 +30,7 @@ export function diffSubscriptionDiagnostics(
     versions.set(diagnostic.key, diagnostic.version);
   }
 
-  // A diagnostic can disappear entirely when Reflex evicts its cached graph,
+  // A diagnostic can disappear entirely when Uklad evicts its cached graph,
   // so disposal detection must compare key sets instead of inspecting nodes.
   for (const key of Array.from(versions.keys())) {
     if (activeKeys.has(key)) continue;

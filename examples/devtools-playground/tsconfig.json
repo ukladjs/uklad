@@ -19,13 +19,13 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client", "node"],
     "paths": {
-      "@flexsurfer/reflex-devtools": ["../../packages/reflex-devtools/src"],
-      "@flexsurfer/reflex": ["../../packages/reflex/src"],
-      "@flexsurfer/reflex/vanilla": ["../../packages/reflex/src/vanilla.ts"],
-      "@flexsurfer/reflex/react": ["../../packages/reflex/src/react.ts"],
-      "@flexsurfer/reflex/devtools": ["../../packages/reflex/src/devtools.ts"],
-      "@flexsurfer/reflex/testing": ["../../packages/reflex/src/testing.ts"],
-      "@flexsurfer/reflex/internal": ["../../packages/reflex/src/internal.ts"]
+      "@ukladjs/devtools": ["../../packages/devtools/src"],
+      "@ukladjs/core": ["../../packages/core/src"],
+      "@ukladjs/core/vanilla": ["../../packages/core/src/vanilla.ts"],
+      "@ukladjs/core/react": ["../../packages/core/src/react.ts"],
+      "@ukladjs/core/devtools": ["../../packages/core/src/devtools.ts"],
+      "@ukladjs/core/testing": ["../../packages/core/src/testing.ts"],
+      "@ukladjs/core/internal": ["../../packages/core/src/internal.ts"]
     }
   },
   "include": ["src"]

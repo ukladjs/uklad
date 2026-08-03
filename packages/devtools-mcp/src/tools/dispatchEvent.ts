@@ -22,7 +22,7 @@ export interface DispatchEventParams extends RuntimeSelectionParams {
 export function dispatchEventTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'dispatch_event',
-    description: 'Dispatch an event to the Reflex application and observe what it did. Returns the outcome derived from the event\'s trace: "succeeded" (with the state patches it committed and the effects it emitted), "failed" (with the error — a missing handler or a throwing handler chain), or "effects-failed" (state committed, but some effect handlers threw). Use this as an act-and-verify loop: the response is the state diff, no follow-up trace query needed. This is the only mutating tool: it requires the DevTools server to run with --allow-dispatch, and otherwise returns a CAPABILITY_DENIED error the user must resolve by restarting the server with that flag.',
+    description: 'Dispatch an event to the Uklad application and observe what it did. Returns the outcome derived from the event\'s trace: "succeeded" (with the state patches it committed and the effects it emitted), "failed" (with the error — a missing handler or a throwing handler chain), or "effects-failed" (state committed, but some effect handlers threw). Use this as an act-and-verify loop: the response is the state diff, no follow-up trace query needed. This is the only mutating tool: it requires the DevTools server to run with --allow-dispatch, and otherwise returns a CAPABILITY_DENIED error the user must resolve by restarting the server with that flag.',
     inputSchema: {
       type: 'object',
       properties: {

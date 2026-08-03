@@ -1,12 +1,12 @@
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 
-import { ReflexProvider } from '../../src/react/context';
+import { UkladProvider } from '../../src/react/context';
 import { useSubscription } from '../../src/react/use-subscription';
-import { createReflexRuntimeForTests as createReflexRuntime } from '../../src/runtime/runtime';
+import { createUkladRuntimeForTests as createUkladRuntime } from '../../src/runtime/runtime';
 
 async function renderRequest(requestId: string, initialValue: number, increment: number) {
-  const runtime = createReflexRuntime({
+  const runtime = createUkladRuntime({
     initialState: { requestId, value: initialValue },
     runtimeId: `request-${requestId}`,
   });
@@ -27,7 +27,7 @@ async function renderRequest(requestId: string, initialValue: number, increment:
   }
 
   const html = renderToString(
-    createElement(ReflexProvider, { runtime }, createElement(RequestView)),
+    createElement(UkladProvider, { runtime }, createElement(RequestView)),
   );
   const snapshot = runtime.getState();
   runtime.dispose();

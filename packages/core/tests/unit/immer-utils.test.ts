@@ -1,6 +1,6 @@
 import { enableMapSet, original, current } from '../../src/core/immer';
 import {
-  createReflexRuntimeForTests as createReflexRuntime,
+  createUkladRuntimeForTests as createUkladRuntime,
   getRuntimeAdminForTests,
   getRuntimeCoreForTests,
 } from '../../src/runtime/runtime';
@@ -12,7 +12,7 @@ const getEqualityCheck = (runtime: Parameters<typeof getRuntimeCoreForTests>[0])
 describe('immer-utils', () => {
   describe('enableMapSet', () => {
     it('keeps equality overrides isolated between explicit runtimes', () => {
-      const runtime = createReflexRuntime({
+      const runtime = createUkladRuntime({
         initialState: {},
         runtimeId: 'map-set-explicit-runtime',
       });
@@ -27,7 +27,7 @@ describe('immer-utils', () => {
 
     it('uses the ES6 equality fallback for runtimes created after Map and Set support is enabled', () => {
       enableMapSet();
-      const runtime = createReflexRuntime({
+      const runtime = createUkladRuntime({
         initialState: {},
         runtimeId: 'map-set-default-runtime',
       });
@@ -36,7 +36,7 @@ describe('immer-utils', () => {
     });
 
     it('does not override a custom equality check when Map and Set support is enabled', () => {
-      const runtime = createReflexRuntime({
+      const runtime = createUkladRuntime({
         initialState: {},
         runtimeId: 'map-set-custom-runtime',
       });
@@ -68,7 +68,7 @@ describe('immer-utils', () => {
       const set3 = new Set(['a', 'b', 'd']);
 
       enableMapSet();
-      const runtime = createReflexRuntime({
+      const runtime = createUkladRuntime({
         initialState: {},
         runtimeId: 'map-set-values-runtime',
       });

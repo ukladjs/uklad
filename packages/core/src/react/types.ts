@@ -4,24 +4,24 @@ import type {
   ContractSubscriptionId,
   ContractSubscriptionResult,
   ContractSubscriptionVector,
-  ReflexContracts,
+  UkladContracts,
 } from '../contracts';
-import type { ReflexRuntime, ReflexRuntimeClient } from '../runtime/api';
+import type { UkladRuntime, UkladRuntimeClient } from '../runtime/api';
 
 /**
  * Props of the package-level provider, which selects a runtime without
  * selecting a contract. Locally typed bindings use
- * `ReflexTypedProviderProps` instead, so that their provider and hooks are
+ * `UkladTypedProviderProps` instead, so that their provider and hooks are
  * checked against one contract together.
  */
-export interface ReflexProviderProps {
-  readonly runtime: ReflexRuntime<any>;
+export interface UkladProviderProps {
+  readonly runtime: UkladRuntime<any>;
   readonly children?: ReactNode;
 }
 
-/** Props of the provider returned by `createReflexHooks<TContracts>()`. */
-export interface ReflexTypedProviderProps<TContracts extends ReflexContracts> {
-  readonly runtime: ReflexRuntime<TContracts>;
+/** Props of the provider returned by `createUkladHooks<TContracts>()`. */
+export interface UkladTypedProviderProps<TContracts extends UkladContracts> {
+  readonly runtime: UkladRuntime<TContracts>;
   readonly children?: ReactNode;
 }
 
@@ -31,7 +31,7 @@ export interface ReflexTypedProviderProps<TContracts extends ReflexContracts> {
  * Kept as its own interface so existing annotations and test doubles that
  * supply only `useSubscription` still satisfy it.
  */
-export interface ReflexHooks<TContracts extends ReflexContracts> {
+export interface UkladHooks<TContracts extends UkladContracts> {
   useSubscription<TId extends ContractSubscriptionId<TContracts>>(
     query: ContractSubscriptionVector<TContracts, TId>,
     componentName?: string,
@@ -39,17 +39,15 @@ export interface ReflexHooks<TContracts extends ReflexContracts> {
 }
 
 /**
- * Everything `createReflexHooks<TContracts>()` returns: the hooks above, plus
+ * Everything `createUkladHooks<TContracts>()` returns: the hooks above, plus
  * the provider that binds them to a runtime built for the same contract.
  *
- * `ReflexProvider` is a function-typed property rather than a method so its
+ * `UkladProvider` is a function-typed property rather than a method so its
  * `runtime` prop is checked contravariantly. That is what rejects a runtime
  * built for a different contract, and the provider is the only place the
  * pairing can be checked at all.
  */
-export interface ReflexBindings<
-  TContracts extends ReflexContracts,
-> extends ReflexHooks<TContracts> {
-  readonly ReflexProvider: (props: ReflexTypedProviderProps<TContracts>) => ReactElement;
-  readonly useRuntime: () => ReflexRuntimeClient<TContracts>;
+export interface UkladBindings<TContracts extends UkladContracts> extends UkladHooks<TContracts> {
+  readonly UkladProvider: (props: UkladTypedProviderProps<TContracts>) => ReactElement;
+  readonly useRuntime: () => UkladRuntimeClient<TContracts>;
 }

@@ -3,7 +3,7 @@
  *
  * There is no nested `TodosState` container: `todosById` and `todosShowing`
  * change independently and are observed independently, so each is its own
- * top-level application root. Reflex compares roots by identity when deciding
+ * top-level application root. Uklad compares roots by identity when deciding
  * what to publish, so editing a todo must not invalidate the filter.
  */
 

@@ -363,7 +363,7 @@ describe('regCofx - Co-Effects', () => {
       let capturedContext: EventContext<any> | null = null;
 
       regCoeffect('failing-cofx', () => {
-        consoleLog('error', '[reflex] Co-effect failed');
+        consoleLog('error', '[uklad] Co-effect failed');
         return undefined;
       });
 
@@ -381,7 +381,7 @@ describe('regCofx - Co-Effects', () => {
 
       await waitForScheduled();
 
-      expectLogCall('error', '[reflex] Co-effect failed');
+      expectLogCall('error', '[uklad] Co-effect failed');
 
       expect(capturedContext).not.toBeNull();
       expect(capturedContext!.coeffects['working-cofx']).toBe(true);
@@ -402,7 +402,7 @@ describe('regCofx - Co-Effects', () => {
       );
 
       expect(() => dispatchSync(['test-unregistered-cofx'])).toThrow(
-        "[reflex] No coeffect handler registered for 'non-existent-cofx'.",
+        "[uklad] No coeffect handler registered for 'non-existent-cofx'.",
       );
       expect(handlerCalled).toBe(false);
       expect(getState().counter).toBe(0);
@@ -530,16 +530,16 @@ describe('regCofx - Co-Effects', () => {
 
     it('should reject runtime-owned co-effect ids', () => {
       expect(() => regCoeffect('event', () => 1)).toThrow(
-        "[reflex] 'event' is a runtime-owned coeffect and cannot be registered with regCoeffect().",
+        "[uklad] 'event' is a runtime-owned coeffect and cannot be registered with regCoeffect().",
       );
       expect(() => regCoeffect('draftState', () => 1)).toThrow(
-        "[reflex] 'draftState' is a runtime-owned coeffect and cannot be registered with regCoeffect().",
+        "[uklad] 'draftState' is a runtime-owned coeffect and cannot be registered with regCoeffect().",
       );
       expect(() => regCoeffect('', () => 1)).toThrow(
-        '[reflex] regCoeffect expects a non-empty coeffect id string.',
+        '[uklad] regCoeffect expects a non-empty coeffect id string.',
       );
       expect(() => regCoeffect('__proto__', () => 1)).toThrow(
-        "[reflex] '__proto__' is not a valid coeffect id.",
+        "[uklad] '__proto__' is not a valid coeffect id.",
       );
     });
   });

@@ -1,7 +1,7 @@
-import type { ReflexModule, ReflexRegistrar } from '@flexsurfer/reflex/vanilla';
+import type { UkladModule, UkladRegistrar } from '@ukladjs/core/vanilla';
 
-import { appIds } from '../../app/reflex/catalog';
-import type { AppContracts } from '../../app/reflex/contracts';
+import { appIds } from '../../app/uklad/catalog';
+import type { AppContracts } from '../../app/uklad/contracts';
 import { memoryStorage } from './env';
 
 /**
@@ -19,7 +19,7 @@ export const headlessEffectModes = {
   [appIds.effects.documentTitle]: 'noop',
 } as const;
 
-export const registerHeadlessEffects: ReflexModule<ReflexRegistrar<AppContracts>> = (registrar) => {
+export const registerHeadlessEffects: UkladModule<UkladRegistrar<AppContracts>> = (registrar) => {
   registrar.regEffect(appIds.effects.diagnosticsDispatchEvent, (event, runtime) => {
     runtime.dispatch(event);
   });

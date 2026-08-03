@@ -1,12 +1,12 @@
-import { createReflexTestHarness } from '../../src/testing';
+import { createUkladTestHarness } from '../../src/testing';
 import {
-  createReflexRuntimeForTests as createReflexRuntime,
+  createUkladRuntimeForTests as createUkladRuntime,
   getRuntimeClient,
 } from '../../src/runtime/runtime';
 
 describe('testing adapter', () => {
   it('exposes focused test operations without the live registry', async () => {
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       initialState: { count: 0 },
       runtimeId: 'testing-adapter',
     });
@@ -19,7 +19,7 @@ describe('testing adapter', () => {
       registrar.regRootSub('count', 'count');
     });
 
-    const harness = createReflexTestHarness(runtime);
+    const harness = createUkladTestHarness(runtime);
     const eventHandler = harness.getEventHandler('increment');
     const subscriptionHandler = harness.getSubscriptionHandler('count');
 
@@ -38,11 +38,11 @@ describe('testing adapter', () => {
   });
 
   it('injects the production client capability into effects', async () => {
-    const runtime = createReflexRuntime({
+    const runtime = createUkladRuntime({
       initialState: { count: 0 },
       runtimeId: 'effect-client',
     });
-    const harness = createReflexTestHarness(runtime);
+    const harness = createUkladTestHarness(runtime);
     let effectRuntime: unknown;
 
     runtime.registerModule((registrar) => {

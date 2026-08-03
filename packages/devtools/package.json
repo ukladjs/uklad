@@ -1,13 +1,13 @@
 {
-  "name": "@flexsurfer/reflex-devtools",
+  "name": "@ukladjs/devtools",
   "version": "0.1.16",
-  "description": "Developer tools for applications built with the reflex library",
+  "description": "Developer tools for applications built with the uklad library",
   "author": "flexsurfer",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/flexsurfer/reflex.git",
-    "directory": "packages/reflex-devtools"
+    "url": "git+https://github.com/ukladjs/uklad.git",
+    "directory": "packages/devtools"
   },
   "publishConfig": {
     "access": "public"
@@ -30,13 +30,14 @@
     }
   },
   "bin": {
-    "reflex-devtools": "dist/cli.js"
+    "uklad-devtools": "dist/cli.js"
   },
   "files": [
     "dist",
     "README.md",
     "LICENSE",
-    "reflex_devtools_logo.jpg",
+    "uklad-avatar.png",
+    "uklad-avatar-dark.png",
     "screenshot.png"
   ],
   "scripts": {
@@ -59,7 +60,7 @@
     "ws": "^8.21.1"
   },
   "devDependencies": {
-    "@flexsurfer/reflex": "workspace:*",
+    "@ukladjs/core": "workspace:*",
     "@types/express": "^5.0.6",
     "@types/node": "^24.13.3",
     "@types/ws": "^8.18.1",
@@ -71,6 +72,6 @@
     "debugging",
     "react",
     "react-native",
-    "reflex"
+    "uklad"
   ]
 }

@@ -1,17 +1,33 @@
-# Reflex monorepo
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="uklad-avatar-dark.png" />
+    <img src="uklad-avatar.png" alt="Uklad" width="160" />
+  </picture>
+</div>
 
-Reflex is already publicly available as a TypeScript port of re-frame. It has
-been available for about a year and has proven itself in production projects.
-That existing library remains available and can still be used.
+# Uklad monorepo
+
+**Uklad is the new name for Reflex.** Reflex is a TypeScript port of re-frame
+that has been publicly available for about a year and has proven itself in
+production projects. This monorepo is both that rebrand — new name, new
+`@ukladjs` npm scope, new home at `ukladjs/uklad` — and the workspace where the
+next version is being built.
+
+The existing Reflex packages remain published and can still be used; nothing is
+being unpublished or taken away:
+
+- [`@flexsurfer/reflex`](https://www.npmjs.com/package/@flexsurfer/reflex)
+- [`@flexsurfer/reflex-devtools`](https://www.npmjs.com/package/@flexsurfer/reflex-devtools)
+- [`@flexsurfer/reflex-devtools-mcp`](https://www.npmjs.com/package/@flexsurfer/reflex-devtools-mcp)
 
 This monorepo is about what comes next. In the year since Reflex began, the way
 software is written has changed dramatically: people increasingly describe and
 review systems while AI agents write most of the code. A state-management
 library designed around older human-first workflows and trade-offs is not
-enough for that environment. Reflex therefore needs new contracts, tools, and
+enough for that environment. Uklad therefore needs new contracts, tools, and
 execution semantics designed specifically for AI-agent development.
 
-Reflex is being reinvented as an agent-first state-management and application
+Uklad is being reinvented as an agent-first state-management and application
 runtime for AI-assisted and agentic development.
 
 This repository is an active design and implementation workspace. It is not a
@@ -37,15 +53,15 @@ structured runtime evidence instead of guessing from source text or logs.
 
 ## Workspaces
 
-- [`@flexsurfer/reflex`](packages/reflex) — the experimental core runtime,
+- [`@ukladjs/core`](packages/core) — the experimental core runtime,
   React bindings, vanilla/headless APIs, tests, benchmarks, and agent templates.
-- [`@flexsurfer/reflex-persist`](packages/reflex-persist) — experimental
+- [`@ukladjs/persist`](packages/persist) — experimental
   synchronous persistence built on the public runtime APIs.
-- [`@flexsurfer/reflex-devtools`](packages/reflex-devtools) — DevTools SDK, server,
+- [`@ukladjs/devtools`](packages/devtools) — DevTools SDK, server,
   CLI, security boundaries, and package assembly.
-- [`@flexsurfer/reflex-devtools-mcp`](packages/reflex-devtools-mcp) — the
+- [`@ukladjs/devtools-mcp`](packages/devtools-mcp) — the
   experimental MCP bridge for inspection and controlled development actions.
-- [`@flexsurfer/reflex-devtools-ui`](packages/reflex-devtools-ui) — the private
+- [`@ukladjs/devtools-ui`](packages/devtools-ui) — the private
   dashboard source assembled into the DevTools package.
 - [`TodoMVC`](examples/todomvc) and [`DevTools playground`](examples/devtools-playground)
   — example applications and integration fixtures.
@@ -77,7 +93,7 @@ pnpm check:all     # development checks, then packed-package consumers
 Useful local development commands include:
 
 ```sh
-pnpm dev:reflex
+pnpm dev:core
 pnpm dev:server
 pnpm dev:ui
 pnpm dev:playground
@@ -89,8 +105,8 @@ pnpm dev:todomvc
 
 - [`docs/README.md`](docs/README.md) — documentation index and structure.
 - [`docs/architecture/application-authoring-rules.md`](docs/architecture/application-authoring-rules.md)
-  — concise required rules for agent- and human-authored Reflex applications.
-- [`docs/roadmaps/reflex.md`](docs/roadmaps/reflex.md) — current execution track
+  — concise required rules for agent- and human-authored Uklad applications.
+- [`docs/roadmaps/uklad.md`](docs/roadmaps/uklad.md) — current execution track
   and release-readiness gates.
 - [`docs/rfcs/agent-operations.md`](docs/rfcs/agent-operations.md) — canonical
   proposed direction for authoritative operations and agent-driven runtimes.
@@ -100,7 +116,7 @@ pnpm dev:todomvc
   the current edit → run → inspect → verify workflow.
 - [`docs/architecture/foundation-adr.md`](docs/architecture/foundation-adr.md)
   — provisional architectural decisions for the redesign.
-- [`docs/roadmaps/historical-reflex.md`](docs/roadmaps/historical-reflex.md) —
+- [`docs/roadmaps/historical-uklad.md`](docs/roadmaps/historical-uklad.md) —
   historical roadmap retained for context; it is not the active execution plan.
 - Package-level READMEs — short package entry points that link to canonical
   documentation here.

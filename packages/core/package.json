@@ -1,7 +1,7 @@
 {
-  "name": "@flexsurfer/reflex",
+  "name": "@ukladjs/core",
   "version": "0.1.27",
-  "description": "Reflex (Reflex.js) re-frame-style reactive state management for React and React Native. Pure event handlers over one central state, derived subscriptions, isolated side effects. Built for AI agentic development.",
+  "description": "Uklad — re-frame-style reactive state management for React and React Native. Pure event handlers over one central state, derived subscriptions, isolated side effects. Built for AI agentic development.",
   "license": "MIT",
   "devEngines": {
     "runtime": {
@@ -15,8 +15,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/flexsurfer/reflex.git",
-    "directory": "packages/reflex"
+    "url": "git+https://github.com/ukladjs/uklad.git",
+    "directory": "packages/core"
   },
   "type": "module",
   "main": "dist/index.cjs",
@@ -90,7 +90,8 @@
     "LICENSE",
     "benchmarks",
     "templates",
-    "reflex_logo.jpg"
+    "uklad-avatar.png",
+    "uklad-avatar-dark.png"
   ],
   "scripts": {
     "build": "tsdown",
@@ -157,8 +158,8 @@
     }
   },
   "keywords": [
-    "reflex",
-    "reflex.js",
+    "uklad",
+    "uklad.js",
     "re-frame",
     "state-management",
     "reactive",

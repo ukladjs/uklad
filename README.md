@@ -7,11 +7,50 @@
 
 # Uklad monorepo
 
+**A deterministic application runtime for React and React Native, built so
+humans and coding agents can observe and verify every state change.**
+
 **Uklad is the new name for Reflex.** Reflex is a TypeScript port of re-frame
 that has been publicly available for about a year and has proven itself in
 production projects. This monorepo is both that rebrand — new name, new
 `@ukladjs` npm scope, new home at `ukladjs/uklad` — and the workspace where the
 next version is being built.
+
+## Why Uklad — and the roadmap
+
+Uklad is not trying to clone every Redux Toolkit API or compete with Zustand
+on minimum bundle size. Its bet is that application behavior should be
+deterministic, observable, and directly verifiable by coding agents. The first
+rows show what is already distinctive in this repository; the rest show
+shipped parity and the gaps that remain.
+
+This compares official or first-party paths unless a cell says otherwise.
+Community packages may cover additional cases.
+
+Legend: ✅ built in · 🟡 partial, beta, or ecosystem-assisted · ⬜ planned ·
+— no first-party equivalent.
+
+| Capability                                        | Uklad in this repository                                                                                                           | Redux Toolkit                                   | Zustand                                       | Direction                                                             |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------- |
+| **Agent runtime inspection and control**          | ✅ [MCP](packages/devtools-mcp): discover, inspect, trace, and perform authorized, outcome-verified dispatches—browser or headless | — no first-party agent protocol                 | — no first-party agent protocol               | **Differentiator · shipped**                                          |
+| **Effects and environmental inputs as data**      | ✅ declarative effects + injected, replaceable coeffects                                                                           | 🟡 thunks, listeners, and middleware callbacks  | 🟡 application-defined actions and middleware | **Differentiator · shipped**                                          |
+| **Causal runtime evidence**                       | ✅ events → patches → effects → subscriptions/renders/errors                                                                       | 🟡 action and state history                     | 🟡 action and state history                   | **Differentiator · shipped**                                          |
+| **Runtime-owned derived graph**                   | ✅ memoized, topological, lifecycle-managed, and traceable [subscription DAG](docs/architecture/subscription-runtime.md)           | 🟡 Reselect memoization; lifecycle is app-owned | 🟡 derived state and lifecycle are app-owned  | **Differentiator · shipped**                                          |
+| **Explicit isolation plus multi-runtime tooling** | ✅ instance-owned runtime + routing across SSR, widgets, tests, and agent sandboxes                                                | ✅ independent and per-request stores           | ✅ independent vanilla and per-request stores | **Parity+ · shipped**                                                 |
+| **Concurrent React, typed APIs, sync dispatch**   | ✅ `useSyncExternalStore`, runtime contracts, `dispatchSync`                                                                       | ✅                                              | ✅                                            | **Parity · shipped**                                                  |
+| **Vanilla subscriptions and per-request SSR**     | ✅ derived reads/watches, hydration, request isolation                                                                             | ✅                                              | ✅                                            | **Parity · shipped**                                                  |
+| **Lazy feature registration**                     | ✅ scoped install/dispose with safe HMR                                                                                            | ✅ reducer and endpoint injection               | 🟡 application-managed                        | **Parity · shipped**                                                  |
+| **Persistence + versioned migrations**            | 🟡 official synchronous beta                                                                                                       | 🟡 ecosystem (`redux-persist`)                  | ✅ official sync/async middleware             | **Beta** · async durability, SSR, merge, multi-attach remain          |
+| **Fail-loud diagnostics**                         | 🟡 strict errors; typo suggestions missing                                                                                         | ✅ invariant checks and diagnostics             | 🟡 limited built-in checks                    | **Roadmap** · suggestions and release hardening                       |
+| **Async server data and caching**                 | 🟡 pair with TanStack Query; effects for commands                                                                                  | ✅ RTK Query                                    | 🟡 pair with a server-state library           | **Intentional pairing** · document and test, do not clone             |
+| **Per-call subscription equality**                | 🟡 definition/runtime level                                                                                                        | ✅ per hook call                                | ✅ custom-equality hooks                      | **Backlog** · evidence-driven                                         |
+| **Entity / normalization helpers**                | ⬜                                                                                                                                 | ✅ `createEntityAdapter`                        | —                                             | **Backlog** · evidence-driven                                         |
+| **Time travel and application undo/redo**         | 🟡 patch groundwork; semantics open                                                                                                | ✅ DevTools time travel                         | 🟡 DevTools/community                         | **Roadmap** · specify replay, effects, privacy, and persistence first |
+| **Supervised async tasks**                        | ⬜ identity, cancellation, timeout, concurrency, traces                                                                            | 🟡 thunk/listener primitives                    | 🟡 application-defined                        | **Roadmap** · build on the operation spine                            |
+
+Rows marked roadmap or backlog are direction, not release promises. See the
+[detailed parity notes](docs/compatibility/redux-zustand-parity.md) and the
+[active Uklad roadmap](docs/roadmaps/uklad.md) for the decisions behind them.
 
 The existing Reflex packages remain published and can still be used; nothing is
 being unpublished or taken away:

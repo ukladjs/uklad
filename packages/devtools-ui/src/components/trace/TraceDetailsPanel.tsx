@@ -6,11 +6,16 @@ import { Badge } from '../ui/Badge';
 
 export default function TraceDetailsPanel() {
     const selectedTrace = useSubscription<TraceItem | null>(['selectedTrace']);
+    const eventName = selectedTrace?.type === 'event' && Array.isArray(selectedTrace.traces[0]?.tags?.event)
+        ? selectedTrace.traces[0].tags.event[0]
+        : undefined;
 
     return (
         <div className="flex flex-col bg-base-100 h-full overflow-hidden">
             <div className="p-3 bg-base-200 border-b border-base-300 flex flex-row items-center gap-3">
-                <h2 className="text-sm">Trace Details</h2>
+                <h2 className="text-sm">
+                    Trace Details{eventName === undefined ? '' : ` · ${String(eventName)}`}
+                </h2>
                 {selectedTrace && (
                     selectedTrace.badges.map((badge) => (
                         <Badge key={badge.label} opType={badge.label} label={badge.label + ": " + badge.number} size="sm" style="outline" />

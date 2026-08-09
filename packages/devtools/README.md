@@ -308,13 +308,18 @@ interface DevtoolsConfig {
   // Adapter mode per effect/coeffect id, e.g. { 'local-storage-set': 'memory' }
   effects?: Record<string, string>;
   // Enables MCP dispatch_and_wait operation snapshots for this runtime.
-  operations?: true;
+  operations?: true | {
+    evidence?: {
+      // Opt-in forward state patches for DevTools-tracked events only.
+      stateChanges?: 'none' | 'patches';
+    };
+  };
 }
 ```
 
-### Canonical operation snapshots
+### DevTools operation snapshots
 
-Enable authoritative `dispatch_and_wait` snapshots on the same DevTools call;
+Enable `dispatch_and_wait` snapshots on the same DevTools call;
 no additional package or inspector wrapper is required:
 
 ```ts
@@ -328,8 +333,19 @@ enabled, it advertises the capability to the server and MCP bridge. The result
 is DevTools' immutable operation snapshot, assembled from runtime execution
 facts: identity, status, event lineage, committed/published revisions, pending
 work, errors, and minimal effect evidence (id, index, payload snapshot, status,
-duration, and error). It intentionally does not include patches, effect return
-values, observations, idempotency, or delivery-timeout data.
+duration, and error). State patches are deliberately opt-in so ordinary
+operation snapshots remain small:
+
+```ts
+enableDevtools(createUkladInspector(runtime), {
+  operations: { evidence: { stateChanges: 'patches' } },
+});
+```
+
+DevTools retains at most 128 forward patches per event and reports any
+truncation in the snapshot. Redaction still runs before this evidence leaves the
+application process. It intentionally does not include reverse patches, full
+before/after state, observations, idempotency, or delivery-timeout data.
 
 Add application-specific PII keys by composing the exported default masker:
 

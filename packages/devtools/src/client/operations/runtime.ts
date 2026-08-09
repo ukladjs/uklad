@@ -2,6 +2,8 @@
 export type OperationEventVector = [string, ...any[]];
 
 export interface DevtoolsExecutionObserver {
+  /** Opt into optional forward state-patch facts for tracked events. */
+  readonly needsPatches?: boolean;
   accept(
     event: OperationEventVector,
     parent?: {
@@ -22,6 +24,7 @@ export interface DevtoolsExecutionObserver {
     operation: { readonly operationId: string; readonly value: unknown },
     status: string,
     error?: unknown,
+    patches?: readonly DevtoolsStatePatchFact[],
   ): void;
   committed(
     operation: { readonly operationId: string; readonly value: unknown },
@@ -43,6 +46,13 @@ export interface DevtoolsExecutionObserver {
   ): void;
   published(revision: number): void;
   disposed(error: unknown): void;
+}
+
+/** Runtime-neutral forward state patch supplied through the optional probe. */
+export interface DevtoolsStatePatchFact {
+  readonly op: 'add' | 'remove' | 'replace';
+  readonly path: readonly (string | number)[];
+  readonly value?: unknown;
 }
 
 /** Runtime-neutral effect fact supplied through the optional execution probe. */

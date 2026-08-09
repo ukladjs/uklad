@@ -156,6 +156,9 @@ async function connectSdk(
         ? {
             operationApiVersion: 1,
             runtimeInstanceId: identity.runtimeInstanceId,
+            ...(identity.operationStateChanges === 'patches'
+              ? { operationStateChanges: 'patches' }
+              : {}),
           }
         : {}),
     },
@@ -1245,11 +1248,17 @@ test('/api/dispatch-and-wait returns a DevTools operation snapshot from an opera
         acceptedSequence: 1,
         committedRevision: 1,
         stateStatus: 'committed',
+        statePatches: [{ op: 'replace', path: ['count'], value: 3 }],
         status: 'completed',
       }],
       pendingEventInstanceIds: [],
       committedRevisions: [1],
       errors: [],
+      evidence: {
+        stateChanges: 'patches',
+        retainedStatePatchCount: 1,
+        statePatchesTruncated: false,
+      },
       summary: {
         eventCount: 1,
         state: { committed: 1, unchanged: 0, skipped: 0 },
@@ -1283,6 +1292,7 @@ test('/api/dispatch-and-wait returns a DevTools operation snapshot from an opera
       runtimeName: 'Runtime test',
       operationApiVersion: 1,
       runtimeInstanceId: 'runtime-test:instance:1',
+      operationStateChanges: 'patches',
     },
   );
 
@@ -1295,12 +1305,16 @@ test('/api/dispatch-and-wait returns a DevTools operation snapshot from an opera
   assert.equal(body.operation.runtimeInstanceId, 'runtime-test:instance:1');
   assert.equal(body.operation.events[0].eventId, 'increment-counter');
   assert.equal(body.operation.events[0].stateStatus, 'committed');
+  assert.deepEqual(body.operation.events[0].statePatches, [
+    { op: 'replace', path: ['count'], value: 3 },
+  ]);
   assert.equal(body.operation.operationId, result.operation.operationId);
   assert.deepEqual(body.operation.committedRevisions, result.operation.committedRevisions);
   assert.deepEqual(body.receipt, body.operation);
   const status = await getStatus(baseUrl, socket.runtimeId);
   assert.equal(status.operations.available, true);
   assert.equal(status.operations.runtimeInstanceId, 'runtime-test:instance:1');
+  assert.deepEqual(status.operations.evidence, { stateChanges: 'patches' });
 });
 
 test('/api/dispatch derives failed and effects-failed outcomes from trace tags', async () => {

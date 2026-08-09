@@ -40,10 +40,25 @@ export interface OperationSnapshot {
   readonly pendingPublishedRevision?: number;
   readonly committedRevisions: readonly number[];
   readonly errors: readonly unknown[];
+  /** Evidence configured for this coordinator and retained in this snapshot. */
+  readonly evidence: OperationEvidenceSnapshot;
   /** Compact evidence counts for agents that do not need to scan every item. */
   readonly summary: OperationSummary;
   /** At least one effect escaped the settled synchronous cascade. */
   readonly hasDetachedEffects: boolean;
+}
+
+export type OperationStateChangeEvidence = 'none' | 'patches';
+
+export interface OperationEvidenceOptions {
+  readonly stateChanges: OperationStateChangeEvidence;
+}
+
+export interface OperationEvidenceSnapshot extends OperationEvidenceOptions {
+  /** Number of state patches retained across all operation events. */
+  readonly retainedStatePatchCount: number;
+  /** At least one event exceeded the fixed per-event state-patch limit. */
+  readonly statePatchesTruncated: boolean;
 }
 
 export interface OperationSummary {
@@ -78,8 +93,18 @@ export interface OperationEventSnapshot {
   readonly committedRevision?: number;
   /** Commit disposition reported by the runtime, when the event reached it. */
   readonly stateStatus?: 'committed' | 'unchanged' | 'skipped';
+  /** Forward patches, present only when state-change evidence was configured. */
+  readonly statePatches?: readonly OperationStatePatchSnapshot[];
+  /** This event had more state patches than DevTools retained. */
+  readonly statePatchesTruncated?: boolean;
   readonly status: 'queued' | 'running' | 'completed' | 'rejected' | 'failed' | 'dropped';
   readonly effects: readonly OperationEffectSnapshot[];
+}
+
+export interface OperationStatePatchSnapshot {
+  readonly op: 'add' | 'remove' | 'replace';
+  readonly path: readonly (string | number)[];
+  readonly value?: unknown;
 }
 
 export interface OperationEffectSnapshot {
@@ -111,6 +136,8 @@ export interface OperationClient {
 export interface UkladOperationInspector extends UkladInspector {
   readonly operationApiVersion: 1;
   readonly runtimeInstanceId: string;
+  /** Evidence collection configured by the application for operation snapshots. */
+  readonly operationEvidence: OperationEvidenceOptions;
   startEvent(event: OperationEventVector): OperationHandle;
   executeEvent(event: OperationEventVector): Promise<OperationWaitResult>;
   getOperation(operationId: string): OperationSnapshot | undefined;

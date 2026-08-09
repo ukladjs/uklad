@@ -186,6 +186,7 @@ function createFakeInspector(
 
 function createOperationRuntime(runtimeId = 'runtime-test') {
   let executionDisposeCount = 0;
+  let executionObserver;
   return {
     runtimeId,
     runtimeInstanceId: `${runtimeId}:instance:1`,
@@ -199,7 +200,8 @@ function createOperationRuntime(runtimeId = 'runtime-test') {
     getOperationSnapshot() {
       return undefined;
     },
-    observeExecution() {
+    observeExecution(observer) {
+      executionObserver = observer;
       let disposed = false;
       return () => {
         if (disposed) return;
@@ -209,6 +211,9 @@ function createOperationRuntime(runtimeId = 'runtime-test') {
     },
     get executionDisposeCount() {
       return executionDisposeCount;
+    },
+    get executionObserver() {
+      return executionObserver;
     },
   };
 }
@@ -429,7 +434,7 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
   }
 });
 
-test('enables DevTools operation snapshots through the DevTools configuration', async () => {
+test('enables DevTools operation state-patch evidence through configuration', async () => {
   const originalFetch = globalThis.fetch;
   const originalWebSocket = globalThis.WebSocket;
   FakeWebSocket.instances = [];
@@ -444,13 +449,15 @@ test('enables DevTools operation snapshots through the DevTools configuration', 
   let cleanup;
   try {
     cleanup = enableDevtools(fake.runtime, {
-      operations: true,
+      operations: { evidence: { stateChanges: 'patches' } },
     });
     await waitForTurn();
     await waitForTurn();
     const socket = FakeWebSocket.instances[0];
     assert.equal(socket.sent[0].payload.operationApiVersion, 1);
     assert.equal(socket.sent[0].payload.runtimeInstanceId, 'runtime-test:instance:1');
+    assert.equal(socket.sent[0].payload.operationStateChanges, 'patches');
+    assert.equal(operationRuntime.executionObserver.needsPatches, true);
 
     const unsupported = createFakeInspector();
     assert.throws(
@@ -481,6 +488,7 @@ test('attaches and disposes the execution probe for coordinator-backed operation
     cleanup = enableDevtools(fake.runtime, { operations: true });
     await waitForTurn();
     await waitForTurn();
+    assert.equal(operationRuntime.executionObserver.needsPatches, false);
     cleanup();
     assert.equal(operationRuntime.executionDisposeCount, 1);
   } finally {
@@ -501,17 +509,20 @@ test('executes a retained operation through a runtime inspector configured in De
 
   const runtime = createUkladRuntime({
     runtimeId: 'configured-operations',
-    initialState: { count: 0 },
+    initialState: { count: 0, credentials: { password: 'before' } },
   });
   const testHarness = createUkladTestHarness(runtime);
   runtime.registerModule((registrar) => {
     registrar.regEvent('increment', ({ draftState }, amount) => {
       draftState.count += amount;
+      draftState.credentials.password = 'after';
     });
   });
   let cleanup;
   try {
-    cleanup = enableDevtools(createUkladInspector(runtime), { operations: true });
+    cleanup = enableDevtools(createUkladInspector(runtime), {
+      operations: { evidence: { stateChanges: 'patches' } },
+    });
     await waitForTurn();
     await waitForTurn();
     const socket = FakeWebSocket.instances[0];
@@ -534,6 +545,14 @@ test('executes a retained operation through a runtime inspector configured in De
     assert.equal(result?.result.operation.eventInstanceIds.length, 1);
     assert.deepEqual(result?.result.operation.committedRevisions, [1]);
     assert.deepEqual(result?.result.operation.errors, []);
+    assert.deepEqual(result?.result.operation.evidence, {
+      stateChanges: 'patches',
+      retainedStatePatchCount: 2,
+      statePatchesTruncated: false,
+    });
+    const passwordPatch = result?.result.operation.events[0].statePatches
+      .find((patch) => patch.path.join('.') === 'credentials.password');
+    assert.equal(passwordPatch?.value, '[REDACTED]');
   } finally {
     cleanup?.();
     runtime.dispose();

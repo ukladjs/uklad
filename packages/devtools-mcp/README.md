@@ -266,8 +266,10 @@ The preferred development action for a runtime enabled with
 `enableDevtools(createUkladInspector(runtime), { operations: true })`. It waits for the root event and all joined
 synchronous descendants and returns the DevTools-owned operation snapshot. The
 snapshot includes operation identity/status, event lineage, committed and
-published revisions, pending work, and errors. It is authoritative even when
-tracing is off.
+published revisions, pending work, and errors. It remains available when
+tracing is off. To include bounded forward state patches, configure the app
+with `operations: { evidence: { stateChanges: 'patches' } }`; verify the
+active mode through `app_status.operations.evidence` first.
 
 **Parameters:**
 

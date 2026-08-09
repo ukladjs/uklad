@@ -140,6 +140,8 @@ interface RuntimeSocketMetadata {
   readonly inspectorApiVersion: number;
   readonly operationApiVersion?: 1;
   readonly runtimeInstanceId?: string;
+  /** Optional DevTools evidence mode; absent means the conservative default. */
+  readonly operationStateChanges?: 'patches';
 }
 
 interface RuntimeEntry {
@@ -632,6 +634,9 @@ export class DevtoolsServer {
             ? {
                 available: true,
                 runtimeInstanceId: runtime.metadata.runtimeInstanceId,
+                evidence: {
+                  stateChanges: runtime.metadata.operationStateChanges ?? 'none',
+                },
               }
             : { available: false },
         security: {
@@ -1204,12 +1209,15 @@ export class DevtoolsServer {
         const runtimeName = authMessage.payload?.runtimeName;
         const operationApiVersion = authMessage.payload?.operationApiVersion;
         const runtimeInstanceId = authMessage.payload?.runtimeInstanceId;
+        const operationStateChanges = authMessage.payload?.operationStateChanges;
         if (
           !this.validRuntimeId(runtimeId) ||
           !this.validRuntimeIdentityText(runtimeName, MAX_RUNTIME_NAME_LENGTH) ||
           (operationApiVersion !== undefined && operationApiVersion !== 1) ||
           (operationApiVersion === 1 && !this.validRuntimeId(runtimeInstanceId)) ||
-          (operationApiVersion !== 1 && runtimeInstanceId !== undefined)
+          (operationApiVersion !== 1 && runtimeInstanceId !== undefined) ||
+          (operationStateChanges !== undefined && operationStateChanges !== 'patches') ||
+          (operationApiVersion !== 1 && operationStateChanges !== undefined)
         ) {
           ws.close(1008, 'Invalid runtime identity');
           return;
@@ -1220,7 +1228,13 @@ export class DevtoolsServer {
           runtimeName,
           protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
           inspectorApiVersion,
-          ...(operationApiVersion === 1 ? { operationApiVersion, runtimeInstanceId } : {}),
+          ...(operationApiVersion === 1
+            ? {
+                operationApiVersion,
+                runtimeInstanceId,
+                ...(operationStateChanges === 'patches' ? { operationStateChanges } : {}),
+              }
+            : {}),
         });
       });
     });

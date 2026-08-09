@@ -22,7 +22,7 @@ export interface DispatchAndWaitParams extends RuntimeSelectionParams {
 export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'dispatch_and_wait',
-    description: 'Dispatch an event through the DevTools-owned operation coordinator and wait for its settled snapshot. The snapshot includes operation/runtime identity, completion boundary, joined-event lineage and IDs, state dispositions and revisions, effect/error summary, pending work, and execution errors. Requires enableDevtools(createUkladInspector(runtime), { operations: true }).',
+    description: 'Dispatch an event through the DevTools-owned operation coordinator and wait for its settled snapshot. The snapshot includes operation/runtime identity, completion boundary, joined-event lineage and IDs, state dispositions and revisions, effect/error summary, pending work, and execution errors. State patches are present only when the app enables operations.evidence.stateChanges: "patches". Requires enableDevtools(createUkladInspector(runtime), { operations: true }).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -72,6 +72,15 @@ export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
                 'failed',
               ],
             },
+            evidence: {
+              type: 'object',
+              properties: {
+                stateChanges: { type: 'string', enum: ['none', 'patches'] },
+                retainedStatePatchCount: { type: 'integer' },
+                statePatchesTruncated: { type: 'boolean' },
+              },
+              additionalProperties: true,
+            },
             events: {
               type: 'array',
               items: {
@@ -83,6 +92,22 @@ export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
                     type: 'string',
                     enum: ['committed', 'unchanged', 'skipped'],
                   },
+                  statePatches: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        op: { type: 'string', enum: ['add', 'remove', 'replace'] },
+                        path: {
+                          type: 'array',
+                          items: { type: ['string', 'integer'] },
+                        },
+                        value: {},
+                      },
+                      additionalProperties: true,
+                    },
+                  },
+                  statePatchesTruncated: { type: 'boolean' },
                 },
                 additionalProperties: true,
               },

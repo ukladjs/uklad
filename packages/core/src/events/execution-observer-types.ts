@@ -1,4 +1,4 @@
-import type { RuntimeProbeEffect } from '../runtime/probe-types';
+import type { RuntimeProbeEffect, RuntimeProbePatch } from '../runtime/probe-types';
 import type { EventVector } from '../types';
 
 /** Opaque development metadata created and owned by an optional integration. */
@@ -18,6 +18,8 @@ export interface DevelopmentExecutionParent {
  * one passive RuntimeProbe; core retains no operation model.
  */
 export interface DevelopmentExecutionObserver {
+  /** Opt into optional forward state-patch facts for tracked events. */
+  readonly needsPatches?: boolean;
   accept(event: EventVector, parent?: DevelopmentExecutionParent): DevelopmentOperationReference;
   queued(operation: DevelopmentOperationReference, committedRevision: number): void;
   started(operation: DevelopmentOperationReference, committedRevision: number): void;
@@ -25,6 +27,7 @@ export interface DevelopmentExecutionObserver {
     operation: DevelopmentOperationReference,
     status: 'completed' | 'missing-handler' | 'aborted' | 'failed',
     error?: unknown,
+    patches?: readonly RuntimeProbePatch[],
   ): void;
   committed(
     operation: DevelopmentOperationReference,

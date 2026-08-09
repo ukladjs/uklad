@@ -2,11 +2,15 @@ import type {
   DevtoolsEffectFact,
   DevtoolsExecutionObserver,
   OperationEventVector,
+  DevtoolsStatePatchFact,
 } from './runtime.js';
 import type {
+  OperationEvidenceOptions,
+  OperationEvidenceSnapshot,
   OperationEffectSnapshot,
   OperationEventSnapshot,
   OperationSnapshot,
+  OperationStatePatchSnapshot,
   OperationSummary,
 } from './types.js';
 
@@ -27,6 +31,8 @@ interface MutableEvent {
   startedRevision?: number;
   committedRevision?: number;
   stateStatus?: 'committed' | 'unchanged' | 'skipped';
+  statePatches?: readonly OperationStatePatchSnapshot[];
+  statePatchesTruncated?: boolean;
   status: OperationEventSnapshot['status'];
 }
 
@@ -47,18 +53,29 @@ interface MutableOperation {
 }
 
 const MAX_RETAINED_OPERATIONS = 256;
+/** Bound retained DevTools evidence independently of trace and wire payload limits. */
+const MAX_RETAINED_STATE_PATCHES_PER_EVENT = 128;
 
 /** DevTools-owned operation view populated from passive core execution hooks. */
 export class OperationCoordinator implements DevtoolsExecutionObserver {
+  readonly needsPatches: boolean;
   private nextOperationId = 0;
   private nextEventId = 0;
   private nextSequence = 0;
   private publishedRevision = 0;
   private readonly operations = new Map<string, MutableOperation>();
   private readonly runtimeInstanceId: string;
+  private readonly evidence: OperationEvidenceOptions;
 
-  constructor(runtimeInstanceId: string) {
+  constructor(
+    runtimeInstanceId: string,
+    evidence: Partial<OperationEvidenceOptions> = {},
+  ) {
     this.runtimeInstanceId = runtimeInstanceId;
+    this.evidence = Object.freeze({
+      stateChanges: evidence.stateChanges === 'patches' ? 'patches' : 'none',
+    });
+    this.needsPatches = this.evidence.stateChanges === 'patches';
   }
 
   accept(
@@ -109,8 +126,21 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
     event.status = 'running';
   }
 
-  transition(operationRef: { readonly value: unknown }, status: string, error?: unknown): void {
+  transition(
+    operationRef: { readonly value: unknown },
+    status: string,
+    error?: unknown,
+    patches?: readonly DevtoolsStatePatchFact[],
+  ): void {
     const { operation, event } = this.resolve(operationRef);
+    if (this.needsPatches && patches !== undefined) {
+      event.statePatches = Object.freeze(
+        patches
+          .slice(0, MAX_RETAINED_STATE_PATCHES_PER_EVENT)
+          .map(snapshotStatePatch),
+      );
+      event.statePatchesTruncated = patches.length > MAX_RETAINED_STATE_PATCHES_PER_EVENT;
+    }
     if (status === 'failed' || status === 'missing-handler') {
       operation.status = 'failed';
       event.status = 'failed';
@@ -217,6 +247,7 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
   get(operationId: string): OperationSnapshot | undefined {
     const operation = this.operations.get(operationId);
     if (!operation) return undefined;
+    const evidence = summarizeEvidence(operation, this.evidence);
     const summary = summarizeOperation(operation);
     return Object.freeze({
       schemaVersion: 0,
@@ -263,6 +294,12 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
             ...(event.stateStatus === undefined
               ? {}
               : { stateStatus: event.stateStatus }),
+            ...(event.statePatches === undefined
+              ? {}
+              : { statePatches: Object.freeze([...event.statePatches]) }),
+            ...(event.statePatchesTruncated !== true
+              ? {}
+              : { statePatchesTruncated: true }),
             status: event.status,
             effects: Object.freeze([...event.effects]),
           }),
@@ -274,6 +311,7 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
         : { pendingPublishedRevision: operation.pendingPublishedRevision }),
       committedRevisions: Object.freeze([...operation.committedRevisions]),
       errors: Object.freeze([...operation.errors]),
+      evidence,
       summary,
       hasDetachedEffects: summary.effects.detached > 0,
     });
@@ -380,6 +418,35 @@ function summarizeOperation(operation: MutableOperation): OperationSummary {
     state: Object.freeze(state),
     effects: Object.freeze(effects),
     errorCount: operation.errors.length,
+  });
+}
+
+function summarizeEvidence(
+  operation: MutableOperation,
+  options: OperationEvidenceOptions,
+): OperationEvidenceSnapshot {
+  let retainedStatePatchCount = 0;
+  let statePatchesTruncated = false;
+
+  for (const event of operation.events.values()) {
+    retainedStatePatchCount += event.statePatches?.length ?? 0;
+    statePatchesTruncated ||= event.statePatchesTruncated === true;
+  }
+
+  return Object.freeze({
+    ...options,
+    retainedStatePatchCount,
+    statePatchesTruncated,
+  });
+}
+
+function snapshotStatePatch(
+  patch: DevtoolsStatePatchFact,
+): OperationStatePatchSnapshot {
+  return Object.freeze({
+    op: patch.op,
+    path: Object.freeze([...patch.path]),
+    ...(patch.value === undefined ? {} : { value: snapshotValue(patch.value) }),
   });
 }
 

@@ -148,6 +148,7 @@ async function startFakeDevtoolsServer({
           operations: {
             available: true,
             runtimeInstanceId: 'integration-runtime:instance:1',
+            evidence: { stateChanges: 'patches' },
           },
           security: {
             authenticated: true,
@@ -256,11 +257,17 @@ async function startFakeDevtoolsServer({
               acceptedSequence: 1,
               committedRevision: 1,
               stateStatus: 'committed',
+              statePatches: [{ op: 'replace', path: ['count'], value: 1 }],
               status: 'completed',
             }],
             pendingEventInstanceIds: [],
             committedRevisions: [1],
             errors: [],
+            evidence: {
+              stateChanges: 'patches',
+              retainedStatePatchCount: 1,
+              statePatchesTruncated: false,
+            },
             summary: {
               eventCount: 1,
               state: { committed: 1, unchanged: 0, skipped: 0 },
@@ -464,6 +471,9 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
     });
     assert.equal(dispatchAndWaitTool.inputSchema.additionalProperties, false);
     assert.ok(dispatchAndWaitTool.outputSchema);
+    const operationSchema = dispatchAndWaitTool.outputSchema.properties.operation;
+    assert.ok(operationSchema.properties.evidence);
+    assert.ok(operationSchema.properties.events.items.properties.statePatches);
     for (const tool of tools.tools.filter(
       ({ name }) => name !== 'dispatch_event' && name !== 'dispatch_and_wait',
     )) {
@@ -509,6 +519,7 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
     assert.deepEqual(status.operations, {
       available: true,
       runtimeInstanceId: 'integration-runtime:instance:1',
+      evidence: { stateChanges: 'patches' },
     });
     assert.equal(status.security.authenticated, true);
 
@@ -547,6 +558,9 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
     assert.equal(operation.operation.schemaVersion, 0);
     assert.equal(operation.operation.events[0].eventId, 'fake-event');
     assert.equal(operation.operation.events[0].stateStatus, 'committed');
+    assert.deepEqual(operation.operation.events[0].statePatches, [
+      { op: 'replace', path: ['count'], value: 1 },
+    ]);
     assert.deepEqual(operation.operation.committedRevisions, [1]);
 
     const subValue = parseToolResult(await client.callTool({

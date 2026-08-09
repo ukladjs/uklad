@@ -8,8 +8,8 @@ import { createOperationClient } from '../dist/client/operations/client.js';
 import { OperationCoordinator } from '../dist/client/operations/coordinator.js';
 import { createOperationInspector } from '../dist/client/operations/inspector.js';
 
-function operationsFor(runtime) {
-  return createOperationClient(createUkladInspector(runtime).getOperationRuntime());
+function operationsFor(runtime, evidence) {
+  return createOperationClient(createUkladInspector(runtime).getOperationRuntime(), evidence);
 }
 
 test('reads the DevTools operation snapshot after dispatch', async () => {
@@ -36,6 +36,7 @@ test('reads the DevTools operation snapshot after dispatch', async () => {
     assert.equal(operation.eventInstanceIds.length, 1);
     assert.equal(operation.events[0].eventId, 'increment');
     assert.equal(operation.events[0].stateStatus, 'committed');
+    assert.equal('statePatches' in operation.events[0], false);
     assert.deepEqual(operation.committedRevisions, [1]);
     assert.deepEqual(operation.errors, []);
     assert.deepEqual(operation.summary, {
@@ -53,7 +54,41 @@ test('reads the DevTools operation snapshot after dispatch', async () => {
       errorCount: 0,
     });
     assert.equal(operation.hasDetachedEffects, false);
+    assert.deepEqual(operation.evidence, {
+      stateChanges: 'none',
+      retainedStatePatchCount: 0,
+      statePatchesTruncated: false,
+    });
     assert.deepEqual(operations.get(operation.operationId), operation);
+  } finally {
+    runtime.dispose();
+  }
+});
+
+test('collects opt-in forward state patches without tracing', async () => {
+  const runtime = createUkladRuntime({
+    runtimeId: 'operations-state-patches',
+    initialState: { count: 0 },
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('increment', ({ draftState }, amount) => {
+      draftState.count += amount;
+    });
+  });
+
+  try {
+    const { operation } = await operationsFor(runtime, {
+      stateChanges: 'patches',
+    }).dispatchAndWait(['increment', 2]);
+
+    assert.deepEqual(operation.evidence, {
+      stateChanges: 'patches',
+      retainedStatePatchCount: 1,
+      statePatchesTruncated: false,
+    });
+    assert.deepEqual(operation.events[0].statePatches, [
+      { op: 'replace', path: ['count'], value: 2 },
+    ]);
   } finally {
     runtime.dispose();
   }
@@ -184,6 +219,29 @@ test('reports publishing until the committed revision is published', () => {
   assert.equal(coordinator.get(reference.operationId).status, 'publishing');
   coordinator.published(1);
   assert.equal(coordinator.get(reference.operationId).status, 'completed');
+});
+
+test('bounds retained state patches and reports truncation', () => {
+  const coordinator = new OperationCoordinator('operations-patch-limit', {
+    stateChanges: 'patches',
+  });
+  const reference = coordinator.accept(['bulk-update']);
+  const patches = Array.from({ length: 129 }, (_, index) => ({
+    op: 'replace',
+    path: ['items', index],
+    value: index,
+  }));
+
+  coordinator.transition(reference, 'completed', undefined, patches);
+  const operation = coordinator.get(reference.operationId);
+
+  assert.equal(operation.events[0].statePatches.length, 128);
+  assert.equal(operation.events[0].statePatchesTruncated, true);
+  assert.deepEqual(operation.evidence, {
+    stateChanges: 'patches',
+    retainedStatePatchCount: 128,
+    statePatchesTruncated: true,
+  });
 });
 
 test('retains terminal failure and effect-error states', async () => {

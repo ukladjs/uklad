@@ -31,7 +31,7 @@ export function observeDevelopmentExecution(
   }
 
   const probe: RuntimeProbe = {
-    needsPatches: false,
+    needsPatches: observer.needsPatches === true,
     needsSubscriptionEvidence: false,
     needsSpans: false,
     tracksOperations: true,
@@ -60,7 +60,12 @@ export function observeDevelopmentExecution(
       observer.started(token as DevelopmentOperationReference, revision);
     },
     transition(token, result): void {
-      observer.transition(token as DevelopmentOperationReference, result.status, result.error);
+      observer.transition(
+        token as DevelopmentOperationReference,
+        result.status,
+        result.error,
+        result.patches,
+      );
     },
     committed(token, result): void {
       observer.committed(

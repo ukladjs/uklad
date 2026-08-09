@@ -16,7 +16,7 @@ import {
 export function appStatusTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'app_status',
-    description: 'Cheap health and runtime-discovery check — call it first after a cold start and after any app reload. Lists every known runtime and its stable runtimeId. Pass runtimeId to select one when multiple runtimes are connected. Reports how the selected runtime runs ("browser", "react-native", or "headless"), tracing, handler counts, operation capability, and sessionEpoch. If sessionEpoch changed, its DevTools connection session changed and server-stored trace ids were invalidated; a transient reconnect can leave runtime state intact.',
+    description: 'Cheap health and runtime-discovery check — call it first after a cold start and after any app reload. Lists every known runtime and its stable runtimeId. Pass runtimeId to select one when multiple runtimes are connected. Reports how the selected runtime runs ("browser", "react-native", or "headless"), tracing, handler counts, operation capability/evidence mode, and sessionEpoch. If sessionEpoch changed, its DevTools connection session changed and server-stored trace ids were invalidated; a transient reconnect can leave runtime state intact.',
     inputSchema: {
       type: 'object',
       properties: {

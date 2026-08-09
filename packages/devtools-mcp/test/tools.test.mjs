@@ -64,6 +64,7 @@ test('app_status reports a healthy headless session without hints', async () => 
         operations: {
           available: true,
           runtimeInstanceId: 'healthy-headless:instance:1',
+          evidence: { stateChanges: 'patches' },
         },
         security: {
           authenticated: true,
@@ -90,6 +91,7 @@ test('app_status reports a healthy headless session without hints', async () => 
   assert.deepEqual(body.operations, {
     available: true,
     runtimeInstanceId: 'healthy-headless:instance:1',
+    evidence: { stateChanges: 'patches' },
   });
   assert.equal(body.security.authenticated, true);
   assert.equal('hints' in body, false);
@@ -117,6 +119,7 @@ test('app_status distinguishes legacy trace dispatch from operation snapshots', 
         operations: {
           available: true,
           runtimeInstanceId: 'headless:instance:1',
+          evidence: { stateChanges: 'none' },
         },
         security: { authenticated: true },
       };
@@ -128,6 +131,7 @@ test('app_status distinguishes legacy trace dispatch from operation snapshots', 
   assert.deepEqual(body.operations, {
     available: true,
     runtimeInstanceId: 'headless:instance:1',
+    evidence: { stateChanges: 'none' },
   });
   assert.equal(body.hints.length, 1);
   assert.match(body.hints[0], /legacy dispatch_event/i);
@@ -558,11 +562,17 @@ test('dispatch_and_wait returns the DevTools operation snapshot as structured co
             acceptedSequence: 1,
             committedRevision: 2,
             stateStatus: 'committed',
+            statePatches: [{ op: 'replace', path: ['count'], value: 2 }],
             status: 'completed',
           }],
           pendingEventInstanceIds: [],
           committedRevisions: [2],
           errors: [],
+          evidence: {
+            stateChanges: 'patches',
+            retainedStatePatchCount: 1,
+            statePatchesTruncated: false,
+          },
           summary: {
             eventCount: 1,
             state: { committed: 1, unchanged: 0, skipped: 0 },
@@ -595,6 +605,9 @@ test('dispatch_and_wait returns the DevTools operation snapshot as structured co
   assert.equal(body.operation.runtimeInstanceId, 'headless-runtime:instance:1');
   assert.equal(body.operation.events[0].eventId, 'increment-counter');
   assert.equal(body.operation.events[0].stateStatus, 'committed');
+  assert.deepEqual(body.operation.events[0].statePatches, [
+    { op: 'replace', path: ['count'], value: 2 },
+  ]);
   assert.equal(body.operation.status, 'completed');
   assert.deepEqual(body.operation.committedRevisions, [2]);
   assert.deepEqual(result.structuredContent, body);

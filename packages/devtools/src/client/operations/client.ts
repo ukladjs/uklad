@@ -1,6 +1,7 @@
 import { OperationCoordinator } from './coordinator.js';
 import type { DevtoolsOperationRuntime, OperationEventVector } from './runtime.js';
 import type {
+  OperationEvidenceOptions,
   OperationClient,
   OperationHandle,
   OperationSnapshot,
@@ -11,15 +12,21 @@ import type {
  * Thin adapter over the DevTools-owned coordinator.
  * Core reports execution facts; DevTools retains the resulting snapshots.
  */
-export function createOperationClient(runtime: DevtoolsOperationRuntime): OperationClient {
-  return createOperationAttachment(runtime).client;
+export function createOperationClient(
+  runtime: DevtoolsOperationRuntime,
+  evidence?: Partial<OperationEvidenceOptions>,
+): OperationClient {
+  return createOperationAttachment(runtime, evidence).client;
 }
 
-function createOperationAttachment(runtime: DevtoolsOperationRuntime): {
+function createOperationAttachment(
+  runtime: DevtoolsOperationRuntime,
+  evidence?: Partial<OperationEvidenceOptions>,
+): {
   readonly client: OperationClient;
   dispose(): void;
 } {
-  const coordinator = new OperationCoordinator(runtime.runtimeInstanceId);
+  const coordinator = new OperationCoordinator(runtime.runtimeInstanceId, evidence);
   const disposeExecution = runtime.observeExecution(coordinator);
   return Object.freeze({
     client: Object.freeze({
@@ -45,11 +52,14 @@ function createOperationAttachment(runtime: DevtoolsOperationRuntime): {
 }
 
 /** Attach the DevTools-owned coordinator to one runtime execution probe. */
-export function acquireOperationClient(runtime: DevtoolsOperationRuntime): {
+export function acquireOperationClient(
+  runtime: DevtoolsOperationRuntime,
+  evidence?: Partial<OperationEvidenceOptions>,
+): {
   readonly client: OperationClient;
   dispose(): void;
 } {
-  return createOperationAttachment(runtime);
+  return createOperationAttachment(runtime, evidence);
 }
 
 async function waitForOperation(

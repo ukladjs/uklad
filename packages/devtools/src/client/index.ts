@@ -21,6 +21,11 @@ import {
 import { diffSubscriptionDiagnostics } from './subscriptionDiagnostics.js';
 import { acquireOperationInspector } from './operations/inspector.js';
 import type {
+  OperationEvidenceOptions,
+  OperationStateChangeEvidence,
+  UkladOperationInspector,
+} from './operations/types.js';
+import type {
   UkladInspector,
   UkladInspectorSnapshot,
   UkladTrace,
@@ -102,7 +107,15 @@ export interface DevtoolsConfig {
    * The runtime only reports passive execution facts; normal DevTools clients
    * still never import or bundle Uklad.
    */
-  operations?: true;
+  operations?: true | DevtoolsOperationsConfig;
+}
+
+/** Opt-in evidence collection for DevTools operation snapshots. */
+export interface DevtoolsOperationsConfig {
+  readonly evidence?: {
+    /** Forward state patches, collected only for DevTools-tracked events. */
+    readonly stateChanges?: OperationStateChangeEvidence;
+  };
 }
 
 export interface EventPayload {
@@ -430,6 +443,9 @@ class DevtoolsClient {
                 ? {
                     operationApiVersion: 1,
                     runtimeInstanceId: operationCapability.runtimeInstanceId,
+                    ...(operationCapability.stateChanges === 'patches'
+                      ? { operationStateChanges: 'patches' }
+                      : {}),
                   }
                 : {}),
             },
@@ -604,6 +620,7 @@ class DevtoolsClient {
   private operationCapability(): {
     readonly runtimeInstanceId: string;
     readonly executeEvent: (event: [string, ...any[]]) => Promise<unknown>;
+    readonly stateChanges: OperationStateChangeEvidence;
   } | null {
     if (
       this.inspector.operationApiVersion !== 1
@@ -612,9 +629,15 @@ class DevtoolsClient {
     ) {
       return null;
     }
+    const operationInspector = this.inspector as Partial<UkladOperationInspector>;
+    const stateChanges = operationInspector.operationEvidence?.stateChanges;
+    if (stateChanges !== undefined && stateChanges !== 'none' && stateChanges !== 'patches') {
+      return null;
+    }
     return {
       runtimeInstanceId: this.inspector.runtimeInstanceId,
       executeEvent: (event) => this.inspector.executeEvent!(event),
+      stateChanges: stateChanges ?? 'none',
     };
   }
 
@@ -1197,6 +1220,21 @@ function validRuntimeIdentityText(value: unknown, maxLength: number): value is s
     && !/[\u0000-\u001F\u007F]/.test(value);
 }
 
+function resolveOperationEvidence(
+  operations: DevtoolsConfig['operations'] | false | undefined,
+): OperationEvidenceOptions | undefined {
+  if (!operations) return undefined;
+  const stateChanges = operations === true
+    ? 'none'
+    : operations.evidence?.stateChanges ?? 'none';
+  if (stateChanges !== 'none' && stateChanges !== 'patches') {
+    throw new Error(
+      '[Uklad Devtools] operations.evidence.stateChanges must be "none" or "patches".',
+    );
+  }
+  return Object.freeze({ stateChanges });
+}
+
 export function enableDevtools(
   inspector: UkladInspector,
   config?: DevtoolsConfig,
@@ -1207,8 +1245,9 @@ export function enableDevtools(
 ): () => void {
   assertInspector(inspector);
 
-  const operationAttachment = config.operations && config.enabled !== false
-    ? acquireOperationInspector(inspector)
+  const operationEvidence = resolveOperationEvidence(config.operations);
+  const operationAttachment = operationEvidence && config.enabled !== false
+    ? acquireOperationInspector(inspector, undefined, operationEvidence)
     : undefined;
   const operationInspector = operationAttachment?.inspector ?? inspector;
   const nextClient = new DevtoolsClient(operationInspector, config);

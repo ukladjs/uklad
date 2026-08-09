@@ -26,6 +26,8 @@ back here for the deeper material.
   activation, publication, equality, and lifecycle semantics.
 - [Subscription bookkeeping](architecture/subscription-registry.md) — registry,
   cache, and release bookkeeping.
+- [TanStack Query integration](architecture/tanstack-query.md) — ownership,
+  lifecycle, and application-boundary rules for server data.
 - [Uklad Persist architecture](architecture/uklad-persist.md) — persistence
   module boundaries and invariants.
 

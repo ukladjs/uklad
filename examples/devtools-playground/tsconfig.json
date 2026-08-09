@@ -25,7 +25,8 @@
       "@ukladjs/core/react": ["../../packages/core/src/react.ts"],
       "@ukladjs/core/devtools": ["../../packages/core/src/devtools.ts"],
       "@ukladjs/core/testing": ["../../packages/core/src/testing.ts"],
-      "@ukladjs/core/internal": ["../../packages/core/src/internal.ts"]
+      "@ukladjs/core/internal": ["../../packages/core/src/internal.ts"],
+      "@ukladjs/tanstack-query": ["../../packages/tanstack-query/src/index.ts"]
     }
   },
   "include": ["src"]

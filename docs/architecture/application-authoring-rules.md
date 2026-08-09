@@ -149,9 +149,10 @@ storage property. They deliberately remain separate names.
 - Passing initial, restored, or hydrated state to a runtime transfers ownership
   of that value and everything reachable from it. Do not mutate it after the
   handoff.
-- Treat state snapshots and root or computed subscription results as read-only
-  runtime-owned values. Components, effects, coeffects, tests, and ordinary
-  application code must not mutate them.
+- Treat state snapshots and subscription results as read-only values.
+  Components, effects, coeffects, tests, and ordinary application code must
+  not mutate them. Values mapped from an external system must be safe to own
+  before they cross into Uklad state.
 - State changes only through an event handler's Immer `draftState`. Build or
   validate any mutable external value before it enters state.
 
@@ -203,6 +204,16 @@ input before they dispatch.
   secretly change the graph shape.
 - Use a root subscription for a direct state-root read and `regSub` only for a
   derived value.
+
+`regSubExt` is the narrow exception for an external lifecycle such as a
+headless TanStack Query observer. It attaches to an already-registered
+subscription without changing that subscription's pure data dependencies.
+Declare any external inputs as its passive signals, keep the lifecycle in a
+platform adapter, and use its `updateRoot` capability only to map a read-only
+external result into an explicitly named root. Do not use an extension to hide
+application state reads, mutate state directly, or run application commands;
+those remain ordinary subscriptions and effects. See [TanStack Query
+integration](tanstack-query.md).
 
 ### 8. Use bounded scalar subscription parameters
 

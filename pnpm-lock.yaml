@@ -10,12 +10,18 @@ importers:
 
   examples/devtools-playground:
     dependencies:
+      '@tanstack/query-core':
+        specifier: ^5.0.0
+        version: 5.101.4
       '@ukladjs/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@ukladjs/devtools':
         specifier: workspace:*
         version: link:../../packages/devtools
+      '@ukladjs/tanstack-query':
+        specifier: workspace:*
+        version: link:../../packages/tanstack-query
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -47,6 +53,9 @@ importers:
       vite-node:
         specifier: ^6.0.0
         version: 6.0.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@24.13.3)(jsdom@26.1.0(supports-color@8.1.1))(vite@8.2.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0))
 
   examples/todomvc:
     dependencies:
@@ -59,6 +68,70 @@ importers:
       '@ukladjs/persist':
         specifier: workspace:*
         version: link:../../packages/persist
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@eslint/js':
+        specifier: 10.0.1
+        version: 10.0.1(eslint@10.8.0(jiti@2.7.0)(supports-color@8.1.1))
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.4
+        version: 19.2.4(@types/react@19.2.18)
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      '@vitejs/plugin-react':
+        specifier: 6.0.5
+        version: 6.0.5(vite@8.2.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0))
+      eslint:
+        specifier: 10.8.0
+        version: 10.8.0(jiti@2.7.0)(supports-color@8.1.1)
+      eslint-plugin-react-hooks:
+        specifier: 7.1.1
+        version: 7.1.1(eslint@10.8.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      eslint-plugin-react-refresh:
+        specifier: 0.5.3
+        version: 0.5.3(eslint@10.8.0(jiti@2.7.0)(supports-color@8.1.1))
+      globals:
+        specifier: 17.8.0
+        version: 17.8.0
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      typescript-eslint:
+        specifier: 8.65.0
+        version: 8.65.0(@typescript/typescript6@6.0.2)(eslint@10.8.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+      vite:
+        specifier: 8.2.0
+        version: 8.2.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@types/node@24.13.3)(jsdom@26.1.0(supports-color@8.1.1))(vite@8.2.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0))
+
+  examples/todomvc-query:
+    dependencies:
+      '@tanstack/query-core':
+        specifier: ^5.0.0
+        version: 5.101.4
+      '@ukladjs/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@ukladjs/devtools':
+        specifier: workspace:*
+        version: link:../../packages/devtools
+      '@ukladjs/tanstack-query':
+        specifier: workspace:*
+        version: link:../../packages/tanstack-query
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -289,6 +362,54 @@ importers:
       '@eslint/js':
         specifier: 10.0.1
         version: 10.0.1(eslint@10.8.0(jiti@2.7.0)(supports-color@8.1.1))
+      '@types/jest':
+        specifier: 30.0.0
+        version: 30.0.0
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      '@ukladjs/core':
+        specifier: workspace:*
+        version: link:../core
+      eslint:
+        specifier: 10.8.0
+        version: 10.8.0(jiti@2.7.0)(supports-color@8.1.1)
+      globals:
+        specifier: 17.8.0
+        version: 17.8.0
+      jest:
+        specifier: 30.4.2
+        version: 30.4.2(@types/node@24.13.3)(supports-color@8.1.1)
+      prettier:
+        specifier: 3.9.6
+        version: 3.9.6
+      publint:
+        specifier: 0.3.22
+        version: 0.3.22
+      ts-jest:
+        specifier: 29.4.12
+        version: 29.4.12(@babel/core@7.29.7(supports-color@8.1.1))(@jest/transform@30.4.1(supports-color@8.1.1))(@jest/types@30.4.1)(@typescript/typescript6@6.0.2)(babel-jest@30.4.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(esbuild@0.28.1)(jest-util@30.4.1)(jest@30.4.2(@types/node@24.13.3)(supports-color@8.1.1))
+      tsdown:
+        specifier: 0.22.14
+        version: 0.22.14(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.22)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      typescript-eslint:
+        specifier: 8.65.0
+        version: 8.65.0(@typescript/typescript6@6.0.2)(eslint@10.8.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)
+
+  packages/tanstack-query:
+    devDependencies:
+      '@arethetypeswrong/core':
+        specifier: 0.18.5
+        version: 0.18.5
+      '@eslint/js':
+        specifier: 10.0.1
+        version: 10.0.1(eslint@10.8.0(jiti@2.7.0)(supports-color@8.1.1))
+      '@tanstack/query-core':
+        specifier: 5.101.4
+        version: 5.101.4
       '@types/jest':
         specifier: 30.0.0
         version: 30.0.0
@@ -1142,6 +1263,9 @@ packages:
     resolution: {integrity: sha512-yYU8cogLeSh/ms2jh8Fj7jaba/EWa7Ja6GoUqYZaraEuCI5YS6ms6ObZgjjedm+jm6XZjdNRWBpPP6Z86oOxcw==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
+
+  '@tanstack/query-core@5.101.4':
+    resolution: {integrity: sha512-gNwcvOJcRbLWPOLG/2OBm+zM+Yv+MKsXKEOWC57USuZDEsI71hEErQsiEGx5wX9rzWWkfwM0fVSPoiIFSsxfiw==}
 
   '@testing-library/dom@10.4.1':
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
@@ -4762,6 +4886,8 @@ snapshots:
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
       vite: 8.2.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)
+
+  '@tanstack/query-core@5.101.4': {}
 
   '@testing-library/dom@10.4.1':
     dependencies:

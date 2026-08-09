@@ -1,0 +1,91 @@
+{
+  "name": "@ukladjs/tanstack-query",
+  "version": "0.1.0-beta.1",
+  "description": "Headless TanStack Query subscriptions for Uklad.",
+  "license": "MIT",
+  "sideEffects": false,
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^22.18.0 || >=24.11.0",
+      "onFail": "error"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ukladjs/uklad.git",
+    "directory": "packages/tanstack-query"
+  },
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:compat": "tsc6 --noEmit -p tsconfig.json",
+    "typecheck:test": "tsc --noEmit -p tsconfig.jest.json",
+    "lint": "eslint --max-warnings=0 src tests tsdown.config.ts jest.config.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run typecheck:compat && pnpm run typecheck:test && pnpm run build && pnpm run test",
+    "check:package": "pnpm run test:package",
+    "clean": "node ../../scripts/clean.mjs dist coverage",
+    "test": "jest --passWithNoTests",
+    "test:unit": "jest --passWithNoTests",
+    "test:ci": "jest --passWithNoTests --coverage --silent",
+    "test:package": "node tests/package-consumer/run.mjs",
+    "prepack": "pnpm run build",
+    "prepublishOnly": "pnpm run check && pnpm run check:package && pnpm run test:ci"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/core": "0.18.5",
+    "@eslint/js": "10.0.1",
+    "@tanstack/query-core": "5.101.4",
+    "@types/jest": "30.0.0",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "@ukladjs/core": "workspace:*",
+    "eslint": "10.8.0",
+    "globals": "17.8.0",
+    "jest": "30.4.2",
+    "prettier": "3.9.6",
+    "publint": "0.3.22",
+    "ts-jest": "29.4.12",
+    "tsdown": "0.22.14",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "8.65.0"
+  },
+  "peerDependencies": {
+    "@tanstack/query-core": "^5.0.0",
+    "@ukladjs/core": "^0.1.27"
+  },
+  "keywords": [
+    "uklad",
+    "uklad.js",
+    "tanstack-query",
+    "query",
+    "server-state",
+    "reactive"
+  ]
+}

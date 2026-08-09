@@ -15,6 +15,14 @@ import type {
   DiagnosticsNested,
   DiagnosticsPayload,
 } from '../../features/diagnostics/state';
+import type {
+  ServerClock,
+  ServerItem,
+  ServerItems,
+  ServerQueryResult,
+  ServerRegion,
+  ServerRegionSummary,
+} from '../../features/server/state';
 import type { User, UsersList, UsersLoading } from '../../features/users/state';
 import type { appIds, stateKeys } from './catalog';
 
@@ -32,6 +40,11 @@ export interface AppState {
 
   [stateKeys.usersList]: UsersList;
   [stateKeys.usersLoading]: UsersLoading;
+
+  [stateKeys.serverClock]: ServerQueryResult<ServerClock>;
+  [stateKeys.serverItems]: ServerItems;
+  [stateKeys.serverRegion]: ServerRegion;
+  [stateKeys.serverRegionSummary]: ServerQueryResult<ServerRegionSummary>;
 
   [stateKeys.collectionsUsers]: CollectionsUsers;
   [stateKeys.collectionsPermissions]: CollectionsPermissions;
@@ -54,6 +67,8 @@ export interface AppEvents {
   [appIds.events.usersToggle]: [userId: number];
   [appIds.events.usersAdd]: [user: User];
   [appIds.events.usersSetLoading]: [isLoading: boolean];
+
+  [appIds.events.serverRegionSelected]: [region: ServerRegion];
 
   [appIds.events.collectionsAddUser]: [userId: string, user: CollectionUser];
   [appIds.events.collectionsRemoveUser]: [userId: string];
@@ -121,6 +136,16 @@ export interface AppContracts extends UkladContracts {
     };
     [appIds.subscriptions.usersList]: { params: []; result: UsersList };
     [appIds.subscriptions.usersLoading]: { params: []; result: UsersLoading };
+    [appIds.subscriptions.serverClock]: {
+      params: [];
+      result: ServerQueryResult<ServerClock>;
+    };
+    [appIds.subscriptions.serverItems]: { params: []; result: ServerItems };
+    [appIds.subscriptions.serverRegion]: { params: []; result: ServerRegion };
+    [appIds.subscriptions.serverRegionSummary]: {
+      params: [];
+      result: ServerQueryResult<ServerRegionSummary>;
+    };
     [appIds.subscriptions.collectionsUsers]: { params: []; result: CollectionsUsers };
     [appIds.subscriptions.collectionsPermissions]: { params: []; result: CollectionsPermissions };
     [appIds.subscriptions.collectionsRoles]: { params: []; result: CollectionsRoles };
@@ -131,6 +156,10 @@ export interface AppContracts extends UkladContracts {
 
     // Computed subscriptions.
     [appIds.subscriptions.usersById]: { params: [id: number]; result: User | undefined };
+    [appIds.subscriptions.serverItemById]: {
+      params: [itemId: number];
+      result: ServerQueryResult<ServerItem>;
+    };
     [appIds.subscriptions.collectionsNested]: { params: []; result: CollectionsNested };
   };
 }

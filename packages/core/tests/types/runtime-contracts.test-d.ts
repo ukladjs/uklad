@@ -56,6 +56,52 @@ runtime.registerModule((registrar) => {
   );
 });
 
+// ---- regSubExt lifecycle typing --------------------------------------
+
+interface ResourceContracts extends UkladContracts {
+  state: { selectedId: number; selectedLabel: string };
+  subscriptions: {
+    'selected/id': { params: []; result: number };
+    'selected/label': { params: []; result: string };
+  };
+}
+
+const resourceRuntime = createUkladRuntime<ResourceContracts>({
+  initialState: { selectedId: 1, selectedLabel: '1' },
+});
+resourceRuntime.registerModule((registrar) => {
+  registrar.regRootSub('selected/id', 'selectedId');
+  registrar.regRootSub('selected/label', 'selectedLabel');
+  registrar.regSubExt(
+    'selected/label',
+    () => [['selected/id']],
+    (context) => ({
+      sync: ([id]) => {
+        const checkedId: number = id;
+        void checkedId;
+        context.updateRoot('selectedLabel', () => String(id));
+        // @ts-expect-error updateRoot addresses state keys, not subscription ids.
+        context.updateRoot('selected/label', () => String(id));
+        // @ts-expect-error The updater must return the selected state key's value type.
+        context.updateRoot('selectedId', () => String(id));
+      },
+      dispose: () => {},
+    }),
+  );
+});
+
+resourceRuntime.registerModule((registrar) => {
+  registrar.regSubExt(
+    'selected/label',
+    () => [['selected/id']],
+    () => ({
+      // @ts-expect-error Extension sync values follow the declared signal tuple.
+      sync: ([id]: [string]) => void id,
+      dispose: () => {},
+    }),
+  );
+});
+
 // ---- regSub dependency inference -------------------------------------
 // `compute` receives the dependency values as one array, in declaration order,
 // followed by the subscription's own parameters. All of it is inferred from the

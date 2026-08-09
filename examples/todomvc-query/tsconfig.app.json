@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2023",
+    "useDefineForClassFields": true,
+    "lib": ["ES2023", "DOM"],
+    "module": "ESNext",
+    "types": ["vite/client"],
+    "skipLibCheck": true,
+    "paths": {
+      "@ukladjs/core": ["../../packages/core/src/index.ts"],
+      "@ukladjs/core/vanilla": ["../../packages/core/src/vanilla.ts"],
+      "@ukladjs/core/react": ["../../packages/core/src/react.ts"],
+      "@ukladjs/core/devtools": ["../../packages/core/src/devtools.ts"],
+      "@ukladjs/core/testing": ["../../packages/core/src/testing.ts"],
+      "@ukladjs/core/internal": ["../../packages/core/src/internal.ts"],
+      "@ukladjs/tanstack-query": ["../../packages/tanstack-query/src/index.ts"],
+      "@ukladjs/devtools": ["../../packages/devtools/src/index.ts"]
+    },
+    "allowArbitraryExtensions": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true
+  },
+  "include": ["src"]
+}

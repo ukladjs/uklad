@@ -1,15 +1,17 @@
-import { scheduleAfterRender } from '../../core/scheduling';
 import { consoleLog } from '../../core/logging';
+import { scheduleAfterRender } from '../../core/scheduling';
 import { getDefaultEqualityCheck } from '../../core/equality';
 import { mergeRuntimeProbeSpan, withRuntimeProbeSpan } from '../probe';
 import { isRuntimeDisposed, type RuntimeCore } from '../core';
 import { SubscriptionEngine } from './engine';
+import { SubscriptionExtensionRuntime } from './extension-runtime';
 import { getRootSubKey, getSubVectorKey } from './keys';
 import { normalizeSubscriptionConfig } from './validation';
 import { createRegistrationHandle } from '../registrations';
 
 import type { RuntimeProbeSubscription } from '../probe-types';
 import type { RegistrationHandle } from '../registrations';
+import type { SubscriptionExtensionPlan } from './extension-runtime';
 import type { SubscriptionDiagnostic, SubscriptionListenerKind, SubscriptionNode } from './types';
 import type {
   EqualityCheckFn,
@@ -29,6 +31,7 @@ interface SubscriptionBuildFrame {
   kind: 'root' | 'computed';
   equalityCheck: EqualityCheckFn;
   dependencyVectors: SubVector[];
+  extension: SubscriptionExtensionPlan | undefined;
   dependencies: SubscriptionNode<any>[];
   dependencyKeys: string[];
   nextDependency: number;
@@ -51,6 +54,7 @@ export class SubscriptionRuntime {
   provisionalCurrent: Map<string, SubscriptionNode<any>>;
   provisionalPrevious: Map<string, SubscriptionNode<any>>;
   provisionalSweepScheduled: boolean;
+  private extensionRuntime: SubscriptionExtensionRuntime | undefined;
   private equalityCheckOverride: EqualityCheckFn | undefined;
 
   get equalityCheck(): EqualityCheckFn {
@@ -77,6 +81,7 @@ export class SubscriptionRuntime {
     this.provisionalSweepScheduled = false;
     this.equalityCheckOverride = undefined;
     this.engine = new SubscriptionEngine(getRuntime);
+    this.extensionRuntime = undefined;
   }
 
   register<R = any, K extends Id = Id>(
@@ -117,6 +122,14 @@ export class SubscriptionRuntime {
     return this.createSubscriptionRegistration(id, handlers);
   }
 
+  registerExtension(
+    id: Id,
+    signalsFn: (...params: any[]) => SubVector[],
+    createExtension: Parameters<SubscriptionExtensionRuntime['register']>[2],
+  ): RegistrationHandle | undefined {
+    return this.getOrCreateExtensionRuntime().register(id, signalsFn, createExtension);
+  }
+
   getOrCreate(subVector: SubVector): SubscriptionNode<any> | null {
     const runtime = this.getRuntime();
     const frames: SubscriptionBuildFrame[] = [];
@@ -133,7 +146,6 @@ export class SubscriptionRuntime {
       if (rootSource !== undefined && query.length !== 1) {
         throw new Error(`[uklad] Root subscription '${subId}' does not accept parameters.`);
       }
-
       const key = getSubVectorKey(query);
       const existing = this.subscriptionCache.get(key)?.node;
       if (existing) {
@@ -162,6 +174,7 @@ export class SubscriptionRuntime {
           throw new Error(`[uklad] Subscription '${subId}' returned an invalid dependency vector.`);
         }
       }
+      const extension = this.extensionRuntime?.getPlan(subId, params);
 
       withRuntimeProbeSpan(
         runtime,
@@ -179,6 +192,7 @@ export class SubscriptionRuntime {
         equalityCheck:
           this.subConfigById.get(subId)?.equalityCheck ?? runtime.subscriptions.equalityCheck,
         dependencyVectors,
+        extension,
         dependencies: [],
         dependencyKeys: [],
         nextDependency: 0,
@@ -193,7 +207,8 @@ export class SubscriptionRuntime {
     while (frames.length > 0) {
       const frame = frames[frames.length - 1]!;
       if (frame.nextDependency < frame.dependencyVectors.length) {
-        const dependencyVector = frame.dependencyVectors[frame.nextDependency++]!;
+        const dependencyIndex = frame.nextDependency++;
+        const dependencyVector = frame.dependencyVectors[dependencyIndex]!;
         const depth = frames.length;
         const dependency = resolve(dependencyVector);
         if (dependency) {
@@ -214,10 +229,32 @@ export class SubscriptionRuntime {
         computeFn,
         params,
         equalityCheck,
+        extension,
         dependencies,
         dependencyKeys,
         subId,
       } = frame;
+      let onActive: () => void;
+      let onUnused: () => void;
+      if (extension === undefined) {
+        onActive = () => this.unmarkProvisional(key, subscription);
+        onUnused = () => this.evict(key, subscription);
+      } else {
+        const extensionRuntime = this.extensionRuntime!;
+        let disposeExtension: (() => void) | undefined;
+        onActive = () => {
+          this.unmarkProvisional(key, subscription);
+          disposeExtension = extensionRuntime.activate(extension);
+        };
+        onUnused = () => {
+          try {
+            disposeExtension?.();
+          } finally {
+            disposeExtension = undefined;
+            this.evict(key, subscription);
+          }
+        };
+      }
       const subscription: SubscriptionNode<any> = this.engine.create({
         key,
         query,
@@ -230,8 +267,8 @@ export class SubscriptionRuntime {
             : (dependencyValues: any[]) => computeFn(dependencyValues),
         dependencies,
         equalityCheck,
-        onActive: () => this.unmarkProvisional(key, subscription),
-        onUnused: () => this.evict(key, subscription),
+        onActive,
+        onUnused,
       });
       this.cache(key, subscription, subId, dependencyKeys);
       if (kind === 'computed') this.markProvisional(key, subscription);
@@ -271,7 +308,9 @@ export class SubscriptionRuntime {
     roots: SubscriptionNode<any>[],
     includeEvidence: boolean = false,
   ): readonly RuntimeProbeSubscription[] {
-    return this.engine.publish(roots, includeEvidence);
+    const recalculated = this.engine.publish(roots, includeEvidence);
+    this.extensionRuntime?.notifyPublication();
+    return recalculated;
   }
 
   inspect(node: SubscriptionNode<any>): SubscriptionDiagnostic {
@@ -329,11 +368,13 @@ export class SubscriptionRuntime {
       this.rootSubscriptionKeys.clear();
       this.clearCacheEntries();
       this.subConfigById.clear();
+      this.extensionRuntime?.clearAll();
       return;
     }
     runtime.registry.sub.clear(subId);
     runtime.registry.subDeps.clear(subId);
     this.clearRootSource(subId);
+    this.extensionRuntime?.clear(subId);
     const keys: string[] = [];
     for (const [key, entry] of this.subscriptionCache) {
       if (entry.subId === subId) keys.push(key);
@@ -364,6 +405,25 @@ export class SubscriptionRuntime {
 
   assertPublicationAllowed(): void {
     this.engine.assertPublicationAllowed();
+  }
+
+  private getOrCreateExtensionRuntime(): SubscriptionExtensionRuntime {
+    if (this.extensionRuntime !== undefined) return this.extensionRuntime;
+    const extensionRuntime = new SubscriptionExtensionRuntime({
+      getRuntime: this.getRuntime,
+      hasRoot: (stateKey) => this.rootSubIdBySource.has(stateKey),
+      hasCachedId: (subId) => this.hasCachedId(subId),
+      assertDefinitionCanBeCleared: (subId) => this.assertDefinitionCanBeCleared(subId),
+      readSignal: (query) => {
+        const subscription = this.getOrCreate(query);
+        if (subscription === null) {
+          throw new Error(`[uklad] Subscription extension samples missing signal '${query[0]}'.`);
+        }
+        return this.engine.getSnapshot(subscription);
+      },
+    });
+    this.extensionRuntime = extensionRuntime;
+    return extensionRuntime;
   }
 
   private registerRootHandlers(

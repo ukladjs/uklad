@@ -46,6 +46,9 @@ The design optimizes for two related goals:
    required.
 10. Effects and coeffects keep the same IDs across platforms. Platform folders
     register the web, native, headless, or test implementation for one runtime.
+11. Server-state integrations live at the platform boundary. They attach an
+    external client and extend ordinary application subscriptions; they do not
+    introduce a second application store, React provider, or special view hook.
 
 ## One application runtime
 
@@ -546,6 +549,34 @@ implementation placement. State, events, subscriptions, and UI remain
 feature-based; environment-facing handler registrations are grouped by the
 runtime platform that supplies them.
 
+### Server-state integrations
+
+TanStack Query and similar server-state clients belong beside platform adapters,
+not in event handlers, subscription computations, or views. The application
+still declares normal state roots and root or derived subscriptions in its
+feature. The platform adapter attaches the external client and uses
+`regQuerySub` from `@ukladjs/tanstack-query` to attach an external lifecycle to
+one of those ordinary subscriptions.
+
+```text
+feature state + subscriptions  →  platform query adapter  →  external client
+                                      ↓ observer result
+                              Uklad event → backing state root → subscriptions
+```
+
+The adapter owns query keys, query functions, client defaults, and mapping the
+read-only observer snapshot to the feature's domain-level `loading | ready |
+error` value. The target storage root is explicit and may differ from the
+lifecycle subscription, which allows parameterized derived subscriptions to
+merge each observer's result into a shared keyed root. Views consume Uklad
+subscriptions only; they do not install `QueryClientProvider` or call
+`useQuery`.
+
+Mutations remain effects: an event declares intent, the platform effect invokes
+the mutation, and successful completion invalidates the relevant query keys.
+For the concrete API and ownership rules, see the [TanStack Query
+integration](tanstack-query.md).
+
 ## Canonical directory structure
 
 The application uses feature-based organization even when it is small:
@@ -668,6 +699,7 @@ whole application:
 | -------------- | -------------------------------------------------------------- |
 | `effects.ts`   | Implement all required application effect IDs for the target   |
 | `coeffects.ts` | Implement all required application coeffect IDs for the target |
+| `queries.ts`   | Optional external server-state client and query-subscription installation |
 
 These files are intentionally application-level rather than nested below
 features. If one grows too large, it may delegate to internal platform-local

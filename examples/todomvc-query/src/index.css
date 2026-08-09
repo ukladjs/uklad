@@ -1,0 +1,35 @@
+/* The visual TodoMVC shell is intentionally shared with the persist example. */
+@import '../../todomvc/src/index.css';
+
+.data-mode {
+  margin: 0;
+  padding: 8px 15px;
+  color: #999;
+  font-size: 11px;
+  text-align: center;
+  border-top: 1px solid #ededed;
+}
+
+.query-status {
+  margin: 0;
+  padding: 24px 15px;
+  color: #777;
+  text-align: center;
+}
+
+.query-status p {
+  margin: 0 0 10px;
+}
+
+.query-status button {
+  padding: 4px 9px;
+  color: #777;
+  background: transparent;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.query-status-error {
+  color: #af5b5e;
+}

@@ -134,6 +134,12 @@ access require the explicit `@ukladjs/core/devtools` and
 
 Uklad settles changed subscription graphs in one STATE-driven topological wave before notifying React. Active snapshots are cache-only, dormant reads are memoized pulls, equality cuts off downstream work, and computed nodes are evicted when their last consumer leaves. The runtime invariants and work budgets are documented in the [central subscription-runtime documentation](https://github.com/ukladjs/uklad/blob/main/docs/architecture/subscription-runtime.md).
 
+For an external lifecycle that should follow one live subscription instance,
+`regSubExt` attaches a controller without changing the subscription's pure
+data definition. Its signals are passive reads, and any mapped value returns
+through Uklad's normal event → state → subscription path. The first integration
+is [`@ukladjs/tanstack-query`](https://github.com/ukladjs/uklad/tree/main/packages/tanstack-query): TanStack Query owns the server cache while Uklad exposes a clean domain read model. See the [integration guide](https://github.com/ukladjs/uklad/blob/main/docs/architecture/tanstack-query.md).
+
 Side effects (HTTP, storage, timers, navigation) live in **effects/coeffects**, registered by id and emitted from event handlers as data — which is what keeps handlers pure, apps portable across web/mobile/desktop, and behavior verifiable by tools.
 
 ## 🎯 Why Uklad?
@@ -155,6 +161,7 @@ Side effects (HTTP, storage, timers, navigation) live in **effects/coeffects**, 
 
 - Examples
   - [TodoMVC](https://github.com/ukladjs/uklad/tree/main/examples/todomvc) - Classic todo app implementation showcasing core uklad patterns
+  - [TodoMVC with TanStack Query](https://github.com/ukladjs/uklad/tree/main/examples/todomvc-query) - Server-state ownership and query-subscription integration
   - [Issue Triage Board](https://github.com/flexsurfer/reflex-demo) - Demo app built with uklad architecture rules ([Live Video](https://www.youtube.com/watch?v=xwv5SwlF4Dg))
   - [Einbürgerungstest](https://github.com/flexsurfer/einburgerungstest/) - Cross-platform web/mobile app built with uklad ([Live Demo](https://www.ebtest.org/))
   - [StarRupture Planner](https://github.com/flexsurfer/starrupture-planner) - Production planning tool built with uklad ([Live Demo](https://www.starrupture-planner.com/))

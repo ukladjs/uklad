@@ -10,13 +10,53 @@ and cache-only diagnostics.
 The runtime has two evaluation paths:
 
 - A live graph is pushed once from all changed STATE roots in topological-rank
-  order. Every cache settles before the first listener runs.
-- A dormant read uses an iterative post-order pull. A publication epoch makes
-  repeated reads between STATE waves constant-time cache hits.
+  order. Every cache settles before the first listener runs. Subscription
+  extensions sample their separate signal tuple when a real consumer activates
+  them. After later STATE publications they schedule one passive, coalesced
+  tuple check, but never publish a graph wave themselves.
+- A dormant read uses an iterative post-order pull. State-only paths memoize
+  between STATE waves and serve their cached snapshot without starting any
+  extension lifecycle.
 
-The STATE's coalesced flush is the only publication boundary. There is no
-per-subscription task queue, dirty propagation, notification debt, dependency
-resolver, or node revival.
+STATE commits enter one synchronous settlement wave. There is no per-subscription
+task queue, dirty propagation, notification debt, dependency resolver, or node
+revival.
+
+## Subscription extensions
+
+`regSubExt` attaches an explicit lifecycle controller to an already-registered
+root or derived subscription. It does not change that subscription's pure data
+definition: roots still read one STATE key, and derived subscriptions still
+compute from only their declared data dependencies.
+
+An extension declares its own **signals**. A signal is an ordinary subscription
+vector sampled without creating a dependency edge. `SubscriptionExtension.sync`
+runs only after a live downstream consumer has activated the lifecycle target
+and receives the latest signal tuple; `dispose()` runs when the final consumer
+leaves. The first sync is immediate for that activation. Later STATE
+publications schedule one coalesced sample on the next host task, and `sync`
+runs only if a signal value changed. Signal nodes remain dormant and may be
+swept and recreated normally; extension observation is never a liveness reason.
+
+This is the generic switch-map mechanism: an extension can replace an external
+observer when a signal changes. Any extension may update an
+explicitly named top-level state key through the runtime-supplied `updateRoot`
+capability. The runtime requires that key to back a registered root
+subscription and applies the updater to its latest value through a protected
+event; it never calls subscription publication directly:
+
+```text
+signal state → extension sync → external observer → event → STATE root → ordinary subscription
+```
+
+The lifecycle target and storage root are independent. A parameterized derived
+subscription can therefore own one external observer per parameter vector and
+merge every result into a shared backing root. Because each update is applied
+to the latest root value, concurrent instances do not overwrite one another.
+
+The signal resolver, factory, and first sync run only from consumer activation,
+never from subscription computation or a dormant read. An extension must
+therefore keep its factory declarative and start external work from `sync`.
 
 ## Per-publication budgets
 
@@ -50,8 +90,8 @@ active/dormant boundaries, and deep registered graphs.
   declares. The runtime keeps throwing on a parameterized root query, which is
   what an undeclared contract still relies on.
 - Computed dependencies are static for one serialized subscription key.
-- Computed nodes have a terminal live lifecycle. Their last consumer evicts
-  them; a later key lookup creates a fresh graph.
+- Computed nodes have a terminal live lifecycle.
+  Their last consumer evicts them; a later key lookup creates a fresh graph.
 - Evicting or explicitly clearing a cached dependency also invalidates every
   dormant cached parent through iterative reverse registry edges. Canonical
   cache entries therefore never retain a terminal dependency node.
@@ -218,7 +258,7 @@ flush 2: the underlying data is fixed
 ## Devtools diagnostics
 
 `getSubscriptionDiagnostics()` returns fresh, read-only DTOs containing a
-subscription key/query, root-or-computed kind, active state, version, and
+subscription key/query, root/computed kind, active state, version, and
 cached value/error status. It never pulls, recomputes, subscribes, or exposes
 listeners/dependencies. Devtools can diff versions and detect disappeared keys
 without coupling to runtime internals.

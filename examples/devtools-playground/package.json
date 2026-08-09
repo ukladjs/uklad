@@ -5,17 +5,23 @@
   "description": "Example app demonstrating Uklad Devtools",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.mjs",
+    "dev:vite": "vite",
+    "dev:api": "node scripts/playground-api-server.mjs",
     "dev:headless": "vite-node --watch src/headless.ts",
     "clean": "node ../../scripts/clean.mjs dist vite.config.js vite.config.d.ts tsconfig.tsbuildinfo tsconfig.node.tsbuildinfo",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "build": "pnpm run typecheck && vite build",
     "check": "pnpm run typecheck",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:unit": "vitest run"
   },
   "dependencies": {
+    "@tanstack/query-core": "^5.0.0",
     "@ukladjs/core": "workspace:*",
     "@ukladjs/devtools": "workspace:*",
+    "@ukladjs/tanstack-query": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
@@ -27,6 +33,7 @@
     "@vitejs/plugin-react": "^6.0.5",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "^8.2.0",
-    "vite-node": "^6.0.0"
+    "vite-node": "^6.0.0",
+    "vitest": "4.1.10"
   }
 }

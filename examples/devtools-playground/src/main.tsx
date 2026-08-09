@@ -19,6 +19,8 @@ import { createPlaygroundRuntime } from './app/uklad/runtime';
 import App from './app/ui/App';
 import { registerWebCoeffects, webCoeffectModes } from './platform/web/coeffects';
 import { registerWebEffects, webEffectModes } from './platform/web/effects';
+import { playgroundServerApi } from './platform/web/server-api';
+import { createPlaygroundQueryClient, installServerQueries } from './platform/web/server-queries';
 import './index.css';
 
 enableMapSet();
@@ -29,6 +31,8 @@ const browserRuntime = createPlaygroundRuntime({
 });
 
 registerFeatureModules(browserRuntime);
+const queryClient = createPlaygroundQueryClient();
+installServerQueries(browserRuntime, queryClient, playgroundServerApi);
 browserRuntime.registerModule(registerWebEffects);
 browserRuntime.registerModule(registerWebCoeffects);
 

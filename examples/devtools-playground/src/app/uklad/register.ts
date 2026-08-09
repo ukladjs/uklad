@@ -3,11 +3,18 @@ import type { UkladDisposer, UkladRuntime } from '@ukladjs/core/vanilla';
 import { collectionsModule } from '../../features/collections/module';
 import { counterModule } from '../../features/counter/module';
 import { diagnosticsModule } from '../../features/diagnostics/module';
+import { serverModule } from '../../features/server/module';
 import { usersModule } from '../../features/users/module';
 import type { AppContracts } from './contracts';
 
 /** The platform-independent feature modules every entry point installs. */
-const featureModules = [counterModule, usersModule, collectionsModule, diagnosticsModule];
+const featureModules = [
+  counterModule,
+  usersModule,
+  serverModule,
+  collectionsModule,
+  diagnosticsModule,
+];
 
 /**
  * Install the application's feature modules on one runtime.

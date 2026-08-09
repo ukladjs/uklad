@@ -5,8 +5,12 @@ import type {
   ContractNamedCoeffectValues,
   ContractHasOpenCoeffects,
   ContractState,
+  ContractStateKey,
+  ContractStateValue,
   DefaultContracts,
+  PermissiveUkladContracts,
   RuntimeOwnedCoeffectId,
+  UkladContracts,
 } from './contracts';
 
 // State and shared identifiers
@@ -259,6 +263,43 @@ export type SubVector = [Id, ...any[]];
 
 export type SubHandler = (...values: any[]) => any;
 export type SubDepsHandler = (...params: any[]) => SubVector[];
+
+/** A state transition applied to the latest value behind a root subscription. */
+export type SubscriptionRootUpdater<TValue = unknown> = (current: TValue) => TValue;
+
+/**
+ * Capability supplied to one active subscription extension.
+ *
+ * `updateRoot` routes an updater through Uklad's private event → STATE path.
+ * The lifecycle target and storage target are intentionally independent: an
+ * extension attached to a parameterized derived subscription can update an
+ * ordinary backing root without activating or retaining that root.
+ */
+export interface SubscriptionExtensionContext<
+  TContracts extends UkladContracts = PermissiveUkladContracts,
+> {
+  updateRoot<TStateKey extends ContractStateKey<TContracts>>(
+    stateKey: TStateKey,
+    updater: SubscriptionRootUpdater<ContractStateValue<TContracts, TStateKey>>,
+  ): void;
+}
+
+/**
+ * Lifecycle attached to an ordinary subscription without changing its data
+ * definition.
+ *
+ * An extension is created when the subscription gains its first consumer.
+ * Its first `sync` runs immediately with values from the extension's separate
+ * passive signals. After later STATE publications, one coalesced sample calls
+ * `sync` only when that tuple changes. `dispose` runs after the final consumer
+ * leaves. The subscription's own root or derived compute function remains pure,
+ * and sampling a signal neither registers a listener nor keeps its subscription
+ * active.
+ */
+export interface SubscriptionExtension<TSignals extends readonly unknown[] = readonly unknown[]> {
+  sync(signals: TSignals): void;
+  dispose(): void;
+}
 
 export interface SubConfig {
   equalityCheck?: EqualityCheckFn;

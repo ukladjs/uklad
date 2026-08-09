@@ -56,6 +56,8 @@ import type {
   Id,
   Interceptor,
   SubConfig,
+  SubscriptionExtension,
+  SubscriptionExtensionContext,
   SubVector,
 } from '../types';
 
@@ -66,6 +68,7 @@ export type {
   UkladRuntimeClient,
   RuntimeEventHandler,
   RuntimeStateRevisions,
+  RuntimeSubscriptionExtensionFactory,
   RuntimeSubscriptionHandler,
 } from './api';
 
@@ -253,6 +256,23 @@ class UkladRuntimeImplementation<TContracts extends UkladContracts> {
       dependencies as any,
       compute as any,
       config,
+    );
+    if (registration) this.recordRegistration(registration);
+  }
+
+  regSubExt(
+    id: Id,
+    signals: (...params: any[]) => readonly SubVector[],
+    createExtension: (
+      context: SubscriptionExtensionContext,
+      ...params: any[]
+    ) => SubscriptionExtension<any>,
+  ): void {
+    this.assertUsable();
+    const registration = this.#core.subscriptions.registerExtension(
+      id,
+      signals as (...params: any[]) => SubVector[],
+      createExtension,
     );
     if (registration) this.recordRegistration(registration);
   }
@@ -479,6 +499,7 @@ class UkladRuntimeImplementation<TContracts extends UkladContracts> {
       regEffect: this.regEffect.bind(this),
       regCoeffect: this.regCoeffect.bind(this),
       regRootSub: this.regRootSub.bind(this),
+      regSubExt: this.regSubExt.bind(this) as unknown as UkladRegistrar<TContracts>['regSubExt'],
       regSub: this.regSub.bind(this),
     });
   }

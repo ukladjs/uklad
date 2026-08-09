@@ -15,6 +15,7 @@ import type {
   ContractSubscriptionId,
   ContractSubscriptionParams,
   ContractSubscriptionResult,
+  ContractSubscriptionSignalValues,
   ContractSubscriptionVector,
   PermissiveUkladContracts,
   UkladContracts,
@@ -34,6 +35,8 @@ import type {
   ErrorHandler,
   Interceptor,
   SubConfig,
+  SubscriptionExtension,
+  SubscriptionExtensionContext,
 } from '../types';
 
 export type RuntimeEventHandler<
@@ -60,6 +63,16 @@ export type RuntimeCoeffectHandler<TContracts extends UkladContracts, TId extend
 export type RuntimeSubscriptionHandler<TContracts extends UkladContracts, TId extends string> = (
   ...values: any[]
 ) => ContractSubscriptionResult<TContracts, TId>;
+
+/** Builds one lifecycle controller attached to an ordinary subscription instance. */
+export type RuntimeSubscriptionExtensionFactory<
+  TContracts extends UkladContracts,
+  TId extends string,
+  TSignals extends readonly ContractSubscribeVector<TContracts>[],
+> = (
+  context: SubscriptionExtensionContext<TContracts>,
+  ...params: ContractSubscriptionParams<TContracts, TId>
+) => SubscriptionExtension<ContractSubscriptionSignalValues<TContracts, TSignals>>;
 
 /** Monotonic committed and render-published state generations. */
 export interface RuntimeStateRevisions {
@@ -146,6 +159,29 @@ export interface UkladRegistrar<TContracts extends UkladContracts = PermissiveUk
   regRootSub<TId extends ContractSubscriptionId<TContracts>, TKey extends string>(
     id: ContractRootSubscriptionSubject<TContracts, TId>,
     sourceKey: ContractRootSubscriptionSource<TContracts, TId, TKey>,
+  ): void;
+  /**
+   * Attach an external lifecycle to an already-registered ordinary
+   * subscription.
+   *
+   * The subscription's data definition is unchanged: a root still reads its
+   * state key and a derived subscription still computes only from its own
+   * dependencies. This extension has a separate tuple of passively sampled
+   * signals.
+   * Its `sync` runs after commit only while the target has live downstream
+   * consumers, and `dispose` runs after the final consumer leaves. Signal
+   * values are re-read passively after STATE publications: those reads never
+   * register a render/watch listener or keep the sampled graph active.
+   *
+   * The factory receives an `updateRoot` capability. It names a top-level state
+   * key explicitly and applies an updater through a private Uklad event. The
+   * runtime requires that key to back an ordinary root subscription, while the
+   * lifecycle and storage targets may otherwise differ.
+   */
+  regSubExt<TId extends string, TSignals extends readonly ContractSubscribeVector<TContracts>[]>(
+    id: TId,
+    signals: (...params: ContractSubscriptionParams<TContracts, TId>) => readonly [...TSignals],
+    createExtension: RuntimeSubscriptionExtensionFactory<TContracts, TId, TSignals>,
   ): void;
   /**
    * Register a computed subscription.

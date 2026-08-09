@@ -18,8 +18,17 @@ export type {
   ContractNamedCoeffectBindings,
   ContractCoeffectPayloads,
   ContractEventPayloads,
+  ContractRootSubscriptionId,
   ContractState,
+  ContractStateKey,
+  ContractStateValue,
+  ContractSubscribeVector,
+  ContractSubscriptionDependencyValues,
+  ContractSubscriptionId,
   ContractSubscriptionPayloads,
+  ContractSubscriptionParams,
+  ContractSubscriptionResult,
+  ContractSubscriptionSignalValues,
   CreateUkladRuntimeOptions,
   DefaultContracts,
   PermissiveUkladContracts,
@@ -35,6 +44,7 @@ export type {
   UkladRuntime,
   UkladRuntimeClient,
   RuntimeEventHandler,
+  RuntimeSubscriptionExtensionFactory,
   RuntimeSubscriptionHandler,
 } from './runtime/api';
 /** Structural diagnostic data retained as a type-only compatibility export. */
@@ -66,6 +76,9 @@ export type {
   SubConfig,
   SubDepsHandler,
   SubHandler,
+  SubscriptionExtension,
+  SubscriptionExtensionContext,
+  SubscriptionRootUpdater,
   SubVector,
 } from './types';
 export type {

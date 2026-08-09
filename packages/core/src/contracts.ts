@@ -128,6 +128,18 @@ export type ContractState<TContracts> = TContracts extends { readonly state: inf
     : Record<string, any>
   : Record<string, any>;
 
+type StateKeyAsString<TKey> = TKey extends string ? TKey : TKey extends number ? `${TKey}` : never;
+
+/** String state keys accepted by APIs that address one top-level state root. */
+export type ContractStateKey<TContracts> = StateKeyAsString<keyof ContractState<TContracts>>;
+
+/** Value stored at one contract-declared top-level state key. */
+export type ContractStateValue<
+  TContracts,
+  TKey extends ContractStateKey<TContracts>,
+> = ContractState<TContracts>[ResolveStateKey<ContractState<TContracts>, TKey> &
+  keyof ContractState<TContracts>];
+
 /** Normalized event payload map for `TContracts`. */
 export type ContractEventPayloads<TContracts> = TContracts extends {
   readonly events: infer TEvents;
@@ -623,8 +635,8 @@ export type ContractSubscriptionVector<
 /** Subscription vectors accepted by public query entry points. */
 export type ContractSubscribeVector<TContracts> = ContractSubscriptionVector<TContracts>;
 
-/** Result produced by one declared dependency vector. */
-type DependencyValue<TContracts, TDependency> = TDependency extends readonly [
+/** Result produced by one declared subscription vector. */
+type SubscriptionVectorValue<TContracts, TVector> = TVector extends readonly [
   infer TId extends string,
   ...unknown[],
 ]
@@ -645,7 +657,20 @@ export type ContractSubscriptionDependencyValues<
   TContracts,
   TDependencies extends readonly unknown[],
 > = {
-  -readonly [TIndex in keyof TDependencies]: DependencyValue<TContracts, TDependencies[TIndex]>;
+  -readonly [TIndex in keyof TDependencies]: SubscriptionVectorValue<
+    TContracts,
+    TDependencies[TIndex]
+  >;
+};
+
+/**
+ * Values passively sampled for a subscription extension.
+ *
+ * Signal vectors name ordinary subscriptions, but they never become graph
+ * dependencies and do not keep the sampled subscriptions active.
+ */
+export type ContractSubscriptionSignalValues<TContracts, TSignals extends readonly unknown[]> = {
+  -readonly [TIndex in keyof TSignals]: SubscriptionVectorValue<TContracts, TSignals[TIndex]>;
 };
 
 /** Idempotent cleanup returned by watches and module installation. */

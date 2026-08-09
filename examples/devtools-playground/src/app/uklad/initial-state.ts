@@ -11,6 +11,12 @@ import {
   createDiagnosticsNested,
   createDiagnosticsPayload,
 } from '../../features/diagnostics/state';
+import {
+  createLoadingServerQuery,
+  createServerItems,
+  createServerRegion,
+} from '../../features/server/state';
+import type { ServerClock, ServerRegionSummary } from '../../features/server/state';
 import { createUsersList, createUsersLoading } from '../../features/users/state';
 import { stateKeys } from './catalog';
 import type { AppState } from './contracts';
@@ -28,6 +34,11 @@ export function createInitialState(): AppState {
 
     [stateKeys.usersList]: createUsersList(),
     [stateKeys.usersLoading]: createUsersLoading(),
+
+    [stateKeys.serverClock]: createLoadingServerQuery<ServerClock>(),
+    [stateKeys.serverItems]: createServerItems(),
+    [stateKeys.serverRegion]: createServerRegion(),
+    [stateKeys.serverRegionSummary]: createLoadingServerQuery<ServerRegionSummary>(),
 
     [stateKeys.collectionsUsers]: createCollectionsUsers(),
     [stateKeys.collectionsPermissions]: createCollectionsPermissions(),

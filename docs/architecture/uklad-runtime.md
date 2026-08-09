@@ -196,6 +196,12 @@ imperative reads, subscriptions, publication, diagnostics, and cache policy.
 Callers use this service directly rather than crossing module boundaries
 through wrapper functions.
 
+When an application calls `regSubExt`, the service lazily creates a
+`SubscriptionExtensionRuntime`. It owns extension definitions and active
+external lifecycles, while the ordinary subscription graph remains owned by
+`SubscriptionRuntime` and `SubscriptionEngine`. An extension's signal reads
+are passive: they do not create graph edges or retain the sampled nodes.
+
 Its `SubscriptionEngine` owns graph semantics:
 
 | Mechanism                      | Purpose                                                                                |
@@ -251,6 +257,7 @@ Paths are relative to `src/`.
 | `runtime/subscriptions/types.ts`                | Opaque graph handles, specs, listener metadata, and diagnostics                   |
 | `runtime/subscriptions/validation.ts`           | Subscription registration option validation                                       |
 | `runtime/subscriptions/subscription-runtime.ts` | `SubscriptionRuntime`: definitions, construction, cache, leases, and engine owner |
+| `runtime/subscriptions/extension-runtime.ts`    | Lazy extension definitions, active lifecycle controllers, and protected root-update bridge |
 | `runtime/subscriptions/cell.ts`                 | Cached node values, errors, stamps, and listener delivery                         |
 | `runtime/subscriptions/engine.ts`               | Reactive graph activation, traversal, publication, and release                    |
 | `runtime/subscriptions/keys.ts`                 | Canonical query-key serialization                                                 |

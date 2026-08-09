@@ -4,10 +4,11 @@ import { appIds } from '../uklad/catalog';
 import CollectionsPanel from '../../features/collections/ui/CollectionsPanel';
 import CounterPanel from '../../features/counter/ui/CounterPanel';
 import DiagnosticsPanel from '../../features/diagnostics/ui/DiagnosticsPanel';
+import ServerPanel from '../../features/server/ui/ServerPanel';
 import UsersPanel from '../../features/users/ui/UsersPanel';
 import './App.css';
 
-type TabId = 'counter' | 'users' | 'collections' | 'diagnostics';
+type TabId = 'counter' | 'users' | 'server' | 'collections' | 'diagnostics';
 
 /**
  * The application shell. It owns no state roots and no registrations — it only
@@ -29,6 +30,15 @@ const TABS: { id: TabId; label: string; subs: string }[] = [
       appIds.subscriptions.usersList,
       appIds.subscriptions.usersLoading,
       appIds.subscriptions.usersById,
+    ].join(', '),
+  },
+  {
+    id: 'server',
+    label: 'Server',
+    subs: [
+      appIds.subscriptions.serverClock,
+      appIds.subscriptions.serverItemById,
+      appIds.subscriptions.serverRegionSummary,
     ].join(', '),
   },
   {
@@ -76,6 +86,7 @@ function App() {
         <div className="tab-content">
           {activeTab === 'counter' && <CounterPanel />}
           {activeTab === 'users' && <UsersPanel />}
+          {activeTab === 'server' && <ServerPanel />}
           {activeTab === 'collections' && <CollectionsPanel />}
           {activeTab === 'diagnostics' && <DiagnosticsPanel />}
         </div>

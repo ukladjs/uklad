@@ -124,6 +124,7 @@ describe('instance-scoped runtime', () => {
       'regEffect',
       'regCoeffect',
       'regRootSub',
+      'regSubExt',
       'regSub',
     ]) {
       expect(exposed[registrarMethod]).toBeUndefined();

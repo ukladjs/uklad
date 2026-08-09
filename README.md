@@ -42,7 +42,7 @@ Legend: ✅ built in · 🟡 partial, beta, or ecosystem-assisted · ⬜ planned
 | **Lazy feature registration**                     | ✅ scoped install/dispose with safe HMR                                                                                            | ✅ reducer and endpoint injection               | 🟡 application-managed                        | **Parity · shipped**                                                  |
 | **Persistence + versioned migrations**            | 🟡 official synchronous beta                                                                                                       | 🟡 ecosystem (`redux-persist`)                  | ✅ official sync/async middleware             | **Beta** · async durability, SSR, merge, multi-attach remain          |
 | **Fail-loud diagnostics**                         | 🟡 strict errors; typo suggestions missing                                                                                         | ✅ invariant checks and diagnostics             | 🟡 limited built-in checks                    | **Roadmap** · suggestions and release hardening                       |
-| **Async server data and caching**                 | 🟡 pair with TanStack Query; effects for commands                                                                                  | ✅ RTK Query                                    | 🟡 pair with a server-state library           | **Intentional pairing** · document and test, do not clone             |
+| **Async server data and caching**                 | 🟡 [`@ukladjs/tanstack-query`](packages/tanstack-query) pairs headless TanStack Query with Uklad subscriptions; effects for commands                 | ✅ RTK Query                                    | 🟡 pair with a server-state library           | **Intentional pairing** · managed read-only snapshots, not a writable cache clone |
 | **Per-call subscription equality**                | 🟡 definition/runtime level                                                                                                        | ✅ per hook call                                | ✅ custom-equality hooks                      | **Backlog** · evidence-driven                                         |
 | **Entity / normalization helpers**                | ⬜                                                                                                                                 | ✅ `createEntityAdapter`                        | —                                             | **Backlog** · evidence-driven                                         |
 | **Time travel and application undo/redo**         | 🟡 patch groundwork; semantics open                                                                                                | ✅ DevTools time travel                         | 🟡 DevTools/community                         | **Roadmap** · specify replay, effects, privacy, and persistence first |
@@ -96,14 +96,18 @@ structured runtime evidence instead of guessing from source text or logs.
   React bindings, vanilla/headless APIs, tests, benchmarks, and agent templates.
 - [`@ukladjs/persist`](packages/persist) — experimental
   synchronous persistence built on the public runtime APIs.
+- [`@ukladjs/tanstack-query`](packages/tanstack-query) — headless TanStack Query integration
+  that routes observer updates through Uklad events and managed state.
 - [`@ukladjs/devtools`](packages/devtools) — DevTools SDK, server,
   CLI, security boundaries, and package assembly.
 - [`@ukladjs/devtools-mcp`](packages/devtools-mcp) — the
   experimental MCP bridge for inspection and controlled development actions.
 - [`@ukladjs/devtools-ui`](packages/devtools-ui) — the private
   dashboard source assembled into the DevTools package.
-- [`TodoMVC`](examples/todomvc) and [`DevTools playground`](examples/devtools-playground)
-  — example applications and integration fixtures.
+- [`TodoMVC (persist)`](examples/todomvc),
+  [`TodoMVC (TanStack Query)`](examples/todomvc-query), and
+  [`DevTools playground`](examples/devtools-playground) — example applications
+  and integration fixtures.
 
 Package metadata includes build and future packaging configuration, but that is
 not a claim that the current framework is ready for publication.
@@ -138,6 +142,7 @@ pnpm dev:ui
 pnpm dev:playground
 pnpm dev:playground:headless
 pnpm dev:todomvc
+pnpm dev:todomvc-query
 ```
 
 ## Documentation

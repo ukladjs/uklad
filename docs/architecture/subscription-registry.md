@@ -4,8 +4,10 @@ Paths in this document are relative to `src/`.
 
 Framework bookkeeping is split by ownership. `RuntimeRegistry` in
 `runtime/registry.ts` stores handler definitions, while `SubscriptionRuntime`
-in `runtime/subscriptions/subscription-runtime.ts` owns subscription definitions, graph
-construction, the canonical cache, and its lifecycle metadata.
+in `runtime/subscriptions/subscription-runtime.ts` owns subscription graph
+construction and the canonical cache. `SubscriptionExtensionRuntime` is
+created on the first `regSubExt` and owns extension definitions and activation
+plans.
 `runtime/subscriptions/keys.ts` owns canonical query-key serialization and its
 development validation.
 Event handlers and interceptor lists are one immutable definition in
@@ -19,12 +21,12 @@ evaluation—live in the `SubscriptionEngine` owned eagerly by
 The handler and subscription-cache modules separate two things that are easy to
 conflate:
 
-- **Definitions** — `id → handler function`. Written at registration
-  (`regRootSub`, `regSub`, `regEvent`, …), read whenever an instance is built
-  or an event is handled. Definition IDs are unique, so duplicate registration
-  throws. HMR must clear or dispose the old definition before registering its
-  replacement. Clears remove either a selected definition or the complete
-  registry.
+- **Definitions** — `id → handler function` or subscription extension. Written
+  at registration (`regRootSub`, `regSub`, `regSubExt`, `regEvent`, …), read
+  whenever an instance is built or an event is handled. Subscription IDs are
+  unique; an extension then attaches to one already-defined id. HMR must clear
+  or dispose the old definition before registering its replacement. Clears
+  remove either a selected definition or the complete registry.
 - **Instances** — `serialized query key → built subscription graph`. Created
   lazily on first read of a query vector, evicted when their last consumer
   leaves. One definition (`['todos-by-id']`) produces many instances
@@ -38,25 +40,26 @@ Two architectural facts explain why the instance-side metadata exists at all:
 1. **Subscription nodes are opaque.** The cache cannot ask a node for its
    dependencies, its kind, or whether it is a root. Any structural fact the
    cache needs, it must record itself at creation time.
-2. **Computed instances are terminal.** They are evicted when unused rather
-   than revived. Eviction of one instance must correctly invalidate every
+2. **Non-root instances are terminal.** Computed instances are evicted when
+   unused rather than revived. Eviction of one instance must correctly invalidate every
    dormant cached parent that references it, so the cache tracks reverse
    edges the old revival machinery made unnecessary.
 
 ## Store summary
 
-| Store                                        | Owner                 | Purpose                                           |
-| -------------------------------------------- | --------------------- | ------------------------------------------------- |
-| `handlers`                                   | `RuntimeRegistry`     | Public typed handler projections                  |
-| `eventDefinitions`                           | `RuntimeRegistry`     | Atomic event handler + immutable interceptor list |
-| system baselines                             | `RegistrationStore`   | Framework handlers restored after clears          |
-| `rootSubIdBySource`                          | `SubscriptionRuntime` | Changed STATE key → owning root                   |
-| `rootSubSourceById`                          | `SubscriptionRuntime` | Is this id a root; what key it reads              |
-| `rootSubscriptionKeys`                       | `SubscriptionRuntime` | Persistence guard for root cells                  |
-| `subscriptionCache`                          | `SubscriptionRuntime` | Canonical built instances                         |
-| `dependentSubscriptionKeys`                  | `SubscriptionRuntime` | Reverse edges for cascade invalidation            |
-| `provisionalCurrent` / `provisionalPrevious` | `SubscriptionRuntime` | Two-generation aborted-render sweep               |
-| `subConfigById`                              | `SubscriptionRuntime` | Per-subscription equality options                 |
+| Store                                        | Owner                          | Purpose                                                           |
+| -------------------------------------------- | ------------------------------ | ----------------------------------------------------------------- |
+| `handlers`                                   | `RuntimeRegistry`              | Public typed handler projections                                  |
+| `eventDefinitions`                           | `RuntimeRegistry`              | Atomic event handler + immutable interceptor list                 |
+| system baselines                             | `RegistrationStore`            | Framework handlers restored after clears                          |
+| `rootSubIdBySource`                          | `SubscriptionRuntime`          | Changed STATE key → owning root                                   |
+| `rootSubSourceById`                          | `SubscriptionRuntime`          | Is this id a root; what key it reads                              |
+| `rootSubscriptionKeys`                       | `SubscriptionRuntime`          | Persistence guard for root cells                                  |
+| `definitions`                                | `SubscriptionExtensionRuntime` | Factories/passive signals attached to an ordinary subscription id |
+| `subscriptionCache`                          | `SubscriptionRuntime`          | Canonical built instances                                         |
+| `dependentSubscriptionKeys`                  | `SubscriptionRuntime`          | Reverse edges for cascade invalidation                            |
+| `provisionalCurrent` / `provisionalPrevious` | `SubscriptionRuntime`          | Two-generation aborted-render sweep                               |
+| `subConfigById`                              | `SubscriptionRuntime`          | Per-subscription equality options                                 |
 
 ## Handler definitions — `RegistrationStore`
 
@@ -67,9 +70,24 @@ is the single implementation of duplicate detection, registration identity,
 safe release, ordering, and framework baselines. Its public `values` projection
 uses a null-prototype object, so valid string ids such as `constructor` and
 `__proto__` cannot collide with `Object.prototype`.
-`regRootSub` and `regSub` both write to `registry.sub` and `registry.subDeps`.
+`regRootSub` and `regSub` both reserve ids in `registry.sub` and
+`registry.subDeps`.
 A root subscription registers a `sub` handler that reads one top-level state
 key and a `subDeps` handler returning `[]`.
+`regSubExt` requires one already-registered target id. Its passive signals and
+lifecycle factory live in `SubscriptionExtensionRuntime`; they
+do not alter the target's pure root or derived subscription definition. The
+extension runtime passively re-samples signal values after STATE publication,
+without a render/watch listener and without keeping those subscriptions active.
+This lets an integration own an external lifecycle without creating a new
+subscription kind in the graph.
+
+The extension runtime and its protected event bridge are lazy. A runtime that
+never registers `regSubExt` allocates no extension registry and installs no
+extension event. An active extension may apply an updater to any explicitly
+named top-level state key backed by a registered root subscription; the bridge
+authenticates the opaque update and routes it through the ordinary event → STATE
+→ subscription path.
 
 This is the only registry devtools reads directly (`getHandlers`) to enumerate
 what the app declares. Registering an existing ID throws for every handler kind.

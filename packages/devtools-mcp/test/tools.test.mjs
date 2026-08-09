@@ -61,6 +61,10 @@ test('app_status reports a healthy headless session without hints', async () => 
           runtimeVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
           inspectorApiVersion: 2,
         },
+        operations: {
+          available: true,
+          runtimeInstanceId: 'healthy-headless:instance:1',
+        },
         security: {
           authenticated: true,
           loopbackOnly: true,
@@ -83,9 +87,51 @@ test('app_status reports a healthy headless session without hints', async () => 
   assert.deepEqual(body.capabilities, ['inspect', 'dispatch']);
   assert.equal(body.readOnly, false);
   assert.equal(body.protocol.version, UKLAD_DEVTOOLS_PROTOCOL_VERSION);
+  assert.deepEqual(body.operations, {
+    available: true,
+    runtimeInstanceId: 'healthy-headless:instance:1',
+  });
   assert.equal(body.security.authenticated, true);
   assert.equal('hints' in body, false);
   assert.equal('connectedApps' in body, false);
+});
+
+test('app_status distinguishes legacy trace dispatch from operation snapshots', async () => {
+  const apiClient = {
+    async getStatus() {
+      return {
+        success: true,
+        mcpEnabled: true,
+        appConnected: true,
+        connectedApps: 1,
+        connectedUIs: 0,
+        sessionEpoch: 3,
+        runtime: 'headless',
+        tracing: false,
+        handlers: { event: 1, fx: 0, cofx: 0, sub: 0 },
+        stateAvailable: true,
+        traceCount: 0,
+        capabilities: ['inspect', 'dispatch'],
+        readOnly: false,
+        protocol: { version: UKLAD_DEVTOOLS_PROTOCOL_VERSION },
+        operations: {
+          available: true,
+          runtimeInstanceId: 'headless:instance:1',
+        },
+        security: { authenticated: true },
+      };
+    },
+  };
+
+  const body = parseToolResult(await appStatusTool(apiClient).handler({}));
+
+  assert.deepEqual(body.operations, {
+    available: true,
+    runtimeInstanceId: 'headless:instance:1',
+  });
+  assert.equal(body.hints.length, 1);
+  assert.match(body.hints[0], /legacy dispatch_event/i);
+  assert.match(body.hints[0], /dispatch_and_wait remains available/i);
 });
 
 test('every MCP tool accepts runtimeId, routes it, and surfaces runtime identity', async () => {
@@ -485,7 +531,7 @@ test('dispatch_event formats failed outcomes with actionable hints', async () =>
   assert.equal('params' in body, false);
 });
 
-test('dispatch_and_wait returns the canonical operation snapshot as structured content', async () => {
+test('dispatch_and_wait returns the DevTools operation snapshot as structured content', async () => {
   const apiClient = {
     async dispatchAndWait(eventName, params, runtimeId) {
       assert.equal(eventName, 'increment-counter');
@@ -497,6 +543,9 @@ test('dispatch_and_wait returns the canonical operation snapshot as structured c
         runtimeName: 'Headless runtime',
         sessionEpoch: 4,
         operation: {
+          schemaVersion: 0,
+          runtimeInstanceId: 'headless-runtime:instance:1',
+          completion: 'cascade-published',
           operationId: 'headless-runtime:instance:1:op:1',
           rootEventInstanceId: 'headless-runtime:instance:1:event:1',
           acceptedSequence: 1,
@@ -505,13 +554,30 @@ test('dispatch_and_wait returns the canonical operation snapshot as structured c
           eventInstanceIds: ['headless-runtime:instance:1:event:1'],
           events: [{
             eventInstanceId: 'headless-runtime:instance:1:event:1',
+            eventId: 'increment-counter',
             acceptedSequence: 1,
             committedRevision: 2,
+            stateStatus: 'committed',
             status: 'completed',
           }],
           pendingEventInstanceIds: [],
           committedRevisions: [2],
           errors: [],
+          summary: {
+            eventCount: 1,
+            state: { committed: 1, unchanged: 0, skipped: 0 },
+            effects: {
+              total: 0,
+              succeeded: 0,
+              returned: 0,
+              failed: 0,
+              unhandled: 0,
+              invalid: 0,
+              detached: 0,
+            },
+            errorCount: 0,
+          },
+          hasDetachedEffects: false,
         },
       };
     },
@@ -525,6 +591,10 @@ test('dispatch_and_wait returns the canonical operation snapshot as structured c
   const body = parseToolResult(result);
 
   assert.equal(body.requestId, 'request-1');
+  assert.equal(body.operation.schemaVersion, 0);
+  assert.equal(body.operation.runtimeInstanceId, 'headless-runtime:instance:1');
+  assert.equal(body.operation.events[0].eventId, 'increment-counter');
+  assert.equal(body.operation.events[0].stateStatus, 'committed');
   assert.equal(body.operation.status, 'completed');
   assert.deepEqual(body.operation.committedRevisions, [2]);
   assert.deepEqual(result.structuredContent, body);

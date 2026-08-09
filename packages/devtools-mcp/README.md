@@ -41,7 +41,7 @@ What agents can do through it:
 - 🔍 **Query application state** — scoped by path, no full dumps
 - 🧮 **Evaluate subscriptions on demand** — verify derived values before any component mounts them
 - 🚀 **Dispatch events and observe the outcome** — when explicitly granted, trigger a handler and get back the state diff it committed, the effects it emitted, or the error if it failed
-- ✅ **Dispatch and wait for a canonical snapshot** — operation-enabled runtimes return the joined cascade's identity, status, lineage, revisions, pending work, and errors
+- ✅ **Dispatch and wait for a DevTools snapshot** — operation-enabled runtimes return the joined cascade's identity, status, lineage, state dispositions, effect/error summary, revisions, and pending work
 - 📚 **List handlers** — all registered events, effects, coeffects, and subscriptions
 - ⚡ **Monitor subscriptions** — current values of active reactive queries
 

@@ -52,7 +52,7 @@ export interface UkladInspector {
   evaluateSubscription(query: [string, ...any[]]): unknown;
   /** Optional internal port exposed by Uklad inspectors for operation snapshots. */
   getOperationRuntime?(): DevtoolsOperationRuntime;
-  /** Optional runtime-owned operation snapshot capability. */
+  /** Optional DevTools-owned operation snapshot capability. */
   readonly operationApiVersion?: 1;
   /** Exact runtime-instance identity for operation snapshots. */
   readonly runtimeInstanceId?: string;

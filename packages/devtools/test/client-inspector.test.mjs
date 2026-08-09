@@ -429,7 +429,7 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
   }
 });
 
-test('enables canonical operation snapshots through the DevTools configuration', async () => {
+test('enables DevTools operation snapshots through the DevTools configuration', async () => {
   const originalFetch = globalThis.fetch;
   const originalWebSocket = globalThis.WebSocket;
   FakeWebSocket.instances = [];

@@ -12,7 +12,7 @@ function operationsFor(runtime) {
   return createOperationClient(createUkladInspector(runtime).getOperationRuntime());
 }
 
-test('reads the canonical coordinator snapshot after dispatch', async () => {
+test('reads the DevTools operation snapshot after dispatch', async () => {
   const runtime = createUkladRuntime({
     runtimeId: 'operations-test',
     initialState: { count: 0 },
@@ -29,10 +29,30 @@ test('reads the canonical coordinator snapshot after dispatch', async () => {
     const { operation } = await operations.dispatchAndWait(['increment', 2]);
 
     assert.equal(testHarness.getState().count, 2);
+    assert.equal(operation.schemaVersion, 0);
+    assert.equal(operation.runtimeInstanceId, runtime.runtimeInstanceId);
+    assert.equal(operation.completion, 'cascade-published');
     assert.equal(operation.status, 'completed');
     assert.equal(operation.eventInstanceIds.length, 1);
+    assert.equal(operation.events[0].eventId, 'increment');
+    assert.equal(operation.events[0].stateStatus, 'committed');
     assert.deepEqual(operation.committedRevisions, [1]);
     assert.deepEqual(operation.errors, []);
+    assert.deepEqual(operation.summary, {
+      eventCount: 1,
+      state: { committed: 1, unchanged: 0, skipped: 0 },
+      effects: {
+        total: 0,
+        succeeded: 0,
+        returned: 0,
+        failed: 0,
+        unhandled: 0,
+        invalid: 0,
+        detached: 0,
+      },
+      errorCount: 0,
+    });
+    assert.equal(operation.hasDetachedEffects, false);
     assert.deepEqual(operations.get(operation.operationId), operation);
   } finally {
     runtime.dispose();
@@ -62,6 +82,10 @@ test('retains parent and effect lineage for a dispatch cascade', async () => {
     assert.equal(testHarness.getState().count, 3);
     assert.equal(root.status, 'completed');
     assert.equal(child.status, 'completed');
+    assert.equal(root.eventId, 'root');
+    assert.equal(root.stateStatus, 'unchanged');
+    assert.equal(child.eventId, 'child');
+    assert.equal(child.stateStatus, 'committed');
     assert.equal(child.parentEventInstanceId, root.eventInstanceId);
     assert.equal(child.sourceEffectId, 'dispatch');
     assert.equal(child.sourceEffectIndex, 0);
@@ -133,6 +157,15 @@ test('records effect evidence through the execution probe', async () => {
     assert.deepEqual(operations.get(operation.operationId).events[0].effects[0].value, {
       source: 'operation-test',
     });
+    assert.deepEqual(operation.summary.effects, {
+      total: 1,
+      succeeded: 0,
+      returned: 1,
+      failed: 0,
+      unhandled: 0,
+      invalid: 0,
+      detached: 0,
+    });
   } finally {
     runtime.dispose();
   }
@@ -171,11 +204,16 @@ test('retains terminal failure and effect-error states', async () => {
     const operations = operationsFor(runtime);
     const failed = await operations.dispatchAndWait(['explode']);
     const effectFailure = await operations.dispatchAndWait(['unhandled-effect']);
+    const missing = await operations.dispatchAndWait(['missing-handler']);
 
     assert.equal(failed.operation.status, 'failed');
     assert.equal(failed.operation.events[0].status, 'failed');
     assert.equal(effectFailure.operation.status, 'completed-with-errors');
     assert.equal(effectFailure.operation.events[0].effects[0].status, 'unhandled');
+    assert.equal(effectFailure.operation.events[0].stateStatus, 'unchanged');
+    assert.equal(effectFailure.operation.summary.effects.unhandled, 1);
+    assert.equal(missing.operation.status, 'failed');
+    assert.equal(missing.operation.events[0].stateStatus, 'skipped');
   } finally {
     runtime.dispose();
   }
@@ -201,6 +239,8 @@ test('records a rejected detached effect as a late failure', async () => {
     assert.equal(operation.status, 'completed');
     assert.equal(operation.events[0].effects.length, 1);
     assert.equal(operation.events[0].effects[0].status, 'detached');
+    assert.equal(operation.summary.effects.detached, 1);
+    assert.equal(operation.hasDetachedEffects, true);
 
     rejectEffect(new Error('detached effect failed'));
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -213,6 +253,9 @@ test('records a rejected detached effect as a late failure', async () => {
     assert.equal(failed.index, 0);
     assert.equal(failed.error.message, 'detached effect failed');
     assert.equal(settled.errors.length, 1);
+    assert.equal(settled.summary.effects.detached, 1);
+    assert.equal(settled.summary.effects.failed, 1);
+    assert.equal(settled.hasDetachedEffects, true);
     // The recorded error must move the settled operation off `completed`.
     assert.equal(settled.status, 'completed-with-errors');
   } finally {

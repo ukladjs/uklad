@@ -145,6 +145,10 @@ async function startFakeDevtoolsServer({
             runtimeVersion: PROTOCOL_VERSION,
             inspectorApiVersion: 2,
           },
+          operations: {
+            available: true,
+            runtimeInstanceId: 'integration-runtime:instance:1',
+          },
           security: {
             authenticated: true,
             loopbackOnly: true,
@@ -237,6 +241,9 @@ async function startFakeDevtoolsServer({
           runtimeName: RUNTIME_NAME,
           sessionEpoch: 1,
           operation: {
+            schemaVersion: 0,
+            runtimeInstanceId: 'integration-runtime:instance:1',
+            completion: 'cascade-published',
             operationId: 'integration-runtime:instance:1:op:1',
             rootEventInstanceId: 'integration-runtime:instance:1:event:1',
             acceptedSequence: 1,
@@ -245,13 +252,30 @@ async function startFakeDevtoolsServer({
             eventInstanceIds: ['integration-runtime:instance:1:event:1'],
             events: [{
               eventInstanceId: 'integration-runtime:instance:1:event:1',
+              eventId: 'fake-event',
               acceptedSequence: 1,
               committedRevision: 1,
+              stateStatus: 'committed',
               status: 'completed',
             }],
             pendingEventInstanceIds: [],
             committedRevisions: [1],
             errors: [],
+            summary: {
+              eventCount: 1,
+              state: { committed: 1, unchanged: 0, skipped: 0 },
+              effects: {
+                total: 0,
+                succeeded: 0,
+                returned: 0,
+                failed: 0,
+                unhandled: 0,
+                invalid: 0,
+                detached: 0,
+              },
+              errorCount: 0,
+            },
+            hasDetachedEffects: false,
           },
         });
       } else if (req.method === 'POST' && url.pathname === '/api/eval-sub') {
@@ -482,6 +506,10 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
       runtimeVersion: PROTOCOL_VERSION,
       inspectorApiVersion: 2,
     });
+    assert.deepEqual(status.operations, {
+      available: true,
+      runtimeInstanceId: 'integration-runtime:instance:1',
+    });
     assert.equal(status.security.authenticated, true);
 
     const handlers = parseToolResult(await client.callTool({
@@ -516,6 +544,9 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
       },
     }));
     assert.equal(operation.operation.operationId, 'integration-runtime:instance:1:op:1');
+    assert.equal(operation.operation.schemaVersion, 0);
+    assert.equal(operation.operation.events[0].eventId, 'fake-event');
+    assert.equal(operation.operation.events[0].stateStatus, 'committed');
     assert.deepEqual(operation.operation.committedRevisions, [1]);
 
     const subValue = parseToolResult(await client.callTool({

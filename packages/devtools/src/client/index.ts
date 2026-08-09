@@ -98,8 +98,9 @@ export interface DevtoolsConfig {
    */
   effects?: Record<string, string>;
   /**
-   * Enable runtime-owned operation snapshots for server-initiated dispatches.
-   * Normal DevTools clients still never import or bundle Uklad.
+   * Enable DevTools-owned operation snapshots for server-initiated dispatches.
+   * The runtime only reports passive execution facts; normal DevTools clients
+   * still never import or bundle Uklad.
    */
   operations?: true;
 }

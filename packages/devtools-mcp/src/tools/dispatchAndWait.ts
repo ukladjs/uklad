@@ -22,7 +22,7 @@ export interface DispatchAndWaitParams extends RuntimeSelectionParams {
 export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'dispatch_and_wait',
-    description: 'Dispatch an event through the runtime-owned operation coordinator and wait for its canonical snapshot. The snapshot includes operation identity and status, joined-event lineage, committed/published revisions, pending work, and execution errors. Requires enableDevtools(createUkladInspector(runtime), { operations: true }).',
+    description: 'Dispatch an event through the DevTools-owned operation coordinator and wait for its settled snapshot. The snapshot includes operation/runtime identity, completion boundary, joined-event lineage and IDs, state dispositions and revisions, effect/error summary, pending work, and execution errors. Requires enableDevtools(createUkladInspector(runtime), { operations: true }).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -50,7 +50,57 @@ export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
         runtimeName: { type: 'string' },
         sessionEpoch: { type: 'integer' },
         requestId: { type: 'string' },
-        operation: { type: 'object', additionalProperties: true },
+        operation: {
+          type: 'object',
+          description: 'Current DevTools snapshots use schemaVersion 0. New fields are additive so compatible older runtimes may omit them.',
+          properties: {
+            schemaVersion: { type: 'integer', enum: [0] },
+            runtimeInstanceId: { type: 'string' },
+            completion: { type: 'string', enum: ['cascade-published'] },
+            operationId: { type: 'string' },
+            rootEventInstanceId: { type: 'string' },
+            acceptedSequence: { type: 'integer' },
+            status: {
+              type: 'string',
+              enum: [
+                'queued',
+                'running',
+                'publishing',
+                'completed',
+                'completed-with-errors',
+                'rejected',
+                'failed',
+              ],
+            },
+            events: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  eventInstanceId: { type: 'string' },
+                  eventId: { type: 'string' },
+                  stateStatus: {
+                    type: 'string',
+                    enum: ['committed', 'unchanged', 'skipped'],
+                  },
+                },
+                additionalProperties: true,
+              },
+            },
+            summary: {
+              type: 'object',
+              properties: {
+                eventCount: { type: 'integer' },
+                state: { type: 'object', additionalProperties: true },
+                effects: { type: 'object', additionalProperties: true },
+                errorCount: { type: 'integer' },
+              },
+              additionalProperties: true,
+            },
+            hasDetachedEffects: { type: 'boolean' },
+          },
+          additionalProperties: true,
+        },
       },
       required: ['operation'],
       additionalProperties: true,

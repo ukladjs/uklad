@@ -16,7 +16,7 @@ import {
 export function appStatusTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'app_status',
-    description: 'Cheap health and runtime-discovery check — call it first after a cold start and after any app reload. Lists every known runtime and its stable runtimeId. Pass runtimeId to select one when multiple runtimes are connected. Reports how the selected runtime runs ("browser", "react-native", or "headless"), tracing, handler counts, and sessionEpoch. If sessionEpoch changed, its DevTools connection session changed and server-stored trace ids were invalidated; a transient reconnect can leave runtime state intact.',
+    description: 'Cheap health and runtime-discovery check — call it first after a cold start and after any app reload. Lists every known runtime and its stable runtimeId. Pass runtimeId to select one when multiple runtimes are connected. Reports how the selected runtime runs ("browser", "react-native", or "headless"), tracing, handler counts, operation capability, and sessionEpoch. If sessionEpoch changed, its DevTools connection session changed and server-stored trace ids were invalidated; a transient reconnect can leave runtime state intact.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -61,6 +61,7 @@ export function appStatusTool(apiClient: DevToolsAPIClient) {
         };
         if (response.effectMode != null) status.effectMode = response.effectMode;
         if (response.effects != null) status.effects = response.effects;
+        if (response.operations != null) status.operations = response.operations;
         if (response.connectedApps > 1) status.connectedApps = response.connectedApps;
 
         const hints: string[] = [];
@@ -72,7 +73,9 @@ export function appStatusTool(apiClient: DevToolsAPIClient) {
         } else if (response.runtime == null && response.mcpEnabled) {
           hints.push('The connected app has not reported runtime info — its @ukladjs/devtools SDK likely predates runtime reporting.');
         } else if (response.tracing === false) {
-          hints.push('Tracing is off in the app, so dispatch outcomes will come back "unknown". Open the devtools UI or restart the server with --mcp to keep tracing on.');
+          hints.push(response.operations?.available === true
+            ? 'Tracing is off, so legacy dispatch_event outcomes will come back "unknown". dispatch_and_wait remains available through the DevTools operation snapshot capability.'
+            : 'Tracing is off in the app, so dispatch_event outcomes will come back "unknown". Open the devtools UI or restart the server with --mcp to keep tracing on.');
         }
         if (!response.capabilities?.includes('dispatch')) {
           hints.push('DevTools is read-only. Restart it with --allow-dispatch only when an agent should be allowed to mutate app state.');

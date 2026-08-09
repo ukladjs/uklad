@@ -7,11 +7,13 @@ import type {
   OperationEffectSnapshot,
   OperationEventSnapshot,
   OperationSnapshot,
+  OperationSummary,
 } from './types.js';
 
 interface OperationReference {
   readonly operationId: string;
   readonly eventInstanceId: string;
+  readonly eventId: string;
   readonly parentEventInstanceId?: string;
   readonly sourceEffectId?: string;
   readonly sourceEffectIndex?: number;
@@ -24,6 +26,7 @@ interface MutableEvent {
   acceptedRevision?: number;
   startedRevision?: number;
   committedRevision?: number;
+  stateStatus?: 'committed' | 'unchanged' | 'skipped';
   status: OperationEventSnapshot['status'];
 }
 
@@ -45,7 +48,7 @@ interface MutableOperation {
 
 const MAX_RETAINED_OPERATIONS = 256;
 
-/** DevTools-owned canonical operation view populated from core execution hooks. */
+/** DevTools-owned operation view populated from passive core execution hooks. */
 export class OperationCoordinator implements DevtoolsExecutionObserver {
   private nextOperationId = 0;
   private nextEventId = 0;
@@ -59,7 +62,7 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
   }
 
   accept(
-    _event: OperationEventVector,
+    event: OperationEventVector,
     parent?: {
       readonly operation: { readonly operationId: string; readonly value: unknown };
       readonly sourceEffectId?: string;
@@ -72,6 +75,7 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
     const reference: OperationReference = Object.freeze({
       operationId,
       eventInstanceId: `evt_${this.runtimeInstanceId}_${++this.nextEventId}`,
+      eventId: event[0],
       ...(parentReference === undefined
         ? {}
         : { parentEventInstanceId: parentReference.eventInstanceId }),
@@ -118,8 +122,10 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
   }
 
   committed(operationRef: { readonly value: unknown }, status: string, revision: number): void {
-    if (status !== 'committed') return;
     const { operation, event } = this.resolve(operationRef);
+    if (!isStateStatus(status)) return;
+    event.stateStatus = status;
+    if (status !== 'committed') return;
     operation.committedRevisions.push(revision);
     event.committedRevision = revision;
     if (revision > this.publishedRevision)
@@ -211,7 +217,11 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
   get(operationId: string): OperationSnapshot | undefined {
     const operation = this.operations.get(operationId);
     if (!operation) return undefined;
+    const summary = summarizeOperation(operation);
     return Object.freeze({
+      schemaVersion: 0,
+      runtimeInstanceId: this.runtimeInstanceId,
+      completion: 'cascade-published',
       operationId: operation.operationId,
       rootEventInstanceId: operation.rootEventInstanceId,
       acceptedSequence: operation.acceptedSequence,
@@ -230,6 +240,7 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
         [...operation.events.values()].map((event) =>
           Object.freeze({
             eventInstanceId: event.reference.eventInstanceId,
+            eventId: event.reference.eventId,
             ...(event.reference.parentEventInstanceId === undefined
               ? {}
               : { parentEventInstanceId: event.reference.parentEventInstanceId }),
@@ -249,6 +260,9 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
             ...(event.committedRevision === undefined
               ? {}
               : { committedRevision: event.committedRevision }),
+            ...(event.stateStatus === undefined
+              ? {}
+              : { stateStatus: event.stateStatus }),
             status: event.status,
             effects: Object.freeze([...event.effects]),
           }),
@@ -260,6 +274,8 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
         : { pendingPublishedRevision: operation.pendingPublishedRevision }),
       committedRevisions: Object.freeze([...operation.committedRevisions]),
       errors: Object.freeze([...operation.errors]),
+      summary,
+      hasDetachedEffects: summary.effects.detached > 0,
     });
   }
 
@@ -327,6 +343,44 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
       this.operations.delete(firstTerminal.operationId);
     }
   }
+}
+
+function isStateStatus(
+  status: string,
+): status is 'committed' | 'unchanged' | 'skipped' {
+  return status === 'committed' || status === 'unchanged' || status === 'skipped';
+}
+
+function summarizeOperation(operation: MutableOperation): OperationSummary {
+  const state = {
+    committed: 0,
+    unchanged: 0,
+    skipped: 0,
+  };
+  const effects = {
+    total: 0,
+    succeeded: 0,
+    returned: 0,
+    failed: 0,
+    unhandled: 0,
+    invalid: 0,
+    detached: 0,
+  };
+
+  for (const event of operation.events.values()) {
+    if (event.stateStatus !== undefined) state[event.stateStatus] += 1;
+    for (const effect of event.effects) {
+      effects.total += 1;
+      effects[effect.status] += 1;
+    }
+  }
+
+  return Object.freeze({
+    eventCount: operation.events.size,
+    state: Object.freeze(state),
+    effects: Object.freeze(effects),
+    errorCount: operation.errors.length,
+  });
 }
 
 /** Copy diagnostic values before retaining them in a DevTools operation snapshot. */

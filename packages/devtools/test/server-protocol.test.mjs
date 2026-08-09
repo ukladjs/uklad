@@ -1226,10 +1226,13 @@ test('/api/dispatch resolves with the observed successful trace', async () => {
   assert.equal('reversePatches' in traceBody.trace.tags, false);
 });
 
-test('/api/dispatch-and-wait returns a canonical operation snapshot from an operation-enabled runtime', async () => {
+test('/api/dispatch-and-wait returns a DevTools operation snapshot from an operation-enabled runtime', async () => {
   const { baseUrl, wsUrl } = await startServer();
   const result = {
     operation: {
+      schemaVersion: 0,
+      runtimeInstanceId: 'runtime-test:instance:1',
+      completion: 'cascade-published',
       operationId: 'runtime-test:instance:1:op:1',
       rootEventInstanceId: 'runtime-test:instance:1:event:1',
       acceptedSequence: 1,
@@ -1238,13 +1241,30 @@ test('/api/dispatch-and-wait returns a canonical operation snapshot from an oper
       eventInstanceIds: ['runtime-test:instance:1:event:1'],
       events: [{
         eventInstanceId: 'runtime-test:instance:1:event:1',
+        eventId: 'increment-counter',
         acceptedSequence: 1,
         committedRevision: 1,
+        stateStatus: 'committed',
         status: 'completed',
       }],
       pendingEventInstanceIds: [],
       committedRevisions: [1],
       errors: [],
+      summary: {
+        eventCount: 1,
+        state: { committed: 1, unchanged: 0, skipped: 0 },
+        effects: {
+          total: 0,
+          succeeded: 0,
+          returned: 0,
+          failed: 0,
+          unhandled: 0,
+          invalid: 0,
+          detached: 0,
+        },
+        errorCount: 0,
+      },
+      hasDetachedEffects: false,
     },
   };
   const socket = await connectSdk(
@@ -1271,6 +1291,10 @@ test('/api/dispatch-and-wait returns a canonical operation snapshot from an oper
 
   assert.equal(response.status, 200);
   assert.equal(body.success, true);
+  assert.equal(body.operation.schemaVersion, 0);
+  assert.equal(body.operation.runtimeInstanceId, 'runtime-test:instance:1');
+  assert.equal(body.operation.events[0].eventId, 'increment-counter');
+  assert.equal(body.operation.events[0].stateStatus, 'committed');
   assert.equal(body.operation.operationId, result.operation.operationId);
   assert.deepEqual(body.operation.committedRevisions, result.operation.committedRevisions);
   assert.deepEqual(body.receipt, body.operation);

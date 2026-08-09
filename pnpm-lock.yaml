@@ -264,8 +264,8 @@ importers:
         specifier: ^11.1.15
         version: 11.1.15
       ws:
-        specifier: ^8.21.1
-        version: 8.21.1
+        specifier: ^8.21.2
+        version: 8.21.2
     devDependencies:
       '@types/express':
         specifier: ^5.0.6
@@ -4020,6 +4020,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.21.2:
+    resolution: {integrity: sha512-54dMVAo4WIe6SKy3vBgN+9bJZqqQ8IMRevAkOLQALhi49qkkQDQfWdAZ8KQlXiEabw88ARXXdUrlvtbKQX+aKw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   xml-name-validator@5.0.0:
     resolution: {integrity: sha512-EvGK8EJ3DhaHfbRlETOWAS5pO9MZITeauHKJyb8wyajUfQUenkIg2MvLDTZ4T/TgIcm3HU0TFBgWWboAZ30UHg==}
     engines: {node: '>=18'}
@@ -7622,6 +7634,8 @@ snapshots:
       signal-exit: 4.1.0
 
   ws@8.21.1: {}
+
+  ws@8.21.2: {}
 
   xml-name-validator@5.0.0: {}
 

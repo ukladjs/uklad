@@ -830,6 +830,10 @@ test('returns shared event metadata and filters traces by event instance', async
         opType: 'event',
         runtimeInstanceId,
         eventInstanceId: rootEventInstanceId,
+        acceptedRevision: 0,
+        startedRevision: 0,
+        committedRevision: 1,
+        stateStatus: 'committed',
         tags: { event: ['root'] },
       },
       {
@@ -840,19 +844,32 @@ test('returns shared event metadata and filters traces by event instance', async
         runtimeInstanceId,
         eventInstanceId: childEventInstanceId,
         parentEventInstanceId: rootEventInstanceId,
+        acceptedRevision: 1,
+        startedRevision: 1,
+        committedRevision: 2,
+        stateStatus: 'committed',
         tags: { event: ['child'] },
       },
     ],
   });
+  sendSdkEvent(socket, {
+    type: 'uklad-state-revisions',
+    payload: { committedRevision: 2, publishedRevision: 2 },
+  });
 
   const status = await waitForStatus(
     baseUrl,
-    (candidate) => candidate.traceCount === 2,
+    (candidate) => (
+      candidate.traceCount === 2
+      && candidate.stateRevisions?.committedRevision === 2
+      && candidate.stateRevisions?.publishedRevision === 2
+    ),
     2000,
     runtimeId,
   );
   assert.equal(status.runtimeInstanceId, runtimeInstanceId);
   assert.equal(status.runtimes[0].runtimeInstanceId, runtimeInstanceId);
+  assert.deepEqual(status.stateRevisions, { committedRevision: 2, publishedRevision: 2 });
 
   const response = await authenticatedFetch(
     baseUrl,
@@ -867,6 +884,10 @@ test('returns shared event metadata and filters traces by event instance', async
   assert.equal(body.traces[0].runtimeInstanceId, runtimeInstanceId);
   assert.equal(body.traces[0].eventInstanceId, childEventInstanceId);
   assert.equal(body.traces[0].parentEventInstanceId, rootEventInstanceId);
+  assert.equal(body.traces[0].acceptedRevision, 1);
+  assert.equal(body.traces[0].startedRevision, 1);
+  assert.equal(body.traces[0].committedRevision, 2);
+  assert.equal(body.traces[0].stateStatus, 'committed');
 
   const detailResponse = await authenticatedFetch(
     baseUrl,
@@ -876,6 +897,8 @@ test('returns shared event metadata and filters traces by event instance', async
   assert.equal(detail.runtimeInstanceId, runtimeInstanceId);
   assert.equal(detail.trace.eventInstanceId, childEventInstanceId);
   assert.equal(detail.trace.parentEventInstanceId, rootEventInstanceId);
+  assert.equal(detail.trace.committedRevision, 2);
+  assert.equal(detail.trace.stateStatus, 'committed');
 });
 
 test('server-side redaction prevents state, trace, dispatch, and audit secret leakage', async () => {
@@ -1893,9 +1916,21 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
     type: 'uklad-state',
     payload: { owner: 'beta-retained' },
   });
+  sendSdkEvent(alpha, {
+    type: 'uklad-state-revisions',
+    payload: { committedRevision: 10, publishedRevision: 10 },
+  });
+  sendSdkEvent(beta, {
+    type: 'uklad-state-revisions',
+    payload: { committedRevision: 20, publishedRevision: 19 },
+  });
   await waitForStatus(
     baseUrl,
-    (status) => status.stateAvailable,
+    (status) => (
+      status.stateAvailable
+      && status.stateRevisions?.committedRevision === 20
+      && status.stateRevisions?.publishedRevision === 19
+    ),
     2000,
     'runtime-beta',
   );
@@ -1920,13 +1955,22 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
       && message.runtimeId === 'runtime-alpha'
       && message.payload?.owner === 'alpha-retained',
   );
+  const alphaRevisionsSnapshotPromise = waitForSocketMessage(
+    ui,
+    (message) =>
+      message.type === 'uklad-state-revisions'
+      && message.runtimeId === 'runtime-alpha'
+      && message.payload?.committedRevision === 10
+      && message.payload?.publishedRevision === 10,
+  );
   ui.send(JSON.stringify({
     type: 'select-runtime',
     payload: { runtimeId: 'runtime-alpha' },
   }));
-  const [alphaSelected, alphaSnapshot] = await Promise.all([
+  const [alphaSelected, alphaSnapshot, alphaRevisionsSnapshot] = await Promise.all([
     alphaSelectedPromise,
     alphaSnapshotPromise,
+    alphaRevisionsSnapshotPromise,
   ]);
   assert.deepEqual(alphaSelected.payload, {
     runtimeId: 'runtime-alpha',
@@ -1937,6 +1981,10 @@ test('UI runtime selection replays retained snapshots and filters identity-tagge
     [alphaSnapshot.runtimeId, alphaSnapshot.runtimeName, alphaSnapshot.sessionEpoch],
     ['runtime-alpha', 'Runtime Alpha', 1],
   );
+  assert.deepEqual(alphaRevisionsSnapshot.payload, {
+    committedRevision: 10,
+    publishedRevision: 10,
+  });
 
   const retainedAlphaReplayCount = ui.receivedMessages.filter(
     (message) =>

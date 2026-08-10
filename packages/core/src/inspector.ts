@@ -1,4 +1,5 @@
 import { acquireTracing, registerTraceCallback, removeTraceCallback } from './runtime/tracing';
+import { attachRuntimeProbe } from './runtime/probe';
 import { DISPATCH, DISPATCH_LATER } from './events/built-in-effects';
 import {
   getDevelopmentOperationReference,
@@ -9,11 +10,13 @@ import { assertRuntimeUsable } from './runtime/validation';
 
 import type { TraceCallback } from './core/tracing-types';
 import type { DevelopmentExecutionObserver } from './events/execution-observer-types';
+import type { RuntimeProbe } from './runtime/probe-types';
 import type {
   UkladDevtoolsOperationRuntime,
   UkladHandlerKeys,
   UkladInspector,
   UkladInspectorSnapshot,
+  UkladStateRevisionsCallback,
 } from './inspector-types';
 import type { EventVector, SubVector } from './types';
 
@@ -22,6 +25,7 @@ export type {
   UkladHandlerKeys,
   UkladInspector,
   UkladInspectorSnapshot,
+  UkladStateRevisionsCallback,
 } from './inspector-types';
 
 const NEXT_TRACE_SUBSCRIPTION_ID = new WeakMap<RuntimeCore, number>();
@@ -59,6 +63,7 @@ export function createUkladInspector(runtime: RuntimeCore): UkladInspector {
       assertRuntimeUsable(runtime);
       return {
         state: runtime.state.get(),
+        stateRevisions: runtime.state.getRevisions(),
         handlerKeys: getHandlerKeys(runtime),
         subscriptions: runtime.subscriptions.diagnostics(),
       };
@@ -81,6 +86,35 @@ export function createUkladInspector(runtime: RuntimeCore): UkladInspector {
         removeTraceCallback(runtime, key);
         releaseTracing();
       };
+    },
+    subscribeStateRevisions(callback: UkladStateRevisionsCallback): () => void {
+      assertRuntimeUsable(runtime);
+      const probe: RuntimeProbe = Object.freeze({
+        needsPatches: false,
+        needsSubscriptionEvidence: false,
+        needsSpans: false,
+        stateCommitted(
+          _previousState: unknown,
+          _nextState: unknown,
+          committedRevision: number,
+        ): void {
+          callback(
+            Object.freeze({
+              committedRevision,
+              publishedRevision: runtime.state.publishedRevision,
+            }),
+          );
+        },
+        published(_state: unknown, publishedRevision: number): void {
+          callback(
+            Object.freeze({
+              committedRevision: runtime.state.committedRevision,
+              publishedRevision,
+            }),
+          );
+        },
+      });
+      return attachRuntimeProbe(runtime, probe);
     },
     dispatch(event: EventVector): void {
       assertRuntimeUsable(runtime);

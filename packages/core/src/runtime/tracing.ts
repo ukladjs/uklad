@@ -4,6 +4,7 @@ import { attachRuntimeProbe, getRuntimeTrackingToken } from './probe';
 import type { RuntimeCore } from './core';
 import type {
   RuntimeProbe,
+  RuntimeProbeCommit,
   RuntimeProbeEffect,
   RuntimeProbeEventMetadata,
   RuntimeProbeParent,
@@ -32,6 +33,8 @@ interface TraceEventToken {
   readonly event: EventVector;
   readonly metadata: RuntimeProbeEventMetadata;
   readonly parentTraceId?: number;
+  acceptedRevision?: number;
+  startedRevision?: number;
   trace?: Trace;
   previousTrace?: Trace | null;
 }
@@ -189,9 +192,13 @@ function getTraceState(runtime: RuntimeCore): TraceState {
         ...(parentToken?.trace === undefined ? {} : { parentTraceId: parentToken.trace.id }),
       };
     },
-    eventStarted(token: unknown): void {
+    eventQueued(token: unknown, committedRevision: number): void {
+      (token as TraceEventToken).acceptedRevision = committedRevision;
+    },
+    eventStarted(token: unknown, committedRevision: number): void {
       const state = currentState();
       const eventToken = token as TraceEventToken;
+      eventToken.startedRevision = committedRevision;
       eventToken.previousTrace = state.currentTrace;
       eventToken.trace = startTrace(state, {
         operation: eventToken.event[0],
@@ -202,6 +209,10 @@ function getTraceState(runtime: RuntimeCore): TraceState {
         ...(eventToken.metadata.parentEventInstanceId === undefined
           ? {}
           : { parentEventInstanceId: eventToken.metadata.parentEventInstanceId }),
+        ...(eventToken.acceptedRevision === undefined
+          ? {}
+          : { acceptedRevision: eventToken.acceptedRevision }),
+        startedRevision: eventToken.startedRevision,
         ...(eventToken.parentTraceId === undefined ? {} : { childOf: eventToken.parentTraceId }),
       });
       state.currentTrace = eventToken.trace;
@@ -219,6 +230,14 @@ function getTraceState(runtime: RuntimeCore): TraceState {
       const error = toTraceError(eventToken.event, result);
       if (error && tags.error === undefined) tags.error = error;
       trace.tags = tags;
+    },
+    committed(token: unknown, result: RuntimeProbeCommit): void {
+      const trace = (token as TraceEventToken).trace;
+      if (!trace) return;
+      trace.stateStatus = result.status;
+      if (result.status === 'committed') {
+        trace.committedRevision = result.committedRevision;
+      }
     },
     effect(token: unknown, effect: RuntimeProbeEffect): void {
       if (effect.status !== 'failed') return;
@@ -318,8 +337,7 @@ function startTrace(state: TraceState, options: TraceOptions): Trace {
   const parentId = options.childOf ?? state.currentTrace?.id;
   // Event traces provide their own identity. Child spans inherit it from the
   // active event trace so one event occurrence can be queried as a group.
-  const eventMetadata =
-    options.eventInstanceId === undefined ? state.currentTrace : options;
+  const eventMetadata = options.eventInstanceId === undefined ? state.currentTrace : options;
   return {
     id: state.nextId++,
     ...(options.operation === undefined ? {} : { operation: options.operation }),
@@ -335,6 +353,14 @@ function startTrace(state: TraceState, options: TraceOptions): Trace {
     ...(eventMetadata?.parentEventInstanceId === undefined
       ? {}
       : { parentEventInstanceId: eventMetadata.parentEventInstanceId }),
+    ...(options.acceptedRevision === undefined
+      ? {}
+      : { acceptedRevision: options.acceptedRevision }),
+    ...(options.startedRevision === undefined ? {} : { startedRevision: options.startedRevision }),
+    ...(options.committedRevision === undefined
+      ? {}
+      : { committedRevision: options.committedRevision }),
+    ...(options.stateStatus === undefined ? {} : { stateStatus: options.stateStatus }),
     start: Date.now(),
   };
 }

@@ -3,12 +3,22 @@ import { JsonViewer } from '../ui/JsonViewer';
 import { DiffViewer } from '../ui/DiffViewer';
 import DispatchButton from '../ui/DispatchButton';
 import { dispatch } from '../../runtime';
+import type { Trace } from '../../types/Trace';
 
-export default function TraceEventDetails({ tags }: { tags: { [key: string]: any } }) {
+const EMPTY_TAGS: { [key: string]: any } = {};
+
+export default function TraceEventDetails({ trace }: { trace?: Trace }) {
+    const tags = trace?.tags ?? EMPTY_TAGS;
     const hasStateChanges = Array.isArray(tags.patches) && tags.patches.length > 0;
     const hasEffects = Array.isArray(tags.effects) && tags.effects.length > 0;
     const defaultViewMode = hasStateChanges ? 'state' : hasEffects ? 'effects' : 'data';
     const [viewMode, setViewMode] = useState<'data' | 'state' | 'effects'>(defaultViewMode);
+    const revisionFacts = [
+        trace?.acceptedRevision === undefined ? null : `queued r${trace.acceptedRevision}`,
+        trace?.startedRevision === undefined ? null : `started r${trace.startedRevision}`,
+        trace?.committedRevision === undefined ? null : `committed r${trace.committedRevision}`,
+        trace?.stateStatus === undefined ? null : `state ${trace.stateStatus}`,
+    ].filter((fact): fact is string => fact !== null);
 
     useEffect(() => {
         setViewMode(defaultViewMode);
@@ -25,6 +35,11 @@ export default function TraceEventDetails({ tags }: { tags: { [key: string]: any
 
     return (
         <div className="flex-1 flex flex-col">
+            {revisionFacts.length > 0 && (
+                <div className="flex flex-wrap gap-x-3 gap-y-1 border-b border-base-300 px-3 py-2 font-mono text-xs text-base-content/70">
+                    {revisionFacts.map((fact) => <span key={fact}>{fact}</span>)}
+                </div>
+            )}
             <div className="flex gap-2 p-2 border-b border-base-300 justify-between">
                 <div className="flex gap-2">
                     {hasStateChanges && (

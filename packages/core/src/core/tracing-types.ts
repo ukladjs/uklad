@@ -14,6 +14,14 @@ export interface TraceOptions {
   eventInstanceId?: string;
   /** Parent event occurrence, distinct from trace/span parentage. */
   parentEventInstanceId?: string;
+  /** Committed state head when this queued event was accepted. */
+  acceptedRevision?: number;
+  /** Committed state head when this event began execution. */
+  startedRevision?: number;
+  /** New committed state head when this event changed state. */
+  committedRevision?: number;
+  /** Whether this event committed, left state unchanged, or skipped commit. */
+  stateStatus?: 'committed' | 'unchanged' | 'skipped';
 }
 
 export interface Trace extends TraceOptions {

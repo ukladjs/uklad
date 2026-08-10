@@ -1,7 +1,7 @@
 import { enableMapSet } from '@ukladjs/core';
 import { saveSettings } from './utils/settingsStorage';
 import { ukladReviver } from './utils/serialization';
-import type { DevtoolsRuntimeSummary } from './types/Runtime';
+import type { DevtoolsRuntimeSummary, StateRevisions } from './types/Runtime';
 import { dispatch, regEffect } from './runtime';
 
 enableMapSet();
@@ -49,6 +49,16 @@ function isRuntimeIdentity(value: unknown): value is {
     && typeof identity.runtimeName === 'string'
     && Number.isSafeInteger(identity.sessionEpoch)
     && (identity.sessionEpoch as number) >= 1;
+}
+
+function isStateRevisions(value: unknown): value is StateRevisions {
+  if (typeof value !== 'object' || value === null) return false;
+  const revisions = value as Partial<StateRevisions>;
+  return Number.isSafeInteger(revisions.committedRevision)
+    && revisions.committedRevision! >= 0
+    && Number.isSafeInteger(revisions.publishedRevision)
+    && revisions.publishedRevision! >= 0
+    && revisions.publishedRevision! <= revisions.committedRevision!;
 }
 
 function isLoopbackHostname(hostname: string): boolean {
@@ -257,6 +267,12 @@ async function connectWebSocket(): Promise<void> {
         dispatch(['add-traces', data.payload, data.runtimeId, data.sessionEpoch]);
       } else if (data.type === 'uklad-state') {
         dispatch(['update-state', data.payload, data.runtimeId, data.sessionEpoch]);
+      } else if (data.type === 'uklad-state-revisions') {
+        if (!isStateRevisions(data.payload)) {
+          wsRef.close(1002, 'DevTools server sent invalid state revisions');
+          return;
+        }
+        dispatch(['update-state-revisions', data.payload, data.runtimeId, data.sessionEpoch]);
       } else if (data.type === 'uklad-active-subs') {
         dispatch(['update-active-subs', data.payload, data.runtimeId, data.sessionEpoch]);
       } else if (data.type === 'uklad-handler-keys') {

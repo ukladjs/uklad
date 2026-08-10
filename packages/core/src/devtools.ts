@@ -24,4 +24,5 @@ export type {
   UkladHandlerKeys,
   UkladInspector,
   UkladInspectorSnapshot,
+  UkladStateRevisionsCallback,
 } from './inspector-types';

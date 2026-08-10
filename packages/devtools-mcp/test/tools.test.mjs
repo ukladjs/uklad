@@ -54,6 +54,7 @@ test('app_status reports a healthy headless session without hints', async () => 
         tracing: true,
         handlers: { event: 14, fx: 3, cofx: 1, sub: 9 },
         stateAvailable: true,
+        stateRevisions: { committedRevision: 42, publishedRevision: 42 },
         traceCount: 42,
         capabilities: ['inspect', 'dispatch'],
         readOnly: false,
@@ -87,6 +88,7 @@ test('app_status reports a healthy headless session without hints', async () => 
   assert.deepEqual(body.effects, { 'local-storage-set': 'memory' });
   assert.equal(body.tracing, true);
   assert.deepEqual(body.handlers, { event: 14, fx: 3, cofx: 1, sub: 9 });
+  assert.deepEqual(body.stateRevisions, { committedRevision: 42, publishedRevision: 42 });
   assert.deepEqual(body.capabilities, ['inspect', 'dispatch']);
   assert.equal(body.readOnly, false);
   assert.equal(body.protocol.version, UKLAD_DEVTOOLS_PROTOCOL_VERSION);
@@ -429,6 +431,10 @@ test('get_traces returns compact rows without full trace tags', async () => {
             duration: 4.25,
             start: 0,
             childOf: 'undefined',
+            acceptedRevision: 4,
+            startedRevision: 4,
+            committedRevision: 5,
+            stateStatus: 'committed',
             tags: {
               event: ['save-user', { id: 1 }],
               patches: [{ op: 'replace', path: ['user'], value: { id: 1 } }],
@@ -451,6 +457,10 @@ test('get_traces returns compact rows without full trace tags', async () => {
   assert.equal(row.duration, '4.25ms');
   assert.equal(row.error, 'handler: boom');
   assert.equal(row.effectErrors, 1);
+  assert.equal(row.acceptedRevision, 4);
+  assert.equal(row.startedRevision, 4);
+  assert.equal(row.committedRevision, 5);
+  assert.equal(row.stateStatus, 'committed');
   assert.equal('tags' in row, false);
   assert.equal('patches' in row, false);
   assert.equal('effects' in row, false);
@@ -488,6 +498,9 @@ test('get_traces correlates an operation event with exact trace rows', async () 
           runtimeInstanceId,
           eventInstanceId,
           parentEventInstanceId: `evt_${runtimeInstanceId}_1`,
+          acceptedRevision: 1,
+          startedRevision: 1,
+          stateStatus: 'unchanged',
           tags: { event: ['child'] },
         }],
       };
@@ -506,6 +519,9 @@ test('get_traces correlates an operation event with exact trace rows', async () 
     body.traces[0].parentEventInstanceId,
     `evt_${runtimeInstanceId}_1`,
   );
+  assert.equal(body.traces[0].acceptedRevision, 1);
+  assert.equal(body.traces[0].startedRevision, 1);
+  assert.equal(body.traces[0].stateStatus, 'unchanged');
 });
 
 test('get_active_subs passes the server-side filter and returns compact values', async () => {

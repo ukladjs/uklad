@@ -1,5 +1,6 @@
 import type { TraceCallback } from './core/tracing-types';
 import type { DevelopmentExecutionObserver } from './events/execution-observer-types';
+import type { RuntimeStateRevisions } from './runtime/api';
 import type { SubscriptionDiagnostic } from './runtime/subscriptions/types';
 import type { EventVector, SubVector } from './types';
 
@@ -13,11 +14,16 @@ export interface UkladHandlerKeys {
 export interface UkladInspectorSnapshot {
   /** The live state write head. The value is not cloned or deep-frozen. */
   readonly state: unknown;
+  /** Monotonic commit and publication heads for the same live state. */
+  readonly stateRevisions: RuntimeStateRevisions;
   /** User-facing handler ids; framework-owned effect ids are omitted. */
   readonly handlerKeys: UkladHandlerKeys;
   /** Cache-only diagnostics. Reading a snapshot never evaluates subscriptions. */
   readonly subscriptions: readonly SubscriptionDiagnostic[];
 }
+
+/** Receives one immutable snapshot of the runtime's current state heads. */
+export type UkladStateRevisionsCallback = (revisions: RuntimeStateRevisions) => void;
 
 /** @internal Structural runtime port consumed by optional DevTools operation snapshots. */
 export interface UkladDevtoolsOperationRuntime {
@@ -44,6 +50,8 @@ export interface UkladInspector {
   getSnapshot(): UkladInspectorSnapshot;
   /** Subscribe to trace batches and keep trace collection active until cleanup. */
   subscribeTraces(callback: TraceCallback): () => void;
+  /** Optional live commit/publication heads without retaining application state. */
+  subscribeStateRevisions?(callback: UkladStateRevisionsCallback): () => void;
   dispatch(event: EventVector): void;
   evaluateSubscription(query: SubVector): unknown;
   /** @internal Runtime port for optional DevTools operation snapshots. */

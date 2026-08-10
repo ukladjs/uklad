@@ -89,4 +89,9 @@ export type {
   TraceOptions,
   TraceTags,
 } from './core/tracing-types';
-export type { UkladHandlerKeys, UkladInspector, UkladInspectorSnapshot } from './inspector-types';
+export type {
+  UkladHandlerKeys,
+  UkladInspector,
+  UkladInspectorSnapshot,
+  UkladStateRevisionsCallback,
+} from './inspector-types';

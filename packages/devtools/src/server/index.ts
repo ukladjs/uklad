@@ -595,6 +595,7 @@ export class DevtoolsServer {
       const connected = this.isRuntimeConnected(runtime);
       const runtimeInfo = runtime.storage?.getRuntimeInfo() ?? null;
       const handlerKeys = runtime.storage?.getHandlerKeys() ?? null;
+      const stateRevisions = runtime.storage?.getStateRevisions() ?? null;
       const auth = res.locals.auth as AuthContext;
 
       res.json({
@@ -622,6 +623,7 @@ export class DevtoolsServer {
             }
           : null,
         stateAvailable: runtime.storage ? runtime.storage.getState() !== null : false,
+        stateRevisions,
         traceCount: runtime.storage?.getStats().totalTraces ?? 0,
         capabilities: [...auth.capabilities],
         readOnly: !auth.capabilities.has('dispatch') && !auth.capabilities.has('restore'),
@@ -721,6 +723,16 @@ export class DevtoolsServer {
             ...(trace.parentEventInstanceId === undefined
               ? {}
               : { parentEventInstanceId: trace.parentEventInstanceId }),
+            ...(trace.acceptedRevision === undefined
+              ? {}
+              : { acceptedRevision: trace.acceptedRevision }),
+            ...(trace.startedRevision === undefined
+              ? {}
+              : { startedRevision: trace.startedRevision }),
+            ...(trace.committedRevision === undefined
+              ? {}
+              : { committedRevision: trace.committedRevision }),
+            ...(trace.stateStatus === undefined ? {} : { stateStatus: trace.stateStatus }),
             tags: trace.tags
               ? {
                   event: Array.isArray(trace.tags.event)
@@ -1394,6 +1406,9 @@ export class DevtoolsServer {
         limits: {
           runtimePayloadBytes: this.config.maxRuntimePayloadBytes,
           controlPayloadBytes: this.config.maxControlPayloadBytes,
+        },
+        telemetry: {
+          stateRevisions: true,
         },
       },
       timestamp: Date.now(),
@@ -2075,6 +2090,9 @@ export class DevtoolsServer {
           storage.updateState(event.payload);
         }
         break;
+      case 'uklad-state-revisions':
+        storage.updateStateRevisions(event.payload);
+        break;
       case 'uklad-active-subs':
         if (event.payload && typeof event.payload === 'object') {
           storage.updateActiveSubs(event.payload);
@@ -2373,6 +2391,14 @@ export class DevtoolsServer {
       payload: storage.getState(),
       timestamp: Date.now(),
     });
+    const stateRevisions = storage.getStateRevisions();
+    if (stateRevisions !== null) {
+      this.sendTaggedRuntimeEventToUi(client, runtime, {
+        type: 'uklad-state-revisions',
+        payload: stateRevisions,
+        timestamp: Date.now(),
+      });
+    }
     this.sendTaggedRuntimeEventToUi(client, runtime, {
       type: 'uklad-active-subs',
       payload: storage.getActiveSubs(),
@@ -2543,6 +2569,8 @@ export class DevtoolsServer {
         return this.validTraceBatch(event.payload);
       case 'uklad-state':
         return event.payload !== undefined;
+      case 'uklad-state-revisions':
+        return this.validStateRevisions(event.payload);
       case 'uklad-active-subs':
         return this.validActiveSubscriptions(event.payload);
       case 'uklad-handler-keys':
@@ -2613,8 +2641,36 @@ export class DevtoolsServer {
         return false;
       }
     }
+    for (const key of ['acceptedRevision', 'startedRevision', 'committedRevision'] as const) {
+      if (
+        trace[key] !== undefined
+        && (!Number.isSafeInteger(trace[key]) || trace[key] < 0)
+      ) {
+        return false;
+      }
+    }
+    if (
+      trace.stateStatus !== undefined
+      && trace.stateStatus !== 'committed'
+      && trace.stateStatus !== 'unchanged'
+      && trace.stateStatus !== 'skipped'
+    ) {
+      return false;
+    }
     if (trace.tags !== undefined && !isRecord(trace.tags)) return false;
     return true;
+  }
+
+  private validStateRevisions(payload: unknown): payload is {
+    committedRevision: number;
+    publishedRevision: number;
+  } {
+    if (!isRecord(payload)) return false;
+    return Number.isSafeInteger(payload.committedRevision)
+      && payload.committedRevision >= 0
+      && Number.isSafeInteger(payload.publishedRevision)
+      && payload.publishedRevision >= 0
+      && payload.publishedRevision <= payload.committedRevision;
   }
 
   private validActiveSubscriptions(payload: unknown): boolean {

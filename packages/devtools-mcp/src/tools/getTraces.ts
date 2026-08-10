@@ -26,7 +26,7 @@ export interface GetTracesParams extends RuntimeSelectionParams {
 export function getTracesTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'get_traces',
-    description: 'List compact Uklad trace rows: events, subscription operations (create/run/dispose), and render cycles with timing. Pass eventInstanceId from a dispatch_and_wait operation event to retrieve exactly the related trace rows. Otherwise use a small limit and eventFilter or opType before opening one get_trace row for patches, effects, or an error stack. To get current mounted subscription values, use get_active_subs.',
+    description: 'List compact Uklad trace rows: events, subscription operations (create/run/dispose), and render cycles with timing. Event rows include their state disposition and revision facts, matching dispatch_and_wait operation events. Pass eventInstanceId from a dispatch_and_wait operation event to retrieve exactly the related trace rows. Otherwise use a small limit and eventFilter or opType before opening one get_trace row for patches, effects, or an error stack. To get current mounted subscription values, use get_active_subs.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -100,6 +100,16 @@ export function getTracesTool(apiClient: DevToolsAPIClient) {
             ...(trace.parentEventInstanceId === undefined
               ? {}
               : { parentEventInstanceId: trace.parentEventInstanceId }),
+            ...(trace.acceptedRevision === undefined
+              ? {}
+              : { acceptedRevision: trace.acceptedRevision }),
+            ...(trace.startedRevision === undefined
+              ? {}
+              : { startedRevision: trace.startedRevision }),
+            ...(trace.committedRevision === undefined
+              ? {}
+              : { committedRevision: trace.committedRevision }),
+            ...(trace.stateStatus === undefined ? {} : { stateStatus: trace.stateStatus }),
             duration: trace.duration !== undefined ? trace.duration.toFixed(2) + 'ms' : 'N/A',
             timestamp: new Date(trace.start || 0).toISOString(),
             event: tags.event,

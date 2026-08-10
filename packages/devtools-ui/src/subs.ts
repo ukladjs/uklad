@@ -13,6 +13,7 @@ regRootSub('runtimes', 'runtimes');
 regRootSub('selectedRuntimeId', 'selectedRuntimeId');
 regRootSub('pendingRuntimeId', 'pendingRuntimeId');
 regRootSub('sessionEpoch', 'sessionEpoch');
+regRootSub('stateRevisions', 'stateRevisions');
 regRootSub('filter', 'filter');
 regRootSub('splitPosition', 'splitPosition');
 regRootSub('isDragging', 'isDragging');

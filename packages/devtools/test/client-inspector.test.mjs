@@ -107,9 +107,14 @@ async function successfulFetch(url) {
 
 function createFakeInspector(
   state = { count: 1 },
-  { runtimeId = 'runtime-test', runtimeName = 'Runtime test' } = {},
+  {
+    runtimeId = 'runtime-test',
+    runtimeName = 'Runtime test',
+    stateRevisions,
+  } = {},
 ) {
   let traceCallback = null;
+  let stateRevisionCallback = null;
   let unsubscribeCount = 0;
   let snapshotCount = 0;
   const dispatches = [];
@@ -123,6 +128,7 @@ function createFakeInspector(
       snapshotCount++;
       return {
         state,
+        ...(stateRevisions === undefined ? {} : { stateRevisions }),
         handlerKeys: {
           event: ['increment'],
           fx: [],
@@ -154,6 +160,17 @@ function createFakeInspector(
         }
       };
     },
+    subscribeStateRevisions(callback) {
+      stateRevisionCallback = callback;
+      let subscribed = true;
+      return () => {
+        if (!subscribed) return;
+        subscribed = false;
+        if (stateRevisionCallback === callback) {
+          stateRevisionCallback = null;
+        }
+      };
+    },
     dispatch(event) {
       dispatches.push(event);
     },
@@ -180,6 +197,10 @@ function createFakeInspector(
     async emitTraces(traces) {
       assert.ok(traceCallback, 'trace callback should be subscribed');
       await traceCallback(traces);
+    },
+    emitStateRevisions(revisions) {
+      assert.ok(stateRevisionCallback, 'state revision callback should be subscribed');
+      stateRevisionCallback(revisions);
     },
   };
 }
@@ -270,6 +291,49 @@ test('runtime-info includes effects and effectMode when configured', async () =>
   });
   assert.equal(payload.effectMode, 'safe');
   assert.deepEqual(payload.effects, { 'local-storage-set': 'memory' });
+});
+
+test('reports state revisions only when the server negotiated that telemetry', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWebSocket = globalThis.WebSocket;
+  FakeWebSocket.instances = [];
+  FakeWebSocket.autoOpen = true;
+  FakeWebSocket.throwOnSend = false;
+  FakeWebSocket.serverHelloOverride = { telemetry: { stateRevisions: true } };
+  globalThis.WebSocket = FakeWebSocket;
+  globalThis.fetch = successfulFetch;
+
+  const fake = createFakeInspector(
+    { count: 1 },
+    { stateRevisions: { committedRevision: 7, publishedRevision: 6 } },
+  );
+  let cleanup;
+  try {
+    cleanup = enableDevtools(fake.runtime);
+    await waitForTurn();
+    await waitForTurn();
+    const socket = FakeWebSocket.instances[0];
+    socket.emit({ type: 'ui-connection-status', payload: { connectedUIs: 1 } });
+    await waitForTurn();
+
+    const revisionEvents = socket.sent.filter((event) => event.type === 'uklad-state-revisions');
+    assert.equal(revisionEvents.length, 1);
+    assert.deepEqual(revisionEvents[0].payload, {
+      committedRevision: 7,
+      publishedRevision: 6,
+    });
+    fake.emitStateRevisions({ committedRevision: 7, publishedRevision: 7 });
+    await waitForTurn();
+    assert.deepEqual(
+      socket.sent.filter((event) => event.type === 'uklad-state-revisions').at(-1)?.payload,
+      { committedRevision: 7, publishedRevision: 7 },
+    );
+  } finally {
+    cleanup?.();
+    FakeWebSocket.serverHelloOverride = null;
+    globalThis.fetch = originalFetch;
+    globalThis.WebSocket = originalWebSocket;
+  }
 });
 
 test('uses only the injected runtime inspector and returns idempotent cleanup', async () => {

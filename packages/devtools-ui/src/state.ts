@@ -11,6 +11,7 @@ export function createDevtoolsState() {
     selectedRuntimeId: null,
     pendingRuntimeId: null,
     sessionEpoch: 0,
+    stateRevisions: null,
     filter: '',
     selectedTrace: null,
     settings: loadSettings(),

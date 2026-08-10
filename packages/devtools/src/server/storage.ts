@@ -101,6 +101,16 @@ export interface Trace {
   runtimeInstanceId?: string;
   eventInstanceId?: string;
   parentEventInstanceId?: string;
+  acceptedRevision?: number;
+  startedRevision?: number;
+  committedRevision?: number;
+  stateStatus?: 'committed' | 'unchanged' | 'skipped';
+}
+
+/** Last state heads reported by the runtime in this DevTools session. */
+export interface StateRevisions {
+  committedRevision: number;
+  publishedRevision: number;
 }
 
 export interface HandlerKeys {
@@ -132,6 +142,7 @@ export class TraceStorage {
   private activeSubBytes = 0;
   private handlerKeys: HandlerKeys | null = null;
   private runtimeInfo: RuntimeInfo | null = null;
+  private stateRevisions: StateRevisions | null = null;
   private readonly maxTraces: number;
   private readonly maxActiveSubscriptions: number;
   private readonly maxActiveSubscriptionBytes: number;
@@ -275,6 +286,25 @@ export class TraceStorage {
     this.runtimeInfo = info;
   }
 
+  updateStateRevisions(revisions: StateRevisions): void {
+    const next = {
+      committedRevision: revisions.committedRevision,
+      publishedRevision: revisions.publishedRevision,
+    };
+    // WebSocket events are ordered, but HTTP fallback sends may race. Keep the
+    // monotonic heads from moving backwards when an older report arrives late.
+    if (
+      this.stateRevisions !== null
+      && (
+        next.committedRevision < this.stateRevisions.committedRevision
+        || next.publishedRevision < this.stateRevisions.publishedRevision
+      )
+    ) {
+      return;
+    }
+    this.stateRevisions = next;
+  }
+
   getTraces(options: {
     limit?: number;
     eventFilter?: string;
@@ -340,6 +370,10 @@ export class TraceStorage {
     return this.runtimeInfo;
   }
 
+  getStateRevisions(): StateRevisions | null {
+    return this.stateRevisions;
+  }
+
   getStats(): {
     totalTraces: number;
     eventTraces: number;
@@ -365,5 +399,6 @@ export class TraceStorage {
     this.activeSubBytes = 0;
     this.handlerKeys = null;
     this.runtimeInfo = null;
+    this.stateRevisions = null;
   }
 }

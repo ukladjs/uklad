@@ -24,6 +24,7 @@ export type {
   UkladHandlerKeys,
   UkladInspector,
   UkladInspectorSnapshot,
+  UkladStateRevisions,
   UkladSubscriptionDiagnostic,
   UkladTrace,
   UkladTraceCallback,

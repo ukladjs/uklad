@@ -30,7 +30,7 @@ export default function TraceDetailsPanel() {
                         <p className="text-sm">Click on a trace item to see its details here</p>
                     </div>
                 ) : selectedTrace.type === 'event' ?
-                    <TraceEventDetails tags={selectedTrace.traces[0]?.tags ?? {}} /> :
+                    <TraceEventDetails trace={selectedTrace.traces[0]} /> :
                     <TraceRenderDetails traces={selectedTrace.traces} />}
             </div>
         </div>

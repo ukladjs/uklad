@@ -62,11 +62,8 @@ export function acceptRuntimeEvent(
 ): RuntimeTrackingContext | undefined {
   const probe = runtime.probe;
   if (!probe?.eventAccepted) return undefined;
-  return probe.eventAccepted(
-    event,
-    parent,
-    createRuntimeProbeEventMetadata(runtime, parent),
-  ) as RuntimeTrackingContext | undefined;
+  return probe.eventAccepted(event, parent, createRuntimeProbeEventMetadata(runtime, parent)) as
+    RuntimeTrackingContext | undefined;
 }
 
 /** Notify only the probes that accepted this exact event occurrence. */
@@ -194,9 +191,9 @@ function createCompositeProbe(attachments: readonly RuntimeProbeAttachment[]): R
           (entry) => entry.attachment === attachment,
         );
         const probeParent =
-          parentEntry === undefined
-              ? undefined
-              : {
+          parent === undefined || parentEntry === undefined
+            ? undefined
+            : {
                 tracking: {
                   eventMetadata: parent.tracking.eventMetadata,
                   operationTracked: attachment.probe.tracksOperations === true,

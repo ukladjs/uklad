@@ -12,6 +12,7 @@ import {
   regEvent,
   regRootSub,
   regSub,
+  testRuntime,
   withTrace,
 } from './runtime-test-api';
 
@@ -46,6 +47,7 @@ describe('Uklad inspector', () => {
     expect(inspector.runtimeName).toBe('Uklad unit-test runtime');
     expect(Object.isFrozen(inspector)).toBe(true);
     expect(snapshot.state).toBe(state);
+    expect(snapshot.stateRevisions).toEqual(testRuntime.getStateRevisions());
     expect(snapshot.handlerKeys).toEqual({
       event: ['inspector-event'],
       fx: ['inspector-effect'],
@@ -88,6 +90,39 @@ describe('Uklad inspector', () => {
       ]),
     );
     expect(computedRuns).toBe(1);
+  });
+
+  it('streams commit and publication revisions without retaining state', async () => {
+    initState({ count: 0 });
+    regEvent<{ count: number }>('inspector-revision', ({ draftState }) => {
+      draftState.count++;
+    });
+
+    const inspector = createUkladInspector();
+    const before = inspector.getSnapshot().stateRevisions;
+    const observed: Array<{ committedRevision: number; publishedRevision: number }> = [];
+    if (!inspector.subscribeStateRevisions) {
+      throw new Error('Core inspector must expose state revision subscription.');
+    }
+    const unsubscribe = inspector.subscribeStateRevisions((revisions) => observed.push(revisions));
+    try {
+      inspector.dispatch(['inspector-revision']);
+      await waitForScheduled();
+      await new Promise((resolve) => setTimeout(resolve, 120));
+
+      expect(observed).toEqual([
+        {
+          committedRevision: before.committedRevision + 1,
+          publishedRevision: before.publishedRevision,
+        },
+        {
+          committedRevision: before.committedRevision + 1,
+          publishedRevision: before.publishedRevision + 1,
+        },
+      ]);
+    } finally {
+      unsubscribe();
+    }
   });
 
   it('dispatches through the bound event router', async () => {

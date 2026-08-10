@@ -161,9 +161,17 @@ test('shares core event metadata between operation snapshots and traces', async 
     assert.equal(rootTrace.runtimeInstanceId, operation.runtimeInstanceId);
     assert.equal(rootTrace.operation, 'root');
     assert.equal(rootTrace.parentEventInstanceId, undefined);
+    assert.equal(rootTrace.acceptedRevision, rootEvent.acceptedRevision);
+    assert.equal(rootTrace.startedRevision, rootEvent.startedRevision);
+    assert.equal(rootTrace.committedRevision, rootEvent.committedRevision);
+    assert.equal(rootTrace.stateStatus, rootEvent.stateStatus);
     assert.equal(childTrace.runtimeInstanceId, operation.runtimeInstanceId);
     assert.equal(childTrace.operation, 'child');
     assert.equal(childTrace.parentEventInstanceId, rootEvent.eventInstanceId);
+    assert.equal(childTrace.acceptedRevision, childEvent.acceptedRevision);
+    assert.equal(childTrace.startedRevision, childEvent.startedRevision);
+    assert.equal(childTrace.committedRevision, childEvent.committedRevision);
+    assert.equal(childTrace.stateStatus, childEvent.stateStatus);
     assert.equal(childEvent.parentEventInstanceId, rootEvent.eventInstanceId);
   } finally {
     unsubscribe();

@@ -12,6 +12,13 @@ export interface TraceOpts {
     opType?: string;
     tags?: TraceTags;
     childOf?: TraceID;
+    runtimeInstanceId?: string;
+    eventInstanceId?: string;
+    parentEventInstanceId?: string;
+    acceptedRevision?: number;
+    startedRevision?: number;
+    committedRevision?: number;
+    stateStatus?: 'committed' | 'unchanged' | 'skipped';
 }
 
 export interface Trace extends TraceOpts {

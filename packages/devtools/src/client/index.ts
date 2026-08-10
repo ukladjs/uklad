@@ -28,6 +28,7 @@ import type {
 import type {
   UkladInspector,
   UkladInspectorSnapshot,
+  UkladStateRevisions,
   UkladTrace,
 } from './types.js';
 
@@ -35,6 +36,7 @@ export type {
   UkladHandlerKeys,
   UkladInspector,
   UkladInspectorSnapshot,
+  UkladStateRevisions,
   UkladSubscriptionDiagnostic,
   UkladTrace,
   UkladTraceCallback,
@@ -170,12 +172,15 @@ class DevtoolsClient {
   private serverAvailable = false;
   private isDisposed = false;
   private traceUnsubscribe: (() => void) | null = null;
+  private stateRevisionUnsubscribe: (() => void) | null = null;
   private connectionTimeout: ReturnType<typeof setTimeout> | null = null;
   private connectionStableTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private maxRuntimePayloadBytes =
     UKLAD_DEVTOOLS_DEFAULT_RUNTIME_PAYLOAD_BYTES;
+  /** Optional telemetry support negotiated from the server hello. */
+  private supportsStateRevisions = false;
   private readonly emittedDiagnostics = new Set<string>();
   private rejectConnection: ((error: unknown) => void) | null = null;
   private healthController: AbortController | null = null;
@@ -491,6 +496,7 @@ class DevtoolsClient {
               return;
             }
             this.maxRuntimePayloadBytes = runtimePayloadBytes;
+            this.supportsStateRevisions = message.payload?.telemetry?.stateRevisions === true;
             this.runtimeSessionId = runtimeSessionId;
             this.isConnected = true;
             this.markConnectionStableAfter(ws);
@@ -517,6 +523,7 @@ class DevtoolsClient {
           }
           this.isConnected = false;
           this.runtimeSessionId = null;
+          this.supportsStateRevisions = false;
           this.stopTracing(false);
           if (!this.hasConfiguredSessionToken) {
             this.sessionToken = null;
@@ -797,15 +804,19 @@ class DevtoolsClient {
           payload: traces
         });
         if (this.isDisposed) return;
+        const snapshot = this.inspector.getSnapshot();
+        await this.sendStateRevisions(snapshot.stateRevisions);
+        if (this.isDisposed) return;
         await this.sendEvent({
           type: 'uklad-active-subs',
           component: 'Uklad',
-          payload: this.mapSubscriptionDiagnostics(this.inspector.getSnapshot())
+          payload: this.mapSubscriptionDiagnostics(snapshot)
         });
         await this.reportDispatchResults(traces);
       });
       this.isTracingEnabled = true;
     }
+    this.startStateRevisionSubscription();
 
     const snapshot = this.inspector.getSnapshot();
     this.sendEvent({
@@ -813,6 +824,7 @@ class DevtoolsClient {
       component: 'Uklad',
       payload: snapshot.state
     });
+    void this.sendStateRevisions(snapshot.stateRevisions);
     this.sendEvent({
       type: 'uklad-active-subs',
       component: 'Uklad',
@@ -824,6 +836,29 @@ class DevtoolsClient {
       payload: snapshot.handlerKeys
     });
     this.sendRuntimeInfo();
+  }
+
+  /** Send neutral state heads only when this server explicitly supports them. */
+  private async sendStateRevisions(revisions: unknown): Promise<void> {
+    if (!this.supportsStateRevisions || !isStateRevisions(revisions)) return;
+    await this.sendEvent({
+      type: 'uklad-state-revisions',
+      component: 'Uklad',
+      payload: revisions,
+    });
+  }
+
+  private startStateRevisionSubscription(): void {
+    if (
+      !this.supportsStateRevisions
+      || this.stateRevisionUnsubscribe !== null
+      || typeof this.inspector.subscribeStateRevisions !== 'function'
+    ) {
+      return;
+    }
+    this.stateRevisionUnsubscribe = this.inspector.subscribeStateRevisions((revisions) => {
+      void this.sendStateRevisions(revisions);
+    });
   }
 
   // Tells the server how this app runs (browser tab vs headless process),
@@ -860,6 +895,8 @@ class DevtoolsClient {
       this.isTracingEnabled = false;
       this.traceUnsubscribe?.();
       this.traceUnsubscribe = null;
+      this.stateRevisionUnsubscribe?.();
+      this.stateRevisionUnsubscribe = null;
 
       // No more trace callbacks are coming; answer outstanding dispatches
       // now instead of letting them time out.
@@ -914,6 +951,7 @@ class DevtoolsClient {
     this.serverAvailable = false;
     this.isConnected = false;
     this.runtimeSessionId = null;
+    this.supportsStateRevisions = false;
 
     const ws = this.ws;
     this.ws = null;
@@ -1224,6 +1262,20 @@ function validRuntimeIdentityText(value: unknown, maxLength: number): value is s
     && value.trim().length > 0
     && value.length <= maxLength
     && !/[\u0000-\u001F\u007F]/.test(value);
+}
+
+function isStateRevisions(value: unknown): value is UkladStateRevisions {
+  if (!value || typeof value !== 'object') return false;
+  const revisions = value as Partial<UkladStateRevisions>;
+  const committedRevision = revisions.committedRevision;
+  const publishedRevision = revisions.publishedRevision;
+  return typeof committedRevision === 'number'
+    && Number.isSafeInteger(committedRevision)
+    && committedRevision >= 0
+    && typeof publishedRevision === 'number'
+    && Number.isSafeInteger(publishedRevision)
+    && publishedRevision >= 0
+    && publishedRevision <= committedRevision;
 }
 
 function resolveOperationEvidence(

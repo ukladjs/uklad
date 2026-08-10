@@ -50,6 +50,7 @@ describe('Conditional patch generation', () => {
       collected.push(...traces);
     });
 
+    const revisionsBeforeDispatch = testRuntime.getStateRevisions();
     dispatch(['tp-set-value', 42]);
     await waitForScheduled();
     await waitForTraceFlush();
@@ -61,6 +62,10 @@ describe('Conditional patch generation', () => {
     expect(trace.tags.patches).toEqual([{ op: 'replace', path: ['value'], value: 42 }]);
     expect(trace.tags.reversePatches).toEqual([{ op: 'replace', path: ['value'], value: 0 }]);
     expect(trace.tags.effects).toEqual([]);
+    expect(trace.acceptedRevision).toBe(revisionsBeforeDispatch.committedRevision);
+    expect(trace.startedRevision).toBe(revisionsBeforeDispatch.committedRevision);
+    expect(trace.committedRevision).toBe(revisionsBeforeDispatch.committedRevision + 1);
+    expect(trace.stateStatus).toBe('committed');
   });
 
   it('should still commit state updates with tracing disabled (plain produce path)', async () => {
@@ -110,16 +115,20 @@ describe('Conditional patch generation', () => {
       (trace) => trace.operation === 'tp-correlation-child' && trace.opType === 'event',
     );
 
-    expect(root).toEqual(expect.objectContaining({
-      runtimeInstanceId: testRuntime.runtimeInstanceId,
-      eventInstanceId: expect.any(String),
-    }));
+    expect(root).toEqual(
+      expect.objectContaining({
+        runtimeInstanceId: testRuntime.runtimeInstanceId,
+        eventInstanceId: expect.any(String),
+      }),
+    );
     expect(root.parentEventInstanceId).toBeUndefined();
-    expect(child).toEqual(expect.objectContaining({
-      runtimeInstanceId: testRuntime.runtimeInstanceId,
-      eventInstanceId: expect.any(String),
-      parentEventInstanceId: root.eventInstanceId,
-    }));
+    expect(child).toEqual(
+      expect.objectContaining({
+        runtimeInstanceId: testRuntime.runtimeInstanceId,
+        eventInstanceId: expect.any(String),
+        parentEventInstanceId: root.eventInstanceId,
+      }),
+    );
     expect(child.eventInstanceId).not.toBe(root.eventInstanceId);
   });
 

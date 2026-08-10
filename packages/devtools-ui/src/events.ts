@@ -1,7 +1,7 @@
 import { current } from "@ukladjs/core";
 import { applyPatches, enablePatches } from "immer";
 import type { Badge, Trace, TraceItem } from './types/Trace';
-import type { DevtoolsRuntimeSummary } from './types/Runtime';
+import type { DevtoolsRuntimeSummary, StateRevisions } from './types/Runtime';
 import { regEvent } from './runtime';
 
 // Enable Immer patches plugin for applyPatches functionality
@@ -13,6 +13,7 @@ function clearRuntimeView(draftState: any) {
     draftState.activeSubs = {};
     draftState.handlerKeys = null;
     draftState.handlerUsage = {};
+    draftState.stateRevisions = null;
     draftState.selectedTrace = null;
     draftState.dispatchModalOpenState = {};
 }
@@ -288,6 +289,14 @@ regEvent('update-state', ({ draftState }, state: any, runtimeId: string, session
     if (!acceptsRuntimeMessage(draftState, runtimeId, sessionEpoch)) return;
     draftState.state = state;
 });
+
+regEvent(
+    'update-state-revisions',
+    ({ draftState }, stateRevisions: StateRevisions, runtimeId: string, sessionEpoch: number) => {
+        if (!acceptsRuntimeMessage(draftState, runtimeId, sessionEpoch)) return;
+        draftState.stateRevisions = stateRevisions;
+    },
+);
 
 regEvent('update-active-subs', ({ draftState }, activeSubs: any, runtimeId: string, sessionEpoch: number) => {
     if (!acceptsRuntimeMessage(draftState, runtimeId, sessionEpoch)) return;

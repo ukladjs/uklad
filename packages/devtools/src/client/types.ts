@@ -22,6 +22,14 @@ export interface UkladTrace {
   readonly eventInstanceId?: string;
   /** Parent event occurrence, distinct from trace/span parentage. */
   readonly parentEventInstanceId?: string;
+  /** Committed state head when this queued event was accepted. */
+  readonly acceptedRevision?: number;
+  /** Committed state head when this event began execution. */
+  readonly startedRevision?: number;
+  /** New committed state head when this event changed state. */
+  readonly committedRevision?: number;
+  /** Whether this event committed, left state unchanged, or skipped commit. */
+  readonly stateStatus?: 'committed' | 'unchanged' | 'skipped';
 }
 
 export type UkladTraceCallback = (traces: UkladTrace[]) => void | Promise<void>;
@@ -33,8 +41,16 @@ export interface UkladHandlerKeys {
   readonly sub: readonly string[];
 }
 
+/** Monotonic state commit and publication heads from a compatible inspector. */
+export interface UkladStateRevisions {
+  readonly committedRevision: number;
+  readonly publishedRevision: number;
+}
+
 export interface UkladInspectorSnapshot {
   readonly state: unknown;
+  /** Optional so pre-revision structural inspectors remain compatible. */
+  readonly stateRevisions?: UkladStateRevisions;
   readonly handlerKeys: UkladHandlerKeys;
   readonly subscriptions: readonly UkladSubscriptionDiagnostic[];
 }
@@ -54,6 +70,8 @@ export interface UkladInspector {
   readonly runtimeName: string;
   getSnapshot(): UkladInspectorSnapshot;
   subscribeTraces(callback: UkladTraceCallback): () => void;
+  /** Optional live state-head stream supplied by current Uklad inspectors. */
+  subscribeStateRevisions?(callback: (revisions: UkladStateRevisions) => void): () => void;
   dispatch(event: [string, ...any[]]): void;
   evaluateSubscription(query: [string, ...any[]]): unknown;
   /** Optional internal port exposed by Uklad inspectors for operation snapshots. */

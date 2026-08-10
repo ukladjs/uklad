@@ -2,7 +2,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useCallback } from 'react';
 import { useSubscription } from '@ukladjs/core';
 import ConnectionStatus from './ConnectionStatus';
-import type { DevtoolsRuntimeSummary } from '../types/Runtime';
+import type { DevtoolsRuntimeSummary, StateRevisions } from '../types/Runtime';
 import { dispatch } from '../runtime';
 
 export default function Header() {
@@ -10,6 +10,7 @@ export default function Header() {
     const runtimes = useSubscription<DevtoolsRuntimeSummary[]>(['runtimes']) ?? [];
     const selectedRuntimeId = useSubscription<string | null>(['selectedRuntimeId']);
     const pendingRuntimeId = useSubscription<string | null>(['pendingRuntimeId']);
+    const stateRevisions = useSubscription<StateRevisions | null>(['stateRevisions']);
 
     const handleThemeChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const selectedTheme = event.target.checked ? 'light' : 'dark';
@@ -43,7 +44,15 @@ export default function Header() {
                 </div>
             </div>
 
-            <div className="flex shrink-0 items-center">
+            <div className="flex shrink-0 items-center gap-3">
+                {stateRevisions && (
+                    <div
+                        className="hidden rounded bg-base-300 px-2 py-1 font-mono text-xs sm:block"
+                        title="Current state revisions: committed is the live write head; published is the render-visible head."
+                    >
+                        c{stateRevisions.committedRevision} · p{stateRevisions.publishedRevision}
+                    </div>
+                )}
                 <label className="swap swap-rotate">
                     {/* this hidden checkbox controls the state */}
                     <input type="checkbox" checked={theme === 'light'} onChange={handleThemeChange} />

@@ -39,6 +39,8 @@ export interface UkladInspector {
   readonly apiVersion: 2;
   readonly runtimeId: string;
   readonly runtimeName: string;
+  /** Exact in-memory runtime lifetime, available to optional diagnostics. */
+  readonly runtimeInstanceId?: string;
   getSnapshot(): UkladInspectorSnapshot;
   /** Subscribe to trace batches and keep trace collection active until cleanup. */
   subscribeTraces(callback: TraceCallback): () => void;

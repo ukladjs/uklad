@@ -20,6 +20,7 @@ import {
   addInterceptor,
   registerTraceCallback,
   removeTraceCallback,
+  testRuntime,
 } from './runtime-test-api';
 
 // Trace callbacks run after the 50 ms batching window.
@@ -86,6 +87,40 @@ describe('Conditional patch generation', () => {
     expect(runtime.getState().value).toBe(3);
     expect(getRuntimeCoreForTests(runtime).probe).toBeUndefined();
     runtime.dispose();
+  });
+
+  it('adds shared runtime event metadata to parent and child event traces', async () => {
+    enableTracing();
+    registerTraceCallback('trace-patches-test', (traces) => {
+      collected.push(...traces);
+    });
+    regEvent('tp-correlation-root', () => [['dispatch', ['tp-correlation-child']]]);
+    regEvent('tp-correlation-child', ({ draftState }) => {
+      draftState.value = 13;
+    });
+
+    dispatch(['tp-correlation-root']);
+    await waitForScheduled();
+    await waitForTraceFlush();
+
+    const root = collected.find(
+      (trace) => trace.operation === 'tp-correlation-root' && trace.opType === 'event',
+    );
+    const child = collected.find(
+      (trace) => trace.operation === 'tp-correlation-child' && trace.opType === 'event',
+    );
+
+    expect(root).toEqual(expect.objectContaining({
+      runtimeInstanceId: testRuntime.runtimeInstanceId,
+      eventInstanceId: expect.any(String),
+    }));
+    expect(root.parentEventInstanceId).toBeUndefined();
+    expect(child).toEqual(expect.objectContaining({
+      runtimeInstanceId: testRuntime.runtimeInstanceId,
+      eventInstanceId: expect.any(String),
+      parentEventInstanceId: root.eventInstanceId,
+    }));
+    expect(child.eventInstanceId).not.toBe(root.eventInstanceId);
   });
 
   it('should trace effects contributed by after interceptors', async () => {

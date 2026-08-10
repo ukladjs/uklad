@@ -98,6 +98,9 @@ export interface Trace {
   opType?: string;
   tags?: Record<string, any>;
   childOf?: number;
+  runtimeInstanceId?: string;
+  eventInstanceId?: string;
+  parentEventInstanceId?: string;
 }
 
 export interface HandlerKeys {
@@ -275,6 +278,7 @@ export class TraceStorage {
   getTraces(options: {
     limit?: number;
     eventFilter?: string;
+    eventInstanceId?: string;
     minDuration?: number;
     opType?: string;
   } = {}): Trace[] {
@@ -285,6 +289,14 @@ export class TraceStorage {
       const filter = options.eventFilter.toLowerCase();
       filtered = filtered.filter(trace =>
         trace.operation?.toLowerCase().includes(filter)
+      );
+    }
+
+    // Exact event-occurrence lookup joins trace records to an operation event
+    // without relying on names, timing, or trace ids.
+    if (options.eventInstanceId) {
+      filtered = filtered.filter(
+        (trace) => trace.eventInstanceId === options.eventInstanceId,
       );
     }
 

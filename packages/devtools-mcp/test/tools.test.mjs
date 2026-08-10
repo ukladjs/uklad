@@ -47,6 +47,7 @@ test('app_status reports a healthy headless session without hints', async () => 
         connectedApps: 1,
         connectedUIs: 0,
         sessionEpoch: 3,
+        runtimeInstanceId: 'healthy-headless:instance:1',
         runtime: 'headless',
         effectMode: 'safe',
         effects: { 'local-storage-set': 'memory' },
@@ -80,6 +81,7 @@ test('app_status reports a healthy headless session without hints', async () => 
 
   assert.equal(body.appConnected, true);
   assert.equal(body.sessionEpoch, 3);
+  assert.equal(body.runtimeInstanceId, 'healthy-headless:instance:1');
   assert.equal(body.runtime, 'headless');
   assert.equal(body.effectMode, 'safe');
   assert.deepEqual(body.effects, { 'local-storage-set': 'memory' });
@@ -453,6 +455,57 @@ test('get_traces returns compact rows without full trace tags', async () => {
   assert.equal('patches' in row, false);
   assert.equal('effects' in row, false);
   assert.equal('childOf' in row, false);
+});
+
+test('get_traces correlates an operation event with exact trace rows', async () => {
+  const runtimeInstanceId = 'runtime-test:instance:1';
+  const eventInstanceId = `evt_${runtimeInstanceId}_2`;
+  const apiClient = {
+    async getTraces(params) {
+      assert.deepEqual(params, {
+        limit: 50,
+        eventFilter: undefined,
+        eventInstanceId,
+        minDuration: undefined,
+        opType: undefined,
+      });
+      return {
+        runtimeId: 'runtime-test',
+        runtimeName: 'Runtime test',
+        runtimeInstanceId,
+        sessionEpoch: 3,
+        stats: {
+          totalTraces: 2,
+          eventTraces: 2,
+          renderTraces: 0,
+        },
+        traces: [{
+          id: 8,
+          operation: 'child',
+          opType: 'event',
+          duration: 1,
+          start: 0,
+          runtimeInstanceId,
+          eventInstanceId,
+          parentEventInstanceId: `evt_${runtimeInstanceId}_1`,
+          tags: { event: ['child'] },
+        }],
+      };
+    },
+  };
+
+  const tool = getTracesTool(apiClient);
+  assert.ok(tool.inputSchema.properties.eventInstanceId);
+  const result = await tool.handler({ eventInstanceId });
+  const body = parseToolResult(result);
+
+  assert.equal(body.runtimeInstanceId, runtimeInstanceId);
+  assert.equal(body.traces[0].runtimeInstanceId, runtimeInstanceId);
+  assert.equal(body.traces[0].eventInstanceId, eventInstanceId);
+  assert.equal(
+    body.traces[0].parentEventInstanceId,
+    `evt_${runtimeInstanceId}_1`,
+  );
 });
 
 test('get_active_subs passes the server-side filter and returns compact values', async () => {

@@ -8,6 +8,8 @@ import { createOperationClient } from '../dist/client/operations/client.js';
 import { OperationCoordinator } from '../dist/client/operations/coordinator.js';
 import { createOperationInspector } from '../dist/client/operations/inspector.js';
 
+const waitForTraceFlush = () => new Promise((resolve) => setTimeout(resolve, 80));
+
 function operationsFor(runtime, evidence) {
   return createOperationClient(createUkladInspector(runtime).getOperationRuntime(), evidence);
 }
@@ -125,6 +127,46 @@ test('retains parent and effect lineage for a dispatch cascade', async () => {
     assert.equal(child.sourceEffectId, 'dispatch');
     assert.equal(child.sourceEffectIndex, 0);
   } finally {
+    runtime.dispose();
+  }
+});
+
+test('shares core event metadata between operation snapshots and traces', async () => {
+  const runtime = createUkladRuntime({
+    runtimeId: 'operations-trace-correlation',
+    initialState: { count: 0 },
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('root', () => [['dispatch', ['child', 3]]]);
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regEvent('child', ({ draftState }, amount) => {
+      draftState.count += amount;
+    });
+  });
+
+  const inspector = createUkladInspector(runtime);
+  const traces = [];
+  const unsubscribe = inspector.subscribeTraces((batch) => traces.push(...batch));
+  try {
+    const { operation } = await createOperationClient(
+      inspector.getOperationRuntime(),
+    ).dispatchAndWait(['root']);
+    await waitForTraceFlush();
+
+    const [rootEvent, childEvent] = operation.events;
+    const rootTrace = traces.find((trace) => trace.eventInstanceId === rootEvent.eventInstanceId);
+    const childTrace = traces.find((trace) => trace.eventInstanceId === childEvent.eventInstanceId);
+
+    assert.equal(rootTrace.runtimeInstanceId, operation.runtimeInstanceId);
+    assert.equal(rootTrace.operation, 'root');
+    assert.equal(rootTrace.parentEventInstanceId, undefined);
+    assert.equal(childTrace.runtimeInstanceId, operation.runtimeInstanceId);
+    assert.equal(childTrace.operation, 'child');
+    assert.equal(childTrace.parentEventInstanceId, rootEvent.eventInstanceId);
+    assert.equal(childEvent.parentEventInstanceId, rootEvent.eventInstanceId);
+  } finally {
+    unsubscribe();
     runtime.dispose();
   }
 });

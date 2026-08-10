@@ -8,6 +8,12 @@ export interface TraceOptions {
   opType?: string;
   tags?: TraceTags;
   childOf?: TraceId;
+  /** Exact in-memory runtime lifetime for traces derived from one event. */
+  runtimeInstanceId?: string;
+  /** Concrete event occurrence shared with DevTools operation snapshots. */
+  eventInstanceId?: string;
+  /** Parent event occurrence, distinct from trace/span parentage. */
+  parentEventInstanceId?: string;
 }
 
 export interface Trace extends TraceOptions {

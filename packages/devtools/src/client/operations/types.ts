@@ -7,7 +7,9 @@ import type { OperationEventVector } from './runtime.js';
  * This is an experimental DevTools snapshot, assembled from passive runtime
  * execution facts. It deliberately contains no trace, retry, or delivery
  * timing data. Evidence such as effects is collected through optional
- * DevTools lifecycle observation.
+ * DevTools lifecycle observation. Each event's eventInstanceId is neutral
+ * runtime metadata also carried by related trace rows; traces never control
+ * operation settlement.
  *
  * A snapshot is a copy taken when it was read. Detached effects settle after
  * their operation does, so a `completed` operation whose promise-returning

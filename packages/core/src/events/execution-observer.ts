@@ -35,7 +35,7 @@ export function observeDevelopmentExecution(
     needsSubscriptionEvidence: false,
     needsSpans: false,
     tracksOperations: true,
-    eventAccepted(event, parent): DevelopmentOperationReference {
+    eventAccepted(event, parent, metadata): DevelopmentOperationReference {
       const parentOperation = getRuntimeTrackingToken(parent?.tracking, probe) as
         DevelopmentOperationReference | undefined;
       return observer.accept(
@@ -51,6 +51,7 @@ export function observeDevelopmentExecution(
                 ? {}
                 : { sourceEffectIndex: parent.sourceEffectIndex }),
             },
+        metadata,
       );
     },
     eventQueued(token, revision): void {

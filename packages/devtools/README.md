@@ -347,6 +347,12 @@ truncation in the snapshot. Redaction still runs before this evidence leaves the
 application process. It intentionally does not include reverse patches, full
 before/after state, observations, idempotency, or delivery-timeout data.
 
+Each instrumented event also has neutral `runtimeInstanceId` and
+`eventInstanceId` metadata. DevTools copies the same event ID into operation
+snapshot events and related trace rows, so an agent can retrieve exact trace
+evidence with `get_traces({ eventInstanceId })`. Trace storage and delivery
+remain diagnostic only; they never control operation settlement.
+
 Add application-specific PII keys by composing the exported default masker:
 
 ```typescript

@@ -18,6 +18,7 @@ import {
 export interface GetTracesParams extends RuntimeSelectionParams {
   limit?: number;
   eventFilter?: string;
+  eventInstanceId?: string;
   minDuration?: number;
   opType?: string;
 }
@@ -25,7 +26,7 @@ export interface GetTracesParams extends RuntimeSelectionParams {
 export function getTracesTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'get_traces',
-    description: 'List compact Uklad trace rows: events, subscription operations (create/run/dispose), and render cycles with timing. Use a small limit and eventFilter or opType before opening one get_trace row for patches, effects, or an error stack. To get current mounted subscription values, use get_active_subs.',
+    description: 'List compact Uklad trace rows: events, subscription operations (create/run/dispose), and render cycles with timing. Pass eventInstanceId from a dispatch_and_wait operation event to retrieve exactly the related trace rows. Otherwise use a small limit and eventFilter or opType before opening one get_trace row for patches, effects, or an error stack. To get current mounted subscription values, use get_active_subs.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -39,6 +40,13 @@ export function getTracesTool(apiClient: DevToolsAPIClient) {
           type: 'string',
           maxLength: 256,
           description: 'Filter traces by event/operation name (case-insensitive substring match)'
+        },
+        eventInstanceId: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 256,
+          description:
+            'Exact event occurrence id from dispatch_and_wait operation.events[].eventInstanceId',
         },
         minDuration: {
           type: 'number',
@@ -63,6 +71,9 @@ export function getTracesTool(apiClient: DevToolsAPIClient) {
         const response = await apiClient.getTraces({
           limit,
           eventFilter: params.eventFilter,
+          ...(params.eventInstanceId === undefined
+            ? {}
+            : { eventInstanceId: params.eventInstanceId }),
           minDuration: params.minDuration,
           opType: params.opType,
           ...(params.runtimeId === undefined
@@ -80,6 +91,15 @@ export function getTracesTool(apiClient: DevToolsAPIClient) {
             id: trace.id,
             operation: trace.operation || 'unknown',
             opType: trace.opType || 'unknown',
+            ...(trace.runtimeInstanceId === undefined
+              ? {}
+              : { runtimeInstanceId: trace.runtimeInstanceId }),
+            ...(trace.eventInstanceId === undefined
+              ? {}
+              : { eventInstanceId: trace.eventInstanceId }),
+            ...(trace.parentEventInstanceId === undefined
+              ? {}
+              : { parentEventInstanceId: trace.parentEventInstanceId }),
             duration: trace.duration !== undefined ? trace.duration.toFixed(2) + 'ms' : 'N/A',
             timestamp: new Date(trace.start || 0).toISOString(),
             event: tags.event,

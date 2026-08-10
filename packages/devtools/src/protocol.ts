@@ -26,6 +26,8 @@ export type RuntimeTelemetryDropReason =
 export interface DevtoolsRuntimeIdentity {
   readonly runtimeId: string;
   readonly runtimeName: string;
+  /** Exact in-memory runtime lifetime when the connected inspector exposes it. */
+  readonly runtimeInstanceId?: string;
 }
 
 /**

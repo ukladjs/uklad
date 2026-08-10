@@ -59,6 +59,9 @@ export function appStatusTool(apiClient: DevToolsAPIClient) {
           protocol: response.protocol,
           security: response.security
         };
+        if (typeof response.runtimeInstanceId === 'string') {
+          status.runtimeInstanceId = response.runtimeInstanceId;
+        }
         if (response.effectMode != null) status.effectMode = response.effectMode;
         if (response.effects != null) status.effects = response.effects;
         if (response.operations != null) status.operations = response.operations;

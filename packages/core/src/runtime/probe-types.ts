@@ -1,5 +1,19 @@
 import type { EventVector, SubVector } from '../types';
 
+/**
+ * Neutral identity for one accepted event occurrence while optional runtime
+ * instrumentation is active. It is correlation metadata, not an operation
+ * record: core does not retain or settle it.
+ */
+export interface RuntimeProbeEventMetadata {
+  /** Exact in-memory runtime lifetime that accepted the event. */
+  readonly runtimeInstanceId: string;
+  /** Unique event occurrence within that runtime lifetime. */
+  readonly eventInstanceId: string;
+  /** The directly accepting event, when this event was synchronously derived. */
+  readonly parentEventInstanceId?: string;
+}
+
 export interface RuntimeProbeParent {
   readonly tracking: RuntimeTrackingContext;
   readonly sourceEffectId?: string;
@@ -68,7 +82,11 @@ export interface RuntimeProbe {
   /** Marks a probe that can back explicit tracked-operation dispatch. */
   readonly tracksOperations?: boolean;
 
-  eventAccepted?(event: EventVector, parent?: RuntimeProbeParent): unknown;
+  eventAccepted?(
+    event: EventVector,
+    parent?: RuntimeProbeParent,
+    metadata?: RuntimeProbeEventMetadata,
+  ): unknown;
   eventQueued?(token: unknown, committedRevision: number): void;
   eventStarted?(token: unknown, committedRevision: number): void;
   transition?(token: unknown, result: RuntimeProbeTransition): void;
@@ -115,6 +133,8 @@ export interface RuntimeTrackingEntry {
  * tokens remain private to the probe host.
  */
 export interface RuntimeTrackingContext {
+  /** Shared event identity for every accepting instrumentation attachment. */
+  readonly eventMetadata: RuntimeProbeEventMetadata;
   readonly operationTracked: boolean;
   readonly entries: readonly RuntimeTrackingEntry[];
 }

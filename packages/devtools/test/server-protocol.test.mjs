@@ -152,10 +152,12 @@ async function connectSdk(
       runtimeId: identity.runtimeId,
       runtimeName: identity.runtimeName,
       token: session.runtime.token,
+      ...(identity.runtimeInstanceId === undefined
+        ? {}
+        : { runtimeInstanceId: identity.runtimeInstanceId }),
       ...(identity.operationApiVersion === 1
         ? {
             operationApiVersion: 1,
-            runtimeInstanceId: identity.runtimeInstanceId,
             ...(identity.operationStateChanges === 'patches'
               ? { operationStateChanges: 'patches' }
               : {}),
@@ -802,6 +804,78 @@ test('internal HTTP failures return a correlation id without raw error detail', 
     storage.getTraces = originalGetTraces;
     console.error = originalConsoleError;
   }
+});
+
+test('returns shared event metadata and filters traces by event instance', async () => {
+  const { baseUrl, wsUrl } = await startServer();
+  const runtimeId = 'runtime-trace-correlation';
+  const runtimeInstanceId = `${runtimeId}:instance:1`;
+  const rootEventInstanceId = `evt_${runtimeInstanceId}_1`;
+  const childEventInstanceId = `evt_${runtimeInstanceId}_2`;
+  const socket = await connectSdk(
+    wsUrl,
+    () => {},
+    undefined,
+    undefined,
+    { runtimeId, runtimeName: 'Trace correlation runtime', runtimeInstanceId },
+  );
+
+  sendSdkEvent(socket, {
+    type: 'uklad-traces',
+    payload: [
+      {
+        id: 701,
+        start: Date.now(),
+        operation: 'root',
+        opType: 'event',
+        runtimeInstanceId,
+        eventInstanceId: rootEventInstanceId,
+        tags: { event: ['root'] },
+      },
+      {
+        id: 702,
+        start: Date.now(),
+        operation: 'child',
+        opType: 'event',
+        runtimeInstanceId,
+        eventInstanceId: childEventInstanceId,
+        parentEventInstanceId: rootEventInstanceId,
+        tags: { event: ['child'] },
+      },
+    ],
+  });
+
+  const status = await waitForStatus(
+    baseUrl,
+    (candidate) => candidate.traceCount === 2,
+    2000,
+    runtimeId,
+  );
+  assert.equal(status.runtimeInstanceId, runtimeInstanceId);
+  assert.equal(status.runtimes[0].runtimeInstanceId, runtimeInstanceId);
+
+  const response = await authenticatedFetch(
+    baseUrl,
+    `/api/traces?runtimeId=${runtimeId}&eventInstanceId=${encodeURIComponent(childEventInstanceId)}`,
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.runtimeInstanceId, runtimeInstanceId);
+  assert.equal(body.traces.length, 1);
+  assert.equal(body.traces[0].id, 702);
+  assert.equal(body.traces[0].runtimeInstanceId, runtimeInstanceId);
+  assert.equal(body.traces[0].eventInstanceId, childEventInstanceId);
+  assert.equal(body.traces[0].parentEventInstanceId, rootEventInstanceId);
+
+  const detailResponse = await authenticatedFetch(
+    baseUrl,
+    `/api/traces/702?runtimeId=${runtimeId}`,
+  );
+  const detail = await detailResponse.json();
+  assert.equal(detail.runtimeInstanceId, runtimeInstanceId);
+  assert.equal(detail.trace.eventInstanceId, childEventInstanceId);
+  assert.equal(detail.trace.parentEventInstanceId, rootEventInstanceId);
 });
 
 test('server-side redaction prevents state, trace, dispatch, and audit secret leakage', async () => {

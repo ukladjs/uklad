@@ -230,6 +230,7 @@ export class DevToolsAPIClient {
   async getTraces(params: {
     limit?: number;
     eventFilter?: string;
+    eventInstanceId?: string;
     minDuration?: number;
     opType?: string;
     runtimeId?: string;
@@ -240,6 +241,9 @@ export class DevToolsAPIClient {
     }
     if (params.eventFilter) {
       queryParams.append('eventFilter', params.eventFilter);
+    }
+    if (params.eventInstanceId) {
+      queryParams.append('eventInstanceId', params.eventInstanceId);
     }
     if (params.minDuration !== undefined) {
       queryParams.append('minDuration', params.minDuration.toString());

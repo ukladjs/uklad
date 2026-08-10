@@ -430,6 +430,12 @@ class DevtoolsClient {
         }
         try {
           const operationCapability = this.operationCapability();
+          const runtimeInstanceId = validRuntimeIdentityText(
+            this.inspector.runtimeInstanceId,
+            256,
+          )
+            ? this.inspector.runtimeInstanceId
+            : undefined;
           ws.send(JSON.stringify({
             type: 'uklad-auth',
             payload: {
@@ -439,10 +445,10 @@ class DevtoolsClient {
               inspectorApiVersion: this.inspector.apiVersion,
               runtimeId: this.inspector.runtimeId,
               runtimeName: this.inspector.runtimeName,
+              ...(runtimeInstanceId === undefined ? {} : { runtimeInstanceId }),
               ...(operationCapability
                 ? {
                     operationApiVersion: 1,
-                    runtimeInstanceId: operationCapability.runtimeInstanceId,
                     ...(operationCapability.stateChanges === 'patches'
                       ? { operationStateChanges: 'patches' }
                       : {}),

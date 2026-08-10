@@ -207,12 +207,13 @@ status payload.
 
 ### 2. `get_traces`
 
-List execution traces from your application as compact rows: id, operation, opType, duration, timestamp, and event args. Failed events carry an `error` summary; events whose effects threw carry an `effectErrors` count. The response also identifies the runtime and its `sessionEpoch`; pass those values with a row's id to `get_trace` for race-safe full detail.
+List execution traces from your application as compact rows: id, operation, opType, duration, timestamp, and event args. Failed events carry an `error` summary; events whose effects threw carry an `effectErrors` count. Operation-enabled event traces additionally share `runtimeInstanceId` and `eventInstanceId` with `dispatch_and_wait` snapshot events. Pass an exact `eventInstanceId` to retrieve its related trace rows. The response also identifies the runtime and its `sessionEpoch`; pass those values with a row's id to `get_trace` for race-safe full detail.
 
 **Parameters:**
 
 - `limit` (number, optional): Maximum traces to return (default: 50, max: 1000)
 - `eventFilter` (string, optional): Filter by event/operation name (substring match)
+- `eventInstanceId` (string, optional): Exact event occurrence ID from `dispatch_and_wait.operation.events[]`
 - `minDuration` (number, optional): Filter traces by minimum duration in milliseconds
 - `opType` (string, optional): Filter by operation type: `event`, `render`, `sub/create`, `sub/run`, `sub/dispose`
 - `runtimeId` (string, optional): Runtime selected from `app_status`
@@ -270,6 +271,9 @@ published revisions, pending work, and errors. It remains available when
 tracing is off. To include bounded forward state patches, configure the app
 with `operations: { evidence: { stateChanges: 'patches' } }`; verify the
 active mode through `app_status.operations.evidence` first.
+When trace evidence is useful, pass an operation event's `eventInstanceId` to
+`get_traces`; the correlation key is shared, but trace availability never
+changes the settled operation result.
 
 **Parameters:**
 

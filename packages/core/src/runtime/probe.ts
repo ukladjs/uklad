@@ -5,6 +5,7 @@ import type { EventVector } from '../types';
 import type {
   RuntimeProbe,
   RuntimeProbeAttachment,
+  RuntimeProbeEventMetadata,
   RuntimeProbeParent,
   RuntimeProbeSpan,
   RuntimeProbeSubscription,
@@ -17,6 +18,7 @@ export type {
   RuntimeProbe,
   RuntimeProbeCommit,
   RuntimeProbeEffect,
+  RuntimeProbeEventMetadata,
   RuntimeProbeParent,
   RuntimeProbePatch,
   RuntimeProbeSpan,
@@ -26,6 +28,7 @@ export type {
 } from './probe-types';
 
 const ATTACHMENTS = new WeakMap<RuntimeCore, Set<RuntimeProbeAttachment>>();
+const NEXT_EVENT_INSTANCE_ID = new WeakMap<RuntimeCore, number>();
 
 /** Read the opaque token contributed by one probe to a tracking context. */
 export function getRuntimeTrackingToken(
@@ -59,7 +62,11 @@ export function acceptRuntimeEvent(
 ): RuntimeTrackingContext | undefined {
   const probe = runtime.probe;
   if (!probe?.eventAccepted) return undefined;
-  return probe.eventAccepted(event, parent) as RuntimeTrackingContext | undefined;
+  return probe.eventAccepted(
+    event,
+    parent,
+    createRuntimeProbeEventMetadata(runtime, parent),
+  ) as RuntimeTrackingContext | undefined;
 }
 
 /** Notify only the probes that accepted this exact event occurrence. */
@@ -175,7 +182,9 @@ function createCompositeProbe(attachments: readonly RuntimeProbeAttachment[]): R
     eventAccepted(
       event: EventVector,
       parent?: RuntimeProbeParent,
+      metadata?: RuntimeProbeEventMetadata,
     ): RuntimeTrackingContext | undefined {
+      if (!metadata) return undefined;
       const entries: RuntimeTrackingEntry[] = [];
       let operationTracked = false;
       for (const attachment of attachments) {
@@ -186,9 +195,10 @@ function createCompositeProbe(attachments: readonly RuntimeProbeAttachment[]): R
         );
         const probeParent =
           parentEntry === undefined
-            ? undefined
-            : {
+              ? undefined
+              : {
                 tracking: {
+                  eventMetadata: parent.tracking.eventMetadata,
                   operationTracked: attachment.probe.tracksOperations === true,
                   entries: [{ attachment, token: parentEntry.token }],
                 },
@@ -200,7 +210,7 @@ function createCompositeProbe(attachments: readonly RuntimeProbeAttachment[]): R
                   : { sourceEffectIndex: parent.sourceEffectIndex }),
               };
         try {
-          const token = callback.call(attachment.probe, event, probeParent);
+          const token = callback.call(attachment.probe, event, probeParent, metadata);
           entries.push({ attachment, token });
           operationTracked ||= attachment.probe.tracksOperations === true;
         } catch (error) {
@@ -210,6 +220,7 @@ function createCompositeProbe(attachments: readonly RuntimeProbeAttachment[]): R
       return entries.length === 0
         ? undefined
         : Object.freeze({
+            eventMetadata: metadata,
             operationTracked,
             entries: Object.freeze(entries),
           });
@@ -264,6 +275,21 @@ function createCompositeProbe(attachments: readonly RuntimeProbeAttachment[]): R
         invokeProbe(entry.attachment.probe, 'spanFinished', entry.token, span);
       }
     },
+  });
+}
+
+function createRuntimeProbeEventMetadata(
+  runtime: RuntimeCore,
+  parent: RuntimeProbeParent | undefined,
+): RuntimeProbeEventMetadata {
+  const nextEventInstanceId = (NEXT_EVENT_INSTANCE_ID.get(runtime) ?? 0) + 1;
+  NEXT_EVENT_INSTANCE_ID.set(runtime, nextEventInstanceId);
+  const runtimeInstanceId = runtime.identity.runtimeInstanceId;
+  const parentEventInstanceId = parent?.tracking.eventMetadata.eventInstanceId;
+  return Object.freeze({
+    runtimeInstanceId,
+    eventInstanceId: `evt_${runtimeInstanceId}_${nextEventInstanceId}`,
+    ...(parentEventInstanceId === undefined ? {} : { parentEventInstanceId }),
   });
 }
 

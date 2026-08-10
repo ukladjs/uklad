@@ -282,6 +282,7 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
   globalThis.fetch = successfulFetch;
 
   const fake = createFakeInspector();
+  fake.inspector.runtimeInstanceId = 'runtime-test:instance:metadata';
   let cleanup;
 
   try {
@@ -335,6 +336,8 @@ test('uses only the injected runtime inspector and returns idempotent cleanup', 
     assert.equal(socket.sent[0].payload.inspectorApiVersion, 2);
     assert.equal(socket.sent[0].payload.runtimeId, 'runtime-test');
     assert.equal(socket.sent[0].payload.runtimeName, 'Runtime test');
+    assert.equal(socket.sent[0].payload.runtimeInstanceId, 'runtime-test:instance:metadata');
+    assert.equal('operationApiVersion' in socket.sent[0].payload, false);
     assert.equal(typeof socket.sent[0].payload.token, 'string');
 
     socket.emit({

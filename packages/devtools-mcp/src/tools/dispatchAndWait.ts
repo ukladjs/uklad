@@ -22,7 +22,7 @@ export interface DispatchAndWaitParams extends RuntimeSelectionParams {
 export function dispatchAndWaitTool(apiClient: DevToolsAPIClient) {
   return {
     name: 'dispatch_and_wait',
-    description: 'Dispatch an event through the DevTools-owned operation coordinator and wait for its settled snapshot. The snapshot includes operation/runtime identity, completion boundary, joined-event lineage and IDs, state dispositions and revisions, effect/error summary, pending work, and execution errors. State patches are present only when the app enables operations.evidence.stateChanges: "patches". Requires enableDevtools(createUkladInspector(runtime), { operations: true }).',
+    description: 'Dispatch an event through the DevTools-owned operation coordinator and wait for its settled snapshot. The snapshot includes operation/runtime identity, completion boundary, joined-event lineage and IDs, state dispositions and revisions, effect/error summary, pending work, and execution errors. Each operation eventInstanceId is shared with related trace rows; pass it to get_traces for trace evidence without making settlement depend on tracing. State patches are present only when the app enables operations.evidence.stateChanges: "patches". Requires enableDevtools(createUkladInspector(runtime), { operations: true }).',
     inputSchema: {
       type: 'object',
       properties: {

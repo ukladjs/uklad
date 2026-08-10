@@ -16,6 +16,12 @@ export interface UkladTrace {
   readonly operation?: string;
   readonly opType?: string;
   readonly tags?: Record<string, unknown>;
+  /** Exact in-memory runtime lifetime for an event-derived trace. */
+  readonly runtimeInstanceId?: string;
+  /** Concrete event occurrence shared with operation snapshot events. */
+  readonly eventInstanceId?: string;
+  /** Parent event occurrence, distinct from trace/span parentage. */
+  readonly parentEventInstanceId?: string;
 }
 
 export type UkladTraceCallback = (traces: UkladTrace[]) => void | Promise<void>;
@@ -54,7 +60,7 @@ export interface UkladInspector {
   getOperationRuntime?(): DevtoolsOperationRuntime;
   /** Optional DevTools-owned operation snapshot capability. */
   readonly operationApiVersion?: 1;
-  /** Exact runtime-instance identity for operation snapshots. */
+  /** Exact in-memory runtime lifetime for diagnostics and operation snapshots. */
   readonly runtimeInstanceId?: string;
   executeEvent?(event: [string, ...any[]]): Promise<unknown>;
   getOperation?(operationId: string): unknown;

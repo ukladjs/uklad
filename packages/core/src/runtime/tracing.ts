@@ -5,6 +5,7 @@ import type { RuntimeCore } from './core';
 import type {
   RuntimeProbe,
   RuntimeProbeEffect,
+  RuntimeProbeEventMetadata,
   RuntimeProbeParent,
   RuntimeProbeSpan,
   RuntimeProbeTransition,
@@ -29,6 +30,7 @@ export type {
 
 interface TraceEventToken {
   readonly event: EventVector;
+  readonly metadata: RuntimeProbeEventMetadata;
   readonly parentTraceId?: number;
   trace?: Trace;
   previousTrace?: Trace | null;
@@ -171,11 +173,19 @@ function getTraceState(runtime: RuntimeCore): TraceState {
     needsPatches: true,
     needsSubscriptionEvidence: false,
     needsSpans: true,
-    eventAccepted(event: EventVector, parent: RuntimeProbeParent | undefined): TraceEventToken {
+    eventAccepted(
+      event: EventVector,
+      parent: RuntimeProbeParent | undefined,
+      metadata: RuntimeProbeEventMetadata | undefined,
+    ): TraceEventToken {
+      if (!metadata) {
+        throw new Error('[uklad] Trace probe accepted an event without runtime metadata.');
+      }
       const parentToken = getRuntimeTrackingToken(parent?.tracking, probe) as
         TraceEventToken | undefined;
       return {
         event,
+        metadata,
         ...(parentToken?.trace === undefined ? {} : { parentTraceId: parentToken.trace.id }),
       };
     },
@@ -187,6 +197,11 @@ function getTraceState(runtime: RuntimeCore): TraceState {
         operation: eventToken.event[0],
         opType: 'event',
         tags: { event: eventToken.event },
+        runtimeInstanceId: eventToken.metadata.runtimeInstanceId,
+        eventInstanceId: eventToken.metadata.eventInstanceId,
+        ...(eventToken.metadata.parentEventInstanceId === undefined
+          ? {}
+          : { parentEventInstanceId: eventToken.metadata.parentEventInstanceId }),
         ...(eventToken.parentTraceId === undefined ? {} : { childOf: eventToken.parentTraceId }),
       });
       state.currentTrace = eventToken.trace;
@@ -301,12 +316,25 @@ function discardPendingTraces(state: TraceState): void {
 
 function startTrace(state: TraceState, options: TraceOptions): Trace {
   const parentId = options.childOf ?? state.currentTrace?.id;
+  // Event traces provide their own identity. Child spans inherit it from the
+  // active event trace so one event occurrence can be queried as a group.
+  const eventMetadata =
+    options.eventInstanceId === undefined ? state.currentTrace : options;
   return {
     id: state.nextId++,
     ...(options.operation === undefined ? {} : { operation: options.operation }),
     ...(options.opType === undefined ? {} : { opType: options.opType }),
     tags: options.tags ?? {},
     ...(parentId === undefined ? {} : { childOf: parentId }),
+    ...(eventMetadata?.runtimeInstanceId === undefined
+      ? {}
+      : { runtimeInstanceId: eventMetadata.runtimeInstanceId }),
+    ...(eventMetadata?.eventInstanceId === undefined
+      ? {}
+      : { eventInstanceId: eventMetadata.eventInstanceId }),
+    ...(eventMetadata?.parentEventInstanceId === undefined
+      ? {}
+      : { parentEventInstanceId: eventMetadata.parentEventInstanceId }),
     start: Date.now(),
   };
 }
@@ -336,6 +364,15 @@ function traceDetachedEffectFailure(
     opType: 'effect',
     tags: { event, effectErrors: [toEffectTraceError(effect)] },
     childOf: eventTrace.id,
+    ...(eventTrace.runtimeInstanceId === undefined
+      ? {}
+      : { runtimeInstanceId: eventTrace.runtimeInstanceId }),
+    ...(eventTrace.eventInstanceId === undefined
+      ? {}
+      : { eventInstanceId: eventTrace.eventInstanceId }),
+    ...(eventTrace.parentEventInstanceId === undefined
+      ? {}
+      : { parentEventInstanceId: eventTrace.parentEventInstanceId }),
   });
   if (effect.startedAtMs > 0) trace.start = effect.startedAtMs;
   finishTrace(state, trace);

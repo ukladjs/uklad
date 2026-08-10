@@ -54,6 +54,7 @@ export function createUkladInspector(runtime: RuntimeCore): UkladInspector {
     apiVersion: 2,
     runtimeId: runtime.identity.runtimeId,
     runtimeName: runtime.identity.runtimeName,
+    runtimeInstanceId: runtime.identity.runtimeInstanceId,
     getSnapshot(): UkladInspectorSnapshot {
       assertRuntimeUsable(runtime);
       return {

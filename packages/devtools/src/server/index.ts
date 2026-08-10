@@ -139,6 +139,7 @@ interface RuntimeSocketMetadata {
   readonly protocolVersion: number;
   readonly inspectorApiVersion: number;
   readonly operationApiVersion?: 1;
+  /** Exact in-memory runtime lifetime, independent of operations support. */
   readonly runtimeInstanceId?: string;
   /** Optional DevTools evidence mode; absent means the conservative default. */
   readonly operationStateChanges?: 'patches';
@@ -607,6 +608,7 @@ export class DevtoolsServer {
         selectedRuntimeId: runtime.runtimeId,
         runtimes: this.runtimeSummaries(),
         sessionEpoch: runtime.sessionEpoch,
+        runtimeInstanceId: runtime.metadata?.runtimeInstanceId ?? null,
         runtime: runtimeInfo?.runtime ?? null,
         effectMode: runtimeInfo?.effectMode ?? null,
         effects: runtimeInfo?.effects ?? null,
@@ -676,6 +678,20 @@ export class DevtoolsServer {
           });
           return;
         }
+        const eventInstanceId =
+          typeof req.query.eventInstanceId === 'string'
+            ? req.query.eventInstanceId
+            : undefined;
+        if (
+          eventInstanceId !== undefined
+          && !this.validRuntimeIdentityText(eventInstanceId, MAX_EVENT_ID_LENGTH)
+        ) {
+          res.status(400).json({
+            success: false,
+            error: `eventInstanceId must be a non-empty string up to ${MAX_EVENT_ID_LENGTH} characters`,
+          });
+          return;
+        }
 
         const traces = runtime
           .storage!.getTraces({
@@ -684,6 +700,7 @@ export class DevtoolsServer {
               typeof req.query.eventFilter === 'string'
                 ? req.query.eventFilter.slice(0, MAX_EVENT_ID_LENGTH)
                 : undefined,
+            eventInstanceId,
             minDuration,
             opType:
               typeof req.query.opType === 'string' ? req.query.opType.slice(0, 64) : undefined,
@@ -695,6 +712,15 @@ export class DevtoolsServer {
             operation: trace.operation,
             opType: trace.opType,
             childOf: trace.childOf,
+            ...(trace.runtimeInstanceId === undefined
+              ? {}
+              : { runtimeInstanceId: trace.runtimeInstanceId }),
+            ...(trace.eventInstanceId === undefined
+              ? {}
+              : { eventInstanceId: trace.eventInstanceId }),
+            ...(trace.parentEventInstanceId === undefined
+              ? {}
+              : { parentEventInstanceId: trace.parentEventInstanceId }),
             tags: trace.tags
               ? {
                   event: Array.isArray(trace.tags.event)
@@ -1214,8 +1240,9 @@ export class DevtoolsServer {
           !this.validRuntimeId(runtimeId) ||
           !this.validRuntimeIdentityText(runtimeName, MAX_RUNTIME_NAME_LENGTH) ||
           (operationApiVersion !== undefined && operationApiVersion !== 1) ||
-          (operationApiVersion === 1 && !this.validRuntimeId(runtimeInstanceId)) ||
-          (operationApiVersion !== 1 && runtimeInstanceId !== undefined) ||
+          (runtimeInstanceId !== undefined
+            && !this.validRuntimeIdentityText(runtimeInstanceId, 256)) ||
+          (operationApiVersion === 1 && runtimeInstanceId === undefined) ||
           (operationStateChanges !== undefined && operationStateChanges !== 'patches') ||
           (operationApiVersion !== 1 && operationStateChanges !== undefined)
         ) {
@@ -1228,10 +1255,10 @@ export class DevtoolsServer {
           runtimeName,
           protocolVersion: UKLAD_DEVTOOLS_PROTOCOL_VERSION,
           inspectorApiVersion,
+          ...(runtimeInstanceId === undefined ? {} : { runtimeInstanceId }),
           ...(operationApiVersion === 1
             ? {
                 operationApiVersion,
-                runtimeInstanceId,
                 ...(operationStateChanges === 'patches' ? { operationStateChanges } : {}),
               }
             : {}),
@@ -2572,6 +2599,20 @@ export class DevtoolsServer {
         return false;
       }
     }
+    if (
+      trace.runtimeInstanceId !== undefined
+      && !this.validRuntimeIdentityText(trace.runtimeInstanceId, 256)
+    ) {
+      return false;
+    }
+    for (const key of ['eventInstanceId', 'parentEventInstanceId'] as const) {
+      if (
+        trace[key] !== undefined
+        && !this.validRuntimeIdentityText(trace[key], MAX_EVENT_ID_LENGTH)
+      ) {
+        return false;
+      }
+    }
     if (trace.tags !== undefined && !isRecord(trace.tags)) return false;
     return true;
   }
@@ -2734,6 +2775,9 @@ export class DevtoolsServer {
     return [...this.runtimes.values()].map((runtime) => ({
       runtimeId: runtime.runtimeId,
       runtimeName: runtime.runtimeName,
+      ...(runtime.metadata?.runtimeInstanceId === undefined
+        ? {}
+        : { runtimeInstanceId: runtime.metadata.runtimeInstanceId }),
       connected: this.isRuntimeConnected(runtime),
       sessionEpoch: runtime.sessionEpoch,
       runtime: runtime.snapshot.getRuntimeInfo()?.runtime ?? null,
@@ -2755,11 +2799,15 @@ export class DevtoolsServer {
     runtimeId: string;
     runtimeName: string;
     sessionEpoch: number;
+    runtimeInstanceId?: string;
   } {
     return {
       runtimeId: runtime.runtimeId,
       runtimeName: runtime.runtimeName,
       sessionEpoch: runtime.sessionEpoch,
+      ...(runtime.metadata?.runtimeInstanceId === undefined
+        ? {}
+        : { runtimeInstanceId: runtime.metadata.runtimeInstanceId }),
     };
   }
 
@@ -2767,6 +2815,7 @@ export class DevtoolsServer {
     runtimeId: string;
     runtimeName: string;
     sessionEpoch: number;
+    runtimeInstanceId?: string;
   } {
     const runtime = this.runtimes.get(runtimeId);
     return runtime

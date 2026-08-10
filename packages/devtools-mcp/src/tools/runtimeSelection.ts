@@ -22,5 +22,8 @@ export function runtimeMetadata(response: any): Record<string, unknown> {
   if (response?.sessionEpoch !== undefined) {
     metadata.sessionEpoch = response.sessionEpoch;
   }
+  if (typeof response?.runtimeInstanceId === 'string') {
+    metadata.runtimeInstanceId = response.runtimeInstanceId;
+  }
   return metadata;
 }

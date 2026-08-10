@@ -1,6 +1,7 @@
 import type {
   DevtoolsEffectFact,
   DevtoolsExecutionObserver,
+  DevtoolsRuntimeEventMetadata,
   OperationEventVector,
   DevtoolsStatePatchFact,
 } from './runtime.js';
@@ -85,17 +86,25 @@ export class OperationCoordinator implements DevtoolsExecutionObserver {
       readonly sourceEffectId?: string;
       readonly sourceEffectIndex?: number;
     },
+    metadata?: DevtoolsRuntimeEventMetadata,
   ): { operationId: string; value: unknown } {
     const parentReference = parent?.operation.value as OperationReference | undefined;
+    // Prefer the neutral core identity when available. The fallback keeps this
+    // coordinator compatible with older structural operation ports.
+    const eventMetadata =
+      metadata?.runtimeInstanceId === this.runtimeInstanceId ? metadata : undefined;
     const operationId =
       parentReference?.operationId ?? `op_${this.runtimeInstanceId}_${++this.nextOperationId}`;
     const reference: OperationReference = Object.freeze({
       operationId,
-      eventInstanceId: `evt_${this.runtimeInstanceId}_${++this.nextEventId}`,
+      eventInstanceId:
+        eventMetadata?.eventInstanceId ?? `evt_${this.runtimeInstanceId}_${++this.nextEventId}`,
       eventId: event[0],
-      ...(parentReference === undefined
-        ? {}
-        : { parentEventInstanceId: parentReference.eventInstanceId }),
+      ...(eventMetadata?.parentEventInstanceId === undefined
+        ? (parentReference === undefined
+          ? {}
+          : { parentEventInstanceId: parentReference.eventInstanceId })
+        : { parentEventInstanceId: eventMetadata.parentEventInstanceId }),
       ...(parent?.sourceEffectId === undefined ? {} : { sourceEffectId: parent.sourceEffectId }),
       ...(parent?.sourceEffectIndex === undefined
         ? {}

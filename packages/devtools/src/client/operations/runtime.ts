@@ -1,6 +1,13 @@
 /** Structural operation port supplied by a runtime-bound Uklad inspector. */
 export type OperationEventVector = [string, ...any[]];
 
+/** Neutral runtime event identity shared with trace records. */
+export interface DevtoolsRuntimeEventMetadata {
+  readonly runtimeInstanceId: string;
+  readonly eventInstanceId: string;
+  readonly parentEventInstanceId?: string;
+}
+
 export interface DevtoolsExecutionObserver {
   /** Opt into optional forward state-patch facts for tracked events. */
   readonly needsPatches?: boolean;
@@ -11,6 +18,7 @@ export interface DevtoolsExecutionObserver {
       readonly sourceEffectId?: string;
       readonly sourceEffectIndex?: number;
     },
+    metadata?: DevtoolsRuntimeEventMetadata,
   ): { readonly operationId: string; readonly value: unknown };
   queued(
     operation: { readonly operationId: string; readonly value: unknown },

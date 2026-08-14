@@ -73,15 +73,15 @@
     "@ukladjs/core": "workspace:*",
     "@types/jest": "30.0.0",
     "@typescript/native": "npm:typescript@7.0.2",
-    "eslint": "10.8.0",
-    "globals": "17.8.0",
+    "eslint": "10.8.1",
+    "globals": "17.9.0",
     "jest": "30.4.2",
     "prettier": "3.9.6",
-    "publint": "0.3.22",
+    "publint": "0.3.23",
     "ts-jest": "29.4.12",
     "tsdown": "0.22.14",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "typescript-eslint": "8.65.0"
+    "typescript-eslint": "8.67.0"
   },
   "peerDependencies": {
     "@ukladjs/core": "^0.2.0"

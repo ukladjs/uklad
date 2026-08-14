@@ -8,7 +8,6 @@
 [![NPM Version](https://img.shields.io/npm/v/%40ukladjs%2Fdevtools)](https://www.npmjs.com/package/@ukladjs/devtools)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ukladjs/uklad/pulls)
 
-  <img src="screenshot.jpg" alt="Uklad DevTools Screenshot" width="100%" />
 </div>
 
 ---

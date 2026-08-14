@@ -97,10 +97,7 @@
     "dist",
     "README.md",
     "LICENSE",
-    "benchmarks",
-    "templates",
-    "uklad-avatar.png",
-    "uklad-avatar-dark.png"
+    "templates"
   ],
   "scripts": {
     "build": "tsdown",

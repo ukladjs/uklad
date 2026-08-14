@@ -43,10 +43,7 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE",
-    "uklad-avatar.png",
-    "uklad-avatar-dark.png",
-    "screenshot.png"
+    "LICENSE"
   ],
   "scripts": {
     "clean": "node ../../scripts/clean.mjs dist",

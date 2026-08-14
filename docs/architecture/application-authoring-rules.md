@@ -245,16 +245,22 @@ and stale graph reuse.
   subscriptions have no equality configuration because they expose their source
   root directly.
 - Set the runtime default with the `equalityCheck` option during
-  `createUkladRuntime` composition. The framework default is deep equality
-  through `fast-deep-equal`; cached subscriptions capture the selected policy
-  when they are first created.
+  `createUkladRuntime` composition. The framework default is `shallowEqual`;
+  cached subscriptions capture the selected policy when they are first
+  created.
 - An application may set `equalityCheck: () => false` to treat every computed
   result as changed and disable equality cutoffs by default. A subscription can
   still provide its own `equalityCheck` override.
+- The default compares immediate contents of arrays, plain objects, `Map`,
+  `Set`, and typed arrays. Plain-object values, array elements, and `Map`
+  values use `Object.is`; `Map` keys and `Set` elements use native key and
+  membership semantics. It does not recurse into nested values. Distinct class
+  instances, dates, regular expressions, promises, weak collections, and
+  `DataView` values compare unequal.
 - Use `Object.is` for a result that preserves meaningful reference identity.
-  Use `shallowEqual` for a freshly allocated shallow array or object whose
-  elements or properties preserve identity. Use a small, documented domain
-  comparator when neither is correct.
+  The default `shallowEqual` fits a freshly allocated outer container whose
+  elements or properties preserve identity. Use a small, documented domain or
+  deep comparator when nested values are intentionally recreated.
 - An equality function must be pure, deterministic, and side-effect-free. It
   decides whether downstream graph work and notifications stop, not merely
   whether React renders.

@@ -1,5 +1,3 @@
-import isEqual from 'fast-deep-equal';
-import isEqualEs6 from 'fast-deep-equal/es6/index.js';
 import {
   Immer,
   current as immerCurrent,
@@ -10,8 +8,6 @@ import {
   type Draft,
 } from 'immer';
 import type { produce as ImmerProduce, produceWithPatches as ImmerProduceWithPatches } from 'immer';
-
-import { replaceDefaultEqualityCheck } from './equality';
 
 let patchesPluginEnabled = false;
 
@@ -37,19 +33,9 @@ export function current<T>(value: T): T {
   return isDraft(value) ? (immerCurrent(value as Draft<T>) as T) : value;
 }
 
-/**
- * Enable Immer support for `Map` and `Set` values.
- *
- * When Uklad still uses its default equality function, this also selects the
- * ES6-aware comparer. A user-installed equality function is left untouched.
- */
+/** Enable Immer support for `Map` and `Set` values. */
 export function enableMapSet(): void {
   immerEnableMapSet();
-  // The fallback is process-wide because Immer's Map/Set plugin is process-wide,
-  // but runtime-local equality overrides must remain untouched. Do not consult
-  // another runtime here: its override must not decide whether other runtimes
-  // receive the ES6-aware framework fallback.
-  replaceDefaultEqualityCheck(isEqual, isEqualEs6);
 }
 
 /**

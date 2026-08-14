@@ -1,10 +1,10 @@
-import { enableMapSet, original, current } from '../../src/core/immer';
+import { shallowEqual } from '../../src/core/equality';
+import { enableMapSet, original, current, produce } from '../../src/core/immer';
 import {
   createUkladRuntimeForTests as createUkladRuntime,
   getRuntimeAdminForTests,
   getRuntimeCoreForTests,
 } from '../../src/runtime/runtime';
-import isEqualEs6 from 'fast-deep-equal/es6/index.js';
 
 const getEqualityCheck = (runtime: Parameters<typeof getRuntimeCoreForTests>[0]) =>
   getRuntimeCoreForTests(runtime).subscriptions.equalityCheck;
@@ -25,60 +25,32 @@ describe('immer-utils', () => {
       runtime.dispose();
     });
 
-    it('uses the ES6 equality fallback for runtimes created after Map and Set support is enabled', () => {
+    it('keeps the safe shallow fallback for runtimes created after it is enabled', () => {
       enableMapSet();
       const runtime = createUkladRuntime({
         initialState: {},
         runtimeId: 'map-set-default-runtime',
       });
-      expect(getEqualityCheck(runtime)).toBe(isEqualEs6);
+      expect(getEqualityCheck(runtime)).toBe(shallowEqual);
       runtime.dispose();
     });
 
-    it('does not override a custom equality check when Map and Set support is enabled', () => {
-      const runtime = createUkladRuntime({
-        initialState: {},
-        runtimeId: 'map-set-custom-runtime',
-      });
-      const customEquality = () => true;
-      getRuntimeAdminForTests(runtime).setEqualityCheck(customEquality);
-
+    it('enables Immer updates for Map and Set values', () => {
       enableMapSet();
 
-      expect(getEqualityCheck(runtime)).toBe(customEquality);
-      expect(getEqualityCheck(runtime)).not.toBe(isEqualEs6);
-      runtime.dispose();
-    });
-
-    it('should handle Map and Set equality correctly after enableMapSet is called', () => {
-      const map1 = new Map([
-        ['key1', 'value1'],
-        ['key2', 'value2'],
-      ]);
-      const map2 = new Map([
-        ['key1', 'value1'],
-        ['key2', 'value2'],
-      ]);
-      const set1 = new Set(['a', 'b', 'c']);
-      const set2 = new Set(['a', 'b', 'c']);
-      const map3 = new Map([
-        ['key1', 'value1'],
-        ['key2', 'different'],
-      ]);
-      const set3 = new Set(['a', 'b', 'd']);
-
-      enableMapSet();
-      const runtime = createUkladRuntime({
-        initialState: {},
-        runtimeId: 'map-set-values-runtime',
+      const base = {
+        rows: new Map([['one', 1]]),
+        selected: new Set(['one']),
+      };
+      const next = produce(base, (draft) => {
+        draft.rows.set('two', 2);
+        draft.selected.add('two');
       });
-      const equalityCheck = getEqualityCheck(runtime);
 
-      expect(equalityCheck(map1, map2)).toBe(true);
-      expect(equalityCheck(set1, set2)).toBe(true);
-      expect(equalityCheck(map1, map3)).toBe(false);
-      expect(equalityCheck(set1, set3)).toBe(false);
-      runtime.dispose();
+      expect(next.rows).not.toBe(base.rows);
+      expect(next.rows.get('two')).toBe(2);
+      expect(next.selected).not.toBe(base.selected);
+      expect(next.selected.has('two')).toBe(true);
     });
   });
 

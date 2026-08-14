@@ -170,7 +170,7 @@ describe('Subscription cache contract', () => {
     expect(getSubscriptionSnapshot(recreated)).toBe(6);
   });
 
-  it('uses default deep equality to stop downstream propagation', async () => {
+  it('uses default shallow equality to stop downstream propagation', async () => {
     const subscription = getOrCreateSubscription(['cache-default-length'])!;
     const callback = jest.fn();
     const unsubscribe = subscribeToSubscription(subscription, callback);

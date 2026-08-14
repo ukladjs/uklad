@@ -1,12 +1,14 @@
 import { performance } from 'node:perf_hooks';
+import { isDeepStrictEqual } from 'node:util';
 
-import { createUkladRuntime } from '../dist/vanilla.mjs';
+import { createUkladRuntime, shallowEqual } from '../dist/vanilla.mjs';
 import { createUkladTestHarness } from '../dist/testing.mjs';
 
 const scope = process.argv[2] ?? 'all';
 const sampleCount = numberFromEnv('UKLAD_BENCH_SAMPLES', 5);
 const globalIterations = process.env.UKLAD_BENCH_ITERATIONS;
 const jsonOutput = process.env.UKLAD_BENCH_JSON === '1';
+const draftLeakScanEnabled = process.env.NODE_ENV === 'development';
 
 const BENCH_HARNESSES = new WeakMap();
 
@@ -22,19 +24,27 @@ function getBenchHarness(runtime) {
 await main();
 
 async function main() {
-  if (!['all', 'state', 'subscriptions', 'events', 'memory'].includes(scope)) {
-    console.error('Usage: node benchmarks/run.mjs [all|state|subscriptions|events|memory]');
+  if (
+    !['all', 'state', 'equality', 'subscriptions', 'events', 'effects', 'memory'].includes(scope)
+  ) {
+    console.error(
+      'Usage: node benchmarks/run.mjs [all|state|equality|subscriptions|events|effects|memory]',
+    );
     process.exitCode = 1;
     return;
   }
 
   const results = [];
   if (scope === 'all' || scope === 'state') results.push(...runStateBenchmarks());
+  if (scope === 'all' || scope === 'equality') results.push(...runEqualityBenchmarks());
   if (scope === 'all' || scope === 'subscriptions') {
     results.push(...runSubscriptionBenchmarks());
   }
   if (scope === 'all' || scope === 'events') {
     results.push(...(await runEventBenchmarks()));
+  }
+  if (scope === 'all' || scope === 'effects') {
+    results.push(...runEffectBenchmarks());
   }
   if (scope === 'all' || scope === 'memory') {
     results.push(...runMemoryBenchmarks());
@@ -117,7 +127,180 @@ function runStateBenchmarks() {
   ];
 }
 
+function runEqualityBenchmarks() {
+  const wideCount = 10_000;
+  const collectionCount = 1_000;
+
+  return [
+    measureEqualityCase({
+      name: 'equality/object-is-array-shared-items-10k',
+      comparator: 'Object.is',
+      shape: 'array/shared-items/10k',
+      compare: Object.is,
+      expectedEqual: false,
+      iterations: iterationsFor('equality', 100_000),
+      setup: () => createSharedRowArrayPair(wideCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-array-shared-items-10k',
+      comparator: 'shallowEqual',
+      shape: 'array/shared-items/10k',
+      compare: shallowEqual,
+      expectedEqual: true,
+      iterations: iterationsFor('equality', 500),
+      setup: () => createSharedRowArrayPair(wideCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/node-deep-array-shared-items-10k',
+      comparator: 'node:isDeepStrictEqual',
+      shape: 'array/shared-items/10k',
+      compare: isDeepStrictEqual,
+      expectedEqual: true,
+      iterations: iterationsFor('equality', 500),
+      setup: () => createSharedRowArrayPair(wideCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-array-different-first-10k',
+      comparator: 'shallowEqual',
+      shape: 'array/different-first/10k',
+      compare: shallowEqual,
+      expectedEqual: false,
+      iterations: iterationsFor('equality', 100_000),
+      setup: () => createChangedNumberArrayPair(wideCount, 0),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-array-different-last-10k',
+      comparator: 'shallowEqual',
+      shape: 'array/different-last/10k',
+      compare: shallowEqual,
+      expectedEqual: false,
+      iterations: iterationsFor('equality', 500),
+      setup: () => createChangedNumberArrayPair(wideCount, wideCount - 1),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-array-recreated-items-1k',
+      comparator: 'shallowEqual',
+      shape: 'array/recreated-items/1k',
+      compare: shallowEqual,
+      expectedEqual: false,
+      iterations: iterationsFor('equality', 100_000),
+      setup: () => createRecreatedRowArrayPair(collectionCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/node-deep-array-recreated-items-1k',
+      comparator: 'node:isDeepStrictEqual',
+      shape: 'array/recreated-items/1k',
+      compare: isDeepStrictEqual,
+      expectedEqual: true,
+      iterations: iterationsFor('equality', 200),
+      setup: () => createRecreatedRowArrayPair(collectionCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-record-primitives-1k',
+      comparator: 'shallowEqual',
+      shape: 'record/primitives/1k',
+      compare: shallowEqual,
+      expectedEqual: true,
+      iterations: iterationsFor('equality', 1_000),
+      setup: () => createPrimitiveRecordPair(collectionCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-record-shared-values-1k',
+      comparator: 'shallowEqual',
+      shape: 'record/shared-object-values/1k',
+      compare: shallowEqual,
+      expectedEqual: true,
+      iterations: iterationsFor('equality', 1_000),
+      setup: () => createSharedValueRecordPair(collectionCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-record-recreated-values-1k',
+      comparator: 'shallowEqual',
+      shape: 'record/recreated-object-values/1k',
+      compare: shallowEqual,
+      expectedEqual: false,
+      iterations: iterationsFor('equality', 1_000),
+      setup: () => createRecreatedValueRecordPair(collectionCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-map-primitives-1k',
+      comparator: 'shallowEqual',
+      shape: 'map/primitives/1k',
+      compare: shallowEqual,
+      expectedEqual: true,
+      iterations: iterationsFor('equality', 1_000),
+      setup: () => createPrimitiveMapPair(collectionCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-map-shared-values-1k',
+      comparator: 'shallowEqual',
+      shape: 'map/shared-object-values/1k',
+      compare: shallowEqual,
+      expectedEqual: true,
+      iterations: iterationsFor('equality', 1_000),
+      setup: () => createSharedValueMapPair(collectionCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-map-recreated-values-1k',
+      comparator: 'shallowEqual',
+      shape: 'map/recreated-object-values/1k',
+      compare: shallowEqual,
+      expectedEqual: false,
+      iterations: iterationsFor('equality', 100_000),
+      setup: () => createRecreatedValueMapPair(collectionCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-set-primitives-1k',
+      comparator: 'shallowEqual',
+      shape: 'set/primitives/1k',
+      compare: shallowEqual,
+      expectedEqual: true,
+      iterations: iterationsFor('equality', 1_000),
+      setup: () => createPrimitiveSetPair(collectionCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-set-shared-values-1k',
+      comparator: 'shallowEqual',
+      shape: 'set/shared-object-values/1k',
+      compare: shallowEqual,
+      expectedEqual: true,
+      iterations: iterationsFor('equality', 1_000),
+      setup: () => createSharedValueSetPair(collectionCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-set-recreated-values-1k',
+      comparator: 'shallowEqual',
+      shape: 'set/recreated-object-values/1k',
+      compare: shallowEqual,
+      expectedEqual: false,
+      iterations: iterationsFor('equality', 100_000),
+      setup: () => createRecreatedValueSetPair(collectionCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-typed-array-equal-10k',
+      comparator: 'shallowEqual',
+      shape: 'uint32-array/equal/10k',
+      compare: shallowEqual,
+      expectedEqual: true,
+      iterations: iterationsFor('equality', 1_000),
+      setup: () => createTypedArrayPair(wideCount),
+    }),
+    measureEqualityCase({
+      name: 'equality/shallow-typed-array-different-last-10k',
+      comparator: 'shallowEqual',
+      shape: 'uint32-array/different-last/10k',
+      compare: shallowEqual,
+      expectedEqual: false,
+      iterations: iterationsFor('equality', 1_000),
+      setup: () => createTypedArrayPair(wideCount, wideCount - 1),
+    }),
+  ];
+}
+
 function runSubscriptionBenchmarks() {
+  const equalityComparisonIterations = iterationsFor('subscriptions', 2_000);
+  const nestedPropagationIterations = iterationsFor('subscriptions', 1_000);
+
   return [
     measure({
       name: 'subscriptions/fan-out-100',
@@ -142,12 +325,43 @@ function runSubscriptionBenchmarks() {
     }),
     measure({
       name: 'subscriptions/equality-cutoff-10k',
-      iterations: iterationsFor('subscriptions', 2_000),
-      setup: () => setupEqualityCutoff(10_000, 'bench-sub-equality-cutoff'),
-      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/replace-items']),
+      iterations: equalityComparisonIterations,
+      setup: () => setupEqualityComparison(10_000, 'bench-sub-equality-cutoff'),
+      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/tick']),
       teardown: disposeSubscriptions,
       validate: ({ downstreamRuns }) => ({
-        downstreamRunsDuringMeasurement: downstreamRuns,
+        equalityPolicy: 'shallowEqual',
+        ...validateDownstreamRuns('subscriptions/equality-cutoff-10k', downstreamRuns, 0),
+      }),
+    }),
+    measure({
+      name: 'subscriptions/identity-propagation-10k',
+      iterations: equalityComparisonIterations,
+      setup: () => setupEqualityComparison(10_000, 'bench-sub-identity-propagation', Object.is),
+      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/tick']),
+      teardown: disposeSubscriptions,
+      validate: ({ downstreamRuns }) => ({
+        equalityPolicy: 'Object.is',
+        ...validateDownstreamRuns(
+          'subscriptions/identity-propagation-10k',
+          downstreamRuns,
+          equalityComparisonIterations * sampleCount,
+        ),
+      }),
+    }),
+    measure({
+      name: 'subscriptions/equality-nested-propagation-1k',
+      iterations: nestedPropagationIterations,
+      setup: () => setupNestedEqualityPropagation(1_000, 'bench-sub-equality-nested-propagation'),
+      operation: ({ runtime }) => getBenchHarness(runtime).dispatchSync(['bench/tick']),
+      teardown: disposeSubscriptions,
+      validate: ({ downstreamRuns }) => ({
+        equalityPolicy: 'shallowEqual',
+        ...validateDownstreamRuns(
+          'subscriptions/equality-nested-propagation-1k',
+          downstreamRuns,
+          nestedPropagationIterations * sampleCount,
+        ),
       }),
     }),
     measure({
@@ -188,6 +402,88 @@ async function runEventBenchmarks() {
   ];
 }
 
+function runEffectBenchmarks() {
+  const smallIterations = iterationsFor('effects', 20_000);
+  const objectIterations = iterationsFor('effects', 10_000);
+  const collectionIterations = iterationsFor('effects', 2_000);
+  const wideRecordIterations = iterationsFor('effects', 200);
+  const draftRepairIterations = iterationsFor('effects', 500);
+  const smallPayload = { id: 42, title: 'benchmark', flags: [true, false] };
+  const rows = createRows(10_000);
+  const wideRecord = createPrimitiveRecord(10_000);
+
+  return [
+    measureEffectCase({
+      name: 'effects/no-effects',
+      iterations: smallIterations,
+      payloadShape: 'none',
+      expectedEffectsPerDispatch: 0,
+      setup: () =>
+        setupEffectDispatch({
+          runtimeId: 'bench-effects-none',
+          handler: () => [],
+        }),
+    }),
+    measureEffectCase({
+      name: 'effects/plain-primitive',
+      iterations: smallIterations,
+      payloadShape: 'primitive',
+      setup: () =>
+        setupEffectDispatch({
+          runtimeId: 'bench-effects-primitive',
+          handler: () => [['bench/capture', 42]],
+        }),
+    }),
+    measureEffectCase({
+      name: 'effects/plain-small-object',
+      iterations: objectIterations,
+      payloadShape: 'plain-object/small',
+      setup: () =>
+        setupEffectDispatch({
+          runtimeId: 'bench-effects-small-object',
+          handler: () => [['bench/capture', smallPayload]],
+        }),
+    }),
+    measureEffectCase({
+      name: 'effects/plain-array-10k',
+      iterations: collectionIterations,
+      payloadShape: 'array/rows/10k',
+      setup: () =>
+        setupEffectDispatch({
+          runtimeId: 'bench-effects-array-10k',
+          handler: () => [['bench/capture', rows]],
+        }),
+      validatePayload: (payload) => Array.isArray(payload) && payload.length === rows.length,
+    }),
+    measureEffectCase({
+      name: 'effects/plain-record-10k',
+      iterations: wideRecordIterations,
+      payloadShape: 'plain-record/primitives/10k',
+      setup: () =>
+        setupEffectDispatch({
+          runtimeId: 'bench-effects-record-10k',
+          handler: () => [['bench/capture', wideRecord]],
+        }),
+      validatePayload: (payload) => payload === wideRecord,
+    }),
+    measureEffectCase({
+      name: 'effects/direct-draft-array-repair-10k',
+      iterations: draftRepairIterations,
+      payloadShape: 'immer-draft/array/10k',
+      setup: () =>
+        setupEffectDispatch({
+          runtimeId: 'bench-effects-draft-array-10k',
+          initialState: { tick: 0, rows },
+          handler: ({ draftState }) => {
+            draftState.tick += 1;
+            return [['bench/capture', draftState.rows]];
+          },
+        }),
+      validatePayload: (payload) => Array.isArray(payload) && payload.length === rows.length,
+    }),
+  ];
+}
+
 function runMemoryBenchmarks() {
   return [
     measureMemory({
@@ -210,6 +506,72 @@ function runMemoryBenchmarks() {
       teardown: disposeSubscriptions,
     }),
   ];
+}
+
+function measureEqualityCase({
+  name,
+  comparator,
+  shape,
+  compare,
+  expectedEqual,
+  iterations,
+  setup,
+}) {
+  return measure({
+    name,
+    iterations,
+    setup: () => ({ ...setup(), result: undefined }),
+    operation: (context) => {
+      context.result = compare(context.left, context.right);
+    },
+    teardown: () => undefined,
+    validate: ({ result }) => {
+      if (result !== expectedEqual) {
+        throw new Error(
+          `${name} returned ${String(result)}; expected equality result ${String(expectedEqual)}`,
+        );
+      }
+      return {
+        comparator,
+        shape,
+        expectedEqual,
+        resultEqual: result,
+      };
+    },
+  });
+}
+
+function measureEffectCase({
+  name,
+  iterations,
+  payloadShape,
+  setup,
+  expectedEffectsPerDispatch = 1,
+  validatePayload,
+}) {
+  return measure({
+    name,
+    iterations,
+    setup,
+    operation: ({ runtime, event }) => getBenchHarness(runtime).dispatchSync(event),
+    validate: (context) => {
+      const expectedEffectRuns = iterations * sampleCount * expectedEffectsPerDispatch;
+      if (context.effectRuns !== expectedEffectRuns) {
+        throw new Error(
+          `${name} ran its effect ${context.effectRuns} times; expected ${expectedEffectRuns}`,
+        );
+      }
+      if (validatePayload !== undefined && !validatePayload(context.lastPayload)) {
+        throw new Error(`${name} produced an invalid effect payload`);
+      }
+      return {
+        draftLeakScan: draftLeakScanEnabled ? 'enabled' : 'disabled',
+        payloadShape,
+        expectedEffectRuns,
+        effectRunsDuringMeasurement: context.effectRuns,
+      };
+    },
+  });
 }
 
 function measure({ name, iterations, setup, operation, teardown = disposeRuntime, validate }) {
@@ -276,11 +638,7 @@ async function measureAsync({
 function measureMemory({ name, setup, teardown = disposeRuntime }) {
   collectGarbage();
   const before = memorySnapshot();
-  let context = setup();
-  collectGarbage();
-  const afterSetup = memorySnapshot();
-  teardown(context);
-  context = undefined;
+  const afterSetup = setupAndDisposeMemoryCase(setup, teardown);
   collectGarbage();
   const afterDispose = memorySnapshot();
 
@@ -294,6 +652,14 @@ function measureMemory({ name, setup, teardown = disposeRuntime }) {
     heapUsedAfterDisposeMb: roundMb(afterDispose.heapUsed),
     releasedHeapMb: roundMb(afterSetup.heapUsed - afterDispose.heapUsed),
   };
+}
+
+function setupAndDisposeMemoryCase(setup, teardown) {
+  const context = setup();
+  collectGarbage();
+  const afterSetup = memorySnapshot();
+  teardown(context);
+  return afterSetup;
 }
 
 function setupFanOut(width, runtimeId) {
@@ -346,16 +712,21 @@ function setupDeepChain(depth, runtimeId) {
   return { runtime, disposers: [disposer] };
 }
 
-function setupEqualityCutoff(itemCount, runtimeId) {
-  const runtime = createBenchRuntime(runtimeId, { items: createRows(itemCount) });
+function setupEqualityComparison(itemCount, runtimeId, equalityCheck) {
+  const runtime = createBenchRuntime(
+    runtimeId,
+    { tick: 0, items: createRows(itemCount) },
+    equalityCheck,
+  );
   let downstreamRuns = 0;
   runtime.registerModule((registrar) => {
     registrar.regRootSub('bench/items-root', 'items');
+    registrar.regRootSub('bench/equality-tick-root', 'tick');
   });
   runtime.registerModule((registrar) => {
     registrar.regSub(
       'bench/mapped-items',
-      () => [['bench/items-root']],
+      () => [['bench/items-root'], ['bench/equality-tick-root']],
       ([items]) => items.map((item) => item),
     );
   });
@@ -382,6 +753,60 @@ function setupEqualityCutoff(itemCount, runtimeId) {
     get downstreamRuns() {
       return downstreamRuns;
     },
+  };
+}
+
+function setupNestedEqualityPropagation(itemCount, runtimeId) {
+  const runtime = createBenchRuntime(runtimeId, { tick: 0, items: createRows(itemCount) });
+  let downstreamRuns = 0;
+  runtime.registerModule((registrar) => {
+    registrar.regRootSub('bench/nested-items-root', 'items');
+    registrar.regRootSub('bench/nested-tick-root', 'tick');
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regSub(
+      'bench/recreated-items',
+      () => [['bench/nested-items-root'], ['bench/nested-tick-root']],
+      ([items]) => items.map((item) => ({ ...item })),
+    );
+  });
+  runtime.registerModule((registrar) => {
+    registrar.regSub(
+      'bench/recreated-item-count',
+      () => [['bench/recreated-items']],
+      ([items]) => {
+        downstreamRuns += 1;
+        return items.length;
+      },
+    );
+  });
+  const disposer = getBenchHarness(runtime).watchSubscription(
+    ['bench/recreated-item-count'],
+    () => {},
+    { emitInitial: false },
+  );
+
+  return {
+    runtime,
+    disposers: [disposer],
+    reset: () => {
+      downstreamRuns = 0;
+    },
+    get downstreamRuns() {
+      return downstreamRuns;
+    },
+  };
+}
+
+function validateDownstreamRuns(name, actual, expected) {
+  if (actual !== expected) {
+    throw new Error(
+      `${name} ran its downstream subscription ${actual} times; expected ${expected}`,
+    );
+  }
+  return {
+    expectedDownstreamRuns: expected,
+    downstreamRunsDuringMeasurement: actual,
   };
 }
 
@@ -416,16 +841,38 @@ function setupEventDispatch(payload, runtimeId) {
   };
 }
 
-function createBenchRuntime(runtimeId, initialState = { tick: 0 }) {
+function setupEffectDispatch({ runtimeId, initialState = { tick: 0 }, handler }) {
   const runtime = createUkladRuntime({ initialState, runtimeId });
+  let effectRuns = 0;
+  let lastPayload;
+  runtime.registerModule((registrar) => {
+    registrar.regEffect('bench/capture', (payload) => {
+      effectRuns += 1;
+      lastPayload = payload;
+    });
+    registrar.regEvent('bench/run-effect', handler);
+  });
+  return {
+    runtime,
+    event: ['bench/run-effect'],
+    reset: () => {
+      effectRuns = 0;
+      lastPayload = undefined;
+    },
+    get effectRuns() {
+      return effectRuns;
+    },
+    get lastPayload() {
+      return lastPayload;
+    },
+  };
+}
+
+function createBenchRuntime(runtimeId, initialState = { tick: 0 }, equalityCheck) {
+  const runtime = createUkladRuntime({ initialState, runtimeId, equalityCheck });
   runtime.registerModule((registrar) => {
     registrar.regEvent('bench/tick', ({ draftState }) => {
       draftState.tick += 1;
-    });
-  });
-  runtime.registerModule((registrar) => {
-    registrar.regEvent('bench/replace-items', ({ draftState }) => {
-      draftState.items = [...draftState.items];
     });
   });
   return runtime;
@@ -472,6 +919,109 @@ function createDeepState() {
 
 function createRows(count) {
   return Array.from({ length: count }, (_, id) => ({ id, value: id % 17, active: id % 2 === 0 }));
+}
+
+function createSharedRowArrayPair(count) {
+  const rows = createRows(count);
+  return { left: [...rows], right: [...rows] };
+}
+
+function createChangedNumberArrayPair(count, changedIndex) {
+  const left = Array.from({ length: count }, (_, index) => index);
+  const right = [...left];
+  right[changedIndex] = -1;
+  return { left, right };
+}
+
+function createRecreatedRowArrayPair(count) {
+  return { left: createRows(count), right: createRows(count) };
+}
+
+function createPrimitiveRecordPair(count) {
+  return { left: createPrimitiveRecord(count), right: createPrimitiveRecord(count) };
+}
+
+function createPrimitiveRecord(count) {
+  const record = {};
+  for (let index = 0; index < count; index += 1) {
+    const key = `field-${index}`;
+    record[key] = index % 17;
+  }
+  return record;
+}
+
+function createSharedValueRecordPair(count) {
+  const rows = createRows(count);
+  const left = {};
+  const right = {};
+  for (const row of rows) {
+    const key = `field-${row.id}`;
+    left[key] = row;
+    right[key] = row;
+  }
+  return { left, right };
+}
+
+function createRecreatedValueRecordPair(count) {
+  const leftRows = createRows(count);
+  const rightRows = createRows(count);
+  const left = {};
+  const right = {};
+  for (let index = 0; index < count; index += 1) {
+    const key = `field-${index}`;
+    left[key] = leftRows[index];
+    right[key] = rightRows[index];
+  }
+  return { left, right };
+}
+
+function createPrimitiveMapPair(count) {
+  const left = new Map();
+  const right = new Map();
+  for (let index = 0; index < count; index += 1) {
+    const value = index % 17;
+    left.set(index, value);
+    right.set(index, value);
+  }
+  return { left, right };
+}
+
+function createSharedValueMapPair(count) {
+  const rows = createRows(count);
+  return {
+    left: new Map(rows.map((row) => [row.id, row])),
+    right: new Map(rows.map((row) => [row.id, row])),
+  };
+}
+
+function createRecreatedValueMapPair(count) {
+  const leftRows = createRows(count);
+  const rightRows = createRows(count);
+  return {
+    left: new Map(leftRows.map((row) => [row.id, row])),
+    right: new Map(rightRows.map((row) => [row.id, row])),
+  };
+}
+
+function createPrimitiveSetPair(count) {
+  const values = Array.from({ length: count }, (_, index) => index);
+  return { left: new Set(values), right: new Set(values) };
+}
+
+function createSharedValueSetPair(count) {
+  const rows = createRows(count);
+  return { left: new Set(rows), right: new Set(rows) };
+}
+
+function createRecreatedValueSetPair(count) {
+  return { left: new Set(createRows(count)), right: new Set(createRows(count)) };
+}
+
+function createTypedArrayPair(count, changedIndex) {
+  const left = Uint32Array.from({ length: count }, (_, index) => index % 17);
+  const right = left.slice();
+  if (changedIndex !== undefined) right[changedIndex] += 1;
+  return { left, right };
 }
 
 function iterationsFor(_kind, fallback) {

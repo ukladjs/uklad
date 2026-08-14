@@ -107,7 +107,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:compat": "tsc6 --noEmit -p tsconfig.json",
     "typecheck:test": "tsc --noEmit -p tsconfig.jest.json",
-    "lint": "eslint --max-warnings=0 src tests jest.config.mjs jest.setup.js tsdown.config.ts",
+    "lint": "eslint --max-warnings=0 src tests benchmarks jest.config.mjs jest.setup.js tsdown.config.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run typecheck:compat && pnpm run typecheck:test && pnpm run build && pnpm run test:clean && pnpm run test:types && pnpm run test:types:dist && pnpm run test:types:package && pnpm run test:types:compat",
@@ -126,8 +126,12 @@
     "test:types:legacy": "node tests/legacy-consumer/run.js",
     "benchmark": "pnpm run build && node --expose-gc benchmarks/run.mjs",
     "benchmark:state": "pnpm run build && node --expose-gc benchmarks/run.mjs state",
+    "benchmark:equality": "pnpm run build && node --expose-gc benchmarks/run.mjs equality",
     "benchmark:subscriptions": "pnpm run build && node --expose-gc benchmarks/run.mjs subscriptions",
     "benchmark:events": "pnpm run build && node --expose-gc benchmarks/run.mjs events",
+    "benchmark:effects": "pnpm run build && NODE_ENV=production node --expose-gc benchmarks/run.mjs effects",
+    "benchmark:effects:dev": "pnpm run build && NODE_ENV=development node --expose-gc benchmarks/run.mjs effects",
+    "benchmark:effects:compare": "pnpm run build && NODE_ENV=production node --expose-gc benchmarks/run.mjs effects && NODE_ENV=development node --expose-gc benchmarks/run.mjs effects",
     "benchmark:memory": "pnpm run build && node --expose-gc benchmarks/run.mjs memory",
     "prepublishOnly": "pnpm run check && pnpm run check:package && pnpm run test:ci"
   },
@@ -155,7 +159,6 @@
     "typescript-eslint": "8.65.0"
   },
   "dependencies": {
-    "fast-deep-equal": "^3.1.3",
     "immer": "^11.1.15"
   },
   "peerDependencies": {

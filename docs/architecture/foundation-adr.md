@@ -99,8 +99,8 @@ the trusted runtime core.
   result size, recomputation frequency, structural sharing, and downstream
   fan-out. Each application selects one default equality policy through the
   `equalityCheck` runtime-creation option; a `regSub` may override it for a
-  particular result. The fallback is `fast-deep-equal`, while `() => false`
-  propagates every recomputation by default. `Object.is`, shallow, deep, and
+  particular result. The fallback is safe shallow structural equality, while
+  `() => false` propagates every recomputation. `Object.is`, explicit deep, and
   domain-specific comparators remain deliberate policy choices rather than
   hidden registration requirements. Subscription query parameters are typed
   cache-key scalars: `string | number | boolean | null`. Contracts reject

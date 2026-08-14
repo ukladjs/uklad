@@ -159,7 +159,7 @@ access require the explicit `@ukladjs/core/devtools` and
 
 ### Subscription runtime
 
-Uklad settles changed subscription graphs in one STATE-driven topological wave before notifying React. Active snapshots are cache-only, dormant reads are memoized pulls, equality cuts off downstream work, and computed nodes are evicted when their last consumer leaves. The runtime invariants and work budgets are documented in the [central subscription-runtime documentation](https://github.com/ukladjs/uklad/blob/main/docs/architecture/subscription-runtime.md).
+Uklad settles changed subscription graphs in one STATE-driven topological wave before notifying React. Active snapshots are cache-only, dormant reads are memoized pulls, equality cuts off downstream work, and computed nodes are evicted when their last consumer leaves. Computed subscriptions use safe shallow structural equality by default: newly allocated arrays, plain objects, Maps, Sets, and typed arrays remain stable when their immediate contents do. Nested values retain identity semantics; pass a runtime or per-subscription comparator when another policy is intentional. The runtime invariants and work budgets are documented in the [central subscription-runtime documentation](https://github.com/ukladjs/uklad/blob/main/docs/architecture/subscription-runtime.md).
 
 For an external lifecycle that should follow one live subscription instance,
 `regSubExt` attaches a controller without changing the subscription's pure

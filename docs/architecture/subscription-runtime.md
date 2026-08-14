@@ -199,7 +199,7 @@ flush: changed key: todos (new object identity)
   rank 0: [todos] refreshes, output stamp advances
   rank 1: [count]   recomputes: 5 -> 5, equality-stable,
                     stamp unchanged
-          [visible] recomputes: same visible items, deep-equal,
+          [visible] recomputes: same visible item identities, shallow-equal,
                     stamp unchanged
   rank 2: [stats] is never enqueued - zero work
   changed set is empty: no listener fires, React renders nothing

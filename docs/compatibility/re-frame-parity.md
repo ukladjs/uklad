@@ -21,7 +21,7 @@ every mechanism should survive 1.0.
 | -------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------- |
 | One immutable application state  | One state per runtime, updated through Immer                                | Ergonomic immutable transitions and structural sharing      | Proxy/value-model constraints and update cost                                    | **Keep, tune**                          |
 | Reactive derived data            | A custom cached subscription DAG                                            | Coherent, selective recomputation                           | Considerable lifecycle and cache complexity                                      | **Keep, measure**                       |
-| Structural subscription equality | `fast-deep-equal` by default                                                | Stops propagation when an allocated result is unchanged     | Up to O(result size) per recomputation                                           | **Tune**                                |
+| Structural subscription equality | Safe shallow structural comparison by default                               | Stops propagation for allocated shallow views               | O(immediate result width); nested allocations propagate                          | **Keep, measure**                       |
 | Value-semantic query vectors     | `JSON.stringify(query)` cache keys                                          | Simple, inspectable canonical keys                          | Unsupported values collide or throw                                              | **Rework**                              |
 | Immutable data events            | String-ID arrays with an immutable contract; cloning at external boundaries | Agent-generated events stay cheap and predictable           | The contract needs type/dev enforcement; cloning still costs at trust boundaries | **Rework, isolate cloning**             |
 | Serialized event handling        | Async FIFO queue plus `dispatchSync`                                        | Deterministic ordering and reentrancy protection            | Two timing models and no per-event completion                                    | **Rework**                              |
@@ -77,30 +77,32 @@ every mechanism should survive 1.0.
   deep, and mount-heavy graphs. Add compute/equality timing before adding more
   graph features.
 
-## 3. `fast-deep-equal` subscription cutoffs — Tune
+## 3. Safe shallow subscription cutoffs — Keep, measure
 
 - **Description:** Root subscriptions compare by `Object.is`; computed
-  subscriptions use `fast-deep-equal` by default and retain the previous
-  result object when equal. A runtime or individual subscription can instead
-  use `shallowEqual`, `Object.is`, or a custom comparator. See
+  subscriptions use `shallowEqual` by default and retain the previous result
+  object when equal. Arrays, plain objects, `Map`, `Set`, and typed arrays
+  compare their immediate contents. Nested values use identity semantics;
+  distinct unsupported instances compare unequal. A runtime or individual
+  subscription can instead use `Object.is` or a custom comparator. See
   [`equality.ts`](../../packages/core/src/core/equality.ts) and
   [`cell.ts`](../../packages/core/src/runtime/subscriptions/cell.ts).
-- **Why:** It approximates ClojureScript `=` and allows a compute function to
-  allocate an equivalent result without waking React or downstream
-  subscriptions.
-- **Pros:** The safe default prevents many accidental renders, makes ordinary
-  selectors easy to write, and turns equality into a propagation cutoff for
-  the whole graph.
-- **Cons:** A successful recomputation can require a full traversal of a large
-  result; cyclic or unusual values need another policy; `Map`/`Set` equality
-  changes only after `enableMapSet()`; and an incorrect custom comparator can
-  hide real changes.
-- **Alternatives:** `Object.is` plus memoized selectors, shallow equality,
-  domain-specific version stamps, or explicit immutable result types.
-- **Direction:** Keep deep equality as the compatibility default during 0.x,
-  but make its cost visible. Document `shallowEqual`/`Object.is` for large
-  results and use benchmarks to decide whether 1.0 should require an explicit
-  equality policy.
+- **Why:** JavaScript selectors commonly allocate a new outer array, object, or
+  collection around identity-stable values produced through structural
+  sharing. Shallow comparison catches that common case without recursively
+  walking every nested result.
+- **Pros:** There is no equality runtime dependency; cycles are safe; inspection
+  failures propagate as changes instead of hiding them; `Map` and `Set`
+  behavior is independent of Immer's opt-in plugin; and equality still cuts
+  off work for the whole downstream graph.
+- **Cons:** Comparing a large flat result is still O(immediate width); a selector
+  that recreates nested values needs memoization or a deliberate custom
+  comparator; and an incorrect custom comparator can hide real changes.
+- **Alternatives:** `Object.is` plus memoized selectors, domain-specific version
+  stamps, an explicit deep comparator, or immutable result types.
+- **Direction:** Keep shallow equality as the framework fallback. Measure wide
+  arrays, objects, maps, sets, and typed arrays on V8 and Hermes, and document
+  explicit identity or domain comparators where their cost model is better.
 
 ## 4. JSON-serialized subscription identity — Rework
 

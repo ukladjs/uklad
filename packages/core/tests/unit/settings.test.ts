@@ -5,6 +5,7 @@ import {
   addInterceptor,
   setEqualityCheck,
 } from './runtime-test-api';
+import { shallowEqual } from '../../src/core/equality';
 import type { Interceptor, InterceptorContext, EqualityCheckFn } from '../../src/types';
 
 beforeEach(() => {
@@ -121,10 +122,12 @@ describe('Global Interceptors', () => {
   });
 
   describe('Global Equality Check', () => {
-    it('should have default equality check that is isEqual', () => {
+    it('should use safe shallow structural equality by default', () => {
       const defaultCheck = getEqualityCheck();
+      expect(defaultCheck).toBe(shallowEqual);
       expect(defaultCheck({ a: 1 }, { a: 1 })).toBe(true);
       expect(defaultCheck({ a: 1 }, { a: 2 })).toBe(false);
+      expect(defaultCheck({ nested: { a: 1 } }, { nested: { a: 1 } })).toBe(false);
     });
 
     it('should allow setting custom equality check', () => {

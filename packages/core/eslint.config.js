@@ -116,7 +116,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['jest.config.mjs', 'jest.setup.js', 'tests/**/*.js'],
+    files: ['benchmarks/**/*.mjs', 'jest.config.mjs', 'jest.setup.js', 'tests/**/*.js'],
     extends: [js.configs.recommended],
     languageOptions: {
       globals: {

@@ -30,7 +30,7 @@ read-only `QuerySnapshot` and return only the domain value that belongs there.
 Install both the Uklad adapter and its required Query Core peer dependency:
 
 ```sh
-pnpm add @ukladjs/tanstack-query @tanstack/query-core
+pnpm add @ukladjs/tanstack-query@0.1.0 @tanstack/query-core@^5.0.0
 ```
 
 The application owns the Query Core version. The current adapter supports v5;

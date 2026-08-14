@@ -20,8 +20,10 @@ the central [TanStack Query integration guide](../../docs/architecture/tanstack-
 ## Setup
 
 ```sh
-pnpm add @ukladjs/tanstack-query @tanstack/query-core
+pnpm add @ukladjs/tanstack-query@0.1.0 @tanstack/query-core@^5.0.0
 ```
+
+The package requires `@ukladjs/core@^0.2.0` as a peer dependency.
 
 ```ts
 import { createUkladRuntime } from '@ukladjs/core/vanilla';

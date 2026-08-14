@@ -18,7 +18,7 @@ export interface SyncPersistStorage {
 }
 
 /**
- * Experimental async storage shape; it is not supported by beta.1.
+ * Experimental async storage shape; it is not supported by the initial release.
  *
  * @experimental Async writes are not ordered or durable yet. Passing this
  * shape also requires `experimentalAsync: true`.
@@ -109,7 +109,7 @@ interface PersistBaseOptions<TState extends AnyState> {
 }
 
 /**
- * Persistence configuration. The beta.1 product contract is the synchronous
+ * Persistence configuration. The initial-release product contract is the synchronous
  * branch; the async branch requires an explicit experimental opt-in.
  */
 export type PersistOptions<TState extends AnyState = AnyState> = PersistBaseOptions<TState> &

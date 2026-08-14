@@ -29,7 +29,10 @@ if (import.meta.env.DEV) {
     void import('@ukladjs/core/devtools').then(({ createUkladInspector }) => {
       enableDevtools(
         createUkladInspector(appRuntime),
-        serverUrl === undefined ? undefined : { serverUrl },
+        {
+          ...(serverUrl === undefined ? {} : { serverUrl }),
+          operations: { evidence: { stateChanges: 'patches' } },
+        },
       );
     });
   });

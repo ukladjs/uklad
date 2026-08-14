@@ -1,19 +1,20 @@
 # Uklad Agent Router
 
-This project uses `@ukladjs/core`. In this project, "Uklad" always means `@ukladjs/core` — the JavaScript/TypeScript state library.
+This project uses `@ukladjs/core`. Prefer the Uklad Agent Toolkit plugin and its Uklad skill; this file is only a compact fallback.
 
-Preferred setup: install the Uklad Agent Toolkit plugin. It owns the Uklad skill, MCP configuration, and context-efficient workflows. This file is only a small fallback router for agents that read `AGENTS.md`.
+For application-authored Uklad work:
 
-For Uklad state-management work:
+- Discover through `src/app/uklad/catalog.ts` -> `contracts.ts` -> the owning feature or selected `platform/<target>` adapter. Search one exact catalog literal or symbol; do not scan every feature.
+- Keep one direct-literal `stateKeys`/`appIds` catalog and one complete `AppContracts`. Feature modules group registrations; one execution owner has one runtime and one reactive graph.
+- Give independently changing or observed values separate feature-prefixed top-level roots. Use `regRootSub` for direct roots and `regSub` only for view-ready derivation from complete, static dependencies.
+- Treat initial/hydrated state, accepted event values, snapshots, and subscription results as runtime-owned. Mutate state only through an event handler's Immer `draftState`; never mutate a dispatched value afterward.
+- Keep handlers, coeffects, interceptors, and subscription functions synchronous. Return declarative effects; never dispatch or schedule host work inside an event turn.
+- Use only bounded scalar subscription parameters (`string`, finite `number`, `boolean`, or `null`) and choose a deliberate equality policy for every computed result.
+- Keep effects, coeffects, and external query lifecycles in target-specific platform adapters under stable application IDs. Views subscribe and dispatch intent; they do not own application derivation or a second server-state provider.
 
-- Use the Uklad skill from the Uklad Agent Toolkit plugin if it is available.
-- Start source orientation with `src/app/uklad/catalog.ts`, then
-  `contracts.ts`, and the owning feature or selected platform module. Use
-  exact-match `rg` for one handler, subscription, or call site.
-- When MCP tools are available, call `app_status` after a cold start or reload. Then use only advertised tools: typed `get_handlers`, path-scoped `get_state`, filtered `get_active_subs` for mounted subscriptions, filtered `get_traces`/one `get_trace`, and `dispatch_event` only when the server explicitly grants it.
-- If `app_status` reports no connected app, start the project-local `devtools:mcp` script (for example, `npm run devtools:mcp`) from the project root, keep it running, reload the app if needed, and retry. Add the script when it is missing; browser apps must pass their exact dev-server origin with `--allow-origin` (repeatable), while headless runtimes need no origin entry.
-- Treat `[REDACTED]`/`[REDACTED:CREDENTIAL]` values from DevTools tools as default credential masking, not an application bug. Never disable or suggest disabling redaction; the application owner can allowlist a non-sensitive key in the redaction config.
-- Do not read every feature or platform file end-to-end when the catalog and
-  contract identify the owning implementation.
-- Keep events pure, isolate I/O in effects/coeffects, keep subscriptions deterministic and view-ready, and keep typed payload maps in sync.
-- Verify with focused tests/typecheck and, when writable DevTools MCP is explicitly granted, the `dispatch_event` response plus filtered mounted-subscription checks. In read-only mode, verify from state, subscriptions, and traces. Treat a changed `sessionEpoch` as a restart.
+For live verification:
+
+- Call `app_status` after a cold start or reload, select `runtimeId` when needed, and use only advertised capabilities. Prefer typed `get_handlers`, path-scoped `get_state`, `eval_sub`, and filtered traces.
+- Use `dispatch_and_wait` when operation snapshots are advertised and mutation was explicitly granted; use `dispatch_event` only as the compatibility path. Never work around `CAPABILITY_DENIED`.
+- If no app is connected, start the project-local `devtools:mcp` script, reload the app if needed, and retry. Browser servers require the exact repeatable `--allow-origin`; headless runtimes do not.
+- Treat redacted values as security behavior and a changed `sessionEpoch` as a new session. Verify with the narrowest formatter, typecheck, focused test, and runtime evidence that adds value.

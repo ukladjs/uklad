@@ -1,13 +1,12 @@
 <div align="center">
 
-  # 🛠️ Uklad DevTools
+# 🛠️ Uklad DevTools
 
-  **Runtime observability for Uklad apps — built for AI agents first, humans second**
+**Runtime observability for Uklad apps — built for AI agents first, humans second**
 
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![NPM Version](https://img.shields.io/npm/v/%40ukladjs%2Fdevtools)](https://www.npmjs.com/package/@ukladjs/devtools)
-  [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ukladjs/uklad/pulls)
-
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![NPM Version](https://img.shields.io/npm/v/%40ukladjs%2Fdevtools)](https://www.npmjs.com/package/@ukladjs/devtools)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ukladjs/uklad/pulls)
 
   <img src="screenshot.jpg" alt="Uklad DevTools Screenshot" width="100%" />
 </div>
@@ -54,45 +53,51 @@ Then just ask for the outcome you want:
 > Add category filtering and verify it works.
 ```
 
-That's it. The plugin's skill drives the agent through everything this README used to ask of you: it installs `@ukladjs/core` and `@ukladjs/devtools` in the project, wires up dev-only tracing, adds and starts the project-local `devtools:mcp` server script, and verifies its own work through the MCP tools instead of re-reading source files.
+That's it. The plugin's skill installs the release-matched `@ukladjs/core` and `@ukladjs/devtools`, enables dev-only operation evidence, adds and starts the project-local `devtools:mcp` server script, and verifies its work through focused MCP evidence instead of broad source rereads.
 
 ### What the agent gets
 
 The plugin starts a version-pinned MCP bridge ([@ukladjs/devtools-mcp](https://github.com/ukladjs/uklad/tree/main/packages/devtools-mcp)) that connects to the project-local DevTools server:
 
-| Tool | What it answers |
-|---|---|
-| `app_status` | Is an app connected? Browser or headless? Did its DevTools session change? |
-| `get_handlers` | Which event/effect/subscription ids exist? |
-| `get_state` | What is the state *at this path* (scoped reads, not full dumps)? |
-| `eval_sub` | What does any registered subscription return, mounted or not? |
-| `get_active_subs` | What are the current values of mounted subscriptions and their active dependencies? |
-| `dispatch_event` | Act — and get back the outcome: state patches, emitted effects, or the error (requires `--allow-dispatch`; otherwise returns `CAPABILITY_DENIED`) |
-| `get_traces` / `get_trace` | What happened recently, including what the agent didn't initiate? |
+| Tool                       | What it answers                                                                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `app_status`               | Is an app connected? Browser or headless? Did its DevTools session change?                                                                             |
+| `get_handlers`             | Which event/effect/subscription ids exist?                                                                                                             |
+| `get_state`                | What is the state _at this path_ (scoped reads, not full dumps)?                                                                                       |
+| `eval_sub`                 | What does any registered subscription return, mounted or not?                                                                                          |
+| `get_active_subs`          | What are the current values of mounted subscriptions and their active dependencies?                                                                    |
+| `dispatch_and_wait`        | Preferred act-and-verify path: what settled across the joined event cascade, including revisions, state status, effects, errors, and optional patches? |
+| `dispatch_event`           | Compatibility action for older runtimes, with a trace-derived outcome.                                                                                 |
+| `get_traces` / `get_trace` | What happened recently, including what the agent didn't initiate?                                                                                      |
 
-When mutation is explicitly enabled, the write loop is `dispatch_event`: its response already contains the observed outcome (`succeeded` / `failed` / `effects-failed`) with the state diff and effects, so the agent verifies each change without a follow-up state read. The read-side counterpart is `eval_sub`, which proves a derived value before any view mounts it. Typo'd handler ids come back as `missing-handler`, not silent no-ops.
+When mutation is explicitly enabled, prefer `dispatch_and_wait` on an operation-enabled runtime. Its immutable snapshot settles the joined cascade without depending on trace storage; bounded state patches are available when configured. Use `dispatch_event` only for older runtimes. The read-side counterpart is `eval_sub`, which proves a derived value before any view mounts it.
 
 ### Manual setup (Cursor, Claude Desktop, or no plugin)
 
 If you're not using the agent toolkit plugin, the setup the skill automates is four small steps:
 
 1. **Install DevTools in your project:**
+
    ```bash
-   npm install --save-dev @ukladjs/devtools
+   npm install --save-dev @ukladjs/devtools@0.2.0
    ```
 
 2. **Enable it in development** (app entry point; adjust the env guard for non-Vite apps):
+
    ```typescript
    import { enableDevtools } from '@ukladjs/devtools';
    import { createUkladInspector } from '@ukladjs/core/devtools';
    import { runtime } from './app/uklad/runtime';
 
    if (import.meta.env.DEV) {
-     enableDevtools(createUkladInspector(runtime));
+     enableDevtools(createUkladInspector(runtime), {
+       operations: { evidence: { stateChanges: 'patches' } },
+     });
    }
    ```
 
 3. **Add and run the project-local server script.** `--mcp` enables authenticated inspection and trace storage, but remains read-only:
+
    ```json
    {
      "scripts": {
@@ -100,9 +105,11 @@ If you're not using the agent toolkit plugin, the setup the skill automates is f
      }
    }
    ```
+
    ```bash
    npm run devtools:mcp
    ```
+
    Replace the origin with the exact origin of your browser dev server. Repeat
    `--allow-origin` when the app uses more than one origin, or omit it for a
    headless-only runtime.
@@ -115,7 +122,7 @@ If you're not using the agent toolkit plugin, the setup the skill automates is f
          "command": "npx",
          "args": [
            "--yes",
-           "--package=@ukladjs/devtools-mcp@0.1.13",
+           "--package=@ukladjs/devtools-mcp@0.2.0",
            "uklad-devtools-mcp",
            "--host",
            "127.0.0.1",
@@ -128,6 +135,7 @@ If you're not using the agent toolkit plugin, the setup the skill automates is f
    ```
 
 Then run your app (browser tab or headless, below) and ask the agent things like:
+
 - "What's the current app state and what user actions led to it?"
 - "Find event handlers slower than 100ms"
 
@@ -171,7 +179,9 @@ runtime.registerModule(installSubscriptions);
 runtime.registerModule(installHeadlessEffects);
 runtime.registerModule(installHeadlessCoeffects);
 
-enableDevtools(createUkladInspector(runtime));
+enableDevtools(createUkladInspector(runtime), {
+  operations: { evidence: { stateChanges: 'patches' } },
+});
 ```
 
 Run the entry under `tsx watch` (or `vite-node --watch`).
@@ -199,7 +209,9 @@ const runtime = createUkladRuntime({
   name: 'Checkout widget',
 });
 
-enableDevtools(createUkladInspector(runtime));
+enableDevtools(createUkladInspector(runtime), {
+  operations: { evidence: { stateChanges: 'patches' } },
+});
 ```
 
 The dashboard selector changes the active runtime and replaces its retained
@@ -243,7 +255,7 @@ If your project is already set up for agents (above), the dashboard is already t
 Starting from scratch, without the MCP parts:
 
 ```bash
-npm install --save-dev @ukladjs/devtools
+npm install --save-dev @ukladjs/devtools@0.2.0
 ```
 
 ```typescript
@@ -286,8 +298,8 @@ const disableDevtools = enableDevtools(createUkladInspector(runtime), {
 disableDevtools();
 
 interface DevtoolsConfig {
-  serverUrl?: string;  // Default: '127.0.0.1:4000'
-  enabled?: boolean;   // Default: true
+  serverUrl?: string; // Default: '127.0.0.1:4000'
+  enabled?: boolean; // Default: true
   // Refuses non-loopback plaintext HTTP by default. Prefer HTTPS or a
   // loopback SSH tunnel; enable this only for a trusted development network.
   allowInsecureRemote?: boolean;
@@ -308,12 +320,14 @@ interface DevtoolsConfig {
   // Adapter mode per effect/coeffect id, e.g. { 'local-storage-set': 'memory' }
   effects?: Record<string, string>;
   // Enables MCP dispatch_and_wait operation snapshots for this runtime.
-  operations?: true | {
-    evidence?: {
-      // Opt-in forward state patches for DevTools-tracked events only.
-      stateChanges?: 'none' | 'patches';
-    };
-  };
+  operations?:
+    | true
+    | {
+        evidence?: {
+          // Opt-in forward state patches for DevTools-tracked events only.
+          stateChanges?: 'none' | 'patches';
+        };
+      };
 }
 ```
 
@@ -356,11 +370,7 @@ remain diagnostic only; they never control operation settlement.
 Add application-specific PII keys by composing the exported default masker:
 
 ```typescript
-import {
-  createKeyRedactor,
-  DEFAULT_SENSITIVE_KEYS,
-  enableDevtools,
-} from '@ukladjs/devtools';
+import { createKeyRedactor, DEFAULT_SENSITIVE_KEYS, enableDevtools } from '@ukladjs/devtools';
 import { createUkladInspector } from '@ukladjs/core/devtools';
 import { runtime } from './app/uklad/runtime';
 
@@ -594,8 +604,8 @@ Built with ❤️ for the Uklad community. Special thanks to all contributors an
 
 <div align="center">
 
-  **Happy Debugging! 🐛➡️✨**
+**Happy Debugging! 🐛➡️✨**
 
-  Made by [@flexsurfer](https://github.com/flexsurfer)
+Made by [@flexsurfer](https://github.com/flexsurfer)
 
 </div>

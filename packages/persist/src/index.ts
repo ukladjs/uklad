@@ -3,7 +3,7 @@
  *
  * The package exposes one stable root entrypoint. Implementation modules stay
  * private so storage engines and lifecycle internals can evolve without
- * creating a public subpath API during beta.
+ * creating a public subpath API during the initial release.
  */
 
 export { localStorageAdapter, memoryStorageAdapter } from './adapters';

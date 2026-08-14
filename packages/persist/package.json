@@ -1,9 +1,17 @@
 {
   "name": "@ukladjs/persist",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0",
   "description": "Synchronous persistence for Uklad.",
+  "author": "flexsurfer",
   "license": "MIT",
   "sideEffects": false,
+  "homepage": "https://uklad.js.org",
+  "bugs": {
+    "url": "https://github.com/ukladjs/uklad/issues"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
   "devEngines": {
     "runtime": {
       "name": "node",
@@ -13,7 +21,7 @@
   },
   "publishConfig": {
     "access": "public",
-    "tag": "beta"
+    "tag": "latest"
   },
   "repository": {
     "type": "git",
@@ -76,7 +84,7 @@
     "typescript-eslint": "8.65.0"
   },
   "peerDependencies": {
-    "@ukladjs/core": "^0.1.27"
+    "@ukladjs/core": "^0.2.0"
   },
   "keywords": [
     "uklad",

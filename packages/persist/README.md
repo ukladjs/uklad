@@ -2,15 +2,15 @@
 
 Sync-safe, versioned persistence for [Uklad](https://github.com/ukladjs/uklad). Hydration is an event, storage operations are effects/coeffects, status is a subscription, and one global interceptor contributes post-commit writes to the events that changed configured roots.
 
-`0.1.0-beta.1` supports browser CSR with synchronous storage such as `localStorage`, one attachment per runtime, root-key persistence, synchronous migrations, and per-key transforms. Async storage, SSR integration, custom merge, and multiple configurations per runtime are not supported in this beta. The async type surface requires an explicit `experimentalAsync: true` opt-in and has no write-ordering or durability guarantee.
+`0.1.0` supports browser CSR with synchronous storage such as `localStorage`, one attachment per runtime, root-key persistence, synchronous migrations, and per-key transforms. Async storage, SSR integration, custom merge, and multiple configurations per runtime are not supported in this intentionally narrow initial release. The async type surface requires an explicit `experimentalAsync: true` opt-in and has no write-ordering or durability guarantee.
 
 ## Install
 
 ```sh
-pnpm add @ukladjs/persist@beta
+pnpm add @ukladjs/persist@0.1.0
 ```
 
-The package requires `@ukladjs/core@^0.1.27` as a peer dependency.
+The package requires `@ukladjs/core@^0.2.0` as a peer dependency.
 
 ## Usage
 

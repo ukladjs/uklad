@@ -1,8 +1,16 @@
 {
   "name": "@ukladjs/core",
-  "version": "0.1.27",
+  "version": "0.2.0",
   "description": "Uklad — re-frame-style reactive state management for React and React Native. Pure event handlers over one central state, derived subscriptions, isolated side effects. Built for AI agentic development.",
+  "author": "flexsurfer",
   "license": "MIT",
+  "homepage": "https://uklad.js.org",
+  "bugs": {
+    "url": "https://github.com/ukladjs/uklad/issues"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
   "devEngines": {
     "runtime": {
       "name": "node",
@@ -11,7 +19,8 @@
     }
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "latest"
   },
   "repository": {
     "type": "git",

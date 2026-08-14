@@ -329,20 +329,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build library
-        run: pnpm run build:core && pnpm run build:persist
+      - name: Build release artifacts
+        run: pnpm run build
 
-      - name: Run tests
-        run: pnpm --filter @ukladjs/core run test:ci
+      - name: Validate coordinated release metadata
+        run: pnpm run release:validate
 
-      - name: Test package publication
-        run: >-
-          npm pack --dry-run ./packages/core &&
-          npm pack --dry-run ./packages/persist &&
-          npm publish --dry-run --tag beta ./packages/persist
-
-      - name: Test TodoMVC example build
-        run: pnpm --filter todomvc run build
+      - name: Inspect every public package tarball
+        run: node scripts/release.mjs pack
 
   package-bundlers:
     runs-on: ubuntu-latest

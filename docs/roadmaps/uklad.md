@@ -47,11 +47,11 @@ support remains deferred until the redesign and release gates are complete.
 
 - [x] Synchronize root/package READMEs and examples with the current API (`createUkladInspector`, current DevTools setup, and the canonical application structure).
 - [x] Fix the swapped Best Practices / API Reference links in [packages/core/README.md](../../packages/core/README.md).
-- [ ] Decide how the central `docs/` tree should be distributed with future package releases; package tarballs currently contain package code and package-facing READMEs, while deep documentation remains in the monorepo.
+- [x] Keep the central `docs/` tree in the monorepo; package tarballs contain package code, package-facing READMEs, licenses, and links back to the canonical documentation.
 - [x] Pin MCP package versions in the shipped agent templates.
-- [ ] Prepare coordinated prerelease versions and release notes after the experimental redesign reaches a release candidate.
-- [ ] Run the full workspace check and packed-package dry runs.
-- [ ] Push the synchronized source repository. Defer npm publication until the framework is ready and the release gates are complete.
+- [x] Prepare the coordinated initial package versions, release manifest, and release notes.
+- [x] Run the full workspace check and packed-package dry runs.
+- [ ] Push the synchronized repositories, then publish packages, the agent toolkit, and the website in the documented order.
 
 ## Phase 1 — Trust and measurement baseline (~1 month, parallelizable)
 
@@ -64,7 +64,7 @@ These items do not win an evaluation by themselves, but each removes a common re
   unregistered IDs in every mode. Add nearest-match suggestions ("did you mean
   `todos/add`?") to the explicit runtime surface. String IDs are only safe if
   mistakes surface immediately; this matters double for AI-generated code.
-- [ ] **Release and support baseline.** `SECURITY.md` is present; remaining work includes `CHANGELOG.md`, a support/compatibility matrix, coordinated release automation, npm provenance/trusted publishing, and a documented deprecation policy. Define supported React, React Native, TypeScript, Node/headless, browser, Metro, and Hermes versions.
+- [ ] **Release and support baseline.** `SECURITY.md`, `CHANGELOG.md`, the compatibility matrix, coordinated release automation, and the deprecation policy are present. Bootstrap the npm organization and initial publication from an authorized local machine, and complete the published React Native, Metro, and Hermes support matrix.
 - [ ] **Runtime performance baseline.** Add repeatable benchmarks and CI budgets for dispatch throughput, broad and deep subscription graphs, 1k/10k active subscriptions, mount/unmount churn, memory retention, large derived collections under deep versus shallow equality, React render counts, AI-token-frequency updates, Hermes performance, and bundle size.
 - [ ] **Internal agent eval baseline.** Run scripted Uklad tasks with MCP connected versus file-tools-only, scored on success rate, turns, tokens, wall time, and deterministic acceptance tests. Use this as the fitness function for DevTools work; do not publish cross-library claims yet.
 
@@ -110,7 +110,7 @@ runtime.registerModule(feature);
 
 This phase begins once the instance API is stable enough that persistence, templates, examples, and public benchmarks will not be rewritten around a moving foundation.
 
-- [x] **Synchronous persistence beta.** `@ukladjs/persist` provides
+- [x] **Synchronous persistence initial release.** `@ukladjs/persist` provides
   instance-aware root persistence, versioned migrations, hydration barriers,
   transforms, redaction-safe errors, and module disposal for synchronous
   storage. Async storage, SSR integration, custom merge behavior, and multiple

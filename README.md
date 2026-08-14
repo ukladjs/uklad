@@ -30,23 +30,23 @@ Community packages may cover additional cases.
 Legend: ✅ built in · 🟡 partial, beta, or ecosystem-assisted · ⬜ planned ·
 — no first-party equivalent.
 
-| Capability                                        | Uklad in this repository                                                                                                           | Redux Toolkit                                   | Zustand                                       | Direction                                                             |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------- |
-| **Agent runtime inspection and control**          | ✅ [MCP](packages/devtools-mcp): discover, inspect, trace, and perform authorized, outcome-verified dispatches—browser or headless | — no first-party agent protocol                 | — no first-party agent protocol               | **Differentiator · shipped**                                          |
-| **Effects and environmental inputs as data**      | ✅ declarative effects + injected, replaceable coeffects                                                                           | 🟡 thunks, listeners, and middleware callbacks  | 🟡 application-defined actions and middleware | **Differentiator · shipped**                                          |
-| **Causal runtime evidence**                       | ✅ events → patches → effects → subscriptions/renders/errors                                                                       | 🟡 action and state history                     | 🟡 action and state history                   | **Differentiator · shipped**                                          |
-| **Runtime-owned derived graph**                   | ✅ memoized, topological, lifecycle-managed, and traceable [subscription DAG](docs/architecture/subscription-runtime.md)           | 🟡 Reselect memoization; lifecycle is app-owned | 🟡 derived state and lifecycle are app-owned  | **Differentiator · shipped**                                          |
-| **Explicit isolation plus multi-runtime tooling** | ✅ instance-owned runtime + routing across SSR, widgets, tests, and agent sandboxes                                                | ✅ independent and per-request stores           | ✅ independent vanilla and per-request stores | **Parity+ · shipped**                                                 |
-| **Concurrent React, typed APIs, sync dispatch**   | ✅ `useSyncExternalStore`, runtime contracts, `dispatchSync`                                                                       | ✅                                              | ✅                                            | **Parity · shipped**                                                  |
-| **Vanilla subscriptions and per-request SSR**     | ✅ derived reads/watches, hydration, request isolation                                                                             | ✅                                              | ✅                                            | **Parity · shipped**                                                  |
-| **Lazy feature registration**                     | ✅ scoped install/dispose with safe HMR                                                                                            | ✅ reducer and endpoint injection               | 🟡 application-managed                        | **Parity · shipped**                                                  |
-| **Persistence + versioned migrations**            | 🟡 official synchronous beta                                                                                                       | 🟡 ecosystem (`redux-persist`)                  | ✅ official sync/async middleware             | **Beta** · async durability, SSR, merge, multi-attach remain          |
-| **Fail-loud diagnostics**                         | 🟡 strict errors; typo suggestions missing                                                                                         | ✅ invariant checks and diagnostics             | 🟡 limited built-in checks                    | **Roadmap** · suggestions and release hardening                       |
-| **Async server data and caching**                 | 🟡 [`@ukladjs/tanstack-query`](packages/tanstack-query) pairs headless TanStack Query with Uklad subscriptions; effects for commands                 | ✅ RTK Query                                    | 🟡 pair with a server-state library           | **Intentional pairing** · managed read-only snapshots, not a writable cache clone |
-| **Per-call subscription equality**                | 🟡 definition/runtime level                                                                                                        | ✅ per hook call                                | ✅ custom-equality hooks                      | **Backlog** · evidence-driven                                         |
-| **Entity / normalization helpers**                | ⬜                                                                                                                                 | ✅ `createEntityAdapter`                        | —                                             | **Backlog** · evidence-driven                                         |
-| **Time travel and application undo/redo**         | 🟡 patch groundwork; semantics open                                                                                                | ✅ DevTools time travel                         | 🟡 DevTools/community                         | **Roadmap** · specify replay, effects, privacy, and persistence first |
-| **Supervised async tasks**                        | ⬜ identity, cancellation, timeout, concurrency, traces                                                                            | 🟡 thunk/listener primitives                    | 🟡 application-defined                        | **Roadmap** · build on the operation spine                            |
+| Capability                                        | Uklad in this repository                                                                                                             | Redux Toolkit                                   | Zustand                                       | Direction                                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Agent runtime inspection and control**          | ✅ [MCP](packages/devtools-mcp): discover, inspect, trace, and perform authorized, outcome-verified dispatches—browser or headless   | — no first-party agent protocol                 | — no first-party agent protocol               | **Differentiator · shipped**                                                      |
+| **Effects and environmental inputs as data**      | ✅ declarative effects + injected, replaceable coeffects                                                                             | 🟡 thunks, listeners, and middleware callbacks  | 🟡 application-defined actions and middleware | **Differentiator · shipped**                                                      |
+| **Causal runtime evidence**                       | ✅ events → patches → effects → subscriptions/renders/errors                                                                         | 🟡 action and state history                     | 🟡 action and state history                   | **Differentiator · shipped**                                                      |
+| **Runtime-owned derived graph**                   | ✅ memoized, topological, lifecycle-managed, and traceable [subscription DAG](docs/architecture/subscription-runtime.md)             | 🟡 Reselect memoization; lifecycle is app-owned | 🟡 derived state and lifecycle are app-owned  | **Differentiator · shipped**                                                      |
+| **Explicit isolation plus multi-runtime tooling** | ✅ instance-owned runtime + routing across SSR, widgets, tests, and agent sandboxes                                                  | ✅ independent and per-request stores           | ✅ independent vanilla and per-request stores | **Parity+ · shipped**                                                             |
+| **Concurrent React, typed APIs, sync dispatch**   | ✅ `useSyncExternalStore`, runtime contracts, `dispatchSync`                                                                         | ✅                                              | ✅                                            | **Parity · shipped**                                                              |
+| **Vanilla subscriptions and per-request SSR**     | ✅ derived reads/watches, hydration, request isolation                                                                               | ✅                                              | ✅                                            | **Parity · shipped**                                                              |
+| **Lazy feature registration**                     | ✅ scoped install/dispose with safe HMR                                                                                              | ✅ reducer and endpoint injection               | 🟡 application-managed                        | **Parity · shipped**                                                              |
+| **Persistence + versioned migrations**            | 🟡 official synchronous initial release                                                                                              | 🟡 ecosystem (`redux-persist`)                  | ✅ official sync/async middleware             | **Narrow scope** · async durability, SSR, merge, multi-attach remain              |
+| **Fail-loud diagnostics**                         | 🟡 strict errors; typo suggestions missing                                                                                           | ✅ invariant checks and diagnostics             | 🟡 limited built-in checks                    | **Roadmap** · suggestions and release hardening                                   |
+| **Async server data and caching**                 | 🟡 [`@ukladjs/tanstack-query`](packages/tanstack-query) pairs headless TanStack Query with Uklad subscriptions; effects for commands | ✅ RTK Query                                    | 🟡 pair with a server-state library           | **Intentional pairing** · managed read-only snapshots, not a writable cache clone |
+| **Per-call subscription equality**                | 🟡 definition/runtime level                                                                                                          | ✅ per hook call                                | ✅ custom-equality hooks                      | **Backlog** · evidence-driven                                                     |
+| **Entity / normalization helpers**                | ⬜                                                                                                                                   | ✅ `createEntityAdapter`                        | —                                             | **Backlog** · evidence-driven                                                     |
+| **Time travel and application undo/redo**         | 🟡 patch groundwork; semantics open                                                                                                  | ✅ DevTools time travel                         | 🟡 DevTools/community                         | **Roadmap** · specify replay, effects, privacy, and persistence first             |
+| **Supervised async tasks**                        | ⬜ identity, cancellation, timeout, concurrency, traces                                                                              | 🟡 thunk/listener primitives                    | 🟡 application-defined                        | **Roadmap** · build on the operation spine                                        |
 
 Rows marked roadmap or backlog are direction, not release promises. See the
 [detailed parity notes](docs/compatibility/redux-zustand-parity.md) and the
@@ -69,11 +69,10 @@ execution semantics designed specifically for AI-agent development.
 Uklad is being reinvented as an agent-first state-management and application
 runtime for AI-assisted and agentic development.
 
-This repository is an active design and implementation workspace. It is not a
-stable framework release, and the current intent is to push the source tree for
-collaboration and review—not to publish the packages to npm. APIs, package
-boundaries, and documentation may change while the foundation is being
-reworked.
+This repository remains an active design and implementation workspace, but its
+first experimental `@ukladjs` package set is now prepared for publication.
+These are pre-1.0 releases: APIs, package boundaries, and documentation may
+still change while the foundation is being finalized.
 
 ## What is being explored
 
@@ -92,15 +91,15 @@ structured runtime evidence instead of guessing from source text or logs.
 
 ## Workspaces
 
-- [`@ukladjs/core`](packages/core) — the experimental core runtime,
+- [`@ukladjs/core@0.2.0`](packages/core) — the experimental core runtime,
   React bindings, vanilla/headless APIs, tests, benchmarks, and agent templates.
-- [`@ukladjs/persist`](packages/persist) — experimental
+- [`@ukladjs/persist@0.1.0`](packages/persist) — intentionally narrow
   synchronous persistence built on the public runtime APIs.
-- [`@ukladjs/tanstack-query`](packages/tanstack-query) — headless TanStack Query integration
+- [`@ukladjs/tanstack-query@0.1.0`](packages/tanstack-query) — headless TanStack Query integration
   that routes observer updates through Uklad events and managed state.
-- [`@ukladjs/devtools`](packages/devtools) — DevTools SDK, server,
+- [`@ukladjs/devtools@0.2.0`](packages/devtools) — DevTools SDK, server,
   CLI, security boundaries, and package assembly.
-- [`@ukladjs/devtools-mcp`](packages/devtools-mcp) — the
+- [`@ukladjs/devtools-mcp@0.2.0`](packages/devtools-mcp) — the
   experimental MCP bridge for inspection and controlled development actions.
 - [`@ukladjs/devtools-ui`](packages/devtools-ui) — the private
   dashboard source assembled into the DevTools package.
@@ -109,8 +108,23 @@ structured runtime evidence instead of guessing from source text or logs.
   [`DevTools playground`](examples/devtools-playground) — example applications
   and integration fixtures.
 
-Package metadata includes build and future packaging configuration, but that is
-not a claim that the current framework is ready for publication.
+The coordinated versions and dist-tags are machine-checked from
+[`release.json`](release.json). See [`CHANGELOG.md`](CHANGELOG.md) for the
+initial release notes and [`RELEASING.md`](RELEASING.md) for the dry-run-first
+publishing procedure.
+
+## Install
+
+```sh
+npm install @ukladjs/core@0.2.0
+```
+
+Install the optional integrations from the coordinated initial release:
+
+```sh
+npm install @ukladjs/persist@0.1.0
+npm install @ukladjs/tanstack-query@0.1.0 @tanstack/query-core@^5.0.0
+```
 
 ## Development
 
@@ -131,6 +145,7 @@ separate because they require network access and an empty npm cache:
 ```sh
 pnpm check:package # packed-package consumers only; requires registry access
 pnpm check:all     # development checks, then packed-package consumers
+pnpm release:check # full checks plus every public package dry run
 ```
 
 Useful local development commands include:
@@ -152,6 +167,8 @@ pnpm dev:todomvc-query
   — concise required rules for agent- and human-authored Uklad applications.
 - [`docs/roadmaps/uklad.md`](docs/roadmaps/uklad.md) — current execution track
   and release-readiness gates.
+- [`docs/compatibility/stability-and-versioning.md`](docs/compatibility/stability-and-versioning.md)
+  — pre-1.0 support, compatibility, and deprecation policy.
 - [`docs/rfcs/agent-operations.md`](docs/rfcs/agent-operations.md) — canonical
   proposed direction for authoritative operations and agent-driven runtimes.
 - [`docs/agent-development/priorities.md`](docs/agent-development/priorities.md)
@@ -170,9 +187,9 @@ Security-sensitive behavior for the development tools is documented in
 
 ## Status
 
-The project is pre-1.0 and experimental. Treat the source, tests, examples,
-and design documents as the current collaboration surface; do not rely on
-them as a stable public API or release promise yet.
+The initial packages are usable experimental releases, not a 1.0 compatibility
+promise. Supported entry points and version ranges are documented; planned
+features remain non-promises until they ship.
 
 ## License
 

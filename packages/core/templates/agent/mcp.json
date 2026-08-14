@@ -4,7 +4,7 @@
       "command": "npx",
       "args": [
         "--yes",
-        "--package=@ukladjs/devtools-mcp@0.1.13",
+        "--package=@ukladjs/devtools-mcp@0.2.0",
         "uklad-devtools-mcp",
         "--host",
         "127.0.0.1",

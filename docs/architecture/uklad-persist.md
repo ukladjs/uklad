@@ -5,7 +5,7 @@
 state changes only through events, storage calls only happen in effects, and
 the module owns no private runtime hooks.
 
-`0.1.0-beta.1` is deliberately sync-safe and browser-CSR focused. Each
+`0.1.0` is deliberately sync-safe and browser-CSR focused. Each
 configured state root is stored independently in a versioned envelope.
 
 ```text
@@ -25,7 +25,7 @@ uses only documented Uklad APIs:
 
 It does **not** import Uklad internals, mutate a runtime's state head directly,
 register watches, or require a persistence-specific core hook. There is one
-attachment per runtime in beta.1; duplicate attachments and protocol ID
+attachment per runtime in the initial release; duplicate attachments and protocol ID
 collisions fail before installation.
 
 ## End-to-end flows
@@ -95,7 +95,7 @@ fresh closed `idle` gate.
 
 Paths below are relative to `src/`. Only the root package entrypoint is public;
 the other paths are implementation details and intentionally have no subpath
-exports during beta.
+exports during the initial release.
 
 | Path          | Responsibility                                                                                                |
 | ------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -129,7 +129,7 @@ a private terminal `disposed` state.
 | dispose                    | reject barriers and ignore late work                                                                |
 
 Repeated hydration after a terminal result is an idempotent no-op. A purge
-request while hydration is active is rejected. The beta.1 application rule is:
+request while hydration is active is rejected. The initial-release application rule is:
 hydrate before first render and before dispatching domain events that change
 persisted roots.
 
@@ -155,11 +155,11 @@ cannot open the write gate or settle a handle barrier.
 
 ## Async roadmap boundary
 
-The async storage shape is explicitly experimental in beta.1. Its read path is
+The async storage shape is explicitly experimental in `0.1.0`. Its read path is
 kept behind the same protocol, but async writes are fire-and-forget and provide
 neither ordering nor durability guarantees.
 
-Beta.2 should add an attachment-local async coordinator rather than a generic
+The next async-capable minor release should add an attachment-local async coordinator rather than a generic
 sync/async abstraction. It will own attempt/generation IDs, one write queue per
 storage key, snapshots captured at enqueue time, `flush()`, and purge ordering
 relative to active or queued writes. `codec.ts`, `config.ts`, and the public

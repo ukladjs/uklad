@@ -11,8 +11,6 @@ This package is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io
 
 ---
 
-
-
 ## ✨ How it fits together
 
 ```
@@ -49,15 +47,11 @@ The app does not have to be a browser tab: a **[headless runtime](#-headless-run
 
 ---
 
-
-
 ## 🚀 Quick Start
-
-
 
 ### Recommended: the Uklad Agent Toolkit plugin
 
-For Claude Code and Codex, don't configure this package by hand. The [Uklad Agent Toolkit](https://github.com/ukladjs/agent-toolkit) plugin ships the MCP configuration *and* the workflow skill that teaches the agent when to use each tool:
+For Claude Code and Codex, don't configure this package by hand. The [Uklad Agent Toolkit](https://github.com/ukladjs/agent-toolkit) plugin ships the MCP configuration _and_ the workflow skill that teaches the agent when to use each tool:
 
 **Claude Code**
 
@@ -89,7 +83,7 @@ For Claude Desktop, Cursor, or any other MCP client, register the bridge with `n
       "command": "npx",
       "args": [
         "--yes",
-        "--package=@ukladjs/devtools-mcp@0.1.13",
+        "--package=@ukladjs/devtools-mcp@0.2.0",
         "uklad-devtools-mcp",
         "--host",
         "127.0.0.1",
@@ -111,32 +105,37 @@ Restart the client and the inspection tools appear.
 The bridge needs a DevTools server with a connected app to talk to. In the project (the agent toolkit skill does all of this automatically):
 
 1. **Install DevTools:**
-  ```bash
-   npm install --save-dev @ukladjs/devtools
-  ```
-2. **Enable it in development** (app entry point):
-  ```typescript
-   import { enableDevtools } from '@ukladjs/devtools';
-   import { createUkladInspector } from '@ukladjs/core/devtools';
 
-   if (import.meta.env.DEV) {
-     enableDevtools(createUkladInspector(runtime), {
-       operations: true,
-     });
-   }
-  ```
+```bash
+ npm install --save-dev @ukladjs/devtools@0.2.0
+```
+
+2. **Enable it in development** (app entry point):
+
+```typescript
+import { enableDevtools } from '@ukladjs/devtools';
+import { createUkladInspector } from '@ukladjs/core/devtools';
+
+if (import.meta.env.DEV) {
+  enableDevtools(createUkladInspector(runtime), {
+    operations: { evidence: { stateChanges: 'patches' } },
+  });
+}
+```
+
 3. **Add and run the project-local server script.** The `--mcp` flag enables authenticated inspection and trace storage, but remains read-only:
-  ```json
-   {
-     "scripts": {
-       "devtools:mcp": "uklad-devtools --mcp --host 127.0.0.1 --port 4000 --allow-origin http://localhost:5173"
-     }
-   }
-  ```
-   Replace the origin with the exact origin of your browser dev server. Repeat
-   `--allow-origin` for additional browser origins, or omit it for headless-only
-   use.
-4. **Start your Uklad app** — a browser tab, or a headless entry (`src/headless.ts` under `tsx`/`vite-node`) for browserless agent work.
+
+```json
+{
+  "scripts": {
+    "devtools:mcp": "uklad-devtools --mcp --host 127.0.0.1 --port 4000 --allow-origin http://localhost:5173"
+  }
+}
+```
+
+Replace the origin with the exact origin of your browser dev server. Repeat
+`--allow-origin` for additional browser origins, or omit it for headless-only
+use. 4. **Start your Uklad app** — a browser tab, or a headless entry (`src/headless.ts` under `tsx`/`vite-node`) for browserless agent work.
 
 If the task genuinely needs mutation, grant it separately:
 
@@ -156,8 +155,6 @@ the project-local DevTools server is even running — so a later grant would nev
 appear.
 
 ---
-
-
 
 ## 🛠️ Available MCP Tools
 
@@ -185,7 +182,7 @@ Cheap health/session and runtime-discovery check — the intended first call aft
 - `tracing`, handler counts per type, `stateAvailable`, `traceCount`, `mcpEnabled`
 - `capabilities` and `readOnly` — the effective least-privilege tool surface
 - `protocol` and `security` — negotiated versions, authentication, loopback,
-redaction, and audit status
+  redaction, and audit status
 
 When a runtime can be selected, degraded details such as a server started
 without `--mcp` or a disconnected selected runtime are reported as explicit
@@ -202,8 +199,6 @@ status payload.
 
 - "Is my app connected and healthy?"
 - "Did the app's DevTools session change since we last checked?"
-
-
 
 ### 2. `get_traces`
 
@@ -224,8 +219,6 @@ List execution traces from your application as compact rows: id, operation, opTy
 - "Find all traces with duration over 100ms"
 - "Show me traces for the 'fetch-user' event"
 
-
-
 ### 3. `get_trace`
 
 Get the full detail of a single trace by id: for events, the state patches committed, the effects emitted, and error details (message, stack, failing interceptor) if it failed.
@@ -243,8 +236,6 @@ Get the full detail of a single trace by id: for events, the state patches commi
 - "Show me the full detail of trace 42"
 - "What state changes did that failed event make before throwing?"
 
-
-
 ### 4. `get_state`
 
 Retrieve the current application state state — scoped by path whenever possible.
@@ -258,8 +249,6 @@ Retrieve the current application state state — scoped by path whenever possibl
 
 - "Show me the user profile data"
 - "What's in the items array?"
-
-
 
 ### 5. `dispatch_and_wait`
 
@@ -311,8 +300,6 @@ requires `--mcp`). A denied call changes nothing and is recorded in the audit lo
 - "Dispatch a 'set-user' event with id 123 and name 'Test User'"
 - "Trigger the 'clear-cache' event and tell me what state it changed"
 
-
-
 ### 7. `get_handlers`
 
 List all registered handler ids, grouped by handler type.
@@ -326,8 +313,6 @@ List all registered handler ids, grouped by handler type.
 
 - "What event handlers are registered?"
 - "List all registered effects"
-
-
 
 ### 8. `get_active_subs`
 
@@ -343,8 +328,6 @@ mounted root subscriptions and dependencies kept active by computed subscription
 
 - "What subscriptions are currently active?"
 - "Show me user-related subscriptions"
-
-
 
 ### 9. `eval_sub`
 
@@ -362,8 +345,6 @@ Evaluate any registered subscription against current app state. Unlike `get_acti
 - "What does the new `expenses/category-total` subscription return for `food`?"
 
 ---
-
-
 
 ## 🧪 Headless runtime for autonomous agent loops
 
@@ -388,7 +369,7 @@ enableDevtools(createUkladInspector(runtime), {
   operations: true,
   // runtime: 'headless' is auto-detected (no window)
   effectMode: 'safe',
-  effects: { 'local-storage-set': 'memory', 'analytics-track': 'noop' }
+  effects: { 'local-storage-set': 'memory', 'analytics-track': 'noop' },
 });
 
 setInterval(() => {}, 60_000); // keep the process alive if the server is down
@@ -403,8 +384,6 @@ Headless mode needs **Node.js 22+** (the SDK uses the global `WebSocket`, stable
 The [DevTools playground](https://github.com/ukladjs/uklad/tree/main/examples/devtools-playground) in this repo is the reference implementation (`pnpm dev:playground:headless` from the workspace root).
 
 ---
-
-
 
 ## 💡 The act-and-verify loop in practice
 
@@ -447,11 +426,7 @@ consider debouncing the dispatch or caching the request.
 
 ---
 
-
-
 ## 🔧 Configuration
-
-
 
 ### DevTools Server (project-local)
 
@@ -541,9 +516,9 @@ Non-loopback binding requires all of the following:
 - `--allow-remote`
 - at least one repeatable exact `--allow-host` value (host name only; no port)
 - at least one repeatable exact `--allow-origin` value (scheme, host, and port;
-no path)
+  no path)
 - `UKLAD_DEVTOOLS_RUNTIME_TOKEN`, `UKLAD_DEVTOOLS_UI_TOKEN`, and
-`UKLAD_DEVTOOLS_MCP_TOKEN`, each at least 32 UTF-8 bytes
+  `UKLAD_DEVTOOLS_MCP_TOKEN`, each at least 32 UTF-8 bytes
 - a trusted TLS boundary, or an SSH tunnel instead of a remote bind
 
 On the DevTools host, behind a TLS reverse proxy:
@@ -634,11 +609,7 @@ server, runtime, and inspector versions.
 
 ---
 
-
-
 ## 🏗️ Development
-
-
 
 ### Building from Source
 
@@ -648,8 +619,6 @@ cd uklad
 pnpm install
 pnpm build
 ```
-
-
 
 ### Testing Locally
 
@@ -692,8 +661,6 @@ packages/devtools-mcp/
 
 ---
 
-
-
 ## 🔗 Related Projects
 
 - **[@ukladjs/core](https://github.com/ukladjs/uklad)** - The reactive state management library
@@ -703,15 +670,11 @@ packages/devtools-mcp/
 
 ---
 
-
-
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
-
-
 
 ## 🙏 Acknowledgments
 
@@ -723,8 +686,6 @@ Built with ❤️ for the Uklad community. Special thanks to:
 
 ---
 
+**Debug Smarter with AI! 🤖✨**
 
-
-  **Debug Smarter with AI! 🤖✨**
-
-  Made by [@flexsurfer](https://github.com/flexsurfer)
+Made by [@flexsurfer](https://github.com/flexsurfer)

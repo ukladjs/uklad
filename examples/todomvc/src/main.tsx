@@ -33,7 +33,9 @@ if (import.meta.hot) {
 if (import.meta.env.DEV) {
   void import('@ukladjs/devtools').then(({ enableDevtools }) => {
     void import('@ukladjs/core/devtools').then(({ createUkladInspector }) => {
-      enableDevtools(createUkladInspector(appRuntime));
+      enableDevtools(createUkladInspector(appRuntime), {
+        operations: { evidence: { stateChanges: 'patches' } },
+      });
     });
   });
 }

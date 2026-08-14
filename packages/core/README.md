@@ -34,7 +34,7 @@ codex plugin marketplace add ukladjs/agent-toolkit
 > Migrate this app's state management to Uklad (@ukladjs/core).
 ```
 
-The plugin ships the Uklad skill (workflow, conventions, progressive references) and the [DevTools](https://github.com/ukladjs/uklad/tree/main/packages/devtools) MCP configuration. From there the agent handles the project itself: installs dependencies, wires dev-only tracing, starts the project-local devtools server, and **verifies its own changes at runtime** instead of re-reading source files — `dispatch_event` returns the state patches an event committed, the effects it emitted, or the error if it failed.
+The plugin ships the Uklad skill (workflow, conventions, progressive references) and the [DevTools](https://github.com/ukladjs/uklad/tree/main/packages/devtools) MCP configuration. From there the agent handles the project itself: installs compatible dependencies, enables development-only operation evidence, starts the project-local DevTools server, and **verifies its own changes at runtime**. On an operation-enabled runtime, `dispatch_and_wait` returns one immutable snapshot for the settled event cascade, including bounded state patches and errors; `dispatch_event` remains the compatibility path for older runtimes.
 
 ### Why agents are effective with Uklad
 
@@ -80,35 +80,62 @@ mkdir -p .cursor && cp node_modules/@ukladjs/core/templates/agent/mcp.json .curs
 ## ✨ The architecture in 30 seconds
 
 ```bash
-npm install @ukladjs/core
+npm install @ukladjs/core@0.2.0
+```
+
+Declare application names once, beside one complete contract:
+
+```ts
+// app/uklad/catalog.ts
+export const stateKeys = { counterValue: 'counterValue' } as const;
+export const appIds = {
+  events: { counterIncrement: 'counter/increment' },
+  subscriptions: { counterValue: 'counter/value' },
+  effects: {},
+  coeffects: {},
+} as const;
+
+// app/uklad/contracts.ts
+import type { UkladContracts } from '@ukladjs/core/vanilla';
+import { appIds, stateKeys } from './catalog';
+
+export interface AppContracts extends UkladContracts {
+  state: { [stateKeys.counterValue]: number };
+  events: { [appIds.events.counterIncrement]: [] };
+  subscriptions: {
+    [appIds.subscriptions.counterValue]: { params: []; result: number };
+  };
+  effects: {};
+  coeffects: {};
+}
 ```
 
 ```tsx
 import { createUkladRuntime } from '@ukladjs/core/vanilla';
-import { UkladProvider, useSubscription } from '@ukladjs/core/react';
+import { createUkladHooks } from '@ukladjs/core/react';
 import { appIds, stateKeys } from './app/uklad/catalog';
+import type { AppContracts } from './app/uklad/contracts';
 
-const runtime = createUkladRuntime({
-  initialState: { counterValue: 0 },
+const runtime = createUkladRuntime<AppContracts>({
+  initialState: { [stateKeys.counterValue]: 0 },
   runtimeId: 'counter-app',
   name: 'Counter app',
 });
 
 // A module owns its registrations and can be disposed safely.
-runtime.registerModule((scope) => {
-  scope.regEvent(appIds.events.counterIncrement, ({ draftState }) => {
+runtime.registerModule((registrar) => {
+  registrar.regEvent(appIds.events.counterIncrement, ({ draftState }) => {
     draftState.counterValue += 1;
   });
-  scope.regRootSub(appIds.subscriptions.counterValue, stateKeys.counterValue);
+  registrar.regRootSub(appIds.subscriptions.counterValue, stateKeys.counterValue);
 });
+
+const { UkladProvider, useRuntime, useSubscription } = createUkladHooks<AppContracts>();
 
 function Counter() {
   const count = useSubscription([appIds.subscriptions.counterValue]);
-  return (
-    <button onClick={() => runtime.dispatch([appIds.events.counterIncrement])}>
-      Count: {count}
-    </button>
-  );
+  const { dispatch } = useRuntime();
+  return <button onClick={() => dispatch([appIds.events.counterIncrement])}>Count: {count}</button>;
 }
 
 function Root() {

@@ -1,16 +1,24 @@
 {
   "name": "@ukladjs/devtools-mcp",
-  "version": "0.1.13",
+  "version": "0.2.0",
   "description": "MCP server for Uklad DevTools - enables AI assistants to inspect traces and dispatch events",
   "author": "flexsurfer",
   "license": "MIT",
+  "homepage": "https://uklad.js.org",
+  "bugs": {
+    "url": "https://github.com/ukladjs/uklad/issues"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ukladjs/uklad.git",
     "directory": "packages/devtools-mcp"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "latest"
   },
   "type": "module",
   "main": "dist/index.js",

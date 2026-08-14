@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "initial-uklad-release",
+  "packages": [
+    {
+      "name": "@ukladjs/core",
+      "path": "packages/core",
+      "version": "0.2.0",
+      "tag": "latest"
+    },
+    {
+      "name": "@ukladjs/devtools",
+      "path": "packages/devtools",
+      "version": "0.2.0",
+      "tag": "latest"
+    },
+    {
+      "name": "@ukladjs/devtools-mcp",
+      "path": "packages/devtools-mcp",
+      "version": "0.2.0",
+      "tag": "latest"
+    },
+    {
+      "name": "@ukladjs/persist",
+      "path": "packages/persist",
+      "version": "0.1.0",
+      "tag": "latest"
+    },
+    {
+      "name": "@ukladjs/tanstack-query",
+      "path": "packages/tanstack-query",
+      "version": "0.1.0",
+      "tag": "latest"
+    }
+  ]
+}

@@ -1,16 +1,24 @@
 {
   "name": "@ukladjs/devtools",
-  "version": "0.1.16",
-  "description": "Developer tools for applications built with the uklad library",
+  "version": "0.2.0",
+  "description": "Developer tools for applications built with Uklad.",
   "author": "flexsurfer",
   "license": "MIT",
+  "homepage": "https://uklad.js.org",
+  "bugs": {
+    "url": "https://github.com/ukladjs/uklad/issues"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ukladjs/uklad.git",
     "directory": "packages/devtools"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "latest"
   },
   "type": "module",
   "main": "dist/client/index.js",

@@ -1,11 +1,11 @@
 # RFC: `@ukladjs/persist` — persistence as Uklad primitives
 
-- **Status:** `0.1.0-beta.1` candidate implemented in [packages/persist](../../packages/persist) (unpublished) and dogfooded in [examples/todomvc](../../examples/todomvc); remaining unchecked release gates below are authoritative
-- **Last updated:** 2026-07-19
-- **Depends on:** the instance-scoped runtime ([instance-scoped-runtime.md](instance-scoped-runtime.md)) plus the generic post-handler/effect guarantees shipping in `@ukladjs/core@0.1.27`; Uklad must be published before this beta
+- **Status:** `0.1.0` release candidate implemented in [packages/persist](../../packages/persist) (unpublished) and dogfooded in [examples/todomvc]; the release gates below are authoritative
+- **Last updated:** 2026-08-10
+- **Depends on:** the instance-scoped runtime ([instance-scoped-runtime.md](instance-scoped-runtime.md)) plus the generic post-handler/effect guarantees shipping in `@ukladjs/core@0.2.0`; Uklad must be published before this initial release
 - **Roadmap slot:** Phase 3, "Persistence + versioned migrations" ([Uklad roadmap](../roadmaps/uklad.md))
 
-Two earlier drafts (method-driven, then dispatch-driven with a whole-state envelope and `partialize`) are superseded. An expert review of the second draft surfaced six findings; rather than patch each one, the scope was reset to the actual problem, which dissolves most of them — the rest are tracked under **Beyond `beta.2`** below.
+Two earlier drafts (method-driven, then dispatch-driven with a whole-state envelope and `partialize`) are superseded. An expert review of the second draft surfaced six findings; rather than patch each one, the scope was reset to the actual problem, which dissolves most of them — the rest are tracked under **Beyond the async release** below.
 
 ## The whole spec
 
@@ -69,9 +69,9 @@ One entry per key: `<prefix>/<percent-encoded-root-key>` → `{"v":<configured-v
 
 ## Boot flows
 
-- **Supported beta flow — browser CSR + sync storage**: attach publishes `'idle'`; `dispatchSync(['uklad-persist/hydrate'])` reads, validates, migrates, overlays roots, and reaches `'hydrated'` or `'failed'` before returning. Applications must hydrate before domain events that may change persisted roots.
+- **Supported initial-release flow — browser CSR + sync storage**: attach publishes `'idle'`; `dispatchSync(['uklad-persist/hydrate'])` reads, validates, migrates, overlays roots, and reaches `'hydrated'` or `'failed'` before returning. Applications must hydrate before domain events that may change persisted roots.
 - **Failure**: read/parse/validate/migrate/deserialize failure publishes `'failed'`, rejects `whenHydrated()`, preserves every original storage entry, and keeps writes closed. `await handle.purge()` removes configured entries and changes the current state into the source for future writes only when every removal succeeds.
-- **Not a beta.1 product claim**: async storage and SSR integration remain experimental/deferred. The generic async path requires the explicit `experimentalAsync: true` opt-in for continued development, but it has no ordering or durability guarantee until `beta.2`.
+- **Not an initial-release product claim**: async storage and SSR integration remain experimental/deferred. The generic async path requires the explicit `experimentalAsync: true` opt-in for continued development, but it has no ordering or durability guarantee until a later minor release.
 
 ## What the idiom buys
 
@@ -97,20 +97,20 @@ Legend: ✅ has it · ⚠️ partial, indirect, or prototype quality · ❌ miss
 | Multiple / nested configurations    | ✅ nested persists                                 | ✅ one middleware/config per store                    | ❌ fixed IDs; one attachment per runtime                | Reject duplicates now; introduce a runtime coordinator only when multiple configs are required |
 | Runtime control API                 | ✅ purge, flush, pause, resume                     | ⚠️ clear, rehydrate, inspect/change options           | ⚠️ hydrate, await, purge, dispose                       | Add durability `flush` with ordered async writes; do not copy mutable options blindly          |
 | Async write ordering and durability | ✅ queued writes + `flush()`                       | ⚠️ async writes, no durability barrier                | ❌ writes are currently fire-and-forget                 | Per-key queue/latch is required before async storage becomes a supported product claim         |
-| SSR hydration control               | ⚠️ manual start / React gate; adapter-dependent    | ✅ lazy storage + `skipHydration`                     | ❌ explicitly outside the beta.1 product contract       | Define CSR/SSR publication semantics and add an example before claiming SSR support            |
+| SSR hydration control               | ⚠️ manual start / React gate; adapter-dependent    | ✅ lazy storage + `skipHydration`                     | ❌ explicitly outside the initial-release product contract | Define CSR/SSR publication semantics and add an example before claiming SSR support            |
 | Corrupt-data and failure policy     | ⚠️ transform/config dependent                      | ⚠️ callback receives errors; default JSON unvalidated | ✅ partial publication + closed writes + purge recovery | Add retry attempts only after the async attempt model is defined                               |
 | Secure storage and redaction        | ⚠️ community adapters/transforms                   | ⚠️ custom storage/transforms                          | ❌                                                      | Add SecureStore only with an opaque/redacted diagnostic design                                 |
 | Store isolation and disposal        | ✅ persistor belongs to one Redux store            | ⚠️ store-local, no persist-specific disposer          | ✅ explicit owner, shared cleanup, safe reattach        | Add multiple configurations only behind a coordinator                                          |
 | Types across the library boundary   | ⚠️ TypeScript definitions                          | ✅ typed middleware and storage                       | ✅ typed keys/transforms + `PersistContracts`           | Retain packed strict-consumer tests as a release gate                                          |
 | DevTools / causal observability     | ⚠️ persistence actions visible in Redux DevTools   | ⚠️ middleware is mostly opaque                        | ✅ final WRITE effect attributed to causing event       | Extend structured durability/error traces with async support                                   |
 
-## Beta delivery plan
+## Initial delivery plan
 
-The beta is split deliberately: ship and dogfood a small sync-safe contract first, then add async only after ordering and durability have defined semantics. Green spike tests prove the public-primitive routing, but beta readiness is determined by the exit criteria below.
+The initial release is deliberately scoped to a small sync-safe contract; async support follows only after ordering and durability have defined semantics. Green spike tests prove the public-primitive routing, but release readiness is determined by the exit criteria below.
 
-> **Beta safety invariant:** no storage error, corrupt snapshot, migration, repeated hydration, disposal, or reordering of async completions may silently overwrite newer persisted data or leave a hydration barrier unsettled.
+> **Initial-release safety invariant:** no storage error, corrupt snapshot, migration, repeated hydration, disposal, or reordering of async completions may silently overwrite newer persisted data or leave a hydration barrier unsettled.
 
-### `0.1.0-beta.1` — sync-safe persistence
+### `0.1.0` — sync-safe persistence
 
 Scope: browser CSR, synchronous localStorage, memory storage for tests, one `persist()` attachment per runtime, configured root keys, synchronous migrations, and per-key serialization transforms. Custom merge, supported async adapters, SSR, SecureStore, and multiple configurations remain outside this release.
 
@@ -120,7 +120,7 @@ Scope: browser CSR, synchronous localStorage, memory storage for tests, one `per
 - [x] Stage every entry through migrate + deserialize and suppress all migration rewrites if any hydration entry failed; rewrites remain post-publication effects.
 - [x] Validate envelope ownership/shape and positive safe-integer versions; reject malformed or future-version entries without backward migration.
 - [x] Make `handle.hydrate()`, `runtime.dispatch([PERSIST_IDS.HYDRATE])`, and `runtime.dispatchSync([PERSIST_IDS.HYDRATE])` produce the same observable transitions and settle causal waiters.
-- [x] Define a beta.1 state machine: attach → `idle`; the first hydrate attempt is terminal; repeated/concurrent hydrate requests are idempotent no-ops; successful purge is explicit recovery into `hydrated`.
+- [x] Define the `0.1.0` state machine: attach → `idle`; the first hydrate attempt is terminal; repeated/concurrent hydrate requests are idempotent no-ops; successful purge is explicit recovery into `hydrated`.
 - [x] Reject duplicate/empty/reserved keys, invalid versions, protocol collisions, and a second attachment before installation.
 - [x] Make handle disposal and runtime disposal share module cleanup; pending work settles, late reads are ignored, and reattach publishes a fresh closed `idle` gate.
 - [x] Preserve no-hydration-echo and write/remove exactly configured roots whose identities changed according to `Object.is`.
@@ -146,18 +146,18 @@ Scope: browser CSR, synchronous localStorage, memory storage for tests, one `per
 - [x] Cover unavailable localStorage, corrupt JSON/deserialize, lossy transforms, migration atomicity, forged internals, queue drops, direct dispatch, duplicate attach, disposal, reattach, purge, and diagnostics in acceptance tests.
 - [x] Build `uklad-persist` after Uklad and before TodoMVC; include package checks, coverage, and tarball dry-run in CI.
 - [x] Test the actual tarball as ESM and CJS with TS6/TS7 and a separately packed Uklad peer.
-- [x] Compile strict contract/key/transform examples against public types and limit README claims to supported beta.1 behavior.
+- [x] Compile strict contract/key/transform examples against public types and limit README claims to supported `0.1.0` behavior.
 
-### `0.1.0-beta.2` — async-safe persistence
+### Future minor — async-safe persistence
 
-This release inherits every `beta.1` gate. AsyncStorage becomes supported only after the following criteria pass; until then the generic async path is experimental.
+This release inherits every `0.1.0` gate. AsyncStorage becomes supported only after the following criteria pass; until then the generic async path is experimental.
 
 #### Hydration state machine
 
 - [ ] Add an explicit attempt/generation ID and define `idle → hydrating → hydrated | failed` transitions.
 - [ ] Permit only one active attempt or define latest-attempt-wins; stale `loaded`/`failed` completions must never publish.
 - [ ] Bind `whenHydrated()` to a defined current/next attempt, support retry after failure, and ignore late completions after disposal.
-- [ ] Choose and document the policy for domain events during hydration. The beta default is an application barrier; custom concurrent merge remains post-beta.
+- [ ] Choose and document the policy for domain events during hydration. The initial-release default is an application barrier; custom concurrent merge remains a later concern.
 
 #### Ordered writes and durability
 
@@ -173,28 +173,28 @@ This release inherits every `beta.1` gate. AsyncStorage becomes supported only a
 - [ ] Ship an AsyncStorage-like adapter and cover read, write, and remove rejection. Optional `multiGet` remains additive.
 - [ ] Deterministically test reversed write completion, reversed hydration completion, mutation during hydration, failure in the middle of a queue, dispose during read/write, purge with pending writes, and `flush()` racing a new write.
 - [ ] Verify two runtimes with different adapters/prefixes remain isolated.
-- [ ] Dogfood the async route in a small React Native or controlled headless example before publishing `beta.2`.
+- [ ] Dogfood the async route in a small React Native or controlled headless example before publishing the async-capable release.
 
-## Beyond `beta.2`
+## Beyond the async release
 
-| Deferred feature                    | Why it is not a beta prerequisite                                                                                    |
+| Deferred feature                    | Why it is not an initial-release prerequisite                                                                        |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | Custom per-key merge                | Additive once the default application-barrier publication model is proven                                            |
 | SecureStore + redacted diagnostics  | Requires an opaque staging and observability design; persisted secret values must never appear in traces or errors   |
-| Full SSR integration + React gate   | Sync beta is CSR-only; async beta defines storage semantics first                                                    |
-| Multiple configs per runtime        | Beta rejects duplicates; add a runtime coordinator when a real second-config use case exists                         |
-| `restoreState` coordination         | Document as unsupported during beta persistence activity, then define attempt/write-gate interaction from real usage |
+| Full SSR integration + React gate   | The sync initial release is CSR-only; async semantics come first                                                      |
+| Multiple configs per runtime        | The initial release rejects duplicates; add a runtime coordinator when a real second-config use case exists           |
+| `restoreState` coordination         | Document as unsupported during initial-release persistence activity, then define attempt/write-gate interaction from real usage |
 | Pause/resume and mutable options    | Not needed for correctness; avoid copying competitor APIs without a demonstrated Uklad use case                     |
 | Throttling and background lifecycle | Additive over the ordered per-key queue after durability is correct                                                  |
 | Adapter batching (`multiGet`)       | Performance optimization that must not shape the minimum adapter contract                                            |
 
-## Prototype findings and beta hardening
+## Prototype findings and release hardening
 
-The spike graduated into the package: its scenarios and beta regressions live in [packages/persist/src/tests/persist.test.ts](../../packages/persist/src/tests/persist.test.ts), including the Map round trip discovered by TodoMVC. Persistence itself still uses only public Uklad APIs. Beta hardening added generic Uklad guarantees—not persistence hooks—for read-only post-handler `newState`, append-only interceptor effects, module cleanup ordering, and final-effect trace capture.
+The spike graduated into the package: its scenarios and release regressions live in [packages/persist/src/tests/persist.test.ts](../../packages/persist/src/tests/persist.test.ts), including the Map round trip discovered by TodoMVC. Persistence itself still uses only public Uklad APIs. Release hardening added generic Uklad guarantees—not persistence hooks—for read-only post-handler `newState`, append-only interceptor effects, module cleanup ordering, and final-effect trace capture.
 
 1. Happy-path sync route: one synchronous `dispatchSync` hydrates, overlays roots, migrates, and re-stores migrated keys via post-commit write effects — zero awaits.
 2. Per-key writes: changing one configured key writes exactly one storage entry; unconfigured keys never write.
-3. Experimental async read route with the gate: a pre-hydration change produces no write, so the stored snapshot survives the read window. This does not prove async write completion ordering and is not a beta.1 support claim.
+3. Experimental async read route with the gate: a pre-hydration change produces no write, so the stored snapshot survives the read window. This does not prove async write completion ordering and is not a `0.1.0` support claim.
 4. Thrown sync reads and rejected experimental async reads both set failed status, reject `whenHydrated()`, report sanitized diagnostics, and keep writes gated.
 5. Hydration appears as ordinary events, and the final trace for the causing domain event contains the exact interceptor-contributed WRITE effect.
 6. Applications use the explicit runtime API (`runtime.registerModule()` and
@@ -202,7 +202,7 @@ The spike graduated into the package: its scenarios and beta regressions live in
 7. Handle/runtime disposal share cleanup; pending barriers reject, late reads are ignored, duplicate attachment is rejected, and reattach starts with a closed idle gate.
 8. Hydration-echo regression: hydrating stored values performs zero writes — the bug the watch-based writer shipped with (see Dogfood notes) cannot recur silently.
 
-Calibration: the suite now establishes beta.1 sync failure atomicity, lifecycle parity, direct-dispatch barriers, recovery, trace finalization, strict typing, and separately packed ESM/CJS consumption with TS6/TS7. It deliberately does not establish async write ordering/durability or SSR integration; the checklists above remain authoritative.
+Calibration: the suite now establishes `0.1.0` sync failure atomicity, lifecycle parity, direct-dispatch barriers, recovery, trace finalization, strict typing, and separately packed ESM/CJS consumption with TS6/TS7. It deliberately does not establish async write ordering/durability or SSR integration; the checklists above remain authoritative.
 
 ## Dogfood notes (TodoMVC, 2026-07-18)
 
@@ -212,8 +212,8 @@ Calibration: the suite now establishes beta.1 sync failure atomicity, lifecycle 
 - Verified in-browser: add todo → per-key envelope written; reload → hydrated before first paint; toggle done → stored with zero storage code in the handler.
 - **The watch-based writer shipped with an echo bug**, spotted in the trace log on the first real boot with stored data: hydration changed `todos`, the value watch fired, and a `store` event wrote the just-read snapshot straight back. Value watches lack causality — they see _that_ a key changed, never _why_. The writer became a global interceptor (event identity → hydration skipped by construction), which also moved writes onto the causing event's trace and dropped the extra `store` event and the "keys must be sub ids" requirement.
 
-## Beta.1 decisions
+## `0.1.0` decisions
 
-1. **Hydrate before domain events.** Writes are closed in `idle`, so a pre-hydration root change is not persisted; the one hydration attempt may then replace that root with its stored value. Beta.1 applications must hydrate before first render and before events that change configured roots. There is no hidden reconcile write.
+1. **Hydrate before domain events.** Writes are closed in `idle`, so a pre-hydration root change is not persisted; the one hydration attempt may then replace that root with its stored value. `0.1.0` applications must hydrate before first render and before events that change configured roots. There is no hidden reconcile write.
 2. **Storage namespaces are explicit.** Root-key components are percent-encoded. Runtimes intended to be isolated on the same storage backend must use distinct non-empty prefixes; using the same prefix deliberately addresses the same entries.
 3. **`restoreState()` is unsupported while persistence is attached.** Restore bypasses events and can forge/remove observable status. Dispose persistence first, restore at a legal runtime boundary, then reattach and hydrate.

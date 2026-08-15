@@ -2,7 +2,7 @@
 
 All notable public package changes are recorded here. Packages version independently; each release entry lists the complete coordinated set.
 
-## `@ukladjs/core@0.2.1` — unreleased
+## `@ukladjs/core@0.2.1`
 
 - Add the project-local `uklad-agent` binary with an idempotent `init` command that creates, previews, updates, or removes a managed Uklad router in `AGENTS.md` without overwriting existing project guidance.
 

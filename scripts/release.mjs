@@ -20,8 +20,25 @@ function packageManifest(entry) {
   return readJson(path.join(entry.path, 'package.json'));
 }
 
+function caretRangeIncludes(range, version) {
+  const rangeMatch = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(range);
+  const versionMatch = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  if (!rangeMatch || !versionMatch) return false;
+
+  const [, rangeMajor, rangeMinor, rangePatch] = rangeMatch.map(Number);
+  const [, versionMajor, versionMinor, versionPatch] = versionMatch.map(Number);
+  const atOrAboveMinimum =
+    versionMajor > rangeMajor ||
+    (versionMajor === rangeMajor && versionMinor > rangeMinor) ||
+    (versionMajor === rangeMajor && versionMinor === rangeMinor && versionPatch >= rangePatch);
+  if (!atOrAboveMinimum) return false;
+  if (rangeMajor > 0) return versionMajor === rangeMajor;
+  if (rangeMinor > 0) return versionMajor === 0 && versionMinor === rangeMinor;
+  return versionMajor === 0 && versionMinor === 0 && versionPatch === rangePatch;
+}
+
 function validateRelease() {
-  assert(release.schemaVersion === 1, 'Unsupported release manifest schema');
+  assert(release.schemaVersion === 2, 'Unsupported release manifest schema');
   assert(typeof release.id === 'string' && release.id.length > 0, 'Release id is required');
   assert(Array.isArray(release.packages) && release.packages.length > 0, 'Release packages are required');
 
@@ -29,6 +46,7 @@ function validateRelease() {
   for (const entry of release.packages) {
     assert(!declaredNames.has(entry.name), `Duplicate release package ${entry.name}`);
     declaredNames.add(entry.name);
+    assert(typeof entry.publish === 'boolean', `${entry.name} publish selection is required`);
 
     const manifest = packageManifest(entry);
     assert(manifest.name === entry.name, `${entry.path} name does not match release.json`);
@@ -72,14 +90,16 @@ function validateRelease() {
     JSON.stringify([...declaredNames].sort()) === JSON.stringify(publicWorkspacePackages),
     'release.json must include every public workspace package exactly once',
   );
+  assert(release.packages.some((entry) => entry.publish), 'At least one release package must be selected');
 
   const coreVersion = release.packages.find((entry) => entry.name === '@ukladjs/core')?.version;
   const mcpVersion = release.packages.find((entry) => entry.name === '@ukladjs/devtools-mcp')?.version;
   for (const integrationName of ['@ukladjs/persist', '@ukladjs/tanstack-query']) {
     const integration = release.packages.find((entry) => entry.name === integrationName);
+    const corePeer = packageManifest(integration).peerDependencies?.['@ukladjs/core'];
     assert(
-      packageManifest(integration).peerDependencies?.['@ukladjs/core'] === `^${coreVersion}`,
-      `${integrationName} must peer-depend on the release core version`,
+      caretRangeIncludes(corePeer, coreVersion),
+      `${integrationName} peer range ${corePeer} must accept @ukladjs/core@${coreVersion}`,
     );
   }
 
@@ -118,7 +138,7 @@ validateRelease();
 if (command === 'check') {
   console.log(`release metadata ok: ${release.id}`);
 } else if (command === 'pack') {
-  for (const entry of release.packages) {
+  for (const entry of release.packages.filter((candidate) => candidate.publish)) {
     runNpm(['pack', '--dry-run', '--json', `./${entry.path}`]);
   }
   console.log(`release tarballs ok: ${release.id}`);
@@ -128,7 +148,7 @@ if (command === 'check') {
     process.env.UKLAD_RELEASE_CONFIRM === release.id,
     `Set UKLAD_RELEASE_CONFIRM=${release.id} to publish`,
   );
-  for (const entry of release.packages) {
+  for (const entry of release.packages.filter((candidate) => candidate.publish)) {
     const args = ['publish', `./${entry.path}`, '--access', 'public', '--tag', entry.tag];
     runNpm(args);
   }

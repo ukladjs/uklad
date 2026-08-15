@@ -2,7 +2,11 @@
 
 All notable public package changes are recorded here. Packages version independently; each release entry lists the complete coordinated set.
 
-## Initial `@ukladjs` release — unreleased
+## `@ukladjs/core@0.2.1` — unreleased
+
+- Add the project-local `uklad-agent` binary with an idempotent `init` command that creates, previews, updates, or removes a managed Uklad router in `AGENTS.md` without overwriting existing project guidance.
+
+## Initial `@ukladjs` release
 
 This is the first release under the `@ukladjs` scope. The core, DevTools, and MCP packages align on the `0.2.0` API milestone; the intentionally narrow persistence and TanStack Query integrations begin at `0.1.0`. All packages remain pre-1.0.
 

@@ -43,14 +43,27 @@ The plugin ships the Uklad skill (workflow, conventions, progressive references)
 - **The running app is observable.** Through the DevTools MCP an agent checks app health, lists handlers, reads state by path, watches live subscription values, and inspects traces of everything that happened — including what it didn't initiate.
 - **No browser required.** The state layer is React-free: a headless entry runs the full app under Node, so autonomous agent loops and CI drive the real thing.
 
-### Without the plugin
+### Add the project router
 
-Copy the tiny router files into your app — they point agents at Uklad conventions without bloating context:
+After installing `@ukladjs/core`, add a short managed Uklad section to the nearest package-level `AGENTS.md`:
 
 ```bash
-cp node_modules/@ukladjs/core/templates/agent/AGENTS.md ./AGENTS.md
-cp node_modules/@ukladjs/core/templates/agent/CLAUDE.md ./CLAUDE.md
+npx --no-install uklad-agent init
 ```
+
+The command requires a direct `@ukladjs/core` dependency, preserves all existing project guidance, and owns only the text between `<!-- uklad-agent:start -->` and `<!-- uklad-agent:end -->`. It is safe to rerun when Uklad guidance changes.
+
+Useful variants:
+
+```bash
+npx --no-install uklad-agent init --dry-run
+npx --no-install uklad-agent init --root packages/my-app
+npx --no-install uklad-agent init --remove
+```
+
+The generated router tells agents that the project uses Uklad, directs compatible agents to the Uklad skill, and points other agents at the detailed fallback shipped in `node_modules/@ukladjs/core/templates/agent/AGENTS.md`. In a monorepo, run it from the consuming package or pass `--root`; this keeps Uklad guidance scoped to the code it governs.
+
+Claude Code users can include the same router by adding `@AGENTS.md` to their existing `CLAUDE.md`. A small starter file remains available at `node_modules/@ukladjs/core/templates/agent/CLAUDE.md`.
 
 For the runtime loop, the project needs a local DevTools script (the plugin's setup skill creates it when missing):
 
@@ -80,7 +93,7 @@ mkdir -p .cursor && cp node_modules/@ukladjs/core/templates/agent/mcp.json .curs
 ## ✨ The architecture in 30 seconds
 
 ```bash
-npm install @ukladjs/core@0.2.0
+npm install @ukladjs/core@0.2.1
 ```
 
 Declare application names once, beside one complete contract:

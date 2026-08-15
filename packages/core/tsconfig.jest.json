@@ -5,7 +5,7 @@
     "declaration": false,
     "declarationMap": false,
     "isolatedDeclarations": false,
-    "types": ["jest"]
+    "types": ["jest", "node"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "tests/unit/**/*.ts", "tests/unit/**/*.tsx"],
   "exclude": []

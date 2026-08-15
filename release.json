@@ -1,36 +1,41 @@
 {
-  "schemaVersion": 1,
-  "id": "initial-uklad-release",
+  "schemaVersion": 2,
+  "id": "core-agent-router-0.2.1",
   "packages": [
     {
       "name": "@ukladjs/core",
       "path": "packages/core",
-      "version": "0.2.0",
-      "tag": "latest"
+      "version": "0.2.1",
+      "tag": "latest",
+      "publish": true
     },
     {
       "name": "@ukladjs/devtools",
       "path": "packages/devtools",
       "version": "0.2.0",
-      "tag": "latest"
+      "tag": "latest",
+      "publish": false
     },
     {
       "name": "@ukladjs/devtools-mcp",
       "path": "packages/devtools-mcp",
       "version": "0.2.0",
-      "tag": "latest"
+      "tag": "latest",
+      "publish": false
     },
     {
       "name": "@ukladjs/persist",
       "path": "packages/persist",
       "version": "0.1.0",
-      "tag": "latest"
+      "tag": "latest",
+      "publish": false
     },
     {
       "name": "@ukladjs/tanstack-query",
       "path": "packages/tanstack-query",
       "version": "0.1.0",
-      "tag": "latest"
+      "tag": "latest",
+      "publish": false
     }
   ]
 }

@@ -97,6 +97,9 @@ describe('Package Consumption Tests', () => {
       expect(fs.existsSync(path.join(distDir, `${entrypoint}.d.mts`))).toBe(true);
       expect(fs.existsSync(path.join(distDir, `${entrypoint}.d.cts`))).toBe(true);
     }
+    expect(fs.readFileSync(path.join(distDir, 'agent-cli.mjs'), 'utf8')).toMatch(
+      /^#!\/usr\/bin\/env node/,
+    );
   });
 
   test('Package.json has correct exports', () => {
@@ -106,6 +109,7 @@ describe('Package Consumption Tests', () => {
     expect(packageJson.main).toBe('dist/index.cjs');
     expect(packageJson.module).toBe('dist/index.mjs');
     expect(packageJson.types).toBe('dist/index.d.mts');
+    expect(packageJson.bin).toEqual({ 'uklad-agent': 'dist/agent-cli.mjs' });
     expect(packageJson.exports).toEqual({
       '.': {
         import: {

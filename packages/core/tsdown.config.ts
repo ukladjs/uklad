@@ -8,9 +8,13 @@ export default defineConfig({
     devtools: 'src/devtools.ts',
     testing: 'src/testing.ts',
     internal: 'src/internal.ts',
+    'agent-cli': 'src/agent-cli.ts',
   },
   format: ['esm', 'cjs'],
   platform: 'neutral',
+  deps: {
+    neverBundle: [/^node:/],
+  },
   target: 'es2022',
   fixedExtension: true,
   clean: true,

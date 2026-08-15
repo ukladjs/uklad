@@ -49,10 +49,10 @@ A full worked scenario — one task walked through the agent's loop (orient → 
 - [ ] **`create-uklad-app` scaffolder — make the convention exist in new projects.**
       `uklad-agent init` (below) retrofits agent config into an _existing_ project; nothing creates the project itself. The entire retrieval strategy — `*-ids.ts` as index, `APP_MAP.md`, exact-match grep, MCP-first — assumes a file convention that an agent freestyling `npm create vite` + uklad will not invent on its own. Ship a template (`npm create uklad-app`, or a flag on `uklad-agent init`) that pins it: `state.ts` / `events.ts` / `subs.ts` / `effects.ts` / `*-ids.ts`, typed payload-map augmentation stubs, `enableDevtools(createUkladInspector(runtime))` wired dev-only through the explicit DevTools entrypoint, CLAUDE.md/AGENTS.md router files, MCP config, and a `uklad-map` script entry. For the "agents build new projects" goal this is the true P0: every other index/tool item only applies to projects shaped like this.
 
-- [ ] **Add `npx uklad-agent init`.**
-      A bootstrap CLI should detect the host project and create/update the small router files plus local config:
-      `npx uklad-agent init --codex --claude --cursor --copilot`.
-      It should optionally add `AGENTS.md`, `CLAUDE.md`, Uklad Agent Toolkit plugin references, `.codex/config.toml` MCP config, Claude/Cursor MCP config, and a script entry for `uklad-map`. Default behavior should be conservative: never overwrite existing guidance without showing a diff or writing a clearly marked Uklad section.
+- [x] **Add safe `uklad-agent init` support for `AGENTS.md`.**
+      `@ukladjs/core` exposes a project-local binary that finds the nearest package, verifies its direct Uklad dependency, and creates or updates only a clearly marked Uklad router section. It preserves existing instructions, is idempotent, supports `--dry-run`, `--remove`, and an explicit monorepo `--root`, and refuses malformed markers or unmanaged Uklad guidance instead of overwriting them.
+- [ ] **Extend `uklad-agent init` to additional agent clients and local runtime config.**
+      Add opt-in `CLAUDE.md`, Codex, Cursor, and Copilot router/config support plus project-local DevTools and `uklad-map` scripts. Every format needs the same conservative merge behavior; never replace existing project guidance or client configuration wholesale.
 
 ### P2 — Guardrails and drift checks
 

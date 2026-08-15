@@ -91,8 +91,9 @@ structured runtime evidence instead of guessing from source text or logs.
 
 ## Workspaces
 
-- [`@ukladjs/core@0.2.0`](packages/core) — the experimental core runtime,
-  React bindings, vanilla/headless APIs, tests, benchmarks, and agent templates.
+- [`@ukladjs/core@0.2.1`](packages/core) — the core runtime,
+  React bindings, vanilla/headless APIs, tests, benchmarks, agent templates,
+  and the safe `uklad-agent init` project router.
 - [`@ukladjs/persist@0.1.0`](packages/persist) — intentionally narrow
   synchronous persistence built on the public runtime APIs.
 - [`@ukladjs/tanstack-query@0.1.0`](packages/tanstack-query) — headless TanStack Query integration
@@ -100,7 +101,7 @@ structured runtime evidence instead of guessing from source text or logs.
 - [`@ukladjs/devtools@0.2.0`](packages/devtools) — DevTools SDK, server,
   CLI, security boundaries, and package assembly.
 - [`@ukladjs/devtools-mcp@0.2.0`](packages/devtools-mcp) — the
-  experimental MCP bridge for inspection and controlled development actions.
+  MCP bridge for inspection and controlled development actions.
 - [`@ukladjs/devtools-ui`](packages/devtools-ui) — the private
   dashboard source assembled into the DevTools package.
 - [`TodoMVC (persist)`](examples/todomvc),
@@ -116,7 +117,7 @@ publishing procedure.
 ## Install
 
 ```sh
-npm install @ukladjs/core@0.2.0
+npm install @ukladjs/core@0.2.1
 ```
 
 Install the optional integrations from the coordinated initial release:

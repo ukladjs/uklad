@@ -1,19 +1,19 @@
 # Stability and versioning
 
 Uklad is a rebrand of Reflex. The previously published
-`@flexsurfer/reflex*` packages remain available; the package set below is the
-first release under the `@ukladjs` scope. Core, DevTools, and MCP align on the
-`0.2.0` API milestone, while the integrations start their own `0.1.0` lines.
+`@flexsurfer/reflex*` packages remain available; the package set below tracks
+the current `@ukladjs` release line. Core, DevTools, and MCP share the `0.2` API
+milestone, while the integrations have their own `0.1` lines.
 
-## Initial release set
+## Current release set
 
-| Package                   | Version        | npm tag  | Stability                          |
-| ------------------------- | -------------- | -------- | ---------------------------------- |
-| `@ukladjs/core`           | `0.2.0` | `latest` | Experimental 0.x                   |
-| `@ukladjs/devtools`       | `0.2.0` | `latest` | Experimental 0.x, development only |
-| `@ukladjs/devtools-mcp`   | `0.2.0` | `latest` | Experimental 0.x, development only |
+| Package                   | Version | npm tag  | Stability                               |
+| ------------------------- | ------- | -------- | --------------------------------------- |
+| `@ukladjs/core`           | `0.2.1` | `latest` | Experimental 0.x                        |
+| `@ukladjs/devtools`       | `0.2.0` | `latest` | Experimental 0.x, development only      |
+| `@ukladjs/devtools-mcp`   | `0.2.0` | `latest` | Experimental 0.x, development only      |
 | `@ukladjs/persist`        | `0.1.0` | `latest` | Browser CSR synchronous initial release |
-| `@ukladjs/tanstack-query` | `0.1.0` | `latest` | TanStack Query v5 initial release  |
+| `@ukladjs/tanstack-query` | `0.1.0` | `latest` | TanStack Query v5 initial release       |
 
 [`release.json`](../../release.json) is the machine-readable source for this
 set. Packages version independently; a coordinated release does not require

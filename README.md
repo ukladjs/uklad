@@ -91,9 +91,9 @@ structured runtime evidence instead of guessing from source text or logs.
 
 ## Workspaces
 
-- [`@ukladjs/core@0.2.1`](packages/core) — the core runtime,
-  React bindings, vanilla/headless APIs, tests, benchmarks, agent templates,
-  and the safe `uklad-agent init` project router.
+- [`@ukladjs/core@0.2.2`](packages/core) — the core runtime,
+  React bindings, vanilla/headless APIs, browserless E2E scenarios, tests,
+  benchmarks, agent templates, and the safe `uklad-agent init` project router.
 - [`@ukladjs/persist@0.1.0`](packages/persist) — intentionally narrow
   synchronous persistence built on the public runtime APIs.
 - [`@ukladjs/tanstack-query@0.1.0`](packages/tanstack-query) — headless TanStack Query integration
@@ -117,7 +117,7 @@ publishing procedure.
 ## Install
 
 ```sh
-npm install @ukladjs/core@0.2.1
+npm install @ukladjs/core@0.2.2
 ```
 
 Install the optional integrations from the coordinated initial release:

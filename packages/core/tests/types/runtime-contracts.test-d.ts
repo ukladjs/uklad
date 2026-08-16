@@ -1,6 +1,6 @@
 import { createUkladHooks } from '../../src/react';
 import { createUkladRuntime } from '../../src/vanilla';
-import { createUkladTestHarness } from '../../src/testing';
+import { createUkladHeadlessScenario, createUkladTestHarness } from '../../src/testing';
 import type { UkladContracts } from '../../src/vanilla';
 
 interface CounterContracts extends UkladContracts {
@@ -420,6 +420,26 @@ const count: number = testHarness.getSubscriptionValue(['count']);
 const scaled: number = testHarness.getSubscriptionValue(['scaled', 3]);
 void count;
 void scaled;
+
+const headlessScenario = createUkladHeadlessScenario(runtime);
+const counterView = headlessScenario.mountView('counter', {
+  count: ['count'],
+  scaled: ['scaled', 3],
+});
+const counterViewValues: { readonly count: number; readonly scaled: number } =
+  counterView.current();
+const headlessCount: number = counterView.value('count');
+const headlessScaled: number = counterView.value('scaled');
+void counterViewValues;
+void headlessCount;
+void headlessScaled;
+headlessScenario.dispatch(['increment', 1]);
+// @ts-expect-error Headless scenarios retain the runtime's event contract.
+headlessScenario.dispatch(['increment', 'one']);
+// @ts-expect-error Headless views retain the runtime's subscription contract.
+headlessScenario.mountView('counter', { missing: ['missing'] });
+void headlessScenario.settle();
+void headlessScenario.dispose();
 
 // @ts-expect-error Event payloads are checked per runtime.
 runtime.dispatch(['increment', 'two']);

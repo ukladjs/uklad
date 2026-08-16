@@ -2,6 +2,10 @@
 
 All notable public package changes are recorded here. Packages version independently; each release entry lists the complete coordinated set.
 
+## `@ukladjs/core@0.2.2` — unreleased
+
+- Add `createUkladHeadlessScenario` to `@ukladjs/core/testing` for browserless, application-semantic E2E tests. Scenarios mount named subscription-backed views, dispatch standard typed events, await normal queue/subscription settlement, assert observed view values, and release views and their isolated runtime deterministically.
+
 ## `@ukladjs/core@0.2.1`
 
 - Add the project-local `uklad-agent` binary with an idempotent `init` command that creates, previews, updates, or removes a managed Uklad router in `AGENTS.md` without overwriting existing project guidance.

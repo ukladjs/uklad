@@ -25,6 +25,7 @@ runtime.registerModule((registrar) => {
 runtime.dispatch(['package/cjs']);
 const inspector: UkladInspector = ukladDevtools.createUkladInspector(runtime);
 const testHarness = ukladTesting.createUkladTestHarness(runtime);
+const headlessScenario = ukladTesting.createUkladHeadlessScenario(runtime);
 const runtimeState: unknown = testHarness.getState();
 const snapshot: UkladInspectorSnapshot = inspector.getSnapshot();
 const removeTraceListener = inspector.subscribeTraces(() => {});
@@ -36,6 +37,7 @@ void namedOptions;
 void trace;
 void snapshot;
 void testHarness.getEventHandler('package/cjs');
+void headlessScenario.mountView('package', { value: ['package/cjs'] });
 void runtimeState;
 void ukladReact.UkladProvider;
 void ukladReact.useUkladRuntime;

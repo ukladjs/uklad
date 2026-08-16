@@ -2,14 +2,14 @@
 
 Uklad is a rebrand of Reflex. The previously published
 `@flexsurfer/reflex*` packages remain available; the package set below tracks
-the current `@ukladjs` release line. Core, DevTools, and MCP share the `0.2` API
-milestone, while the integrations have their own `0.1` lines.
+the current `@ukladjs` release line. Core, DevTools, and MCP share the `0.2`
+API milestone, while the integrations have their own `0.1` lines.
 
 ## Current release set
 
 | Package                   | Version | npm tag  | Stability                               |
 | ------------------------- | ------- | -------- | --------------------------------------- |
-| `@ukladjs/core`           | `0.2.1` | `latest` | Experimental 0.x                        |
+| `@ukladjs/core`           | `0.2.2` | `latest` | Experimental 0.x                        |
 | `@ukladjs/devtools`       | `0.2.0` | `latest` | Experimental 0.x, development only      |
 | `@ukladjs/devtools-mcp`   | `0.2.0` | `latest` | Experimental 0.x, development only      |
 | `@ukladjs/persist`        | `0.1.0` | `latest` | Browser CSR synchronous initial release |

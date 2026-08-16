@@ -93,7 +93,7 @@ mkdir -p .cursor && cp node_modules/@ukladjs/core/templates/agent/mcp.json .curs
 ## ✨ The architecture in 30 seconds
 
 ```bash
-npm install @ukladjs/core@0.2.1
+npm install @ukladjs/core@0.2.2
 ```
 
 Declare application names once, beside one complete contract:
@@ -169,6 +169,16 @@ receive a dispatch/subscription-only client facade. Registration, persistence,
 and lifecycle work go through the runtime owner; inspection and focused test
 access require the explicit `@ukladjs/core/devtools` and
 `@ukladjs/core/testing` subpaths.
+
+### Browserless E2E scenarios
+
+`@ukladjs/core/testing` also exports `createUkladHeadlessScenario(runtime)` for
+application-semantic E2E tests. Mount named subscription-backed views with
+`app.mountView`, drive them through standard `app.dispatch` calls, await
+`app.settle()`, and assert the observed view values before unmounting or
+disposing the scenario. It exercises the real event and subscription lifecycle
+without requiring a browser; retain a small browser smoke test for DOM wiring,
+accessibility, and layout.
 
 ### Subscription runtime
 

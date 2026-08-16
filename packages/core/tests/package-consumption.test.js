@@ -221,7 +221,7 @@ describe('Package Consumption Tests', () => {
       reactKeys: expectedReactRuntimeExports,
       sameProvider: true,
       devtoolsKeys: ['createUkladInspector'],
-      testingKeys: ['createUkladTestHarness'],
+      testingKeys: ['createUkladHeadlessScenario', 'createUkladTestHarness'],
     });
   });
 
@@ -246,7 +246,10 @@ describe('Package Consumption Tests', () => {
     expect(Object.keys(react).sort()).toEqual(expectedReactRuntimeExports);
     expect(root.UkladProvider).toBe(react.UkladProvider);
     expect(Object.keys(devtools).sort()).toEqual(['createUkladInspector']);
-    expect(Object.keys(testing).sort()).toEqual(['createUkladTestHarness']);
+    expect(Object.keys(testing).sort()).toEqual([
+      'createUkladHeadlessScenario',
+      'createUkladTestHarness',
+    ]);
   });
 
   test('Node with unset NODE_ENV warns when CJS and ESM initialize separate runtimes', () => {

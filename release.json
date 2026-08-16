@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "core-agent-router-0.2.1",
+  "id": "core-headless-e2e-0.2.2",
   "packages": [
     {
       "name": "@ukladjs/core",
       "path": "packages/core",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "tag": "latest",
       "publish": true
     },

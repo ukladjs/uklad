@@ -10,7 +10,7 @@
  * wired into prepublishOnly after the build step.
  */
 import { createUkladRuntime } from '@ukladjs/core';
-import { createUkladTestHarness } from '@ukladjs/core/testing';
+import { createUkladHeadlessScenario, createUkladTestHarness } from '@ukladjs/core/testing';
 import type {
   ContractNamedEventRegistrationOptions,
   EventRegistrationOptions,
@@ -57,6 +57,7 @@ interface NamedContracts extends UkladContracts {
 
 const runtime = createUkladRuntime<TestContracts>({ initialState: { todos: [] as Todo[] } });
 const testHarness = createUkladTestHarness(runtime);
+const headlessScenario = createUkladHeadlessScenario(runtime);
 runtime.dispatch(['todos/add', 'buy milk']);
 runtime.dispatch(['app/init']);
 // @ts-expect-error unknown event id
@@ -154,7 +155,10 @@ runtime.registerModule((registrar) => {
 
 const todos = testHarness.getSubscriptionValue(['todos/all']);
 const _check: Todo[] = todos;
+const headlessTodos = headlessScenario.mountView('todos', { todos: ['todos/all'] });
+const _headlessCheck: Todo[] = headlessTodos.value('todos');
 void _check;
+void _headlessCheck;
 // @ts-expect-error unknown sub id
 useSubscription(['todos/nope']);
 

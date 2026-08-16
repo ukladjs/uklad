@@ -1,6 +1,6 @@
 import { createUkladRuntime } from '@ukladjs/core/vanilla';
 import { createUkladInspector } from '@ukladjs/core/devtools';
-import { createUkladTestHarness } from '@ukladjs/core/testing';
+import { createUkladHeadlessScenario, createUkladTestHarness } from '@ukladjs/core/testing';
 import {
   UkladProvider,
   createUkladHooks,
@@ -29,6 +29,7 @@ runtime.registerModule((registrar) => {
 runtime.dispatch(['package/esm']);
 const inspector: UkladInspector = createUkladInspector(runtime);
 const testHarness = createUkladTestHarness(runtime);
+const headlessScenario = createUkladHeadlessScenario(runtime);
 const runtimeState: unknown = testHarness.getState();
 const snapshot: UkladInspectorSnapshot = inspector.getSnapshot();
 const removeTraceListener = inspector.subscribeTraces(() => {});
@@ -40,6 +41,7 @@ void namedOptions;
 void trace;
 void snapshot;
 void testHarness.getEventHandler('package/esm');
+void headlessScenario.mountView('package', { value: ['package/esm'] });
 void runtimeState;
 void UkladProvider;
 void useUkladRuntime;

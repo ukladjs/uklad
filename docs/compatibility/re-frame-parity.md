@@ -17,7 +17,7 @@ every mechanism should survive 1.0.
 
 ## At a glance
 
-| Re-frame goal                    | Current Uklad mechanism                                                    | Main benefit                                                | Main cost                                                                        | Direction                               |
+| Re-frame goal                    | Current Uklad mechanism                                                     | Main benefit                                                | Main cost                                                                        | Direction                               |
 | -------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------- |
 | One immutable application state  | One state per runtime, updated through Immer                                | Ergonomic immutable transitions and structural sharing      | Proxy/value-model constraints and update cost                                    | **Keep, tune**                          |
 | Reactive derived data            | A custom cached subscription DAG                                            | Coherent, selective recomputation                           | Considerable lifecycle and cache complexity                                      | **Keep, measure**                       |
@@ -287,8 +287,9 @@ every mechanism should survive 1.0.
 
 1. **Close correctness gaps:** enforce safe subscription parameters and make
    every asynchronous event ingress take ownership consistently.
-2. **Use the pre-1.0 window:** decide whether vectors, the queue, generic
-   interceptors, and dual state heads are stable concepts or a legacy executor.
+2. **Evolve compatibly before 1.0:** improve vectors, the queue, generic
+   interceptors, and dual state heads additively or behind the documented public
+   contract; defer an unavoidable break to a future major release.
 3. **Strengthen external work:** add enforceable effect/coeffect contracts and
    supervised async completion without weakening effects-as-data.
 4. **Measure before changing defaults:** benchmark Immer, structured cloning,

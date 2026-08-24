@@ -1,7 +1,7 @@
 {
   "name": "@ukladjs/devtools",
   "version": "0.2.0",
-  "description": "Developer tools for applications built with Uklad.",
+  "description": "Production-confidence DevTools for Uklad: traces, state, subscriptions, secure runtime inspection, and capability-gated agent verification.",
   "author": "flexsurfer",
   "license": "MIT",
   "homepage": "https://uklad.js.org",
@@ -77,6 +77,10 @@
     "debugging",
     "react",
     "react-native",
-    "uklad"
+    "uklad",
+    "ai-agent",
+    "agentic-development",
+    "mcp",
+    "runtime-verification"
   ]
 }

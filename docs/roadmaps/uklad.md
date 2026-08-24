@@ -1,15 +1,25 @@
 # Roadmap
 
-> **Positioning:** Uklad is the deterministic application runtime for agentic React and React Native apps — observable and verifiable by humans and agents.
+> **Positioning:** Uklad is the production-ready deterministic application
+> runtime for agentic React and React Native apps — observable and verifiable
+> by humans and agents.
 
-The runtime core is credible: concurrent-safe React bindings, a memoized subscription DAG, effects-as-data, tracing, a headless runtime, and an MCP verification loop. The bottleneck is productization, proof, and distribution — not additional state-management surface area. What's missing is everything that lets an architecture or security team say yes, and evidence that the AI-agent advantage is real rather than claimed.
+The runtime core is production-ready within the published support boundary:
+concurrent-safe React bindings, a memoized subscription DAG, effects-as-data,
+tracing, a headless runtime, and an MCP verification loop. The next bottleneck
+is broader proof, distribution, and advanced agent operations — not another
+state-management surface area. Open roadmap work expands the supported product;
+it does not revoke the current production contract.
 
 Two clocks govern prioritization:
 
 1. **The evidence clock.** There is no widely cited public benchmark for agent productivity with a state-management framework. Being first with reproducible numbers is worth more than being feature-complete.
-2. **The breakage window.** At current adoption, breaking architectural changes are the cheapest they will ever be. Anything breaking must land before 1.0 — and 1.0 must wait for it.
+2. **The compatibility clock.** The current documented public API is the 1.0
+   baseline. New architecture must land additively, preserve a compatibility
+   path, or wait for a future major release.
 
-When items compete, pick the one that feeds the proof or exploits the breakage window.
+When items compete, pick the one that feeds reproducible proof or adds the most
+agent value without destabilizing production applications.
 
 Detailed trackers this document links into:
 
@@ -26,15 +36,14 @@ Detailed trackers this document links into:
 - [Redux Toolkit and Zustand feature parity](../compatibility/redux-zustand-parity.md) — compatibility guidance extracted from the historical roadmap.
 - [docs/agent-development/workflow.md](../agent-development/workflow.md) — the canonical agent scenario new tools are justified against.
 
-The immediate architecture gate is no longer “more trace tooling.” It is the
-core operation spine: exact invocation/event identities, committed and
-published revisions, causal completion, structured state/effect results,
-lookup, and retry safety. Supervised async tasks follow that spine before
-Uklad makes a production-grade agent-runtime claim. Persistence,
-productization, and distribution continue in parallel where they do not freeze
-the old trace-derived completion contract.
+The next advanced agent-runtime gate is no longer “more trace tooling.” It is
+the operation spine: exact invocation/event identities, committed and published
+revisions, causal completion, structured state/effect results, lookup, and
+retry safety. Supervised async tasks follow that spine. These capabilities
+strengthen autonomous operation; they are not prerequisites for the supported
+production state runtime or today's authorized dispatch-and-wait workflow.
 
-Operation-spine status: **Phase 0 and Phase 1 of the [agent-operation RFC](../rfcs/agent-operations.md) are complete in the experimental core slice**, with package and persistence checks passing. Inspector/DevTools/MCP integration, enforced effect profiles, durable idempotency, and supervised async work remain open roadmap phases.
+Operation-spine status: **Phase 0 and Phase 1 of the [agent-operation RFC](../rfcs/agent-operations.md) are complete in the supported core slice**, with package and persistence checks passing. Inspector/DevTools/MCP integration, enforced effect profiles, durable idempotency, and supervised async work remain open roadmap phases.
 
 ---
 
@@ -42,8 +51,8 @@ Operation-spine status: **Phase 0 and Phase 1 of the [agent-operation RFC](../rf
 
 The strongest recent work is invisible: the source repository, package READMEs,
 and examples must stay synchronized with the evolving runtime contract. The
-current milestone is to review the published experimental surface; stable 1.0
-support remains deferred until the redesign and release gates are complete.
+current milestone is to protect the published production surface while
+finishing the additional evidence and labeling gates for 1.0.
 
 - [x] Synchronize root/package READMEs and examples with the current API (`createUkladInspector`, current DevTools setup, and the canonical application structure).
 - [x] Fix the swapped Best Practices / API Reference links in [packages/core/README.md](../../packages/core/README.md).
@@ -51,7 +60,7 @@ support remains deferred until the redesign and release gates are complete.
 - [x] Pin MCP package versions in the shipped agent templates.
 - [x] Prepare the coordinated initial package versions, release manifest, and release notes.
 - [x] Run the full workspace check and packed-package dry runs.
-- [ ] Push the synchronized repositories, then publish packages, the agent toolkit, and the website in the documented order.
+- [x] Publish the synchronized packages, agent toolkit, and website through the documented release flow.
 
 ## Phase 1 — Trust and measurement baseline (~1 month, parallelizable)
 
@@ -59,12 +68,13 @@ These items do not win an evaluation by themselves, but each removes a common re
 
 - [x] **DevTools/MCP security baseline.** The server now uses generated role tokens for HTTP and WebSocket, exact browser-origin and Host checks, loopback-only binding by default, read-only MCP capabilities unless dispatch/restore are granted separately, bounded and schema-validated runtime/control data, application/server redaction hooks, mutation audit records, reconnect-safe runtime sessions, and a fail-closed runtime/DevTools/MCP protocol-version handshake. Principal-scoped capability policy and remote-deployment abuse controls remain explicitly tracked in the [DevTools roadmap](devtools.md#p2).
 - [ ] **Fail-loud dev mode.** The instance API (`runtime.dispatch`,
-  `dispatchSync`, `getSubscriptionValue`, `watchSubscription`, and
-  `useSubscription` through it) now throws on malformed vectors and
-  unregistered IDs in every mode. Add nearest-match suggestions ("did you mean
-  `todos/add`?") to the explicit runtime surface. String IDs are only safe if
-  mistakes surface immediately; this matters double for AI-generated code.
-- [ ] **Release and support baseline.** `SECURITY.md`, `CHANGELOG.md`, the compatibility matrix, coordinated release automation, and the deprecation policy are present. Bootstrap the npm organization and initial publication from an authorized local machine, and complete the published React Native, Metro, and Hermes support matrix.
+      `dispatchSync`, `getSubscriptionValue`, `watchSubscription`, and
+      `useSubscription` through it) now throws on malformed vectors and
+      unregistered IDs in every mode. Add nearest-match suggestions ("did you mean
+      `todos/add`?") to the explicit runtime surface. String IDs are only safe if
+      mistakes surface immediately; this matters double for AI-generated code.
+- [x] **Release and support baseline.** `SECURITY.md`, `CHANGELOG.md`, the compatibility matrix, coordinated release automation, the deprecation policy, npm publication, and the production-readiness contract are present.
+- [ ] **Native support matrix.** Publish the exact React Native, Metro, and Hermes combinations exercised in CI; until then applications validate their selected native target explicitly.
 - [ ] **Runtime performance baseline.** Add repeatable benchmarks and CI budgets for dispatch throughput, broad and deep subscription graphs, 1k/10k active subscriptions, mount/unmount churn, memory retention, large derived collections under deep versus shallow equality, React render counts, AI-token-frequency updates, Hermes performance, and bundle size.
 - [ ] **Internal agent eval baseline.** Run scripted Uklad tasks with MCP connected versus file-tools-only, scored on success rate, turns, tokens, wall time, and deterministic acceptance tests. Use this as the fitness function for DevTools work; do not publish cross-library claims yet.
 
@@ -111,14 +121,14 @@ runtime.registerModule(feature);
 This phase begins once the instance API is stable enough that persistence, templates, examples, and public benchmarks will not be rewritten around a moving foundation.
 
 - [x] **Synchronous persistence initial release.** `@ukladjs/persist` provides
-  instance-aware root persistence, versioned migrations, hydration barriers,
-  transforms, redaction-safe errors, and module disposal for synchronous
-  storage. Async storage, SSR integration, custom merge behavior, and multiple
-  attachments per runtime remain open follow-up work.
+      instance-aware root persistence, versioned migrations, hydration barriers,
+      transforms, redaction-safe errors, and module disposal for synchronous
+      storage. Async storage, SSR integration, custom merge behavior, and multiple
+      attachments per runtime remain open follow-up work.
 - [ ] **`create-uklad-app` scaffolder.** Generate the canonical convention:
-  `app/uklad/catalog.ts`, `contracts.ts`, `initial-state.ts`, `runtime.ts`,
-  `bindings.ts`, feature modules, platform effect/coeffect registrations,
-  dev-only inspector wiring, and the agent router files.
+      `app/uklad/catalog.ts`, `contracts.ts`, `initial-state.ts`, `runtime.ts`,
+      `bindings.ts`, feature modules, platform effect/coeffect registrations,
+      dev-only inspector wiring, and the agent router files.
 - [ ] **Official Expo reference app, built by agents using the Uklad toolkit.** Include Metro/Hermes CI, AsyncStorage + SecureStore adapters, hydration migrations, background transitions, reconnect handling, and an offline command outbox. Dogfood the workflow in a public demo showing an agent building and verifying the application with metrics on screen.
 - [ ] **Public agent benchmark.** Compare the same tested tasks in Uklad, Zustand, and Redux Toolkit only after the internal harness is stable. Fix model and tool versions, publish prompts and source, use identical acceptance tests and time limits, run multiple repetitions, disclose failures and variance, and make the harness reproducible.
 - [ ] **MCP backlog prioritized by harness data** (tracked in [docs/roadmaps/devtools.md](devtools.md)): `get_client_logs`, `find_state_changes(path)`, `sinceId` pagination with explicit cursor-reset responses, `uklad-map` static manifest + source locations through MCP, shape mode, snapshot/restore, `explain_event`, deterministic replay, and runtime schema validation for external tool payloads. Predicted winners remain hypotheses until measured.

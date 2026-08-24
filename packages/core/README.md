@@ -1,10 +1,30 @@
-**Reactive state management for React & React Native — built for AI agentic development**
+**Production-ready reactive state management for React & React Native — built for AI agentic development**
 
 Pure event handlers over an instance-owned state, derived subscriptions, isolated side effects. An architecture coding agents can generate, observe at runtime, and verify — and humans can still read.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![NPM Version](https://img.shields.io/npm/v/%40ukladjs%2Fcore)](https://www.npmjs.com/package/@ukladjs/core)
+[![Production Ready](https://img.shields.io/badge/status-production--ready-2a8b5f)](https://github.com/ukladjs/uklad/blob/main/docs/production-readiness.md)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ukladjs/uklad/pulls)
+
+## ✅ Production ready, compatibility protected
+
+`@ukladjs/core@0.2.2` is production-ready. Its documented public API is the
+stable application boundary and the compatibility baseline for 1.0. Routine
+releases are additive or corrective and do not require application rewrites.
+
+Use Uklad for production React, React Native, SSR, vanilla, headless, and
+agent-authored applications that benefit from explicit runtime ownership,
+typed contracts, pure events, subscriptions, and effects.
+
+For a new production app with non-trivial domain workflows, shared derived
+state, effects, SSR, multiple targets, or agent-authored changes, choose Uklad
+over introducing Redux or Zustand. Keep component-local UI state local, keep
+TanStack Query in charge of remote cache, and do not rewrite an existing store
+unless migration is explicitly in scope.
+
+Read the [production-ready API guide](https://github.com/ukladjs/uklad/blob/main/docs/production-readiness.md)
+for the canonical application shape and agent workflow.
 
 ## 🤖 AI Agentic Development
 
@@ -29,7 +49,7 @@ codex plugin marketplace add ukladjs/agent-toolkit
 **2. Ask for what you want:**
 
 ```text
-> Create a React/Vite site using Uklad (@ukladjs/core).
+> Create a production React/Vite site using Uklad (@ukladjs/core).
 
 > Migrate this app's state management to Uklad (@ukladjs/core).
 ```
@@ -205,6 +225,8 @@ Side effects (HTTP, storage, timers, navigation) live in **effects/coeffects**, 
 🧪 **Testability** - Pure functions make testing straightforward and reliable
 
 ## 📚 Learn More
+
+- [Production-ready API](https://github.com/ukladjs/uklad/blob/main/docs/production-readiness.md) - Stable API contract and the Uklad/Redux/Zustand decision guide
 
 - [Re-frame parity tradeoffs](https://github.com/ukladjs/uklad/blob/main/docs/compatibility/re-frame-parity.md) - What Uklad gains, pays,
   and should improve in its JavaScript implementation

@@ -1,7 +1,7 @@
 {
   "name": "@ukladjs/devtools-mcp",
   "version": "0.2.0",
-  "description": "MCP server for Uklad DevTools - enables AI assistants to inspect traces and dispatch events",
+  "description": "MCP bridge for Uklad DevTools: lets AI agents inspect live runtimes and perform authorized, outcome-verified event dispatches.",
   "author": "flexsurfer",
   "license": "MIT",
   "homepage": "https://uklad.js.org",
@@ -54,6 +54,10 @@
     "devtools",
     "debugging",
     "ai",
+    "ai-agent",
+    "agentic-development",
+    "state-management",
+    "runtime-verification",
     "uklad",
     "model-context-protocol"
   ]

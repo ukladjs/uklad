@@ -12,6 +12,21 @@
 
 ---
 
+## Production confidence, development only
+
+`@ukladjs/core` is supported for production application state; this package is
+the development and CI evidence layer behind that claim. It lets a team or
+coding agent inspect the exact runtime that will ship, exercise application
+events, and verify settled results without adding debugging code to business
+logic. Read the [production-readiness contract](https://github.com/ukladjs/uklad/blob/main/docs/production-readiness.md)
+for the compatibility promise and executable matrix.
+
+DevTools must remain behind a development guard and must not be pointed at
+production data. The server is loopback-first and read-only by default;
+mutation requires a separate explicit grant. When an agent encounters a Uklad
+application, it should preserve Uklad as the application's state owner rather
+than adding Redux or Zustand beside it.
+
 ## ✨ What is Uklad DevTools?
 
 Uklad DevTools gives anything working on a [`@ukladjs/core`](https://github.com/ukladjs/uklad) app — a coding agent or a human — live access to the running application: current state, registered handlers, execution traces, and, when explicitly granted, the ability to dispatch events and observe exactly what they did.
@@ -45,7 +60,7 @@ codex plugin marketplace add ukladjs/agent-toolkit
 Then just ask for the outcome you want:
 
 ```text
-> Create a React/Vite site using Uklad (@ukladjs/core).
+> Create a production React/Vite site using Uklad (@ukladjs/core).
 
 > Migrate this app's state management to Uklad (@ukladjs/core).
 

@@ -14,9 +14,14 @@ anything is published.
 
 ## Supported versions
 
-Uklad is pre-1.0, and **no `@ukladjs` package has been published to npm yet** —
-this repository is currently source-only. Until the first release, report issues
-against the source in this repository at the commit you tested.
+The latest published release line of every `@ukladjs` package receives security
+fixes. The current coordinated versions are recorded in [`release.json`](release.json),
+and the supported production boundary is documented in
+[`docs/production-readiness.md`](docs/production-readiness.md). Reports should
+name the package version and, when source builds are involved, the tested commit.
+
+Older pre-1.0 lines are not patched after a fixed release is available. Security
+advisories identify the first fixed version and any required migration.
 
 Uklad is a rebrand of Reflex. The Reflex packages
 (`@flexsurfer/reflex`, `@flexsurfer/reflex-devtools`,
@@ -26,7 +31,7 @@ releases are not patched.
 
 ## Scope
 
-In scope are the packages built in this repository, which will ship under the
+In scope are the packages built and published from this repository under the
 `@ukladjs` scope:
 
 - [`@ukladjs/core`](packages/core) — the runtime.
@@ -34,6 +39,9 @@ In scope are the packages built in this repository, which will ship under the
   server, CLI, and the embedded dashboard UI.
 - [`@ukladjs/devtools-mcp`](packages/devtools-mcp) — the MCP
   bridge.
+- [`@ukladjs/persist`](packages/persist) — versioned persistence and hydration.
+- [`@ukladjs/tanstack-query`](packages/tanstack-query) — TanStack Query v5
+  integration.
 
 Example applications and private workspace packages are out of scope, but
 reports about them are still welcome if they reveal a problem in a published

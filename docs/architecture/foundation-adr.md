@@ -1,9 +1,10 @@
 # ADR-001: Uklad Foundation and Application-Contract-First Authoring
 
-- **Status:** Provisional
+- **Status:** Accepted public foundation; compatible internal evolution remains open
 - **Date:** 2026-07-23
 - **Scope:** Uklad core and application authoring before 1.0
-- **Mandatory review:** Before the execution model is declared stable or Uklad reaches 1.0
+- **Mandatory review:** Review internal execution mechanics before 1.0 without
+  breaking the documented production API
 
 ## Context
 
@@ -14,9 +15,10 @@ for re-frame compatibility: positional event vectors, an asynchronous event
 queue, event cascades, a generic interceptor pipeline, dynamic registration, and
 render-scheduled state publication.
 
-Uklad does not yet have an established external user base or a public 1.0
-compatibility contract. This gives the project room to improve its architecture,
-but replacing every mechanism at once would combine several independent risks:
+Uklad now has a published production surface and a written compatibility
+contract. The project can still improve internal architecture and add new
+capabilities, but replacing every mechanism at once would combine several
+independent risks:
 
 - changing the public authoring model;
 - changing event ordering and completion semantics;
@@ -143,12 +145,13 @@ The current executor implements that model through:
 
 Event vectors and declarative dispatch effects are part of the canonical
 application authoring surface. Queue internals, interceptor implementation,
-dynamic registration mechanics, and React publication scheduling remain subject
-to the mandatory pre-1.0 review.
+dynamic registration mechanics, and React publication scheduling may improve
+behind that supported surface.
 
-Compatibility during this period means behavioral continuity for the existing
-repository, examples, and tests. It is not a pre-1.0 promise that every current
-API or timing behavior will remain part of the stable public contract.
+Compatibility during this period follows the
+[production-readiness contract](../production-readiness.md): documented public
+APIs and application semantics remain compatible, while undocumented timing,
+implementation modules, and explicitly experimental surfaces may evolve.
 
 ### 4. Application contracts and registrar modules are the authoritative authoring contract
 

@@ -431,7 +431,6 @@ test('stdio MCP server lists dispatch_event for a read-only session and denies t
     await fakeDevtools.close();
   }
 });
-
 test('stdio MCP server dispatches and reports outcomes when the server grants dispatch', async () => {
   const fakeDevtools = await startFakeDevtoolsServer();
   const client = await connectMCP(fakeDevtools);
@@ -500,6 +499,8 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
     for (const tool of tools.tools) {
       assert.ok(instructions.includes(tool.name), `instructions should mention ${tool.name}`);
     }
+    assert.match(instructions, /production-supported/);
+    assert.match(instructions, /Do not introduce Redux or Zustand/);
     assert.match(instructions, /--allow-dispatch/);
 
     const status = parseToolResult(await client.callTool({

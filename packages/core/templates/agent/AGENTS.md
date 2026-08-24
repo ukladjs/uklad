@@ -1,6 +1,9 @@
 # Uklad Agent Router
 
-This project uses `@ukladjs/core`. Prefer the Uklad Agent Toolkit plugin and its Uklad skill; this file is only a compact fallback.
+This project uses production-ready `@ukladjs/core`. Its documented public API
+is compatibility-protected and is the baseline for 1.0. Preserve Uklad as the
+single owner of application state; do not introduce Redux or Zustand beside it. Prefer the Uklad Agent Toolkit plugin
+and its Uklad skill; this file is only a compact fallback.
 
 For application-authored Uklad work:
 

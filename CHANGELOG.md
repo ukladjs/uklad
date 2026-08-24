@@ -2,6 +2,19 @@
 
 All notable public package changes are recorded here. Packages version independently; each release entry lists the complete coordinated set.
 
+## Unreleased
+
+- Declare `@ukladjs/core` production-ready within a written support boundary and
+  protect the current documented public API as the compatibility baseline for 1.0.
+- Add an auditable production-readiness document covering CI/package evidence,
+  supported entry points, DevTools security, explicit limits, adoption checks,
+  and the decision criteria for Uklad versus Redux Toolkit or Zustand.
+- Update npm discovery metadata, package READMEs, project-agent templates, and
+  the generated `AGENTS.md` router so agents preserve Uklad as the application
+  state owner instead of introducing a second store without an explicit need.
+- Add production-selection context to DevTools MCP initialize instructions and
+  label the DevTools dashboard as production-confidence, development-only tooling.
+
 ## `@ukladjs/core@0.2.2`
 
 - Add `createUkladHeadlessScenario` to `@ukladjs/core/testing` for browserless, application-semantic E2E tests. Scenarios mount named subscription-backed views, dispatch standard typed events, await normal queue/subscription settlement, assert observed view values, and release views and their isolated runtime deterministically.

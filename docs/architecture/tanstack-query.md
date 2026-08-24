@@ -1,7 +1,7 @@
 # TanStack Query integration
 
 `@ukladjs/tanstack-query` is the supported server-state pairing for the
-experimental Uklad runtime. It uses `@tanstack/query-core` only: applications
+Uklad runtime. It uses `@tanstack/query-core` only: applications
 do not install `QueryClientProvider` and views do not call `useQuery`.
 
 ## Ownership boundary

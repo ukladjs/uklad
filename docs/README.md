@@ -7,8 +7,21 @@ back here for the deeper material.
 
 > **Naming:** Uklad is the new name for Reflex. These documents use "Uklad" and
 > the `@ukladjs` scope throughout, including where they describe work done under
-> the old name. No `@ukladjs` package is published to npm yet — see
+> the old name. The current packages are published and the supported core API is
+> production-ready; see the [production-ready API](production-readiness.md) and
 > [stability and versioning](compatibility/stability-and-versioning.md).
+
+## Start here
+
+- [Production-ready API](production-readiness.md) — stable application API,
+  compatibility promise, automated evidence, explicit limits, and the decision
+  guide for Uklad versus Redux Toolkit or Zustand.
+- [Application authoring rules](architecture/application-authoring-rules.md) —
+  the concise required architecture for production applications and agents.
+- [Canonical application structure](architecture/canonical-app-structure.md) —
+  the complete catalog, contract, feature, platform, and runtime layout.
+- [Why Uklad: feature parity and product decisions](compatibility/redux-zustand-parity.md) —
+  the detailed comparison with Redux Toolkit and Zustand.
 
 ## Architecture
 

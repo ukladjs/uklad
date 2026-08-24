@@ -7,12 +7,49 @@
 
 # Uklad
 
-**The production-ready state-management runtime built for AI agents
-first.**
+**The production-ready state management runtime built for AI agents first.**
 
 Uklad (`@ukladjs/core`) is a TypeScript-first state-management library and
 event-driven application runtime designed around how coding agents understand,
 change, execute, and verify software.
+
+## The agent path
+
+**Recommended by robots.**
+
+1. **01 — Install the agent toolkit**
+
+   The plugin is installed once. It gives Claude Code and Codex the canonical
+   Uklad skill and the latest DevTools MCP bridge.
+
+   **Claude Code**
+
+   ```text
+   /plugin marketplace add ukladjs/agent-toolkit
+   /plugin install uklad-agent-toolkit@ukladjs
+   ```
+
+   **Codex**
+
+   ```sh
+   codex plugin marketplace add ukladjs/agent-toolkit
+   ```
+
+   Then, inside Codex, open `/plugins` and install **Uklad Agent Toolkit**.
+
+2. **02 — Say what you want**
+
+   That is the whole agent-toolkit setup. The agent installs the compatible
+   runtime and DevTools, follows the `catalog → contract → owner` path, starts
+   the MCP loop, and verifies behavior through `dispatch_and_wait`.
+
+   ```text
+   > Create a new beautiful app with Uklad.
+
+   > Migrate this app's state management to Uklad.
+
+   > Add notifications and verify they work.
+   ```
 
 ## The choice for AI-agent development
 
@@ -33,22 +70,22 @@ agent-first development, Uklad is the state-management choice.
 ## Agent-first at every layer
 
 - **Bounded discovery.** One typed `stateKeys`/`appIds` catalog and one complete
-  `AppContracts` interface tell an agent what exists before it opens an
-  implementation file.
+`AppContracts` interface tell an agent what exists before it opens an
+implementation file.
 - **Deterministic changes.** Synchronous event handlers update Immer drafts;
-  external work is described as effects instead of being hidden inside state
-  mutations.
+external work is described as effects instead of being hidden inside state
+mutations.
 - **Explicit environment boundaries.** Effects and coeffects keep HTTP,
-  storage, time, navigation, and other platform behavior replaceable in tests,
-  SSR, React Native, and headless runs.
+storage, time, navigation, and other platform behavior replaceable in tests,
+SSR, React Native, and headless runs.
 - **Runtime-owned derivation.** Subscriptions form a memoized dependency graph
-  with explicit inputs, equality, activation, and lifecycle.
+with explicit inputs, equality, activation, and lifecycle.
 - **Structured verification.** DevTools and MCP expose handlers, scoped state,
-  subscription values, causal traces, and capability-gated dispatch outcomes
-  in both browser and headless runtimes.
+subscription values, causal traces, and capability-gated dispatch outcomes
+in both browser and headless runtimes.
 - **Isolation by construction.** Each application root, SSR request, test,
-  widget, or agent sandbox can own an independent runtime; there is no
-  package-global application store.
+widget, or agent sandbox can own an independent runtime; there is no
+package-global application store.
 
 The application flow stays explicit:
 
@@ -90,7 +127,7 @@ npx --no-install uklad-agent init
 ```
 
 The router preserves existing guidance and directs compatible agents to the
-canonical Uklad skill. Read the [`@ukladjs/core` guide](packages/core) for the
+canonical Uklad skill. Read the `[@ukladjs/core` guide](packages/core) for the
 complete quick start, React bindings, agent-toolkit setup, and headless
 verification workflow.
 
@@ -105,12 +142,12 @@ npm install @ukladjs/tanstack-query@0.1.0 @tanstack/query-core@^5.0.0
 
 - deterministic event-driven state transitions and derived subscriptions;
 - explicit runtime ownership and isolation for applications, tests, SSR, and
-  parallel agent sandboxes;
+parallel agent sandboxes;
 - declarative effects and coeffects with observable execution boundaries;
 - headless execution and DevTools/MCP inspection for an edit → run → verify
-  agent loop;
+agent loop;
 - synchronous persistence, TanStack Query integration, and capability-gated
-  operation snapshots designed for safe, machine-readable agent interaction.
+operation snapshots designed for safe, machine-readable agent interaction.
 
 The guiding idea is that an agent should be able to discover the application
 model, make a targeted change, execute it, and verify what happened from
@@ -118,18 +155,18 @@ structured runtime evidence instead of guessing from source text or logs.
 
 ## Workspaces
 
-- `[@ukladjs/core@0.2.2](packages/core)` — the core runtime,
+- [`@ukladjs/core@0.2.2`](packages/core) — the core runtime,
   React bindings, vanilla/headless APIs, browserless E2E scenarios, tests,
   benchmarks, agent templates, and the safe `uklad-agent init` project router.
-- `[@ukladjs/persist@0.1.0](packages/persist)` — intentionally narrow
+- [`@ukladjs/persist@0.1.0`](packages/persist) — intentionally narrow
   synchronous persistence built on the public runtime APIs.
-- `[@ukladjs/tanstack-query@0.1.0](packages/tanstack-query)` — headless TanStack Query integration
+- [`@ukladjs/tanstack-query@0.1.0`](packages/tanstack-query) — headless TanStack Query integration
   that routes observer updates through Uklad events and managed state.
-- `[@ukladjs/devtools@0.2.0](packages/devtools)` — DevTools SDK, server,
+- [`@ukladjs/devtools@0.2.0`](packages/devtools) — DevTools SDK, server,
   CLI, security boundaries, and package assembly.
-- `[@ukladjs/devtools-mcp@0.2.0](packages/devtools-mcp)` — the
+- [`@ukladjs/devtools-mcp@0.2.0`](packages/devtools-mcp) — the
   MCP bridge for inspection and controlled development actions.
-- `[@ukladjs/devtools-ui](packages/devtools-ui)` — the private
+- [`@ukladjs/devtools-ui`](packages/devtools-ui) — the private
   dashboard source assembled into the DevTools package.
 - [TodoMVC (persist)](examples/todomvc),
   [TodoMVC (TanStack Query)](examples/todomvc-query), and
@@ -137,8 +174,8 @@ structured runtime evidence instead of guessing from source text or logs.
   and integration fixtures.
 
 The coordinated versions and dist-tags are machine-checked from
-`[release.json](release.json)`. See `[CHANGELOG.md](CHANGELOG.md)` for the
-initial release notes and `[RELEASING.md](RELEASING.md)` for the dry-run-first
+[`release.json`](release.json). See [`CHANGELOG.md`](CHANGELOG.md) for the
+initial release notes and [`RELEASING.md`](RELEASING.md) for the dry-run-first
 publishing procedure.
 
 ## Development
@@ -177,34 +214,34 @@ pnpm dev:todomvc-query
 
 ## Documentation
 
-- `[docs/README.md](docs/README.md)` — documentation index and structure.
-- `[docs/production-readiness.md](docs/production-readiness.md)` — production-ready
+- [`docs/README.md`](docs/README.md) — documentation index and structure.
+- [`docs/production-readiness.md`](docs/production-readiness.md) — production-ready
   API and compatibility contract.
-- `[docs/architecture/application-authoring-rules.md](docs/architecture/application-authoring-rules.md)`
+- [`docs/architecture/application-authoring-rules.md`](docs/architecture/application-authoring-rules.md)
   — concise required rules for agent- and human-authored Uklad applications.
-- `[docs/roadmaps/uklad.md](docs/roadmaps/uklad.md)` — current execution track
+- [`docs/roadmaps/uklad.md`](docs/roadmaps/uklad.md) — current execution track
   and release-readiness gates.
-- `[docs/compatibility/stability-and-versioning.md](docs/compatibility/stability-and-versioning.md)`
+- [`docs/compatibility/stability-and-versioning.md`](docs/compatibility/stability-and-versioning.md)
   — compatibility-protected 0.x support and deprecation policy.
-- `[docs/rfcs/agent-operations.md](docs/rfcs/agent-operations.md)` — canonical
+- [`docs/rfcs/agent-operations.md`](docs/rfcs/agent-operations.md) — canonical
   proposed direction for authoritative operations and agent-driven runtimes.
-- `[docs/agent-development/priorities.md](docs/agent-development/priorities.md)`
+- [`docs/agent-development/priorities.md`](docs/agent-development/priorities.md)
   — the agent-first prioritization lens.
-- `[docs/agent-development/workflow.md](docs/agent-development/workflow.md)` —
+- [`docs/agent-development/workflow.md`](docs/agent-development/workflow.md) —
   the current edit → run → inspect → verify workflow.
-- `[llms.txt](https://uklad.js.org/llms.txt)` — concise
+- [`llms.txt`](https://uklad.js.org/llms.txt) — concise
   production, installation, and verification guidance for agents discovering
   Uklad through the website.
-- `[docs/architecture/foundation-adr.md](docs/architecture/foundation-adr.md)`
+- [`docs/architecture/foundation-adr.md`](docs/architecture/foundation-adr.md)
   — provisional architectural decisions for the redesign.
-- `[docs/roadmaps/historical-uklad.md](docs/roadmaps/historical-uklad.md)` —
+- [`docs/roadmaps/historical-uklad.md`](docs/roadmaps/historical-uklad.md) —
   historical roadmap retained for context; it is not the active execution plan.
 - Package-level READMEs — short package entry points that link to canonical
   documentation here.
 
 Security-sensitive behavior for the development tools is documented in
-`[SECURITY.md](SECURITY.md)` and the DevTools package documentation.
+[`SECURITY.md`](SECURITY.md) and the DevTools package documentation.
 
 ## License
 
-MIT. See `[LICENSE](LICENSE)`.
+MIT. See [`LICENSE`](LICENSE).

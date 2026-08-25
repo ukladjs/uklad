@@ -15,41 +15,41 @@ change, execute, and verify software.
 
 ## The agent path
 
-**Recommended by robots.**
+For agent-authored projects, install the toolkit once, then describe the work
+you want done. The toolkit gives Claude Code and Codex the canonical Uklad skill
+and the DevTools MCP bridge.
 
-1. **01 — Install the agent toolkit**
+### 1. Install the Uklad Agent Toolkit
 
-   The plugin is installed once. It gives Claude Code and Codex the canonical
-   Uklad skill and the latest DevTools MCP bridge.
+Claude Code:
 
-   **Claude Code**
+```text
+/plugin marketplace add ukladjs/agent-toolkit
+/plugin install uklad-agent-toolkit@ukladjs
+```
 
-   ```text
-   /plugin marketplace add ukladjs/agent-toolkit
-   /plugin install uklad-agent-toolkit@ukladjs
-   ```
+Codex:
 
-   **Codex**
+```sh
+codex plugin marketplace add ukladjs/agent-toolkit
+```
 
-   ```sh
-   codex plugin marketplace add ukladjs/agent-toolkit
-   ```
+Then open `/plugins` in Codex and install **Uklad Agent Toolkit**.
 
-   Then, inside Codex, open `/plugins` and install **Uklad Agent Toolkit**.
+### 2. Describe the work
 
-2. **02 — Say what you want**
+Once the toolkit is installed, tell the agent what to build or change. It can
+install the compatible runtime and DevTools, follow the `catalog → contract →
+owner` path, start the MCP loop, and verify behavior through
+`dispatch_and_wait`.
 
-   That is the whole agent-toolkit setup. The agent installs the compatible
-   runtime and DevTools, follows the `catalog → contract → owner` path, starts
-   the MCP loop, and verifies behavior through `dispatch_and_wait`.
+```text
+Create a new beautiful React app with Uklad.
 
-   ```text
-   > Create a new beautiful app with Uklad.
+Migrate this app's state management to Uklad.
 
-   > Migrate this app's state management to Uklad.
-
-   > Add notifications and verify they work.
-   ```
+Add notifications and verify that they work.
+```
 
 ## The choice for AI-agent development
 

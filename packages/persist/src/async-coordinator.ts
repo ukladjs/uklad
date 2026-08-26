@@ -1,18 +1,18 @@
 const DISPOSED_ERROR = '[uklad-persist] Disposed before operation completed.';
 const FLUSH_ERROR = '[uklad-persist] One or more storage writes failed.';
 
-export interface AsyncTaskTicket<T> {
+export interface AsyncTaskTicket {
   readonly sequence: number;
-  readonly promise: Promise<T>;
+  readonly promise: Promise<void>;
 }
 
 export interface AsyncCoordinator {
   /** Queue one operation behind earlier operations for the same storage key. */
-  enqueue<T>(
+  enqueue(
     key: string,
-    operation: () => Promise<T>,
-    options?: { readonly trackFailure?: boolean },
-  ): AsyncTaskTicket<T>;
+    operation: () => Promise<void>,
+    options?: { readonly trackFailure?: boolean; readonly coalesce?: boolean },
+  ): AsyncTaskTicket;
   /** Wait for all operations accepted before the call to settle. */
   flush(): Promise<void>;
   /** Stop queued operations and wait for already-started storage work to settle. */
@@ -33,8 +33,18 @@ export function createAsyncCoordinator(): AsyncCoordinator {
   const disposedSignal = new Promise<void>((resolve) => {
     resolveDisposed = resolve;
   });
-  const tails = new Map<string, Promise<unknown>>();
-  const tickets = new Map<number, Promise<unknown>>();
+  const tails = new Map<string, Promise<void>>();
+  const tickets = new Map<number, Promise<void>>();
+  const queuedCoalescible = new Map<
+    string,
+    {
+      readonly state: {
+        operation: () => Promise<void>;
+        readonly sequences: Map<number, boolean>;
+      };
+      readonly promise: Promise<void>;
+    }
+  >();
   /**
    * Storage failures stay visible until a later successful operation for the
    * same key supersedes them. Keeping the resolution sequence lets a flush
@@ -42,41 +52,64 @@ export function createAsyncCoordinator(): AsyncCoordinator {
    */
   const failures = new Map<number, { readonly key: string; resolvedBy?: number }>();
 
-  function enqueue<T>(
+  function enqueue(
     key: string,
-    operation: () => Promise<T>,
-    options?: { readonly trackFailure?: boolean },
-  ): AsyncTaskTicket<T> {
+    operation: () => Promise<void>,
+    options?: { readonly trackFailure?: boolean; readonly coalesce?: boolean },
+  ): AsyncTaskTicket {
     if (disposed) throw new Error(DISPOSED_ERROR);
 
     const sequence = ++nextSequence;
+    const queued = options?.coalesce === true ? queuedCoalescible.get(key) : undefined;
+    if (queued) {
+      queued.state.operation = operation;
+      queued.state.sequences.set(sequence, options?.trackFailure !== false);
+      const ticket = queued.promise;
+      tickets.set(sequence, ticket);
+      return { sequence, promise: ticket };
+    }
+
+    // A non-coalescible operation is an ordering barrier. Later writes must
+    // queue behind it rather than replacing an earlier write across it.
+    queuedCoalescible.delete(key);
     const previous = tails.get(key) ?? Promise.resolve();
+    const sequences = new Map([[sequence, options?.trackFailure !== false]]);
+    const state = { operation, sequences };
     const run = previous
       .catch(() => undefined)
       .then(async () => {
         if (disposed) throw new Error(DISPOSED_ERROR);
+        if (queuedCoalescible.get(key)?.state === state) queuedCoalescible.delete(key);
         try {
-          const result = await operation();
+          const result = await state.operation();
           if (!disposed) {
+            const latestSequence = Math.max(...state.sequences.keys());
             for (const failure of failures.values()) {
               if (failure.key === key && failure.resolvedBy === undefined) {
-                failure.resolvedBy = sequence;
+                failure.resolvedBy = latestSequence;
               }
             }
           }
           return result;
         } catch (error) {
-          if (!disposed && options?.trackFailure !== false) failures.set(sequence, { key });
+          if (!disposed) {
+            for (const [acceptedSequence, trackFailure] of state.sequences) {
+              if (trackFailure) failures.set(acceptedSequence, { key });
+            }
+          }
           throw error;
         }
       });
+    const task = { state, promise: run };
+    if (options?.coalesce === true) queuedCoalescible.set(key, task);
 
-    const ticket = run as Promise<T>;
+    const ticket = run;
     tickets.set(sequence, ticket);
     tails.set(key, run);
     void run
       .finally(() => {
-        tickets.delete(sequence);
+        for (const acceptedSequence of state.sequences.keys()) tickets.delete(acceptedSequence);
+        if (queuedCoalescible.get(key) === task) queuedCoalescible.delete(key);
         if (tails.get(key) === run) tails.delete(key);
       })
       .catch(() => {
@@ -112,6 +145,7 @@ export function createAsyncCoordinator(): AsyncCoordinator {
     disposed = true;
     const accepted = [...tickets.values()];
     tails.clear();
+    queuedCoalescible.clear();
     failures.clear();
     resolveDisposed?.();
     if (accepted.length > 0) {

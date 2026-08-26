@@ -80,9 +80,12 @@ root is `undefined`, the write effect removes its storage entry instead.
 
 For async storage, writes are queued per key. Independent roots can progress
 concurrently, while an older write for one root cannot complete after a newer
-write for that same root and overwrite it. `handle.flush()` is the durability
-barrier for writes accepted before the call; `runtime.flush()` only drains the
-Uklad event queue. A failed write remains visible to the durability barrier
+write for that same root and overwrite it. Writes that have not started use
+last-write-wins coalescing; active calls and non-write ordering barriers are
+never replaced. Every accepted ticket remains attached to the resulting work,
+so `handle.flush()` still covers writes accepted before the call even when a
+later snapshot replaces their queued operation. `runtime.flush()` only drains
+the Uklad event queue. A failed write remains visible to the durability barrier
 until a later successful operation for that root supersedes it.
 
 ### Application hydration barrier
@@ -124,7 +127,7 @@ exports during the initial release.
 | `ids.ts`               | Persistence protocol IDs                                                                                     |
 | `types.ts`             | Public storage, option, handle, diagnostic, and strict-contract types                                        |
 | `adapters.ts`          | Browser `localStorage`, in-memory, AsyncStorage-compatible, and sync structural adapters                     |
-| `async-coordinator.ts` | Per-key async ordering, failure tracking, durability barriers, and disposal                                  |
+| `async-coordinator.ts` | Per-key async ordering, queued-write coalescing, failure tracking, durability barriers, and disposal         |
 | `config.ts`            | Static option validation and frozen normalized key configuration                                             |
 | `codec.ts`             | Versioned envelope codec, recursive JSON validation, migrations, and transforms; no Uklad runtime dependency |
 | `protocol.ts`          | Registration collision checks and validation of internal event/effect payloads                               |

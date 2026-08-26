@@ -74,6 +74,19 @@ jobs:
           pnpm --filter @ukladjs/react-native-persist-demo run check &&
           pnpm --filter @ukladjs/expo-persist-demo run check
 
+      - name: Bundle React Native and Expo Android fixtures
+        run: |
+          mkdir -p "$RUNNER_TEMP/react-native-persist"
+          pnpm --filter @ukladjs/react-native-persist-demo exec react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output "$RUNNER_TEMP/react-native-persist/index.android.bundle" \
+            --assets-dest "$RUNNER_TEMP/react-native-persist"
+          pnpm --filter @ukladjs/expo-persist-demo exec expo export \
+            --platform android \
+            --output-dir "$RUNNER_TEMP/expo-persist"
+
   typescript-compatibility:
     runs-on: ubuntu-latest
     steps:

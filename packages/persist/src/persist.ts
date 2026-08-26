@@ -355,20 +355,24 @@ export function persist<TContracts extends UkladContracts>(
     return effects;
   };
 
-  const enqueueAsyncOperation = <T>(
+  const enqueueAsyncOperation = (
     key: string,
-    operation: () => Promise<T>,
+    operation: () => Promise<void>,
     failure: PersistDiagnostic,
   ): void => {
     if (!asyncCoordinator || disposed) return;
-    const ticket = asyncCoordinator.enqueue(key, async () => {
-      try {
-        return await operation();
-      } catch {
-        if (!disposed) reportDiagnostic(failure);
-        throw new Error(`[uklad-persist] ${failure.code}.`);
-      }
-    });
+    const ticket = asyncCoordinator.enqueue(
+      key,
+      async () => {
+        try {
+          return await operation();
+        } catch {
+          if (!disposed) reportDiagnostic(failure);
+          throw new Error(`[uklad-persist] ${failure.code}.`);
+        }
+      },
+      { coalesce: true },
+    );
     void ticket.promise.catch(() => {
       // The coordinator retains the sanitized failure for flush(); this local
       // catch prevents an unhandled rejection for event writes; callers that

@@ -79,7 +79,9 @@ One entry per key: `<prefix>/<percent-encoded-root-key>` → `{"v":<configured-v
 - **Persistence intent is in the log and attributed to its cause.** Hydration is an event, and each write effect rides on the event that changed the key — the trace answers "this `todos/add` requested a write of `todos`" directly. Storage success or failure is reported separately through sanitized diagnostics.
 - **Post-commit writes by construction.** The writer interceptor only contributes effects; effects execute in `do-fx` after the commit, and the write effect serializes the captured committed snapshot. Persistence can neither abort an application event nor capture uncommitted state — the strongest expert finding, resolved structurally.
 - **The write gate is deliberately dual**: observable post-event status must be `'hydrated'`, and the attachment-scoped lifecycle must also be hydrated. The latter prevents a disposed attachment's stale state status from opening writes after reattach.
-- **Write coalescing later is contained**: a per-key trailing debounce inside the write effect, invisible to the rest of the design.
+- **Write coalescing is contained**: the per-key coordinator replaces only
+  writes that have not started. Active storage calls and purge barriers remain
+  ordered, while every accepted ticket retains its durability semantics.
 
 ## Feature parity: Redux Persist and Zustand persist
 
@@ -162,7 +164,7 @@ Scope: browser CSR, synchronous localStorage, memory storage for tests, one `per
 
 - [x] Serialize writes per storage key so completion order cannot allow an older value to overwrite a newer one; independent keys may progress concurrently.
 - [x] Capture the exact committed snapshot represented by each queued write rather than reading an unrelated future state head.
-- [ ] Coalesce only writes that have not started, preserve last-write-wins, and keep the queue usable after an individual write failure.
+- [x] Coalesce only writes that have not started, preserve last-write-wins, and keep the queue usable after an individual write failure.
 - [x] Add `handle.flush(): Promise<void>` that waits for every write accepted before the call; `runtime.flush()` remains only an event-queue boundary.
 - [x] Add structured persist-error reporting and define `dispose()` behavior for queued, active, and awaited writes without an implicit hidden flush.
 - [x] Make async `purge()` ordered relative to pending writes so an older queued write cannot recreate purged data.
@@ -171,7 +173,7 @@ Scope: browser CSR, synchronous localStorage, memory storage for tests, one `per
 
 - [x] Ship an AsyncStorage-like adapter and cover read, write, and remove rejection. Optional `multiGet` remains additive.
 - [x] Deterministically test ordered writes, failure in the middle of a queue, disposal, purge with pending writes, and `flush()`.
-- [ ] Verify two native runtimes with different adapters/prefixes remain isolated in device CI.
+- [x] Verify two native-style runtimes with different adapter instances and prefixes remain isolated in package CI, and production-bundle both Android fixtures in CI.
 - [x] Dogfood the async route in small React Native and Expo fixtures.
 
 ## Beyond the async release
@@ -201,7 +203,7 @@ The spike graduated into the package: its scenarios and release regressions live
 7. Handle/runtime disposal share cleanup; pending barriers reject, late reads are ignored, duplicate attachment is rejected, and reattach starts with a closed idle gate.
 8. Hydration-echo regression: hydrating stored values performs zero writes — the bug the watch-based writer shipped with (see Dogfood notes) cannot recur silently.
 
-Calibration: the suite establishes sync failure atomicity, async lifecycle parity, ordered writes, exact snapshots, direct-dispatch barriers, recovery, trace finalization, strict typing, and separately packed ESM/CJS consumption with TS6/TS7. Native device CI and SSR publication semantics remain outside this package check.
+Calibration: the suite establishes sync failure atomicity, async lifecycle parity, ordered and coalesced writes, exact latest snapshots, multi-runtime native-style isolation, direct-dispatch barriers, recovery, trace finalization, strict typing, and separately packed ESM/CJS consumption with TS6/TS7. React Native and Expo Android production bundles are CI gates; emulator/device execution and SSR publication semantics remain outside this package check.
 
 ## Dogfood notes (TodoMVC, 2026-07-18)
 

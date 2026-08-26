@@ -1148,7 +1148,7 @@ describe('persist', () => {
     runtime.dispose();
   });
 
-  it('orders async writes and persists the exact committed snapshot for each event', async () => {
+  it('persists the exact latest snapshot when writes coalesce before starting', async () => {
     const data = new Map<string, string>();
     const writes: Array<{
       key: string;
@@ -1180,17 +1180,116 @@ describe('persist', () => {
     await runtime.flush();
 
     expect(writes).toHaveLength(1);
-    expect(JSON.parse(writes[0]!.value)).toEqual({ v: 1, data: 1 });
+    expect(JSON.parse(writes[0]!.value)).toEqual({ v: 1, data: 2 });
     writes[0]!.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(writes).toHaveLength(2);
-    expect(JSON.parse(writes[1]!.value)).toEqual({ v: 1, data: 2 });
-    writes[1]!.resolve();
     await handle.flush();
 
     expect(runtime.getState().count).toBe(2);
     handle.dispose();
     runtime.dispose();
+  });
+
+  it('coalesces queued async writes to the latest committed snapshot', async () => {
+    const writes: Array<{ value: string; resolve: () => void }> = [];
+    const runtime = makeRuntime({ count: 0 });
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('count/bump', ({ draftState }) => {
+        draftState.count += 1;
+      });
+    });
+    const handle = persist(runtime, {
+      storage: {
+        getItem: async () => null,
+        setItem: (_key, value) =>
+          new Promise<void>((resolve) => {
+            writes.push({ value, resolve });
+          }),
+        removeItem: async () => {},
+      },
+      keys: ['count'],
+    });
+
+    handle.hydrate();
+    await handle.whenHydrated();
+    runtime.dispatch(['count/bump']);
+    await runtime.flush();
+    expect(writes).toHaveLength(1);
+
+    runtime.dispatch(['count/bump']);
+    runtime.dispatch(['count/bump']);
+    await runtime.flush();
+    expect(writes).toHaveLength(1);
+
+    writes[0]!.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(writes).toHaveLength(2);
+    expect(JSON.parse(writes[1]!.value)).toEqual({ v: 1, data: 3 });
+    writes[1]!.resolve();
+    await expect(handle.flush()).resolves.toBeUndefined();
+
+    await handle.dispose();
+    runtime.dispose();
+  });
+
+  it('keeps native-style async runtimes isolated by adapter and prefix', async () => {
+    const deviceData = new Map<string, string>([
+      ['native-a/count', entry(1, 10)],
+      ['native-b/count', entry(1, 20)],
+    ]);
+    const calls = { a: [] as string[], b: [] as string[] };
+    const adapter = (owner: keyof typeof calls): AsyncPersistStorage => ({
+      getItem: async (key) => {
+        calls[owner].push(key);
+        return deviceData.get(key) ?? null;
+      },
+      setItem: async (key, value) => {
+        calls[owner].push(key);
+        deviceData.set(key, value);
+      },
+      removeItem: async (key) => {
+        calls[owner].push(key);
+        deviceData.delete(key);
+      },
+    });
+    const runtimeA = makeRuntime({ count: 0 });
+    const runtimeB = makeRuntime({ count: 0 });
+    for (const runtime of [runtimeA, runtimeB]) {
+      runtime.registerModule((registrar) => {
+        registrar.regEvent('count/bump', ({ draftState }) => {
+          draftState.count += 1;
+        });
+      });
+    }
+    const handleA = persist(runtimeA, {
+      storage: adapter('a'),
+      keys: ['count'],
+      prefix: 'native-a',
+    });
+    const handleB = persist(runtimeB, {
+      storage: adapter('b'),
+      keys: ['count'],
+      prefix: 'native-b',
+    });
+
+    handleA.hydrate();
+    handleB.hydrate();
+    await Promise.all([handleA.whenHydrated(), handleB.whenHydrated()]);
+    expect(runtimeA.getState().count).toBe(10);
+    expect(runtimeB.getState().count).toBe(20);
+
+    runtimeA.dispatch(['count/bump']);
+    runtimeB.dispatch(['count/bump']);
+    await Promise.all([runtimeA.flush(), runtimeB.flush()]);
+    await Promise.all([handleA.flush(), handleB.flush()]);
+
+    expect(deviceData.get('native-a/count')).toBe(entry(1, 11));
+    expect(deviceData.get('native-b/count')).toBe(entry(1, 21));
+    expect(calls.a.every((key) => key.startsWith('native-a/'))).toBe(true);
+    expect(calls.b.every((key) => key.startsWith('native-b/'))).toBe(true);
+
+    await Promise.all([handleA.dispose(), handleB.dispose()]);
+    runtimeA.dispose();
+    runtimeB.dispose();
   });
 
   it('keeps async flush failures visible until a later write succeeds', async () => {

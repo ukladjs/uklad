@@ -2,7 +2,7 @@
 
 Versioned persistence for [Uklad](https://github.com/ukladjs/uklad). Hydration is an event, storage operations are effects/coeffects, status is a subscription, and one global interceptor contributes post-commit writes to the events that changed configured roots.
 
-Both synchronous storage (for example `localStorage`) and promise-based storage (for example React Native AsyncStorage or Expo SQLite's key-value store) are supported. Async writes are serialized per storage key, preserve the committed snapshot that caused each write, and can be awaited with `flush()`.
+Both synchronous storage (for example `localStorage`) and promise-based storage (for example React Native AsyncStorage or Expo SQLite's key-value store) are supported. Async writes are serialized per storage key, coalesce only while they have not started, preserve the latest committed snapshot, and can be awaited with `flush()`.
 
 ## Install
 
@@ -52,6 +52,8 @@ await persistence.flush(); // await this at a lifecycle boundary when durability
 Writes remain closed until status is `hydrated`. Hydration events are excluded from the writer, so reading a stored root never echoes it back to storage.
 If an async write fails, `flush()` continues to reject until a later successful
 operation for that root supersedes the failed write.
+Queued writes for one root use last-write-wins coalescing. Active storage calls
+and non-write ordering barriers such as `purge()` are never replaced.
 
 ### Hydration barrier
 

@@ -42,6 +42,121 @@ describe('async persistence coordinator', () => {
     await coordinator.flush();
   });
 
+  it('coalesces only queued operations and runs the latest accepted work', async () => {
+    const coordinator = createAsyncCoordinator();
+    const active = deferred<void>();
+    const latest = deferred<void>();
+    const started: string[] = [];
+
+    const activeTicket = coordinator.enqueue(
+      'count',
+      async () => {
+        started.push('active');
+        await active.promise;
+      },
+      { coalesce: true },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const superseded = coordinator.enqueue(
+      'count',
+      async () => {
+        started.push('superseded');
+      },
+      { coalesce: true },
+    );
+    const newest = coordinator.enqueue(
+      'count',
+      async () => {
+        started.push('newest');
+        await latest.promise;
+      },
+      { coalesce: true },
+    );
+
+    active.resolve();
+    await activeTicket.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(started).toEqual(['active', 'newest']);
+
+    latest.resolve();
+    await expect(Promise.all([superseded.promise, newest.promise])).resolves.toEqual([
+      undefined,
+      undefined,
+    ]);
+    await expect(coordinator.flush()).resolves.toBeUndefined();
+  });
+
+  it('keeps a flush snapshot attached to work that is later coalesced', async () => {
+    const coordinator = createAsyncCoordinator();
+    const active = deferred<void>();
+    const latest = deferred<void>();
+    const started: string[] = [];
+
+    coordinator.enqueue('count', async () => active.promise);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    coordinator.enqueue(
+      'count',
+      async () => {
+        started.push('superseded');
+      },
+      { coalesce: true },
+    );
+    const flush = coordinator.flush();
+    coordinator.enqueue(
+      'count',
+      async () => {
+        started.push('newest');
+        await latest.promise;
+      },
+      { coalesce: true },
+    );
+
+    active.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(started).toEqual(['newest']);
+
+    let flushed = false;
+    void flush.then(() => {
+      flushed = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(flushed).toBe(false);
+
+    latest.resolve();
+    await expect(flush).resolves.toBeUndefined();
+  });
+
+  it('does not coalesce across a non-coalescible ordering barrier', async () => {
+    const coordinator = createAsyncCoordinator();
+    const active = deferred<void>();
+    const started: string[] = [];
+
+    coordinator.enqueue('count', async () => active.promise);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    coordinator.enqueue(
+      'count',
+      async () => {
+        started.push('write-before');
+      },
+      { coalesce: true },
+    );
+    coordinator.enqueue('count', async () => {
+      started.push('barrier');
+    });
+    coordinator.enqueue(
+      'count',
+      async () => {
+        started.push('write-after');
+      },
+      { coalesce: true },
+    );
+
+    active.resolve();
+    await coordinator.flush();
+    expect(started).toEqual(['write-before', 'barrier', 'write-after']);
+  });
+
   it('keeps the queue usable after a failed operation and clears it after a later success', async () => {
     const coordinator = createAsyncCoordinator();
     const failure = coordinator.enqueue('count', async () => {
@@ -52,6 +167,32 @@ describe('async persistence coordinator', () => {
     await expect(coordinator.flush()).rejects.toThrow('storage writes failed');
 
     const succeeding = coordinator.enqueue('count', async () => undefined);
+    await expect(succeeding.promise).resolves.toBeUndefined();
+    await expect(coordinator.flush()).resolves.toBeUndefined();
+  });
+
+  it('recovers after a coalesced queued operation fails', async () => {
+    const coordinator = createAsyncCoordinator();
+    const active = deferred<void>();
+    coordinator.enqueue('count', async () => active.promise);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const superseded = coordinator.enqueue('count', async () => undefined, { coalesce: true });
+    const failure = coordinator.enqueue(
+      'count',
+      async () => {
+        throw new Error('latest queued write failed');
+      },
+      { coalesce: true },
+    );
+
+    active.resolve();
+    await expect(Promise.all([superseded.promise, failure.promise])).rejects.toThrow(
+      'latest queued write failed',
+    );
+    await expect(coordinator.flush()).rejects.toThrow('storage writes failed');
+
+    const succeeding = coordinator.enqueue('count', async () => undefined, { coalesce: true });
     await expect(succeeding.promise).resolves.toBeUndefined();
     await expect(coordinator.flush()).resolves.toBeUndefined();
   });

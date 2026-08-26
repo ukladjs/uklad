@@ -7,10 +7,10 @@ Both synchronous storage (for example `localStorage`) and promise-based storage 
 ## Install
 
 ```sh
-pnpm add @ukladjs/persist@0.1.0
+pnpm add @ukladjs/persist@0.2.0
 ```
 
-The package requires `@ukladjs/core@^0.2.0` as a peer dependency.
+The package requires `@ukladjs/core@^0.2.3` as a peer dependency.
 
 ## Usage
 

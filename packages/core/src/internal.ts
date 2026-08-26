@@ -1,42 +1,16 @@
 /**
- * Internal adapters for first-party integrations and their tests.
+ * Internal adapters retained for tests and backward compatibility.
  *
  * This entrypoint is intentionally not re-exported from the package root or
  * vanilla API. Application code should use the production runtime client;
- * integrations should depend on the smallest capability they need here.
+ * integrations should use getRuntimeIntegration from the vanilla entrypoint.
  */
-import { createUkladRuntimeForTests, getRuntimeAdminForTests } from './runtime/runtime';
+import { createUkladRuntimeForTests } from './runtime/runtime';
 
 /** @internal Test-only owner facade with administrative operations attached. */
 export { createUkladRuntimeForTests };
 
-import type { UkladRuntime } from './runtime/api';
-import type { UkladContracts } from './contracts';
-import type { ContractDispatchVector, ContractState } from './contracts';
-import type { Interceptor } from './types';
-
-export function getRuntimeIntegration<TContracts extends UkladContracts>(
-  runtime: UkladRuntime<TContracts>,
-): {
-  readonly getState: () => ContractState<TContracts>;
-  readonly flush: () => Promise<void>;
-  readonly dispatchSync: (event: ContractDispatchVector<TContracts>) => void;
-  /**
-   * Add and remove a runtime-wide interceptor.
-   *
-   * Interceptors are not scoped to a module, so an integration that adds one
-   * owns its lifetime: remove it by id from the installing module's cleanup so
-   * it is torn down with the rest of the integration.
-   */
-  readonly addInterceptor: (interceptor: Interceptor<ContractState<TContracts>>) => void;
-  readonly removeInterceptor: (id: string) => void;
-} {
-  const implementation = getRuntimeAdminForTests(runtime);
-  return Object.freeze({
-    getState: implementation.getState.bind(implementation),
-    flush: implementation.flush.bind(implementation),
-    dispatchSync: implementation.dispatchSync.bind(implementation),
-    addInterceptor: implementation.addInterceptor.bind(implementation),
-    removeInterceptor: implementation.removeInterceptor.bind(implementation),
-  });
-}
+// Backward-compatible first-party entrypoint. New integrations import the
+// supported capability from @ukladjs/core/vanilla.
+export { getRuntimeIntegration } from './runtime/integration';
+export type { UkladRuntimeIntegration } from './runtime/integration';

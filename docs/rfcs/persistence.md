@@ -16,7 +16,7 @@ Two earlier drafts (method-driven, then dispatch-driven with a whole-state envel
 
 `@ukladjs/persist` is an ordinary external consumer of Uklad, not a privileged integration. It may own persistence-specific machinery such as adapters, migrations, queues, retries, barriers, and its public handle API, but every interaction with a runtime goes through documented public `@ukladjs/core` APIs: events, effects, coeffects, global interceptors, subscriptions, and `registerModule()` lifecycle. It must not import Uklad internals, access private registries or pipeline state, mutate internal state heads, or require persistence-specific behavior in Uklad core.
 
-If persistence exposes a missing capability, Uklad may add a generic public primitive useful to any library; it must not add a special `uklad-persist` hook. `PersistHandle` is the primary typed and lifecycle-aware API, while public persist event IDs remain an optional low-level protocol for direct dispatch, DevTools, MCP, and composition. Both routes must produce the same observable Uklad state transitions.
+If persistence exposes a missing capability, Uklad may add a generic public primitive useful to any library; it must not add a special `uklad-persist` hook. Uklad therefore exposes the bounded `getRuntimeIntegration()` facade for libraries that own runtime-wide interceptors and synchronous lifecycle dispatch without widening the application runtime client. `PersistHandle` is the primary typed and lifecycle-aware API, while public persist event IDs remain an optional low-level protocol for direct dispatch, DevTools, MCP, and composition. Both routes must produce the same observable Uklad state transitions.
 
 ## Design: integration through public primitives
 
@@ -134,6 +134,7 @@ Scope: browser CSR, synchronous localStorage, memory storage for tests, one `per
 - [x] Use a fail-closed storage policy: valid roots may publish, but any read/parse/validate/migrate/deserialize failure leaves all original entries untouched, publishes failed status, and closes writes.
 - [x] Expose failed status and `purge()` recovery in TodoMVC instead of remaining silently non-persistent.
 - [x] Report sanitized key/phase/code diagnostics without raw values or user-thrown messages.
+- [x] Report each failed async purge removal exactly once through the terminal protocol event.
 
 #### Uklad and public API contract
 
@@ -167,6 +168,7 @@ Scope: browser CSR, synchronous localStorage, memory storage for tests, one `per
 - [x] Coalesce only writes that have not started, preserve last-write-wins, and keep the queue usable after an individual write failure.
 - [x] Add `handle.flush(): Promise<void>` that waits for every write accepted before the call; `runtime.flush()` remains only an event-queue boundary.
 - [x] Add structured persist-error reporting and define `dispose()` behavior for queued, active, and awaited writes without an implicit hidden flush.
+- [x] Prune recovered failure windows once no active `flush()` snapshot can observe them, bounding lifetime history by unresolved roots and active barriers.
 - [x] Make async `purge()` ordered relative to pending writes so an older queued write cannot recreate purged data.
 
 #### Adapter and race gates
@@ -175,6 +177,11 @@ Scope: browser CSR, synchronous localStorage, memory storage for tests, one `per
 - [x] Deterministically test ordered writes, failure in the middle of a queue, disposal, purge with pending writes, and `flush()`.
 - [x] Verify two native-style runtimes with different adapter instances and prefixes remain isolated in package CI, and production-bundle both Android fixtures in CI.
 - [x] Dogfood the async route in small React Native and Expo fixtures.
+
+#### Maintainability
+
+- [x] Keep async storage ordering in a dedicated coordinator and hydration/purge generations and waiters in an explicit lifecycle controller.
+- [x] Keep persistence on the public `@ukladjs/core/vanilla` integration surface; the compatibility `internal` re-export is not required by the package.
 
 ## Beyond the async release
 

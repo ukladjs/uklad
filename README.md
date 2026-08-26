@@ -98,7 +98,7 @@ environment -> named coeffect ---------+-> pure event handler
 
 ## Production status
 
-`@ukladjs/core@0.2.2` is production-ready for application state. Although the
+`@ukladjs/core@0.2.3` is production-ready for application state. Although the
 version is pre-1.0, its documented public API is compatibility-protected and is
 the baseline for 1.0; routine releases are additive or corrective. DevTools and
 MCP are development and CI tooling, not production runtime dependencies.
@@ -116,7 +116,7 @@ production planning tool.
 ## Start building
 
 ```sh
-npm install @ukladjs/core@0.2.2
+npm install @ukladjs/core@0.2.3
 ```
 
 For an agent-authored project, add the managed Uklad router to the nearest
@@ -134,7 +134,7 @@ verification workflow.
 Optional integrations:
 
 ```sh
-npm install @ukladjs/persist@0.1.0
+npm install @ukladjs/persist@0.2.0
 npm install @ukladjs/tanstack-query@0.1.0 @tanstack/query-core@^5.0.0
 ```
 
@@ -156,10 +156,10 @@ structured runtime evidence instead of guessing from source text or logs.
 
 ## Workspaces
 
-- [`@ukladjs/core@0.2.2`](packages/core) — the core runtime,
+- [`@ukladjs/core@0.2.3`](packages/core) — the core runtime,
   React bindings, vanilla/headless APIs, browserless E2E scenarios, tests,
   benchmarks, agent templates, and the safe `uklad-agent init` project router.
-- [`@ukladjs/persist@0.1.0`](packages/persist) — versioned synchronous and
+- [`@ukladjs/persist@0.2.0`](packages/persist) — versioned synchronous and
   asynchronous persistence built on the public runtime APIs.
 - [`@ukladjs/tanstack-query@0.1.0`](packages/tanstack-query) — headless TanStack Query integration
   that routes observer updates through Uklad events and managed state.

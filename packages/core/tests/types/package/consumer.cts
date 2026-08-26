@@ -16,6 +16,7 @@ const namedOptions: EventRegistrationOptions<{ package: string }> = {
 };
 const trace: Trace | undefined = undefined;
 const runtime = ukladVanilla.createUkladRuntime({ initialState: { package: 'cjs' } });
+const integration = ukladVanilla.getRuntimeIntegration(runtime);
 runtime.registerModule((registrar) => {
   registrar.regEvent('package/cjs', () => undefined);
   registrar.regEvent('package/cjs-named', ({ coeffects: { now } }) => void now, {
@@ -23,6 +24,7 @@ runtime.registerModule((registrar) => {
   });
 });
 runtime.dispatch(['package/cjs']);
+void integration.flush();
 const inspector: UkladInspector = ukladDevtools.createUkladInspector(runtime);
 const testHarness = ukladTesting.createUkladTestHarness(runtime);
 const headlessScenario = ukladTesting.createUkladHeadlessScenario(runtime);

@@ -902,6 +902,33 @@ describe('persist', () => {
     runtime.dispose();
   });
 
+  it('reports an async purge removal failure exactly once', async () => {
+    const diagnostics: PersistDiagnostic[] = [];
+    const runtime = makeRuntime({ count: 0 });
+    const handle = persist(runtime, {
+      storage: {
+        getItem: async () => null,
+        setItem: async () => {},
+        removeItem: async () => {
+          throw new Error('remove cause must not leak');
+        },
+      },
+      keys: ['count'],
+      onError: (value) => diagnostics.push(value),
+    });
+    handle.hydrate();
+    await handle.whenHydrated();
+    warnSpy.mockClear();
+
+    await expect(handle.purge()).rejects.toThrow('Purge failed');
+
+    expect(diagnostics).toEqual([{ code: 'storage-remove-failed', phase: 'purge', key: 'count' }]);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('remove cause must not leak');
+    await handle.dispose();
+    runtime.dispose();
+  });
+
   it('settles purge when a sync adapter violates its remove contract with a thenable', async () => {
     const diagnostics: PersistDiagnostic[] = [];
     const storage = {

@@ -1,4 +1,4 @@
-import { createUkladRuntime } from '@ukladjs/core/vanilla';
+import { createUkladRuntime, getRuntimeIntegration } from '@ukladjs/core/vanilla';
 import { createUkladInspector } from '@ukladjs/core/devtools';
 import { createUkladHeadlessScenario, createUkladTestHarness } from '@ukladjs/core/testing';
 import {
@@ -20,6 +20,7 @@ const namedOptions: EventRegistrationOptions<{ package: string }> = {
 };
 const trace: Trace | undefined = undefined;
 const runtime = createUkladRuntime({ initialState: { package: 'esm' } });
+const integration = getRuntimeIntegration(runtime);
 runtime.registerModule((registrar) => {
   registrar.regEvent('package/esm', () => undefined);
   registrar.regEvent('package/esm-named', ({ coeffects: { now } }) => void now, {
@@ -27,6 +28,7 @@ runtime.registerModule((registrar) => {
   });
 });
 runtime.dispatch(['package/esm']);
+void integration.flush();
 const inspector: UkladInspector = createUkladInspector(runtime);
 const testHarness = createUkladTestHarness(runtime);
 const headlessScenario = createUkladHeadlessScenario(runtime);

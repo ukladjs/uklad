@@ -648,14 +648,21 @@ export function getRuntimeCoreForTests<TContracts extends UkladContracts>(
   ).getCoreForInternalUse();
 }
 
-/** @internal Administrative access used by testing and development adapters. */
-export function getRuntimeAdminForTests<TContracts extends UkladContracts>(
+/** @internal Administrative access used to construct bounded public facades. */
+export function getRuntimeAdminForInternalUse<TContracts extends UkladContracts>(
   runtime: UkladRuntime<TContracts>,
 ): UkladRuntimeAdmin<TContracts> {
   return getRuntimeOwnerImplementation(
     runtime,
     '[uklad] Expected a runtime created by createUkladRuntime().',
   ) as unknown as UkladRuntimeAdmin<TContracts>;
+}
+
+/** @internal Backward-compatible test helper. */
+export function getRuntimeAdminForTests<TContracts extends UkladContracts>(
+  runtime: UkladRuntime<TContracts>,
+): UkladRuntimeAdmin<TContracts> {
+  return getRuntimeAdminForInternalUse(runtime);
 }
 
 /** @internal Core access used by the separate DevTools entrypoint. */

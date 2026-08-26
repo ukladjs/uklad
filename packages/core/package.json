@@ -1,6 +1,6 @@
 {
   "name": "@ukladjs/core",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Production-ready, agent-first state management for React and React Native. Stable public API, pure events, derived subscriptions, explicit effects, SSR, and verifiable DevTools.",
   "author": "flexsurfer",
   "license": "MIT",

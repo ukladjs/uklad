@@ -4,6 +4,22 @@ All notable public package changes are recorded here. Packages version independe
 
 ## Unreleased
 
+## `@ukladjs/core@0.2.3` and `@ukladjs/persist@0.2.0`
+
+- Add the narrow public `getRuntimeIntegration()` capability to core's root and
+  vanilla entry points so official integrations can read state, flush work,
+  dispatch synchronously, and own interceptors without depending on the
+  compatibility-only `@ukladjs/core/internal` entry point.
+- Promote persistence's async storage path to the supported product surface,
+  including AsyncStorage-compatible and Expo SQLite adapters, retryable and
+  generation-authenticated hydration, ordered per-key writes, queued-write
+  coalescing, durability `flush()`, awaitable disposal, and deterministic purge.
+- Keep async failure accounting bounded, report purge failures exactly once,
+  fence stale attachment work, and extract lifecycle transitions into an
+  explicit controller with deterministic race coverage.
+- Add packed ESM/CommonJS and TypeScript 6/7 consumer coverage, native runtime
+  isolation regressions, and Android bundle gates for the Expo and bare React
+  Native fixtures.
 - Declare `@ukladjs/core` production-ready within a written support boundary and
   protect the current documented public API as the compatibility baseline for 1.0.
 - Add an auditable production-readiness document covering CI/package evidence,

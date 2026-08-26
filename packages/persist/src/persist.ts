@@ -1,5 +1,4 @@
-import { isRegistrationCollisionError } from '@ukladjs/core/vanilla';
-import { getRuntimeIntegration } from '@ukladjs/core/internal';
+import { getRuntimeIntegration, isRegistrationCollisionError } from '@ukladjs/core/vanilla';
 import type {
   ContractState,
   PermissiveUkladContracts,
@@ -11,6 +10,7 @@ import { encodeEnvelope, ignoreThenable, isThenable, stageEntry, type StagedEntr
 import { normalizeOptions } from './config';
 import { createAsyncCoordinator, type AsyncCoordinator } from './async-coordinator';
 import { PERSIST_IDS } from './ids';
+import { DISPOSED_ERROR, createPersistLifecycle, type PurgeTicket } from './lifecycle';
 import {
   isCompletionPayload,
   isHydrationSnapshot,
@@ -35,28 +35,13 @@ import type {
   PersistErrorPhase,
   PersistHandle,
   PersistOptions,
-  PersistStatus,
   SyncPersistStorage,
 } from './types';
 
 type Runtime = UkladRuntime<PermissiveUkladContracts>;
 type PersistEffect = [id: string] | [id: string, value: unknown];
-type LifecycleState = PersistStatus | 'disposed';
-
-interface Waiter {
-  readonly resolve: () => void;
-  readonly reject: (error: Error) => void;
-}
-
-interface PurgeWaiter extends Waiter {
-  readonly request: string;
-  accepted: boolean;
-}
 
 const attachedRuntimes = new WeakSet<object>();
-const HYDRATION_ERROR = '[uklad-persist] Hydration failed.';
-const DISPOSED_ERROR = '[uklad-persist] Disposed before operation completed.';
-const PURGE_ERROR = '[uklad-persist] Purge failed.';
 const EFFECT_AUTHORIZATION = '__ukladPersistAuthorization';
 const WRITE_SNAPSHOT = '__ukladPersistWriteSnapshot';
 
@@ -86,17 +71,10 @@ export function persist<TContracts extends UkladContracts>(
   const configByKey = new Map(keyConfigs.map((config) => [config.key, config]));
   const storageKey = (key: string): string => `${prefix}/${encodeURIComponent(key)}`;
 
-  let lifecycleState: LifecycleState = 'idle';
-  let disposed = false;
+  const lifecycle = createPersistLifecycle();
   let disposalBarrier: Promise<void> = Promise.resolve();
-  let purgeInFlight = false;
-  const hydrationWaiters: Waiter[] = [];
-  const purgeWaiters: PurgeWaiter[] = [];
   const authorizedEffects = new Set<string>();
   const authorizedEvents = new Set<string>();
-  const queuedHydrationRequests = new Set<string>();
-  let nextHydrationGeneration = 0;
-  let activeHydrationGeneration = 0;
   const authorizedEventGenerations = new Map<string, number>();
   let nextAuthorization = 0;
 
@@ -189,34 +167,24 @@ export function persist<TContracts extends UkladContracts>(
   };
 
   const failDroppedHydrationCompletion = (generation: number): void => {
-    if (
-      disposed ||
-      activeHydrationGeneration !== generation ||
-      (lifecycleState !== 'idle' && lifecycleState !== 'hydrating')
-    )
-      return;
+    if (!lifecycle.canAcceptHydrationCompletion(generation, ['idle', 'hydrating'])) return;
     const value = diagnostic('event-queue-failed', 'lifecycle');
     try {
       dispatchSyncAuthorized(PERSIST_IDS.FAILED, value, generation);
     } catch {
-      lifecycleState = 'failed';
-      activeHydrationGeneration = 0;
+      lifecycle.forceHydrationFailure();
       reportDiagnostic(value);
-      settleHydrationWaiters();
     }
   };
 
   const failDroppedPurgeCompletion = (): void => {
-    if (disposed || !purgeInFlight) return;
+    if (lifecycle.disposed || !lifecycle.purgeInFlight) return;
     const values = [diagnostic('event-queue-failed', 'lifecycle')];
     try {
       dispatchSyncAuthorized(PERSIST_IDS.PURGED, values);
     } catch {
-      lifecycleState = 'failed';
-      purgeInFlight = false;
+      lifecycle.forcePurgeFailure();
       reportDiagnostic(values[0]!);
-      settlePurgeWaiters('failed');
-      settleHydrationWaiters();
     }
   };
 
@@ -232,7 +200,7 @@ export function persist<TContracts extends UkladContracts>(
     try {
       runtime.dispatch([id, payload, authorization]);
       void integration.flush().catch(() => {
-        if (disposed || !authorizedEvents.delete(authorization)) return;
+        if (lifecycle.disposed || !authorizedEvents.delete(authorization)) return;
         authorizedEventGenerations.delete(authorization);
         onDropped();
       });
@@ -241,31 +209,6 @@ export function persist<TContracts extends UkladContracts>(
       authorizedEventGenerations.delete(authorization);
       onDropped();
     }
-  };
-
-  const settleHydrationWaiters = (): void => {
-    if (lifecycleState !== 'hydrated' && lifecycleState !== 'failed') return;
-    if (lifecycleState === 'failed' && queuedHydrationRequests.size > 0) return;
-    for (const waiter of hydrationWaiters.splice(0)) {
-      if (lifecycleState === 'hydrated') waiter.resolve();
-      else waiter.reject(new Error(HYDRATION_ERROR));
-    }
-  };
-
-  const settlePurgeWaiters = (status: TerminalStatus): void => {
-    for (let index = purgeWaiters.length - 1; index >= 0; index -= 1) {
-      const waiter = purgeWaiters[index]!;
-      if (!waiter.accepted) continue;
-      purgeWaiters.splice(index, 1);
-      if (status === 'hydrated') waiter.resolve();
-      else waiter.reject(new Error(PURGE_ERROR));
-    }
-  };
-
-  const markPurgeAccepted = (request: unknown): void => {
-    if (typeof request !== 'string') return;
-    const waiter = purgeWaiters.find((candidate) => candidate.request === request);
-    if (waiter) waiter.accepted = true;
   };
 
   const readAllSync = (): HydrationSnapshot => {
@@ -360,14 +303,14 @@ export function persist<TContracts extends UkladContracts>(
     operation: () => Promise<void>,
     failure: PersistDiagnostic,
   ): void => {
-    if (!asyncCoordinator || disposed) return;
+    if (!asyncCoordinator || lifecycle.disposed) return;
     const ticket = asyncCoordinator.enqueue(
       key,
       async () => {
         try {
           return await operation();
         } catch {
-          if (!disposed) reportDiagnostic(failure);
+          if (!lifecycle.disposed) reportDiagnostic(failure);
           throw new Error(`[uklad-persist] ${failure.code}.`);
         }
       },
@@ -467,7 +410,6 @@ export function persist<TContracts extends UkladContracts>(
               return undefined;
             } catch {
               const value = diagnostic('storage-remove-failed', 'purge', key);
-              if (!disposed) reportDiagnostic(value);
               throw new Error(`[uklad-persist] ${value.code}.`);
             }
           },
@@ -503,10 +445,8 @@ export function persist<TContracts extends UkladContracts>(
   };
 
   const cleanup = (): void => {
-    if (disposed) return;
-    disposed = true;
-    lifecycleState = 'disposed';
-    purgeInFlight = false;
+    if (lifecycle.disposed) return;
+    lifecycle.dispose();
     const coordinatorBarrier = asyncCoordinator?.dispose();
     authorizedEffects.clear();
     authorizedEventGenerations.clear();
@@ -517,8 +457,6 @@ export function persist<TContracts extends UkladContracts>(
     } else {
       attachedRuntimes.delete(runtimeIdentity);
     }
-    for (const waiter of hydrationWaiters.splice(0)) waiter.reject(new Error(DISPOSED_ERROR));
-    for (const waiter of purgeWaiters.splice(0)) waiter.reject(new Error(DISPOSED_ERROR));
   };
 
   attachedRuntimes.add(runtimeIdentity);
@@ -539,22 +477,15 @@ export function persist<TContracts extends UkladContracts>(
 
       if (isSync) {
         scope.regCoeffect(PERSIST_IDS.SNAPSHOT, () =>
-          lifecycleState === 'idle' || lifecycleState === 'failed'
+          lifecycle.canStageSyncRead()
             ? readAllSync()
             : { rawByKey: Object.create(null) as RawByKey, diagnostics: [] },
         );
         scope.regEvent(
           PERSIST_IDS.HYDRATE,
           ({ draftState, coeffects: { snapshot } }) => {
-            if (lifecycleState === 'hydrating' || lifecycleState === 'hydrated') {
-              return [effect(PERSIST_IDS.SETTLE, {})];
-            }
-            if (lifecycleState !== 'idle' && lifecycleState !== 'failed') {
-              return [effect(PERSIST_IDS.SETTLE, {})];
-            }
-            const generation = ++nextHydrationGeneration;
-            activeHydrationGeneration = generation;
-            lifecycleState = 'hydrating';
+            const generation = lifecycle.acceptSyncHydration();
+            if (generation === undefined) return [effect(PERSIST_IDS.SETTLE, {})];
             return applySnapshot(draftState as AnyState, snapshot as HydrationSnapshot, generation);
           },
           { coeffects: { snapshot: PERSIST_IDS.SNAPSHOT } },
@@ -569,30 +500,8 @@ export function persist<TContracts extends UkladContracts>(
             typeof requestPayload === 'object' && requestPayload !== null
               ? (Reflect.get(requestPayload, 'generation') as unknown)
               : undefined;
-          const isQueuedHandleAttempt =
-            typeof requestedRequest === 'string' &&
-            isHydrationGeneration(requestedGeneration) &&
-            requestedGeneration === activeHydrationGeneration &&
-            queuedHydrationRequests.has(requestedRequest);
-          if (
-            (lifecycleState === 'hydrating' || lifecycleState === 'hydrated') &&
-            !isQueuedHandleAttempt
-          ) {
-            if (typeof requestedRequest === 'string')
-              queuedHydrationRequests.delete(requestedRequest);
-            return [effect(PERSIST_IDS.SETTLE, {})];
-          }
-          if (lifecycleState !== 'idle' && lifecycleState !== 'failed' && !isQueuedHandleAttempt) {
-            if (typeof requestedRequest === 'string')
-              queuedHydrationRequests.delete(requestedRequest);
-            return [effect(PERSIST_IDS.SETTLE, {})];
-          }
-          const generation = isHydrationGeneration(requestedGeneration)
-            ? requestedGeneration
-            : ++nextHydrationGeneration;
-          nextHydrationGeneration = Math.max(nextHydrationGeneration, generation);
-          activeHydrationGeneration = generation;
-          lifecycleState = 'hydrating';
+          const generation = lifecycle.acceptAsyncHydration(requestedRequest, requestedGeneration);
+          if (generation === undefined) return [effect(PERSIST_IDS.SETTLE, {})];
           (draftState as AnyState)[PERSIST_IDS.STATUS] = 'hydrating';
           return [effect(PERSIST_IDS.READ, { request: requestedRequest, generation })];
         });
@@ -606,21 +515,18 @@ export function persist<TContracts extends UkladContracts>(
         }
         {
           const request = Reflect.get(authorizedPayload, 'request') as unknown;
-          if (typeof request === 'string') {
-            queuedHydrationRequests.delete(request);
-          }
+          lifecycle.consumeQueuedHydrationRequest(request);
         }
         const generation = Reflect.get(authorizedPayload, 'generation') as unknown;
         if (
           !isHydrationGeneration(generation) ||
-          disposed ||
-          lifecycleState !== 'hydrating' ||
-          activeHydrationGeneration !== generation
+          lifecycle.disposed ||
+          !lifecycle.canAcceptHydrationCompletion(generation)
         )
           return;
         void readAllAsync()
           .then((snapshot) => {
-            if (!disposed) {
+            if (!lifecycle.disposed) {
               dispatchAuthorized(
                 PERSIST_IDS.LOADED,
                 snapshot,
@@ -630,7 +536,7 @@ export function persist<TContracts extends UkladContracts>(
             }
           })
           .catch(() => {
-            if (!disposed) {
+            if (!lifecycle.disposed) {
               dispatchAuthorized(
                 PERSIST_IDS.FAILED,
                 diagnostic('storage-read-failed', 'read'),
@@ -650,8 +556,7 @@ export function persist<TContracts extends UkladContracts>(
           const generation = capability.generation;
           if (
             !isHydrationGeneration(generation) ||
-            lifecycleState !== 'hydrating' ||
-            activeHydrationGeneration !== generation
+            !lifecycle.canAcceptHydrationCompletion(generation)
           ) {
             return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
           }
@@ -678,8 +583,7 @@ export function persist<TContracts extends UkladContracts>(
           const generation = capability.generation;
           if (
             !isHydrationGeneration(generation) ||
-            (lifecycleState !== 'idle' && lifecycleState !== 'hydrating') ||
-            activeHydrationGeneration !== generation
+            !lifecycle.canAcceptHydrationCompletion(generation, ['idle', 'hydrating'])
           ) {
             return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
           }
@@ -698,11 +602,9 @@ export function persist<TContracts extends UkladContracts>(
       );
 
       scope.regEvent(PERSIST_IDS.PURGE, ({ draftState }, request: unknown) => {
-        if (purgeInFlight) {
-          markPurgeAccepted(request);
-          return;
-        }
-        if (lifecycleState === 'hydrating') {
+        const admission = lifecycle.admitPurge(request);
+        if (admission === 'joined') return;
+        if (admission === 'rejected') {
           return [
             effect(PERSIST_IDS.REPORT, diagnostic('purge-during-hydration', 'lifecycle')),
             effect(PERSIST_IDS.REJECT_PURGE, { request }),
@@ -717,11 +619,9 @@ export function persist<TContracts extends UkladContracts>(
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           return;
         }
-        markPurgeAccepted(Reflect.get(authorizedPayload, 'request'));
-        if (disposed || purgeInFlight) return;
-        purgeInFlight = true;
+        if (!lifecycle.beginPurge(Reflect.get(authorizedPayload, 'request'))) return;
         void removeAll().then((diagnostics) => {
-          if (!disposed) {
+          if (!lifecycle.disposed) {
             dispatchAuthorized(PERSIST_IDS.PURGED, diagnostics, failDroppedPurgeCompletion);
           }
         });
@@ -732,7 +632,7 @@ export function persist<TContracts extends UkladContracts>(
           if (!consumeEventAuthorization(authorization)) {
             return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
           }
-          if (!purgeInFlight) {
+          if (!lifecycle.purgeInFlight) {
             return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
           }
           const diagnostics = isPersistDiagnosticArray(value)
@@ -763,7 +663,7 @@ export function persist<TContracts extends UkladContracts>(
           const newState = context.newState as AnyState | undefined;
           if (
             newState === undefined ||
-            lifecycleState !== 'hydrated' ||
+            !lifecycle.canWrite() ||
             newState[PERSIST_IDS.STATUS] !== 'hydrated'
           ) {
             return context;
@@ -796,42 +696,31 @@ export function persist<TContracts extends UkladContracts>(
         if (!authorizedPayload || !isCompletionPayload(authorizedPayload)) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           if (authorizedPayload) {
-            lifecycleState = 'failed';
-            settleHydrationWaiters();
+            lifecycle.forceHydrationFailure();
           }
           return;
         }
-        if (authorizedPayload.generation !== activeHydrationGeneration) {
+        if (!lifecycle.completeHydration(authorizedPayload.status, authorizedPayload.generation)) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
-          return;
         }
-        lifecycleState = authorizedPayload.status;
-        activeHydrationGeneration = 0;
-        settleHydrationWaiters();
       });
       scope.regEffect(PERSIST_IDS.COMPLETE_PURGE, (payload: unknown) => {
         const authorizedPayload = consumeEffectAuthorization(payload);
         if (!authorizedPayload || !isPurgeCompletionPayload(authorizedPayload)) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           if (authorizedPayload) {
-            lifecycleState = 'failed';
-            purgeInFlight = false;
-            settlePurgeWaiters('failed');
-            settleHydrationWaiters();
+            lifecycle.forcePurgeFailure();
           }
           return;
         }
-        lifecycleState = authorizedPayload.status;
-        purgeInFlight = false;
-        settlePurgeWaiters(authorizedPayload.status);
-        settleHydrationWaiters();
+        lifecycle.completePurge(authorizedPayload.status);
       });
       scope.regEffect(PERSIST_IDS.SETTLE, (payload: unknown) => {
         if (!consumeEffectAuthorization(payload)) {
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           return;
         }
-        settleHydrationWaiters();
+        lifecycle.settleHydration();
       });
       scope.regEffect(PERSIST_IDS.REJECT_PURGE, (payload: unknown) => {
         const authorizedPayload = consumeEffectAuthorization(payload);
@@ -839,8 +728,8 @@ export function persist<TContracts extends UkladContracts>(
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           return;
         }
-        markPurgeAccepted(Reflect.get(authorizedPayload, 'request'));
-        settlePurgeWaiters('failed');
+        lifecycle.acceptPurgeRequest(Reflect.get(authorizedPayload, 'request'));
+        lifecycle.rejectAcceptedPurges();
       });
       scope.regEffect(PERSIST_IDS.REPORT, (payload: unknown) => {
         const authorizedPayload = consumeEffectAuthorization(payload);
@@ -875,8 +764,8 @@ export function persist<TContracts extends UkladContracts>(
   const installedDisposer = disposeModule;
   return {
     hydrate(): void {
-      if (disposed) throw new Error(DISPOSED_ERROR);
-      if (purgeInFlight || purgeWaiters.length > 0) {
+      if (lifecycle.disposed) throw new Error(DISPOSED_ERROR);
+      if (lifecycle.hasPurgeWork) {
         throw new Error('[uklad-persist] Cannot hydrate while purge is in progress.');
       }
       if (isSync) {
@@ -886,85 +775,55 @@ export function persist<TContracts extends UkladContracts>(
           // A before-interceptor can abort HYDRATE before its handler allocates
           // a generation. Create a valid fallback generation so waiters still
           // receive a terminal failure instead of remaining pending forever.
-          const generation = isHydrationGeneration(activeHydrationGeneration)
-            ? activeHydrationGeneration
-            : ++nextHydrationGeneration;
-          activeHydrationGeneration = generation;
-          if (lifecycleState === 'idle') lifecycleState = 'hydrating';
+          const generation = lifecycle.ensureHydrationGenerationAfterDispatchFailure();
           failDroppedHydrationCompletion(generation);
           throw error;
         }
       } else {
-        if (lifecycleState === 'hydrating' || lifecycleState === 'hydrated') return;
         const request = issueAuthorization();
-        const generation = ++nextHydrationGeneration;
-        queuedHydrationRequests.add(request);
-        lifecycleState = 'hydrating';
-        activeHydrationGeneration = generation;
+        const generation = lifecycle.queueAsyncHydration(request);
+        if (generation === undefined) return;
         try {
           runtime.dispatch([PERSIST_IDS.HYDRATE, { request, generation }]);
           void integration.flush().catch(() => {
-            if (disposed || !queuedHydrationRequests.delete(request)) return;
+            if (lifecycle.disposed || !lifecycle.consumeQueuedHydrationRequest(request)) return;
             failDroppedHydrationCompletion(generation);
           });
         } catch (error) {
-          queuedHydrationRequests.delete(request);
+          lifecycle.consumeQueuedHydrationRequest(request);
           failDroppedHydrationCompletion(generation);
           throw error;
         }
       }
     },
     whenHydrated(): Promise<void> {
-      return new Promise((resolve, reject) => {
-        if (disposed) {
-          reject(new Error(DISPOSED_ERROR));
-          return;
-        }
-        // A retry request is queued before its async HYDRATE event runs. Do
-        // not immediately reject a waiter against the previous failed attempt
-        // while that next generation is waiting in the runtime queue.
-        if (lifecycleState === 'failed' && queuedHydrationRequests.size === 0) {
-          reject(new Error(HYDRATION_ERROR));
-          return;
-        }
-        hydrationWaiters.push({ resolve, reject });
-        settleHydrationWaiters();
-      });
+      return lifecycle.whenHydrated();
     },
     async flush(): Promise<void> {
-      if (disposed) throw new Error(DISPOSED_ERROR);
+      if (lifecycle.disposed) throw new Error(DISPOSED_ERROR);
       await integration.flush();
       if (!asyncCoordinator) return;
       await asyncCoordinator.flush();
     },
     purge(): Promise<void> {
-      if (disposed) return Promise.reject(new Error(DISPOSED_ERROR));
+      if (lifecycle.disposed) return Promise.reject(new Error(DISPOSED_ERROR));
 
       const request = issueAuthorization();
-      let waiter: PurgeWaiter;
-      const pending = new Promise<void>((resolve, reject) => {
-        waiter = { resolve, reject, request, accepted: false };
-        purgeWaiters.push(waiter);
-      });
+      const ticket: PurgeTicket = lifecycle.createPurgeTicket(request);
       try {
         runtime.dispatch([PERSIST_IDS.PURGE, request]);
         void integration.flush().catch(() => {
-          if (disposed || waiter!.accepted) return;
-          const index = purgeWaiters.indexOf(waiter!);
-          if (index < 0) return;
-          purgeWaiters.splice(index, 1);
+          if (lifecycle.disposed || lifecycle.isPurgeAccepted(ticket)) return;
+          if (!lifecycle.cancelPurge(ticket, true)) return;
           reportDiagnostic(diagnostic('event-queue-failed', 'lifecycle'));
-          waiter!.reject(new Error(PURGE_ERROR));
         });
       } catch {
-        const index = purgeWaiters.indexOf(waiter!);
-        if (index >= 0) purgeWaiters.splice(index, 1);
-        waiter!.reject(new Error(PURGE_ERROR));
+        lifecycle.cancelPurge(ticket);
       }
-      return pending;
+      return ticket.promise;
     },
     async dispose(): Promise<void> {
-      if (!disposed) installedDisposer?.();
+      if (!lifecycle.disposed) installedDisposer?.();
       await disposalBarrier;
     },
   };

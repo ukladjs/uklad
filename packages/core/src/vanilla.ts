@@ -8,6 +8,8 @@ export { DISPATCH, DISPATCH_LATER } from './events/built-in-effects';
 export { shallowEqual } from './core/equality';
 export { current, enableMapSet, original } from './core/immer';
 export { isRegistrationCollisionError } from './runtime/registrations';
+export { getRuntimeIntegration } from './runtime/integration';
+export type { UkladRuntimeIntegration } from './runtime/integration';
 
 // The contract surface is deliberately small. `UkladContracts` is what an
 // application declares; `DefaultContracts` is the ambient single-runtime

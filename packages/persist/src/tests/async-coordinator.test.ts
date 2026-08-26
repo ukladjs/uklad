@@ -197,6 +197,23 @@ describe('async persistence coordinator', () => {
     await expect(coordinator.flush()).resolves.toBeUndefined();
   });
 
+  it('prunes superseded failure history after repeated recovery', async () => {
+    const coordinator = createAsyncCoordinator();
+
+    for (let index = 0; index < 100; index += 1) {
+      const failure = coordinator.enqueue('count', async () => {
+        throw new Error('expected storage failure');
+      });
+      await expect(failure.promise).rejects.toThrow('expected storage failure');
+      await expect(coordinator.flush()).rejects.toThrow('storage writes failed');
+
+      const recovery = coordinator.enqueue('count', async () => undefined);
+      await expect(recovery.promise).resolves.toBeUndefined();
+      await expect(coordinator.flush()).resolves.toBeUndefined();
+      expect(coordinator.retainedFailureCountForTests()).toBe(0);
+    }
+  });
+
   it('gives concurrent flush callers the same result for a failed write', async () => {
     const coordinator = createAsyncCoordinator();
     const failure = coordinator.enqueue('count', async () => {

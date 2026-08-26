@@ -9,7 +9,7 @@ Pure event handlers over an instance-owned state, derived subscriptions, isolate
 
 ## ✅ Production ready, compatibility protected
 
-`@ukladjs/core@0.2.2` is production-ready. Its documented public API is the
+`@ukladjs/core@0.2.3` is production-ready. Its documented public API is the
 stable application boundary and the compatibility baseline for 1.0. Routine
 releases are additive or corrective and do not require application rewrites.
 
@@ -113,7 +113,7 @@ mkdir -p .cursor && cp node_modules/@ukladjs/core/templates/agent/mcp.json .curs
 ## ✨ The architecture in 30 seconds
 
 ```bash
-npm install @ukladjs/core@0.2.2
+npm install @ukladjs/core@0.2.3
 ```
 
 Declare application names once, beside one complete contract:
@@ -179,6 +179,22 @@ function Root() {
   );
 }
 ```
+
+Libraries that attach runtime-wide infrastructure can request the bounded
+integration facade from `@ukladjs/core/vanilla`:
+
+```ts
+import { getRuntimeIntegration } from '@ukladjs/core/vanilla';
+
+const integration = getRuntimeIntegration(runtime);
+integration.addInterceptor(myInterceptor);
+// The attaching library owns removal of every interceptor it adds.
+integration.removeInterceptor(myInterceptor.id);
+```
+
+Application features should continue to use `UkladRuntime`, its module
+registrar, and the React bindings. The integration facade exists for libraries
+that genuinely own runtime-wide lifecycle infrastructure.
 
 Each runtime owns its state, event queue, handlers, subscription graph,
 tracing, and inspector. Create one per browser root, SSR request, embedded

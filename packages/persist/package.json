@@ -1,6 +1,6 @@
 {
   "name": "@ukladjs/persist",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Versioned synchronous and asynchronous persistence for Uklad.",
   "author": "flexsurfer",
   "license": "MIT",
@@ -85,7 +85,7 @@
     "typescript-eslint": "8.65.0"
   },
   "peerDependencies": {
-    "@ukladjs/core": "^0.2.0"
+    "@ukladjs/core": "^0.2.3"
   },
   "keywords": [
     "uklad",

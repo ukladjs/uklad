@@ -128,15 +128,18 @@ exports during the initial release.
 | `types.ts`             | Public storage, option, handle, diagnostic, and strict-contract types                                        |
 | `adapters.ts`          | Browser `localStorage`, in-memory, AsyncStorage-compatible, and sync structural adapters                     |
 | `async-coordinator.ts` | Per-key async ordering, queued-write coalescing, failure tracking, durability barriers, and disposal         |
+| `lifecycle.ts`         | Explicit hydration generations, retry admission, purge ownership, waiter settlement, and disposal            |
 | `config.ts`            | Static option validation and frozen normalized key configuration                                             |
 | `codec.ts`             | Versioned envelope codec, recursive JSON validation, migrations, and transforms; no Uklad runtime dependency |
 | `protocol.ts`          | Registration collision checks and validation of internal event/effect payloads                               |
-| `persist.ts`           | Attachment-local state, Uklad registration, lifecycle barriers, writer, and handle implementation            |
+| `persist.ts`           | Storage operations, Uklad registration, authenticated protocol effects, writer, and handle assembly          |
 
 The dependency direction is inward: `codec.ts` and `config.ts` are pure
 configuration/data code; `protocol.ts` describes boundary messages; only
-`persist.ts` assembles them against a runtime. Async ordering lives in its own
-attachment-local coordinator, so the codec remains runtime-independent.
+`persist.ts` assembles them against a runtime through the public
+`getRuntimeIntegration()` capability. Async ordering and lifecycle transitions
+live in separate attachment-local controllers, so storage coordination, waiter
+state, and Uklad registration do not share mutable implementation flags.
 
 ## Lifecycle and protocol
 

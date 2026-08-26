@@ -17,6 +17,8 @@ export interface AsyncCoordinator {
   flush(): Promise<void>;
   /** Stop queued operations and wait for already-started storage work to settle. */
   dispose(): Promise<void> | undefined;
+  /** Internal regression probe; production consumers never receive this coordinator. */
+  retainedFailureCountForTests(): number;
 }
 
 /**
@@ -45,12 +47,32 @@ export function createAsyncCoordinator(): AsyncCoordinator {
       readonly promise: Promise<void>;
     }
   >();
+  const activeFlushTargets = new Map<number, number>();
+  const openFailureByKey = new Map<string, number>();
+  let nextFlushId = 0;
   /**
    * Storage failures stay visible until a later successful operation for the
    * same key supersedes them. Keeping the resolution sequence lets a flush
    * whose snapshot predates that success still report the failure.
    */
   const failures = new Map<number, { readonly key: string; resolvedBy?: number }>();
+
+  function pruneResolvedFailures(): void {
+    for (const [sequence, failure] of failures) {
+      const resolvedBy = failure.resolvedBy;
+      if (resolvedBy === undefined) continue;
+      const neededByActiveFlush = [...activeFlushTargets.values()].some(
+        (target) => sequence <= target && target < resolvedBy,
+      );
+      if (!neededByActiveFlush) failures.delete(sequence);
+    }
+  }
+
+  function recordFailure(sequence: number, key: string): void {
+    if (openFailureByKey.has(key)) return;
+    openFailureByKey.set(key, sequence);
+    failures.set(sequence, { key });
+  }
 
   function enqueue(
     key: string,
@@ -84,17 +106,19 @@ export function createAsyncCoordinator(): AsyncCoordinator {
           const result = await state.operation();
           if (!disposed) {
             const latestSequence = Math.max(...state.sequences.keys());
-            for (const failure of failures.values()) {
-              if (failure.key === key && failure.resolvedBy === undefined) {
-                failure.resolvedBy = latestSequence;
-              }
+            const failureSequence = openFailureByKey.get(key);
+            if (failureSequence !== undefined) {
+              const failure = failures.get(failureSequence);
+              if (failure) failure.resolvedBy = latestSequence;
+              openFailureByKey.delete(key);
+              pruneResolvedFailures();
             }
           }
           return result;
         } catch (error) {
           if (!disposed) {
             for (const [acceptedSequence, trackFailure] of state.sequences) {
-              if (trackFailure) failures.set(acceptedSequence, { key });
+              if (trackFailure) recordFailure(acceptedSequence, key);
             }
           }
           throw error;
@@ -122,19 +146,26 @@ export function createAsyncCoordinator(): AsyncCoordinator {
   async function flush(): Promise<void> {
     if (disposed) throw new Error(DISPOSED_ERROR);
     const targetSequence = nextSequence;
+    const flushId = ++nextFlushId;
+    activeFlushTargets.set(flushId, targetSequence);
     const pending = [...tickets.entries()]
       .filter(([sequence]) => sequence <= targetSequence)
       .map(([, promise]) => promise);
 
-    const pendingResult = Promise.allSettled(pending).then(() => undefined);
-    await Promise.race([pendingResult, disposedSignal]);
-    if (disposed) throw new Error(DISPOSED_ERROR);
+    try {
+      const pendingResult = Promise.allSettled(pending).then(() => undefined);
+      await Promise.race([pendingResult, disposedSignal]);
+      if (disposed) throw new Error(DISPOSED_ERROR);
 
-    for (const [sequence, failure] of failures) {
-      if (sequence > targetSequence) continue;
-      if (failure.resolvedBy === undefined || failure.resolvedBy > targetSequence) {
-        throw new Error(FLUSH_ERROR);
+      for (const [sequence, failure] of failures) {
+        if (sequence > targetSequence) continue;
+        if (failure.resolvedBy === undefined || failure.resolvedBy > targetSequence) {
+          throw new Error(FLUSH_ERROR);
+        }
       }
+    } finally {
+      activeFlushTargets.delete(flushId);
+      pruneResolvedFailures();
     }
   }
 
@@ -146,6 +177,7 @@ export function createAsyncCoordinator(): AsyncCoordinator {
     const accepted = [...tickets.values()];
     tails.clear();
     queuedCoalescible.clear();
+    openFailureByKey.clear();
     failures.clear();
     resolveDisposed?.();
     if (accepted.length > 0) {
@@ -154,5 +186,10 @@ export function createAsyncCoordinator(): AsyncCoordinator {
     return disposalBarrier;
   }
 
-  return { enqueue, flush, dispose };
+  return {
+    enqueue,
+    flush,
+    dispose,
+    retainedFailureCountForTests: () => failures.size,
+  };
 }

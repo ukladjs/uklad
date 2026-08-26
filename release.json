@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "core-headless-e2e-0.2.2",
+  "id": "core-persist-async-0.2.3-0.2.0",
   "packages": [
     {
       "name": "@ukladjs/core",
       "path": "packages/core",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "tag": "latest",
       "publish": true
     },
@@ -26,9 +26,9 @@
     {
       "name": "@ukladjs/persist",
       "path": "packages/persist",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "tag": "latest",
-      "publish": false
+      "publish": true
     },
     {
       "name": "@ukladjs/tanstack-query",

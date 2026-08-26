@@ -17,17 +17,33 @@ export interface SyncPersistStorage {
   removeItem(key: string): void;
 }
 
-/**
- * Experimental async storage shape; it is not supported by the initial release.
- *
- * @experimental Async writes are not ordered or durable yet. Passing this
- * shape also requires `experimentalAsync: true`.
- */
+/** Promise-based string key-value storage used by React Native and Expo. */
 export interface AsyncPersistStorage {
   readonly sync?: false;
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;
+}
+
+/** Structural adapter input accepted by `asyncStorageAdapter()`. */
+export interface AsyncStorageLike {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+  removeItem(key: string): Promise<void>;
+}
+
+/** Structural adapter input accepted by `syncStorageAdapter()`. */
+export interface SyncStorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+/** Sync-method shape exposed by Expo SQLite's key-value store. */
+export interface SyncMethodsStorageLike {
+  getItemSync(key: string): string | null;
+  setItemSync(key: string, value: string): void;
+  removeItemSync(key: string): void;
 }
 
 export type PersistStorage = SyncPersistStorage | AsyncPersistStorage;
@@ -109,8 +125,9 @@ interface PersistBaseOptions<TState extends AnyState> {
 }
 
 /**
- * Persistence configuration. The initial-release product contract is the synchronous
- * branch; the async branch requires an explicit experimental opt-in.
+ * Persistence configuration. Both synchronous and ordered asynchronous storage
+ * are supported. `experimentalAsync` is retained as a source-compatible no-op
+ * for applications that opted into the original prototype.
  */
 export type PersistOptions<TState extends AnyState = AnyState> = PersistBaseOptions<TState> &
   (
@@ -120,20 +137,22 @@ export type PersistOptions<TState extends AnyState = AnyState> = PersistBaseOpti
       }
     | {
         readonly storage: AsyncPersistStorage;
-        /** @experimental Async writes are not ordered or durable yet. */
-        readonly experimentalAsync: true;
+        /** @deprecated Async storage is now supported without an opt-in. */
+        readonly experimentalAsync?: true;
       }
   );
 
 export interface PersistHandle {
-  /** Start the one hydration attempt. Repeated calls are idempotent. */
+  /** Start hydration. Repeated calls are idempotent while active or hydrated. */
   hydrate(): void;
-  /** Wait for hydration; waits for a future attempt when the attachment is idle. */
+  /** Wait for hydration; gate events that change persisted roots on its resolution. */
   whenHydrated(): Promise<void>;
   /** Remove configured entries and reopen writes from the current state on success. */
   purge(): Promise<void>;
-  /** Detach the module. Pending barriers reject deterministically. */
-  dispose(): void;
+  /** Wait for accepted writes to settle durably; failures remain visible until superseded. */
+  flush(): Promise<void>;
+  /** Detach the module and wait until active storage work can no longer outlive ownership. */
+  dispose(): Promise<void>;
 }
 
 /** Optional state field contributed by persistence to a strict runtime contract. */

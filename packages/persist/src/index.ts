@@ -6,11 +6,17 @@
  * creating a public subpath API during the initial release.
  */
 
-export { localStorageAdapter, memoryStorageAdapter } from './adapters';
+export {
+  asyncStorageAdapter,
+  localStorageAdapter,
+  memoryStorageAdapter,
+  syncStorageAdapter,
+} from './adapters';
 export { PERSIST_IDS } from './ids';
 export { persist } from './persist';
 export type {
   AsyncPersistStorage,
+  AsyncStorageLike,
   PersistContractState,
   PersistContracts,
   PersistData,
@@ -26,4 +32,6 @@ export type {
   PersistStorage,
   PersistSubscriptionPayloads,
   SyncPersistStorage,
+  SyncMethodsStorageLike,
+  SyncStorageLike,
 } from './types';

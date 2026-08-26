@@ -4,7 +4,13 @@ import { createUkladInspector } from '@ukladjs/core/devtools';
 import type { Trace } from '@ukladjs/core/vanilla';
 import type { UkladContracts } from '@ukladjs/core/vanilla';
 
-import { PERSIST_IDS, localStorageAdapter, persist } from '../index';
+import {
+  PERSIST_IDS,
+  asyncStorageAdapter,
+  localStorageAdapter,
+  persist,
+  syncStorageAdapter,
+} from '../index';
 import type {
   AsyncPersistStorage,
   PersistData,
@@ -80,6 +86,16 @@ function createDeferredAsyncStorage(initial?: Record<string, string>, failReads 
   };
 }
 
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 function entry(version: number, data: unknown): string {
   return JSON.stringify({ v: version, data });
 }
@@ -109,6 +125,54 @@ describe('persist', () => {
   afterEach(() => {
     warnSpy.mockRestore();
     errorSpy.mockRestore();
+  });
+
+  it('adapts AsyncStorage-compatible and synchronous Expo key-value shapes', async () => {
+    const values = new Map<string, string>();
+    const async = asyncStorageAdapter({
+      getItem: async (key) => values.get(key) ?? null,
+      setItem: async (key, value) => {
+        values.set(key, value);
+      },
+      removeItem: async (key) => {
+        values.delete(key);
+      },
+    });
+    expect(async.sync).toBe(false);
+    await async.setItem('key', 'value');
+    await expect(async.getItem('key')).resolves.toBe('value');
+    await async.removeItem('key');
+
+    const syncValues = new Map<string, string>();
+    const sync = syncStorageAdapter({
+      getItem: (key) => syncValues.get(key) ?? null,
+      setItem: (key, value) => {
+        syncValues.set(key, value);
+      },
+      removeItem: (key) => {
+        syncValues.delete(key);
+      },
+    });
+    expect(sync.sync).toBe(true);
+    sync.setItem('key', 'value');
+    expect(sync.getItem('key')).toBe('value');
+    sync.removeItem('key');
+    expect(sync.getItem('key')).toBeNull();
+
+    const expoLikeValues = new Map<string, string>();
+    const expoLike = syncStorageAdapter({
+      getItemSync: (key) => expoLikeValues.get(key) ?? null,
+      setItemSync: (key, value) => {
+        expoLikeValues.set(key, value);
+      },
+      removeItemSync: (key) => {
+        expoLikeValues.delete(key);
+      },
+    });
+    expoLike.setItem('key', 'value');
+    expect(expoLike.getItem('key')).toBe('value');
+    expoLike.removeItem('key');
+    expect(expoLike.getItem('key')).toBeNull();
   });
 
   it('starts idle, then synchronously hydrates, migrates, and rewrites only migrated keys', async () => {
@@ -415,6 +479,30 @@ describe('persist', () => {
     runtime.dispose();
   });
 
+  it('settles sync hydration waiters when a before interceptor aborts the event', async () => {
+    const runtime = makeRuntime({ count: 0 });
+    const handle = persist(runtime, {
+      storage: createMemoryStorage({ 'uklad/count': entry(1, 41) }).storage,
+      keys: ['count'],
+    });
+    runtime.addInterceptor({
+      id: 'block-sync-hydrate-before-handler',
+      before: (context) => {
+        if (context.coeffects.event[0] === PERSIST_IDS.HYDRATE) {
+          throw new Error('expected sync hydration before-interceptor failure');
+        }
+        return context;
+      },
+    });
+    const pending = handle.whenHydrated();
+
+    expect(() => handle.hydrate()).toThrow('expected sync hydration before-interceptor failure');
+    await expect(pending).rejects.toThrow('Hydration failed');
+    expect(statusOf(runtime)).toBe('failed');
+    handle.dispose();
+    runtime.dispose();
+  });
+
   it('stages migrations and emits no rewrite when deserialize or any sibling entry fails', () => {
     const originalTodos = entry(1, ['old']);
     const originalSettings = 'CORRUPT_SECRET_VALUE';
@@ -575,6 +663,41 @@ describe('persist', () => {
     runtime.dispose();
   });
 
+  it('keeps async hydration idempotent while active and after success', async () => {
+    const gate = createDeferred<void>();
+    let reads = 0;
+    const runtime = makeRuntime({ count: 0 });
+    const storage: AsyncPersistStorage = {
+      getItem: async () => {
+        reads += 1;
+        await gate.promise;
+        return entry(1, 10);
+      },
+      setItem: async () => {},
+      removeItem: async () => {},
+    };
+    const handle = persist(runtime, { storage, keys: ['count'] });
+
+    const pending = handle.whenHydrated();
+    handle.hydrate();
+    await runtime.flush();
+    expect(reads).toBe(1);
+
+    handle.hydrate();
+    await runtime.flush();
+    expect(reads).toBe(1);
+
+    gate.resolve();
+    await expect(pending).resolves.toBeUndefined();
+    expect(statusOf(runtime)).toBe('hydrated');
+
+    handle.hydrate();
+    await runtime.flush();
+    expect(reads).toBe(1);
+    handle.dispose();
+    runtime.dispose();
+  });
+
   it('rejects invalid config, protocol collisions, and duplicate attachments without partial install', () => {
     const memory = createMemoryStorage();
     const runtime = makeRuntime({ count: 0 });
@@ -589,9 +712,8 @@ describe('persist', () => {
       persist(runtime, { storage: memory.storage, keys: ['count'], version: 0 }),
     ).toThrow('positive safe integer');
     const asyncStorage = createDeferredAsyncStorage().storage;
-    expect(() => persist(runtime, { storage: asyncStorage, keys: ['count'] } as never)).toThrow(
-      'experimental',
-    );
+    const asyncHandle = persist(runtime, { storage: asyncStorage, keys: ['count'] } as never);
+    asyncHandle.dispose();
 
     const handle = persist(runtime, { storage: memory.storage, keys: ['count'] });
     expect(() => persist(runtime, { storage: memory.storage, keys: ['count'] })).toThrow(
@@ -659,6 +781,59 @@ describe('persist', () => {
     await runtime.flush();
     expect(memory.setCalls).toBe(2);
     second.dispose();
+    runtime.dispose();
+  });
+
+  it('fences active async writes before allowing reattachment', async () => {
+    const data = new Map<string, string>();
+    const writes: Array<{ value: string; resolve: () => void }> = [];
+    const storage: AsyncPersistStorage = {
+      getItem: async (key) => data.get(key) ?? null,
+      setItem: (key, value) =>
+        new Promise<void>((resolve) => {
+          writes.push({
+            value,
+            resolve: () => {
+              data.set(key, value);
+              resolve();
+            },
+          });
+        }),
+      removeItem: async (key) => {
+        data.delete(key);
+      },
+    };
+    const runtime = makeRuntime({ count: 0 });
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('count/bump', ({ draftState }) => {
+        draftState.count += 1;
+      });
+    });
+    const first = persist(runtime, { storage, keys: ['count'] });
+    first.hydrate();
+    await first.whenHydrated();
+    runtime.dispatch(['count/bump']);
+    await runtime.flush();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(writes.map(({ value }) => JSON.parse(value).data)).toEqual([1]);
+
+    const disposed = first.dispose();
+    expect(() => persist(runtime, { storage, keys: ['count'] })).toThrow('already attached');
+    writes[0]!.resolve();
+    await disposed;
+
+    const second = persist(runtime, { storage, keys: ['count'] });
+    second.hydrate();
+    await second.whenHydrated();
+    runtime.dispatch(['count/bump']);
+    await runtime.flush();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(writes.map(({ value }) => JSON.parse(value).data)).toEqual([1, 2]);
+
+    writes[1]!.resolve();
+    await second.flush();
+    expect(JSON.parse(data.get('uklad/count')!).data).toBe(2);
+    await second.dispose();
     runtime.dispose();
   });
 
@@ -973,6 +1148,136 @@ describe('persist', () => {
     runtime.dispose();
   });
 
+  it('orders async writes and persists the exact committed snapshot for each event', async () => {
+    const data = new Map<string, string>();
+    const writes: Array<{
+      key: string;
+      value: string;
+      resolve: () => void;
+    }> = [];
+    const storage: AsyncPersistStorage = {
+      getItem: async (key) => data.get(key) ?? null,
+      setItem: (key, value) =>
+        new Promise<void>((resolve) => {
+          writes.push({ key, value, resolve });
+        }),
+      removeItem: async (key) => {
+        data.delete(key);
+      },
+    };
+    const runtime = makeRuntime({ count: 0 });
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('count/bump', ({ draftState }) => {
+        draftState.count += 1;
+      });
+    });
+    const handle = persist(runtime, { storage, keys: ['count'] });
+
+    handle.hydrate();
+    await handle.whenHydrated();
+    runtime.dispatch(['count/bump']);
+    runtime.dispatch(['count/bump']);
+    await runtime.flush();
+
+    expect(writes).toHaveLength(1);
+    expect(JSON.parse(writes[0]!.value)).toEqual({ v: 1, data: 1 });
+    writes[0]!.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(writes).toHaveLength(2);
+    expect(JSON.parse(writes[1]!.value)).toEqual({ v: 1, data: 2 });
+    writes[1]!.resolve();
+    await handle.flush();
+
+    expect(runtime.getState().count).toBe(2);
+    handle.dispose();
+    runtime.dispose();
+  });
+
+  it('keeps async flush failures visible until a later write succeeds', async () => {
+    let failWrites = true;
+    const runtime = makeRuntime({ count: 0 });
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('count/bump', ({ draftState }) => {
+        draftState.count += 1;
+      });
+    });
+    const handle = persist(runtime, {
+      storage: {
+        getItem: async () => null,
+        setItem: async () => {
+          if (failWrites) throw new Error('storage failure must not leak');
+        },
+        removeItem: async () => {},
+      },
+      keys: ['count'],
+    });
+
+    handle.hydrate();
+    await handle.whenHydrated();
+    runtime.dispatch(['count/bump']);
+    await runtime.flush();
+
+    await expect(handle.flush()).rejects.toThrow('storage writes failed');
+    await expect(handle.flush()).rejects.toThrow('storage writes failed');
+
+    failWrites = false;
+    runtime.dispatch(['count/bump']);
+    await runtime.flush();
+    await expect(handle.flush()).resolves.toBeUndefined();
+
+    handle.dispose();
+    runtime.dispose();
+  });
+
+  it('orders purge behind an active async write', async () => {
+    const data = new Map<string, string>();
+    let writeResolve: (() => void) | undefined;
+    let removeStarted = false;
+    let removeResolve: (() => void) | undefined;
+    const storage: AsyncPersistStorage = {
+      getItem: async (key) => data.get(key) ?? null,
+      setItem: (key, value) =>
+        new Promise<void>((resolve) => {
+          data.set(key, value);
+          writeResolve = resolve;
+        }),
+      removeItem: (key) =>
+        new Promise<void>((resolve) => {
+          removeStarted = true;
+          removeResolve = () => {
+            data.delete(key);
+            resolve();
+          };
+        }),
+    };
+    const runtime = makeRuntime({ count: 0 });
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('count/bump', ({ draftState }) => {
+        draftState.count += 1;
+      });
+    });
+    const handle = persist(runtime, { storage, keys: ['count'] });
+
+    handle.hydrate();
+    await handle.whenHydrated();
+    runtime.dispatch(['count/bump']);
+    await runtime.flush();
+    expect(writeResolve).toBeDefined();
+
+    const purge = handle.purge();
+    await runtime.flush();
+    expect(removeStarted).toBe(false);
+    writeResolve!();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(removeStarted).toBe(true);
+    removeResolve!();
+    await expect(purge).resolves.toBeUndefined();
+    expect(data.has('uklad/count')).toBe(false);
+
+    handle.dispose();
+    runtime.dispose();
+  });
+
   it('rejects a purge queued immediately behind experimental async hydration', async () => {
     const deferred = createDeferredAsyncStorage({ 'uklad/count': entry(1, 100) });
     const runtime = makeRuntime({ count: 0 });
@@ -1076,6 +1381,46 @@ describe('persist', () => {
     expect(statusOf(runtime)).toBe('failed');
     expect(diagnostics).toEqual([{ code: 'storage-read-failed', phase: 'read', key: 'count' }]);
     expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('SECRET_READ_CAUSE');
+    handle.dispose();
+    runtime.dispose();
+  });
+
+  it('retries async hydration after a failed generation', async () => {
+    const firstGate = createDeferred<void>();
+    const secondGate = createDeferred<void>();
+    let readAttempt = 0;
+    const runtime = makeRuntime({ count: 0 });
+    const storage: AsyncPersistStorage = {
+      getItem: async () => {
+        const attempt = readAttempt++;
+        if (attempt === 0) {
+          await firstGate.promise;
+          throw new Error('first read failed');
+        }
+        await secondGate.promise;
+        return entry(1, 17);
+      },
+      setItem: async () => {},
+      removeItem: async () => {},
+    };
+    const handle = persist(runtime, { storage, keys: ['count'] });
+
+    handle.hydrate();
+    await runtime.flush();
+    const first = handle.whenHydrated();
+    firstGate.resolve();
+    await expect(first).rejects.toThrow('Hydration failed');
+    expect(statusOf(runtime)).toBe('failed');
+
+    handle.hydrate();
+    const second = handle.whenHydrated();
+    await runtime.flush();
+    expect(statusOf(runtime)).toBe('hydrating');
+    secondGate.resolve();
+    await expect(second).resolves.toBeUndefined();
+    expect(runtime.getState().count).toBe(17);
+    expect(statusOf(runtime)).toBe('hydrated');
+
     handle.dispose();
     runtime.dispose();
   });

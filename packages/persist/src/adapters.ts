@@ -1,4 +1,35 @@
-import type { SyncPersistStorage } from './types';
+import type {
+  AsyncPersistStorage,
+  AsyncStorageLike,
+  SyncPersistStorage,
+  SyncMethodsStorageLike,
+  SyncStorageLike,
+} from './types';
+
+/** Wrap an AsyncStorage-compatible object without importing a native package. */
+export function asyncStorageAdapter(storage: AsyncStorageLike): AsyncPersistStorage {
+  return {
+    sync: false,
+    getItem: (key) => storage.getItem(key),
+    setItem: (key, value) => storage.setItem(key, value),
+    removeItem: (key) => storage.removeItem(key),
+  };
+}
+
+/** Wrap a synchronous string storage implementation, including Expo SQLite kv-store. */
+export function syncStorageAdapter(
+  storage: SyncStorageLike | SyncMethodsStorageLike,
+): SyncPersistStorage {
+  const getItem = 'getItemSync' in storage ? storage.getItemSync : storage.getItem;
+  const setItem = 'setItemSync' in storage ? storage.setItemSync : storage.setItem;
+  const removeItem = 'removeItemSync' in storage ? storage.removeItemSync : storage.removeItem;
+  return {
+    sync: true,
+    getItem: (key) => getItem.call(storage, key),
+    setItem: (key, value) => setItem.call(storage, key, value),
+    removeItem: (key) => removeItem.call(storage, key),
+  };
+}
 
 /** localStorage-backed synchronous adapter (browser CSR). */
 export function localStorageAdapter(): SyncPersistStorage {

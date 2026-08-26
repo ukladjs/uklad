@@ -1,0 +1,22 @@
+node_modules/
+
+# Native build products and dependency installations.
+/android/.gradle
+/android/.kotlin
+/android/.idea
+/android/local.properties
+/android/app/debug.keystore
+/android/build
+/android/app/build
+/android/app/.cxx
+/ios/Pods
+/ios/build
+/vendor/bundle
+
+# Xcode and Metro local state.
+**/xcuserdata/
+**/*.xcuserstate
+*.jsbundle
+.metro-health-check*
+
+*.log

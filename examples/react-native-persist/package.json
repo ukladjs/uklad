@@ -1,0 +1,30 @@
+{
+  "name": "@ukladjs/react-native-persist-demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Bare React Native fixture for @ukladjs/persist async storage.",
+  "scripts": {
+    "start": "react-native start",
+    "android": "react-native run-android",
+    "ios": "react-native run-ios",
+    "typecheck": "tsc6 --noEmit",
+    "check": "pnpm run typecheck"
+  },
+  "dependencies": {
+    "@babel/runtime": "7.26.10",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@ukladjs/core": "workspace:*",
+    "@ukladjs/persist": "workspace:*",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  },
+  "devDependencies": {
+    "@react-native/babel-preset": "0.81.5",
+    "@react-native/codegen": "0.81.5",
+    "@react-native/gradle-plugin": "0.81.5",
+    "@react-native-community/cli": "^20.0.2",
+    "@react-native/metro-config": "0.81.5",
+    "@types/react": "19.2.18",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  }
+}

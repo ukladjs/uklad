@@ -42,11 +42,8 @@ export function normalizeOptions(options: PersistOptions<AnyState>): NormalizedO
   ) {
     throw new Error('[uklad-persist] storage.sync must be true, false, or undefined.');
   }
-  if (options.storage.sync !== true && options.experimentalAsync !== true) {
-    throw new Error(
-      '[uklad-persist] Async storage is experimental; pass experimentalAsync: true to opt in.',
-    );
-  }
+  // Async storage is now supported. Keep the former opt-in accepted by the
+  // source-compatible option union, but do not require it for native callers.
   if (options.storage.sync === true && options.experimentalAsync !== undefined) {
     throw new Error('[uklad-persist] experimentalAsync is only valid for async storage.');
   }

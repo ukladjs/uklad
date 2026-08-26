@@ -69,6 +69,11 @@ jobs:
       - name: Verify persistence tarball
         run: npm pack --dry-run --json ./packages/persist
 
+      - name: Check React Native and Expo fixtures
+        run: >-
+          pnpm --filter @ukladjs/react-native-persist-demo run check &&
+          pnpm --filter @ukladjs/expo-persist-demo run check
+
   typescript-compatibility:
     runs-on: ubuntu-latest
     steps:

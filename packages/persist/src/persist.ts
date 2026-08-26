@@ -9,10 +9,12 @@ import type {
 
 import { encodeEnvelope, ignoreThenable, isThenable, stageEntry, type StagedEntry } from './codec';
 import { normalizeOptions } from './config';
+import { createAsyncCoordinator, type AsyncCoordinator } from './async-coordinator';
 import { PERSIST_IDS } from './ids';
 import {
   isCompletionPayload,
   isHydrationSnapshot,
+  isHydrationGeneration,
   isPersistDiagnostic,
   isPersistDiagnosticArray,
   isPersistDiagnosticValue,
@@ -56,6 +58,7 @@ const HYDRATION_ERROR = '[uklad-persist] Hydration failed.';
 const DISPOSED_ERROR = '[uklad-persist] Disposed before operation completed.';
 const PURGE_ERROR = '[uklad-persist] Purge failed.';
 const EFFECT_AUTHORIZATION = '__ukladPersistAuthorization';
+const WRITE_SNAPSHOT = '__ukladPersistWriteSnapshot';
 
 /** Attach one persistence module to a runtime. */
 export function persist<TContracts extends UkladContracts>(
@@ -77,17 +80,24 @@ export function persist<TContracts extends UkladContracts>(
 
   const { storage, keyConfigs, version, prefix, migrate, onError } = normalized;
   const isSync = storage.sync === true;
+  const asyncCoordinator: AsyncCoordinator | undefined = isSync
+    ? undefined
+    : createAsyncCoordinator();
   const configByKey = new Map(keyConfigs.map((config) => [config.key, config]));
   const storageKey = (key: string): string => `${prefix}/${encodeURIComponent(key)}`;
 
   let lifecycleState: LifecycleState = 'idle';
   let disposed = false;
+  let disposalBarrier: Promise<void> = Promise.resolve();
   let purgeInFlight = false;
   const hydrationWaiters: Waiter[] = [];
   const purgeWaiters: PurgeWaiter[] = [];
   const authorizedEffects = new Set<string>();
   const authorizedEvents = new Set<string>();
   const queuedHydrationRequests = new Set<string>();
+  let nextHydrationGeneration = 0;
+  let activeHydrationGeneration = 0;
+  const authorizedEventGenerations = new Map<string, number>();
   let nextAuthorization = 0;
 
   const issueAuthorization = (): string =>
@@ -104,7 +114,22 @@ export function persist<TContracts extends UkladContracts>(
       value: authorization,
       enumerable: false,
     });
+    if (Object.prototype.hasOwnProperty.call(payload, WRITE_SNAPSHOT)) {
+      Object.defineProperty(authorizedPayload, WRITE_SNAPSHOT, {
+        value: Reflect.get(payload, WRITE_SNAPSHOT),
+        enumerable: false,
+      });
+    }
     return [id, authorizedPayload];
+  };
+
+  const writeEffect = (key: string, value: unknown): PersistEffect => {
+    const payload = { key };
+    Object.defineProperty(payload, WRITE_SNAPSHOT, {
+      value,
+      enumerable: false,
+    });
+    return effect(PERSIST_IDS.WRITE, payload);
   };
 
   const consumeEffectAuthorization = (value: unknown): object | undefined => {
@@ -115,11 +140,24 @@ export function persist<TContracts extends UkladContracts>(
       return undefined;
     const payload = { ...candidate };
     delete payload[EFFECT_AUTHORIZATION];
+    if (Object.prototype.hasOwnProperty.call(candidate, WRITE_SNAPSHOT)) {
+      Object.defineProperty(payload, WRITE_SNAPSHOT, {
+        value: Reflect.get(candidate, WRITE_SNAPSHOT),
+        enumerable: false,
+      });
+    }
     return payload;
   };
 
-  const consumeEventAuthorization = (authorization: unknown): boolean =>
-    typeof authorization === 'string' && authorizedEvents.delete(authorization);
+  const consumeEventAuthorization = (
+    authorization: unknown,
+  ): { readonly authorization: string; readonly generation?: number } | undefined => {
+    if (typeof authorization !== 'string' || !authorizedEvents.delete(authorization))
+      return undefined;
+    const generation = authorizedEventGenerations.get(authorization);
+    authorizedEventGenerations.delete(authorization);
+    return generation === undefined ? { authorization } : { authorization, generation };
+  };
 
   const diagnostic = (
     code: PersistErrorCode,
@@ -138,23 +176,31 @@ export function persist<TContracts extends UkladContracts>(
     }
   };
 
-  const dispatchSyncAuthorized = (id: string, payload: object): void => {
+  const dispatchSyncAuthorized = (id: string, payload: object, generation?: number): void => {
     const authorization = issueAuthorization();
     authorizedEvents.add(authorization);
+    if (generation !== undefined) authorizedEventGenerations.set(authorization, generation);
     try {
       integration.dispatchSync([id, payload, authorization]);
     } finally {
       authorizedEvents.delete(authorization);
+      authorizedEventGenerations.delete(authorization);
     }
   };
 
-  const failDroppedHydrationCompletion = (): void => {
-    if (disposed || (lifecycleState !== 'idle' && lifecycleState !== 'hydrating')) return;
+  const failDroppedHydrationCompletion = (generation: number): void => {
+    if (
+      disposed ||
+      activeHydrationGeneration !== generation ||
+      (lifecycleState !== 'idle' && lifecycleState !== 'hydrating')
+    )
+      return;
     const value = diagnostic('event-queue-failed', 'lifecycle');
     try {
-      dispatchSyncAuthorized(PERSIST_IDS.FAILED, value);
+      dispatchSyncAuthorized(PERSIST_IDS.FAILED, value, generation);
     } catch {
       lifecycleState = 'failed';
+      activeHydrationGeneration = 0;
       reportDiagnostic(value);
       settleHydrationWaiters();
     }
@@ -174,23 +220,32 @@ export function persist<TContracts extends UkladContracts>(
     }
   };
 
-  const dispatchAuthorized = (id: string, payload: object, onDropped: () => void): void => {
+  const dispatchAuthorized = (
+    id: string,
+    payload: object,
+    onDropped: () => void,
+    generation?: number,
+  ): void => {
     const authorization = issueAuthorization();
     authorizedEvents.add(authorization);
+    if (generation !== undefined) authorizedEventGenerations.set(authorization, generation);
     try {
       runtime.dispatch([id, payload, authorization]);
       void integration.flush().catch(() => {
         if (disposed || !authorizedEvents.delete(authorization)) return;
+        authorizedEventGenerations.delete(authorization);
         onDropped();
       });
     } catch {
       authorizedEvents.delete(authorization);
+      authorizedEventGenerations.delete(authorization);
       onDropped();
     }
   };
 
   const settleHydrationWaiters = (): void => {
     if (lifecycleState !== 'hydrated' && lifecycleState !== 'failed') return;
+    if (lifecycleState === 'failed' && queuedHydrationRequests.size > 0) return;
     for (const waiter of hydrationWaiters.splice(0)) {
       if (lifecycleState === 'hydrated') waiter.resolve();
       else waiter.reject(new Error(HYDRATION_ERROR));
@@ -263,7 +318,11 @@ export function persist<TContracts extends UkladContracts>(
     return { rawByKey, diagnostics };
   };
 
-  const applySnapshot = (draftState: AnyState, snapshot: HydrationSnapshot): PersistEffect[] => {
+  const applySnapshot = (
+    draftState: AnyState,
+    snapshot: HydrationSnapshot,
+    generation: number,
+  ): PersistEffect[] => {
     const diagnostics = [...snapshot.diagnostics];
     const staged: StagedEntry[] = [];
 
@@ -289,34 +348,59 @@ export function persist<TContracts extends UkladContracts>(
     // unless every configured entry completed the full staging pipeline.
     if (status === 'hydrated') {
       for (const entry of staged) {
-        if (entry.migrated) effects.push(effect(PERSIST_IDS.WRITE, { key: entry.key }));
+        if (entry.migrated) effects.push(writeEffect(entry.key, entry.value));
       }
     }
-    effects.push(effect(PERSIST_IDS.COMPLETE, { status } satisfies CompletionPayload));
+    effects.push(effect(PERSIST_IDS.COMPLETE, { status, generation } satisfies CompletionPayload));
     return effects;
   };
 
+  const enqueueAsyncOperation = <T>(
+    key: string,
+    operation: () => Promise<T>,
+    failure: PersistDiagnostic,
+  ): void => {
+    if (!asyncCoordinator || disposed) return;
+    const ticket = asyncCoordinator.enqueue(key, async () => {
+      try {
+        return await operation();
+      } catch {
+        if (!disposed) reportDiagnostic(failure);
+        throw new Error(`[uklad-persist] ${failure.code}.`);
+      }
+    });
+    void ticket.promise.catch(() => {
+      // The coordinator retains the sanitized failure for flush(); this local
+      // catch prevents an unhandled rejection for event writes; callers that
+      // need durability use handle.flush() to observe the retained failure.
+    });
+  };
+
   const removeOneForWrite = (key: string): void => {
+    if (!isSync) {
+      enqueueAsyncOperation(
+        key,
+        () => Promise.resolve(storage.removeItem(storageKey(key))),
+        diagnostic('storage-remove-failed', 'write', key),
+      );
+      return;
+    }
+
     try {
-      const result = storage.removeItem(storageKey(key));
-      if (isSync && isThenable(result)) {
+      const result = (storage as SyncPersistStorage).removeItem(storageKey(key)) as unknown;
+      if (isThenable(result)) {
         ignoreThenable(result);
         reportDiagnostic(diagnostic('sync-contract-violation', 'write', key));
-      } else if (!isSync) {
-        void Promise.resolve(result).catch(() => {
-          reportDiagnostic(diagnostic('storage-remove-failed', 'write', key));
-        });
       }
     } catch {
       reportDiagnostic(diagnostic('storage-remove-failed', 'write', key));
     }
   };
 
-  const writeKey = (key: string): void => {
+  const writeKey = (key: string, value: unknown): void => {
     const config = configByKey.get(key);
     if (!config) return;
 
-    const value = integration.getState()[key];
     if (value === undefined) {
       // A missing root means "no stored entry". A serializer returning
       // undefined, in contrast, is an invalid serialization below.
@@ -347,14 +431,18 @@ export function persist<TContracts extends UkladContracts>(
     }
 
     try {
-      const result = storage.setItem(storageKey(key), encoded);
-      if (isSync && isThenable(result)) {
+      if (!isSync) {
+        enqueueAsyncOperation(
+          key,
+          () => Promise.resolve(storage.setItem(storageKey(key), encoded)),
+          diagnostic('storage-write-failed', 'write', key),
+        );
+        return;
+      }
+      const result = (storage as SyncPersistStorage).setItem(storageKey(key), encoded) as unknown;
+      if (isThenable(result)) {
         ignoreThenable(result);
         reportDiagnostic(diagnostic('sync-contract-violation', 'write', key));
-      } else if (!isSync) {
-        void Promise.resolve(result).catch(() => {
-          reportDiagnostic(diagnostic('storage-write-failed', 'write', key));
-        });
       }
     } catch {
       reportDiagnostic(diagnostic('storage-write-failed', 'write', key));
@@ -363,16 +451,45 @@ export function persist<TContracts extends UkladContracts>(
 
   const removeAll = async (): Promise<PersistDiagnostic[]> => {
     const diagnostics: PersistDiagnostic[] = [];
+    if (!isSync) {
+      const operations = keyConfigs.map(({ key }) => {
+        if (!asyncCoordinator)
+          return Promise.resolve(diagnostic('storage-remove-failed', 'purge', key));
+        const ticket = asyncCoordinator.enqueue(
+          key,
+          async () => {
+            try {
+              await storage.removeItem(storageKey(key));
+              return undefined;
+            } catch {
+              const value = diagnostic('storage-remove-failed', 'purge', key);
+              if (!disposed) reportDiagnostic(value);
+              throw new Error(`[uklad-persist] ${value.code}.`);
+            }
+          },
+          { trackFailure: false },
+        );
+        return ticket.promise.then(
+          () => undefined,
+          () => diagnostic('storage-remove-failed', 'purge', key),
+        );
+      });
+      diagnostics.push(
+        ...(await Promise.all(operations)).filter(
+          (value): value is PersistDiagnostic => value !== undefined,
+        ),
+      );
+      return diagnostics;
+    }
+
     await Promise.all(
       keyConfigs.map(async ({ key }) => {
         try {
-          const result = storage.removeItem(storageKey(key));
-          if (isSync && isThenable(result)) {
+          const result = (storage as SyncPersistStorage).removeItem(storageKey(key)) as unknown;
+          if (isThenable(result)) {
             ignoreThenable(result);
             diagnostics.push(diagnostic('sync-contract-violation', 'purge', key));
-            return;
           }
-          await result;
         } catch {
           diagnostics.push(diagnostic('storage-remove-failed', 'purge', key));
         }
@@ -386,7 +503,16 @@ export function persist<TContracts extends UkladContracts>(
     disposed = true;
     lifecycleState = 'disposed';
     purgeInFlight = false;
-    attachedRuntimes.delete(runtimeIdentity);
+    const coordinatorBarrier = asyncCoordinator?.dispose();
+    authorizedEffects.clear();
+    authorizedEventGenerations.clear();
+    if (coordinatorBarrier) {
+      disposalBarrier = coordinatorBarrier.then(() => {
+        attachedRuntimes.delete(runtimeIdentity);
+      });
+    } else {
+      attachedRuntimes.delete(runtimeIdentity);
+    }
     for (const waiter of hydrationWaiters.splice(0)) waiter.reject(new Error(DISPOSED_ERROR));
     for (const waiter of purgeWaiters.splice(0)) waiter.reject(new Error(DISPOSED_ERROR));
   };
@@ -409,23 +535,62 @@ export function persist<TContracts extends UkladContracts>(
 
       if (isSync) {
         scope.regCoeffect(PERSIST_IDS.SNAPSHOT, () =>
-          lifecycleState === 'idle'
+          lifecycleState === 'idle' || lifecycleState === 'failed'
             ? readAllSync()
             : { rawByKey: Object.create(null) as RawByKey, diagnostics: [] },
         );
         scope.regEvent(
           PERSIST_IDS.HYDRATE,
           ({ draftState, coeffects: { snapshot } }) => {
-            if (lifecycleState !== 'idle') return [effect(PERSIST_IDS.SETTLE, {})];
-            return applySnapshot(draftState as AnyState, snapshot as HydrationSnapshot);
+            if (lifecycleState === 'hydrating' || lifecycleState === 'hydrated') {
+              return [effect(PERSIST_IDS.SETTLE, {})];
+            }
+            if (lifecycleState !== 'idle' && lifecycleState !== 'failed') {
+              return [effect(PERSIST_IDS.SETTLE, {})];
+            }
+            const generation = ++nextHydrationGeneration;
+            activeHydrationGeneration = generation;
+            lifecycleState = 'hydrating';
+            return applySnapshot(draftState as AnyState, snapshot as HydrationSnapshot, generation);
           },
           { coeffects: { snapshot: PERSIST_IDS.SNAPSHOT } },
         );
       } else {
-        scope.regEvent(PERSIST_IDS.HYDRATE, ({ draftState }, request: unknown) => {
-          if (lifecycleState !== 'idle') return [effect(PERSIST_IDS.SETTLE, {})];
+        scope.regEvent(PERSIST_IDS.HYDRATE, ({ draftState }, requestPayload: unknown) => {
+          const requestedRequest =
+            typeof requestPayload === 'object' && requestPayload !== null
+              ? (Reflect.get(requestPayload, 'request') as unknown)
+              : requestPayload;
+          const requestedGeneration =
+            typeof requestPayload === 'object' && requestPayload !== null
+              ? (Reflect.get(requestPayload, 'generation') as unknown)
+              : undefined;
+          const isQueuedHandleAttempt =
+            typeof requestedRequest === 'string' &&
+            isHydrationGeneration(requestedGeneration) &&
+            requestedGeneration === activeHydrationGeneration &&
+            queuedHydrationRequests.has(requestedRequest);
+          if (
+            (lifecycleState === 'hydrating' || lifecycleState === 'hydrated') &&
+            !isQueuedHandleAttempt
+          ) {
+            if (typeof requestedRequest === 'string')
+              queuedHydrationRequests.delete(requestedRequest);
+            return [effect(PERSIST_IDS.SETTLE, {})];
+          }
+          if (lifecycleState !== 'idle' && lifecycleState !== 'failed' && !isQueuedHandleAttempt) {
+            if (typeof requestedRequest === 'string')
+              queuedHydrationRequests.delete(requestedRequest);
+            return [effect(PERSIST_IDS.SETTLE, {})];
+          }
+          const generation = isHydrationGeneration(requestedGeneration)
+            ? requestedGeneration
+            : ++nextHydrationGeneration;
+          nextHydrationGeneration = Math.max(nextHydrationGeneration, generation);
+          activeHydrationGeneration = generation;
+          lifecycleState = 'hydrating';
           (draftState as AnyState)[PERSIST_IDS.STATUS] = 'hydrating';
-          return [effect(PERSIST_IDS.READ, { request })];
+          return [effect(PERSIST_IDS.READ, { request: requestedRequest, generation })];
         });
       }
 
@@ -441,12 +606,23 @@ export function persist<TContracts extends UkladContracts>(
             queuedHydrationRequests.delete(request);
           }
         }
-        if (disposed || lifecycleState !== 'idle') return;
-        lifecycleState = 'hydrating';
+        const generation = Reflect.get(authorizedPayload, 'generation') as unknown;
+        if (
+          !isHydrationGeneration(generation) ||
+          disposed ||
+          lifecycleState !== 'hydrating' ||
+          activeHydrationGeneration !== generation
+        )
+          return;
         void readAllAsync()
           .then((snapshot) => {
             if (!disposed) {
-              dispatchAuthorized(PERSIST_IDS.LOADED, snapshot, failDroppedHydrationCompletion);
+              dispatchAuthorized(
+                PERSIST_IDS.LOADED,
+                snapshot,
+                () => failDroppedHydrationCompletion(generation),
+                generation,
+              );
             }
           })
           .catch(() => {
@@ -454,7 +630,8 @@ export function persist<TContracts extends UkladContracts>(
               dispatchAuthorized(
                 PERSIST_IDS.FAILED,
                 diagnostic('storage-read-failed', 'read'),
-                failDroppedHydrationCompletion,
+                () => failDroppedHydrationCompletion(generation),
+                generation,
               );
             }
           });
@@ -462,29 +639,44 @@ export function persist<TContracts extends UkladContracts>(
       scope.regEvent(
         PERSIST_IDS.LOADED,
         ({ draftState }, snapshot: unknown, authorization: unknown) => {
-          if (!consumeEventAuthorization(authorization)) {
+          const capability = consumeEventAuthorization(authorization);
+          if (!capability) {
             return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
           }
-          if (lifecycleState !== 'hydrating') {
+          const generation = capability.generation;
+          if (
+            !isHydrationGeneration(generation) ||
+            lifecycleState !== 'hydrating' ||
+            activeHydrationGeneration !== generation
+          ) {
             return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
           }
           if (!isHydrationSnapshot(snapshot, keyConfigs)) {
             (draftState as AnyState)[PERSIST_IDS.STATUS] = 'failed';
             return [
               effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle')),
-              effect(PERSIST_IDS.COMPLETE, { status: 'failed' } satisfies CompletionPayload),
+              effect(PERSIST_IDS.COMPLETE, {
+                status: 'failed',
+                generation,
+              } satisfies CompletionPayload),
             ];
           }
-          return applySnapshot(draftState as AnyState, snapshot);
+          return applySnapshot(draftState as AnyState, snapshot, generation);
         },
       );
       scope.regEvent(
         PERSIST_IDS.FAILED,
         ({ draftState }, value: unknown, authorization: unknown) => {
-          if (!consumeEventAuthorization(authorization)) {
+          const capability = consumeEventAuthorization(authorization);
+          if (!capability) {
             return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
           }
-          if (lifecycleState !== 'idle' && lifecycleState !== 'hydrating') {
+          const generation = capability.generation;
+          if (
+            !isHydrationGeneration(generation) ||
+            (lifecycleState !== 'idle' && lifecycleState !== 'hydrating') ||
+            activeHydrationGeneration !== generation
+          ) {
             return [effect(PERSIST_IDS.REPORT, diagnostic('invalid-completion', 'lifecycle'))];
           }
           const reported = isPersistDiagnosticValue(value)
@@ -493,7 +685,10 @@ export function persist<TContracts extends UkladContracts>(
           (draftState as AnyState)[PERSIST_IDS.STATUS] = 'failed';
           return [
             effect(PERSIST_IDS.REPORT, reported),
-            effect(PERSIST_IDS.COMPLETE, { status: 'failed' } satisfies CompletionPayload),
+            effect(PERSIST_IDS.COMPLETE, {
+              status: 'failed',
+              generation,
+            } satisfies CompletionPayload),
           ];
         },
       );
@@ -573,7 +768,7 @@ export function persist<TContracts extends UkladContracts>(
           const previousState = context.previousState as AnyState;
           for (const { key } of keyConfigs) {
             if (!Object.is(newState[key], previousState[key])) {
-              context.effects.push(effect(PERSIST_IDS.WRITE, { key }));
+              context.effects.push(writeEffect(key, newState[key]));
             }
           }
           return context;
@@ -586,7 +781,11 @@ export function persist<TContracts extends UkladContracts>(
           reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
           return;
         }
-        writeKey(authorizedPayload.key);
+        if (!Object.prototype.hasOwnProperty.call(authorizedPayload, WRITE_SNAPSHOT)) {
+          reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
+          return;
+        }
+        writeKey(authorizedPayload.key, Reflect.get(authorizedPayload, WRITE_SNAPSHOT));
       });
       scope.regEffect(PERSIST_IDS.COMPLETE, (payload: unknown) => {
         const authorizedPayload = consumeEffectAuthorization(payload);
@@ -598,7 +797,12 @@ export function persist<TContracts extends UkladContracts>(
           }
           return;
         }
+        if (authorizedPayload.generation !== activeHydrationGeneration) {
+          reportDiagnostic(diagnostic('invalid-completion', 'lifecycle'));
+          return;
+        }
         lifecycleState = authorizedPayload.status;
+        activeHydrationGeneration = 0;
         settleHydrationWaiters();
       });
       scope.regEffect(PERSIST_IDS.COMPLETE_PURGE, (payload: unknown) => {
@@ -675,20 +879,33 @@ export function persist<TContracts extends UkladContracts>(
         try {
           integration.dispatchSync([PERSIST_IDS.HYDRATE]);
         } catch (error) {
-          failDroppedHydrationCompletion();
+          // A before-interceptor can abort HYDRATE before its handler allocates
+          // a generation. Create a valid fallback generation so waiters still
+          // receive a terminal failure instead of remaining pending forever.
+          const generation = isHydrationGeneration(activeHydrationGeneration)
+            ? activeHydrationGeneration
+            : ++nextHydrationGeneration;
+          activeHydrationGeneration = generation;
+          if (lifecycleState === 'idle') lifecycleState = 'hydrating';
+          failDroppedHydrationCompletion(generation);
           throw error;
         }
       } else {
+        if (lifecycleState === 'hydrating' || lifecycleState === 'hydrated') return;
         const request = issueAuthorization();
+        const generation = ++nextHydrationGeneration;
         queuedHydrationRequests.add(request);
+        lifecycleState = 'hydrating';
+        activeHydrationGeneration = generation;
         try {
-          runtime.dispatch([PERSIST_IDS.HYDRATE, request]);
+          runtime.dispatch([PERSIST_IDS.HYDRATE, { request, generation }]);
           void integration.flush().catch(() => {
             if (disposed || !queuedHydrationRequests.delete(request)) return;
-            failDroppedHydrationCompletion();
+            failDroppedHydrationCompletion(generation);
           });
         } catch (error) {
           queuedHydrationRequests.delete(request);
+          failDroppedHydrationCompletion(generation);
           throw error;
         }
       }
@@ -699,17 +916,25 @@ export function persist<TContracts extends UkladContracts>(
           reject(new Error(DISPOSED_ERROR));
           return;
         }
+        // A retry request is queued before its async HYDRATE event runs. Do
+        // not immediately reject a waiter against the previous failed attempt
+        // while that next generation is waiting in the runtime queue.
+        if (lifecycleState === 'failed' && queuedHydrationRequests.size === 0) {
+          reject(new Error(HYDRATION_ERROR));
+          return;
+        }
         hydrationWaiters.push({ resolve, reject });
         settleHydrationWaiters();
       });
     },
+    async flush(): Promise<void> {
+      if (disposed) throw new Error(DISPOSED_ERROR);
+      await integration.flush();
+      if (!asyncCoordinator) return;
+      await asyncCoordinator.flush();
+    },
     purge(): Promise<void> {
       if (disposed) return Promise.reject(new Error(DISPOSED_ERROR));
-      if (lifecycleState === 'hydrating') {
-        return Promise.reject(
-          new Error('[uklad-persist] Cannot purge while hydration is in progress.'),
-        );
-      }
 
       const request = issueAuthorization();
       let waiter: PurgeWaiter;
@@ -734,9 +959,9 @@ export function persist<TContracts extends UkladContracts>(
       }
       return pending;
     },
-    dispose(): void {
-      if (disposed) return;
-      installedDisposer?.();
+    async dispose(): Promise<void> {
+      if (!disposed) installedDisposer?.();
+      await disposalBarrier;
     },
   };
 }

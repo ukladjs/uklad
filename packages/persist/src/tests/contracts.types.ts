@@ -44,7 +44,6 @@ const asyncStorage: AsyncPersistStorage = {
   setItem: async () => {},
   removeItem: async () => {},
 };
-// @ts-expect-error async storage requires an explicit experimental opt-in.
 persist(runtime, { storage: asyncStorage, keys: ['ready'] });
 persist(runtime, {
   storage: asyncStorage,
@@ -71,5 +70,6 @@ persist(runtime, {
 void status;
 void invalidAsyncData;
 void invalidMapData;
-handle.dispose();
+const disposal: Promise<void> = handle.dispose();
+void disposal;
 runtime.dispose();

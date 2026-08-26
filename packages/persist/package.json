@@ -1,7 +1,7 @@
 {
   "name": "@ukladjs/persist",
   "version": "0.1.0",
-  "description": "Synchronous persistence for Uklad.",
+  "description": "Versioned synchronous and asynchronous persistence for Uklad.",
   "author": "flexsurfer",
   "license": "MIT",
   "sideEffects": false,
@@ -76,6 +76,7 @@
     "eslint": "10.8.0",
     "globals": "17.8.0",
     "jest": "30.4.2",
+    "jest-environment-node": "30.4.1",
     "prettier": "3.9.6",
     "publint": "0.3.22",
     "ts-jest": "29.4.12",

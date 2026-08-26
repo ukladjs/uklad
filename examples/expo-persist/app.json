@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "Uklad Persist Expo",
+    "slug": "uklad-persist-expo",
+    "version": "1.0.0",
+    "platforms": ["ios", "android"],
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "com.anonymous.ukladpersistexpo"
+    }
+  }
+}

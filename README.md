@@ -146,8 +146,9 @@ parallel agent sandboxes;
 - declarative effects and coeffects with observable execution boundaries;
 - headless execution and DevTools/MCP inspection for an edit → run → verify
 agent loop;
-- synchronous persistence, TanStack Query integration, and capability-gated
-operation snapshots designed for safe, machine-readable agent interaction.
+- synchronous and asynchronous persistence, TanStack Query integration, and
+capability-gated operation snapshots designed for safe, machine-readable agent
+interaction.
 
 The guiding idea is that an agent should be able to discover the application
 model, make a targeted change, execute it, and verify what happened from
@@ -158,8 +159,8 @@ structured runtime evidence instead of guessing from source text or logs.
 - [`@ukladjs/core@0.2.2`](packages/core) — the core runtime,
   React bindings, vanilla/headless APIs, browserless E2E scenarios, tests,
   benchmarks, agent templates, and the safe `uklad-agent init` project router.
-- [`@ukladjs/persist@0.1.0`](packages/persist) — intentionally narrow
-  synchronous persistence built on the public runtime APIs.
+- [`@ukladjs/persist@0.1.0`](packages/persist) — versioned synchronous and
+  asynchronous persistence built on the public runtime APIs.
 - [`@ukladjs/tanstack-query@0.1.0`](packages/tanstack-query) — headless TanStack Query integration
   that routes observer updates through Uklad events and managed state.
 - [`@ukladjs/devtools@0.2.0`](packages/devtools) — DevTools SDK, server,
@@ -170,8 +171,10 @@ structured runtime evidence instead of guessing from source text or logs.
   dashboard source assembled into the DevTools package.
 - [TodoMVC (persist)](examples/todomvc),
   [TodoMVC (TanStack Query)](examples/todomvc-query), and
-  [DevTools playground](examples/devtools-playground) — example applications
-  and integration fixtures.
+  [DevTools playground](examples/devtools-playground) — browser examples.
+- [Expo persistence](examples/expo-persist) and
+  [bare React Native persistence](examples/react-native-persist) — native
+  SQLite and AsyncStorage integration fixtures.
 
 The coordinated versions and dist-tags are machine-checked from
 [`release.json`](release.json). See [`CHANGELOG.md`](CHANGELOG.md) for the
@@ -210,7 +213,24 @@ pnpm dev:playground
 pnpm dev:playground:headless
 pnpm dev:todomvc
 pnpm dev:todomvc-query
+pnpm dev:expo-persist
+pnpm dev:react-native-persist
 ```
+
+The persistence fixtures can also be launched directly on a platform:
+
+```sh
+# Expo managed app
+pnpm dev:expo-persist:ios
+pnpm dev:expo-persist:android
+
+# Bare React Native app (iOS requires CocoaPods first)
+pnpm dev:react-native-persist:ios
+pnpm dev:react-native-persist:android
+```
+
+Run `pnpm install` once, then `pnpm build:persist` before starting either
+fixture so the workspace package is available to Metro.
 
 ## Documentation
 

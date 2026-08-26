@@ -4,7 +4,7 @@ export const PERSIST_IDS = {
   STATUS: 'uklad-persist',
   /** Internal event publishing the attachment's initial idle status. */
   ATTACH: 'uklad-persist/attach',
-  /** Public event that starts the attachment's one hydration attempt. */
+  /** Public event that starts (or retries after failure) a hydration attempt. */
   HYDRATE: 'uklad-persist/hydrate',
   /** Internal async read-completion event. */
   LOADED: 'uklad-persist/loaded',

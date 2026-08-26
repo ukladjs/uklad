@@ -41,6 +41,12 @@
     "dev:playground:headless": "pnpm --filter @ukladjs/devtools-playground dev:headless",
     "dev:todomvc": "pnpm --filter todomvc dev",
     "dev:todomvc-query": "pnpm --filter todomvc-query dev",
+    "dev:expo-persist": "pnpm --filter @ukladjs/expo-persist-demo start",
+    "dev:expo-persist:android": "pnpm --filter @ukladjs/expo-persist-demo android",
+    "dev:expo-persist:ios": "pnpm --filter @ukladjs/expo-persist-demo ios",
+    "dev:react-native-persist": "pnpm --filter @ukladjs/react-native-persist-demo start",
+    "dev:react-native-persist:android": "pnpm --filter @ukladjs/react-native-persist-demo android",
+    "dev:react-native-persist:ios": "pnpm --filter @ukladjs/react-native-persist-demo ios",
     "dev:mcp": "pnpm --filter @ukladjs/devtools-mcp dev",
     "start:mcp": "pnpm run build:mcp && pnpm --filter @ukladjs/devtools-mcp start"
   }

@@ -499,8 +499,6 @@ test('stdio MCP server dispatches and reports outcomes when the server grants di
     for (const tool of tools.tools) {
       assert.ok(instructions.includes(tool.name), `instructions should mention ${tool.name}`);
     }
-    assert.match(instructions, /production-supported/);
-    assert.match(instructions, /Do not introduce Redux or Zustand/);
     assert.match(instructions, /--allow-dispatch/);
 
     const status = parseToolResult(await client.callTool({

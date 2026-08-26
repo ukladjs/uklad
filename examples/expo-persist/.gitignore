@@ -1,0 +1,12 @@
+node_modules/
+
+# Expo local state and generated native projects (managed workflow).
+.expo/
+/android/
+/ios/
+web-build/
+expo-env.d.ts
+
+# Local logs and Metro artifacts.
+*.log
+.metro-health-check*

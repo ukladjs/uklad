@@ -12,10 +12,16 @@ export interface HydrationSnapshot {
 
 export interface CompletionPayload {
   readonly status: TerminalStatus;
+  readonly generation: number;
 }
 
-export interface PurgeCompletionPayload extends CompletionPayload {
+export interface PurgeCompletionPayload {
+  readonly status: TerminalStatus;
   readonly diagnostics: readonly PersistDiagnostic[];
+}
+
+export function isHydrationGeneration(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
 export function isPersistDiagnostic(
@@ -102,12 +108,18 @@ export function isWritePayload(value: unknown): value is { readonly key: string 
 export function isCompletionPayload(value: unknown): value is CompletionPayload {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const status = Reflect.get(value, 'status') as unknown;
-  return status === 'hydrated' || status === 'failed';
+  return (
+    (status === 'hydrated' || status === 'failed') &&
+    isHydrationGeneration(Reflect.get(value, 'generation'))
+  );
 }
 
 export function isPurgeCompletionPayload(value: unknown): value is PurgeCompletionPayload {
   return (
-    isCompletionPayload(value) &&
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    (Reflect.get(value, 'status') === 'hydrated' || Reflect.get(value, 'status') === 'failed') &&
     isPersistDiagnosticArray(Reflect.get(value, 'diagnostics') as unknown)
   );
 }

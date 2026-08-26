@@ -1,8 +1,8 @@
 # @ukladjs/persist
 
-Sync-safe, versioned persistence for [Uklad](https://github.com/ukladjs/uklad). Hydration is an event, storage operations are effects/coeffects, status is a subscription, and one global interceptor contributes post-commit writes to the events that changed configured roots.
+Versioned persistence for [Uklad](https://github.com/ukladjs/uklad). Hydration is an event, storage operations are effects/coeffects, status is a subscription, and one global interceptor contributes post-commit writes to the events that changed configured roots.
 
-`0.1.0` supports browser CSR with synchronous storage such as `localStorage`, one attachment per runtime, root-key persistence, synchronous migrations, and per-key transforms. Async storage, SSR integration, custom merge, and multiple configurations per runtime are not supported in this intentionally narrow initial release. The async type surface requires an explicit `experimentalAsync: true` opt-in and has no write-ordering or durability guarantee.
+Both synchronous storage (for example `localStorage`) and promise-based storage (for example React Native AsyncStorage or Expo SQLite's key-value store) are supported. Async writes are serialized per storage key, preserve the committed snapshot that caused each write, and can be awaited with `flush()`.
 
 ## Install
 
@@ -36,7 +36,7 @@ persistence.hydrate();
 The runtime is explicit. Attach only once per runtime; a second attachment and
 persistence protocol collisions fail loudly.
 
-`hydrate()` performs one attachment-scoped attempt. Repeated calls are idempotent no-ops. Status is available at `['uklad-persist']`:
+`hydrate()` starts an attachment-scoped attempt. Repeated calls are idempotent while an attempt is active or already hydrated; after a failed attempt, calling it again retries. Status is available at `['uklad-persist']`:
 
 ```ts
 import { PERSIST_IDS } from '@ukladjs/persist';
@@ -46,9 +46,45 @@ import { PERSIST_IDS } from '@ukladjs/persist';
 // 'idle' | 'hydrating' | 'hydrated' | 'failed'
 
 await persistence.whenHydrated(); // rejects when hydration failed or was disposed
+await persistence.flush(); // await this at a lifecycle boundary when durability matters
 ```
 
 Writes remain closed until status is `hydrated`. Hydration events are excluded from the writer, so reading a stored root never echoes it back to storage.
+If an async write fails, `flush()` continues to reject until a later successful
+operation for that root supersedes the failed write.
+
+### Hydration barrier
+
+Persistence does not block application events while status is `idle`,
+`hydrating`, or `failed`. Such events still commit normal Uklad state, but
+changes to configured roots are not written and a later successful hydration
+may replace them with stored values. Applications must therefore gate domain
+actions that can change persisted roots until status is `hydrated` (or
+`whenHydrated()` resolves). Independent, non-persisted UI roots may continue to
+change during hydration.
+
+### React Native and Expo
+
+The package does not import a native storage implementation. Pass any
+AsyncStorage-compatible object through `asyncStorageAdapter`:
+
+```ts
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { asyncStorageAdapter, persist } from '@ukladjs/persist';
+
+const persistence = persist(runtime, {
+  storage: asyncStorageAdapter(AsyncStorage),
+  keys: ['todos'],
+});
+
+persistence.hydrate();
+await persistence.whenHydrated();
+```
+
+For Expo SQLite's synchronous key-value API, use `syncStorageAdapter` with its
+`getItemSync`/`setItemSync`/`removeItemSync` methods from
+`expo-sqlite/kv-store`. The Expo fixture uses this synchronous route; the bare
+React Native fixture exercises `asyncStorageAdapter()` and `flush()`.
 
 ## Storage layout
 
@@ -138,7 +174,19 @@ Serialization and storage-write failures are reported through `onError` without 
 
 ## Lifecycle and strict contracts
 
-`dispose()` removes the module's handlers, status subscription, and writer interceptor. Runtime disposal uses the same cleanup path, and pending barriers reject. Disposing and reattaching starts from a fresh `idle` gate even if state still contains an older terminal status.
+`dispose()` removes the module's handlers, status subscription, and writer
+interceptor. Runtime disposal uses the same cleanup path, and pending barriers
+reject. Queued async storage work is cancelled; already-started storage calls
+cannot be cancelled, so attachment ownership remains fenced until they settle.
+Await disposal before reattaching:
+
+```ts
+await persistence.dispose();
+const nextPersistence = persist(runtime, nextOptions);
+```
+
+The next attachment starts from a fresh `idle` gate even if state still
+contains an older terminal status.
 
 `PersistHandle` is the primary typed API. Applications that intentionally dispatch the public hydrate/purge events or query status on a strict runtime can compose its contract:
 
@@ -157,7 +205,7 @@ runtime.dispatch([PERSIST_IDS.HYDRATE]);
 
 Internal completion/effect IDs are exported for diagnostics but are not part of `PersistContracts` and must not be dispatched by applications. Library-owned payloads are authenticated at runtime; forged or malformed internal work is rejected without opening the write gate.
 
-For the package [architecture](https://github.com/ukladjs/uklad/blob/main/docs/architecture/uklad-persist.md), safety invariant, and roadmap to async support, see the [uklad-persist RFC](https://github.com/ukladjs/uklad/blob/main/docs/rfcs/persistence.md).
+For the package [architecture](https://github.com/ukladjs/uklad/blob/main/docs/architecture/uklad-persist.md), safety invariant, and native-app integration notes, see the [uklad-persist RFC](https://github.com/ukladjs/uklad/blob/main/docs/rfcs/persistence.md).
 
 ## License
 

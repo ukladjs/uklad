@@ -1,0 +1,26 @@
+{
+  "name": "@ukladjs/expo-persist-demo",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.js",
+  "description": "Expo SQLite fixture for synchronous @ukladjs/persist storage.",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc6 --noEmit",
+    "check": "pnpm run typecheck"
+  },
+  "dependencies": {
+    "@ukladjs/core": "workspace:*",
+    "@ukladjs/persist": "workspace:*",
+    "expo": "~54.0.37",
+    "expo-sqlite": "~16.0.10",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  }
+}

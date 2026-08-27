@@ -367,6 +367,65 @@ describe('persist', () => {
     runtime.dispose();
   });
 
+  it.each([
+    [
+      'toJSON getter',
+      () =>
+        Object.defineProperty({ theme: 'dark' }, 'toJSON', {
+          enumerable: true,
+          get: () => {
+            throw new Error('SECRET_THROWING_TO_JSON');
+          },
+        }),
+    ],
+    [
+      'proxy trap',
+      () =>
+        new Proxy(
+          { theme: 'dark' },
+          {
+            ownKeys: () => {
+              throw new Error('SECRET_THROWING_PROXY');
+            },
+          },
+        ),
+    ],
+  ])('sanitizes a throwing serializer %s', async (_label, createData) => {
+    const original = entry(1, { theme: 'old' });
+    const diagnostics: PersistDiagnostic[] = [];
+    const memory = createMemoryStorage({ 'uklad/settings': original });
+    const runtime = makeRuntime({ settings: { theme: 'light' } });
+    const handle = persist(runtime, {
+      storage: memory.storage,
+      keys: [
+        {
+          key: 'settings',
+          serialize: () => createData() as PersistData,
+        },
+      ],
+      onError: (value) => diagnostics.push(value),
+    });
+    runtime.registerModule((registrar) => {
+      registrar.regEvent('settings/change', ({ draftState }) => {
+        draftState.settings = { theme: 'dark' };
+      });
+    });
+
+    handle.hydrate();
+    runtime.dispatch(['settings/change']);
+    await handle.flush();
+
+    expect(memory.data.get('uklad/settings')).toBe(original);
+    expect(memory.setCalls).toBe(0);
+    expect(diagnostics).toEqual([
+      { code: 'serialize-failed', phase: 'serialize', key: 'settings' },
+    ]);
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('SECRET_THROWING');
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('SECRET_THROWING');
+    await handle.dispose();
+    runtime.dispose();
+  });
+
   it('uses Object.is for root identity and removes storage when a root is deleted', async () => {
     const memory = createMemoryStorage();
     const runtime = makeRuntime({ value: Number.NaN, ui: 0 });

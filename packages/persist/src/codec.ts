@@ -87,8 +87,11 @@ export function stageEntry(
 
 /** Encode a validated JSON value into the versioned storage envelope. */
 export function encodeEnvelope(version: number, data: unknown): string | undefined {
-  if (!isPersistDataValue(data)) return undefined;
   try {
+    // Validation inspects user-owned objects and may encounter throwing proxy
+    // traps or accessors. Keep the codec total so every invalid value follows
+    // the caller's sanitized serialize-failed path.
+    if (!isPersistDataValue(data)) return undefined;
     const encoded = JSON.stringify({ v: version, data } satisfies Envelope);
     const parsed = JSON.parse(encoded) as unknown;
     return isEnvelopeRecord(parsed) && parsed.v === version && isPersistDataValue(parsed.data)

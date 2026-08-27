@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createAsyncStorage } from '@react-native-async-storage/async-storage';
 import { createUkladRuntime } from '@ukladjs/core/vanilla';
 import { asyncStorageAdapter, persist } from '@ukladjs/persist';
 import type { PersistContracts } from '@ukladjs/persist';
@@ -7,6 +7,8 @@ import { eventIds, stateKeys, subscriptionIds } from './catalog';
 import type { AppContracts as BaseContracts } from './contracts';
 
 export type AppContracts = PersistContracts<BaseContracts>;
+
+const appStorage = createAsyncStorage('uklad-demo');
 
 export const runtime = createUkladRuntime<AppContracts>({
   initialState: { [stateKeys.count]: 0 },
@@ -22,7 +24,7 @@ runtime.registerModule((registrar) => {
 });
 
 export const persistence = persist(runtime, {
-  storage: asyncStorageAdapter(AsyncStorage),
+  storage: asyncStorageAdapter(appStorage),
   prefix: 'uklad-demo-react-native',
   keys: [stateKeys.count],
   onError: (error) => console.warn('[react-native-persist-demo]', error),

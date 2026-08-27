@@ -1,9 +1,9 @@
 # React Native persistence fixture
 
-This is the bare React Native counterpart to the Expo fixture. It uses
-`@react-native-async-storage/async-storage` through `asyncStorageAdapter()` and
-exercises asynchronous hydration, per-key write ordering, `purge()`, and
-`flush()` when the app backgrounds.
+This is the bare React Native counterpart to the Expo fixture. It uses a named
+AsyncStorage v3 database from `@react-native-async-storage/async-storage`
+through `asyncStorageAdapter()` and exercises asynchronous hydration, per-key
+write ordering, `purge()`, and `flush()` when the app backgrounds.
 
 The screen gates domain actions until the persistence status is `hydrated`.
 Failed hydration exposes explicit retry and purge recovery controls, preventing

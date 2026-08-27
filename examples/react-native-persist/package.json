@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@babel/runtime": "7.26.10",
-    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-async-storage/async-storage": "^3.1.1",
     "@ukladjs/core": "workspace:*",
     "@ukladjs/persist": "workspace:*",
     "react": "19.1.0",

@@ -67,21 +67,29 @@ change during hydration.
 
 ### React Native and Expo
 
-The package does not import a native storage implementation. Pass any
-AsyncStorage-compatible object through `asyncStorageAdapter`:
+The package does not import a native storage implementation. For new React
+Native apps, create a named AsyncStorage v3 instance and pass it through
+`asyncStorageAdapter`:
 
 ```ts
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createAsyncStorage } from '@react-native-async-storage/async-storage';
 import { asyncStorageAdapter, persist } from '@ukladjs/persist';
 
+const appStorage = createAsyncStorage('my-app');
+
 const persistence = persist(runtime, {
-  storage: asyncStorageAdapter(AsyncStorage),
+  storage: asyncStorageAdapter(appStorage),
   keys: ['todos'],
 });
 
 persistence.hydrate();
 await persistence.whenHydrated();
 ```
+
+AsyncStorage v3 scoped instances use a separate native database for each name.
+When migrating an existing app that used the default v1/v2 singleton, keep the
+legacy default export until its data has been copied into the new named
+database; changing the instance name alone does not migrate stored values.
 
 For Expo SQLite's synchronous key-value API, use `syncStorageAdapter` with its
 `getItemSync`/`setItemSync`/`removeItemSync` methods from

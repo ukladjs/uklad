@@ -19,11 +19,11 @@
     "react-native": "0.81.5"
   },
   "devDependencies": {
-    "@react-native/babel-preset": "0.81.5",
-    "@react-native/codegen": "0.81.5",
-    "@react-native/gradle-plugin": "0.81.5",
+    "@react-native/babel-preset": "0.87.0",
+    "@react-native/codegen": "0.87.0",
+    "@react-native/gradle-plugin": "0.87.0",
     "@react-native-community/cli": "^20.0.2",
-    "@react-native/metro-config": "0.81.5",
+    "@react-native/metro-config": "0.87.0",
     "@types/react": "19.2.18",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   }

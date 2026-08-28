@@ -1,29 +1,33 @@
 # `@ukladjs/tanstack-query`
 
-Headless TanStack Query integration for Uklad. TanStack Query owns server
+Headless TanStack Query v5 integration for Uklad. TanStack Query owns server
 cache, retries, invalidation, and garbage collection. Uklad owns local/UI state
-and exposes the feature's clean remote read model through ordinary root and
-derived subscriptions.
+and exposes a mapped remote read model through ordinary subscriptions.
 
-This package uses `@tanstack/query-core`, not `@tanstack/react-query`. There is
-no `QueryClientProvider` and no `useQuery` in a view.
+This package uses `@tanstack/query-core`, not `@tanstack/react-query`. It does
+not install `QueryClientProvider`, provide React context, or add a query hook.
+Views use the application's existing Uklad provider and `useSubscription`.
 
 `@tanstack/query-core` is a required peer dependency. Install it in the
-application so the adapter, the application, and any TanStack framework adapter
-all use one compatible Query Core instance. `@ukladjs/tanstack-query` currently
-supports Query Core v5 (`^5.0.0`); a new major requires an adapter release that
-explicitly declares and verifies support for it.
+application so the adapter, application, and any TanStack framework adapter
+share one compatible Query Core instance. The adapter currently supports Query
+Core v5 (`^5.0.0`).
 
-For the architecture, ownership boundary, and application-placement rules, see
-the central [TanStack Query integration guide](../../docs/architecture/tanstack-query.md).
+For the ownership model and application-placement rules, see the central
+[TanStack Query integration guide](../../docs/architecture/tanstack-query.md).
 
-## Setup
+## Install
 
 ```sh
-pnpm add @ukladjs/tanstack-query@0.1.0 @tanstack/query-core@^5.0.0
+pnpm add @ukladjs/tanstack-query@0.2.0 @tanstack/query-core@^5.0.0
 ```
 
-The package requires `@ukladjs/core@^0.2.0` as a peer dependency.
+The package also requires `@ukladjs/core@^0.2.4` as a peer dependency.
+
+## Quick start
+
+Create one `QueryClient`, attach it to one Uklad runtime, and register a
+cache-owned query subscription from the platform adapter:
 
 ```ts
 import { createUkladRuntime } from '@ukladjs/core/vanilla';
@@ -32,28 +36,20 @@ import { QueryClient, attachQueryClient, regQuerySub } from '@ukladjs/tanstack-q
 
 const queryClient = new QueryClient();
 const runtime = createUkladRuntime({
-  initialState: {
-    selectedTodoId: 42,
-    selectedTodo: { kind: 'loading' as const },
-  },
+  initialState: { selectedTodoId: 42 },
 });
 
-// Replaces QueryClientProvider's mount/unmount responsibility. It does not
-// install React context.
-attachQueryClient(runtime, queryClient);
+// Mounts the headless client with the runtime lifecycle. It does not install
+// React Query context.
+const detachQueryClient = attachQueryClient(runtime, queryClient);
 
 runtime.registerModule((registrar) => {
   registrar.regRootSub('ui/selected-todo-id', 'selectedTodoId');
-  registrar.regRootSub('todos/selected', 'selectedTodo');
 
   regQuerySub(
     registrar,
     queryClient,
     'todos/selected',
-    {
-      stateKey: 'selectedTodo',
-      update: (_current, value) => value,
-    },
     () => [['ui/selected-todo-id']],
     ([id]) => ({
       queryKey: ['todos', id],
@@ -72,7 +68,6 @@ runtime.registerModule((registrar) => {
 
 function Todo() {
   const todo = useSubscription(['todos/selected']);
-
   if (todo.kind === 'loading') return 'Loading…';
   if (todo.kind === 'error') return `Could not load: ${todo.message}`;
   return todo.todo.title;
@@ -87,48 +82,137 @@ function Root() {
 }
 ```
 
-`todos/selected` is both the lifecycle subscription and the explicit storage
-root in this example. `regQuerySub` attaches a generic `regSubExt` lifecycle
-driver; it does not turn the subscription into a special Query type. The
-initial root value belongs in `initialState`, usually a domain-level `loading`
-or `idle` value.
+`todos/selected` has no backing state root. TanStack owns the query cache and
+`regQuerySub` exposes the mapped result directly. A hydrated cache entry is
+available synchronously during the first render; an uncached query reads as the
+mapper's loading value until its observer fetch completes.
 
-After the first consumer commits, the driver passively reads its declared
-**signals** and starts one `QueryObserver`. When `selectedTodoId` changes, it
-switch-maps from the old observer to the new query key. Sampling a signal does
-not add a dependency edge or keep its Uklad subscription active. The final
-consumer destroys the observer; TanStack's `gcTime` remains the authority for
-cache retention.
+Dispose `detachQueryClient` (or the runtime) when the execution owner shuts
+down. The attachment mounts/unmounts the client and rejects accidental reuse of
+one client across runtimes.
+
+## Lifecycle and ownership
+
+Each subscription vector owns one external source and, once active, one
+`QueryObserver`:
 
 ```text
-signal state → Query extension → QueryObserver → internal event → state.selectedTodo → root subscription
+render/read       → getOptimisticResult() (synchronous)
+first commit     → observer.subscribe() and possible fetch
+observer callback→ external invalidation → Uklad graph publication
+final consumer   → observer destroy() → external node eviction
 ```
 
-The observer never publishes directly into the Uklad graph. The extension maps
-TanStack's read-only result, then applies the target's `update` function to the
-latest value of `stateKey` through a protected runtime event. Normal Uklad STATE
-publication updates the ordinary root and every derived subscription that
-depends on it.
+The dormant read does not subscribe or fetch. The first committed consumer
+activates the observer; the final consumer releases it. TanStack's `gcTime`, not
+Uklad state, controls cache retention. A query callback only invalidates the
+external source; it never writes application state or exposes a mutable client
+to a mapper.
 
-The lifecycle subscription and storage root may differ. This is what makes one
-`regQuerySub` work for parameterized derived subscriptions as well:
+Declared query signals are real Uklad dependencies. For an active consumer, a
+state change re-reads the query in the same publication wave and calls
+`QueryObserver.setOptions()` for the active vector. Parameters are scalar
+subscription coordinates, so parameterized vectors are isolated and can be
+released independently.
+
+## Mapping and observation
+
+The `mapResult` callback receives a frozen, read-only `QuerySnapshot`. It
+contains data, error, status, fetch status, timestamps, failure metadata, and
+the standard TanStack lifecycle booleans. It does not contain `refetch`, fetch,
+mutation, invalidation, or any other imperative operation.
+
+`regQuerySub` observes only `data` and `error` by default. This keeps a
+background stale/fetch transition from invalidating a mapper that does not
+expose that lifecycle. TanStack structural sharing and the subscription
+equality policy suppress unchanged mapped values.
+
+Opt into lifecycle fields that the mapper intentionally returns:
 
 ```ts
-registrar.regRootSub('todos/by-id-state', 'todoById');
-registrar.regSub(
-  'todos/by-id',
-  () => [['todos/by-id-state']],
-  ([todoById], id) => todoById[id],
+regQuerySub(
+  registrar,
+  queryClient,
+  'todos/selected-status',
+  () => [],
+  () => ({ queryKey: ['todos', 42], queryFn: () => api.getTodo(42) }),
+  (query) => ({ data: query.data, refreshing: query.isFetching }),
+  { observe: ['data', 'error', 'isFetching'] },
 );
+```
 
+Use `{ observe: 'all' }` only when the mapped result deliberately exposes the
+full lifecycle. The optional `config` also accepts the normal subscription
+`equalityCheck`.
+
+## Event-time cache reads
+
+When an event needs a synchronous cached value, configure a narrow coeffect on
+the QueryClient attachment. Do not close over `QueryClient` in event code:
+
+```ts
+interface AppContracts extends UkladContracts {
+  readonly coeffects: {
+    readonly 'todos/cached-list': {
+      readonly arg: void;
+      readonly value: readonly Todo[] | undefined;
+    };
+  };
+}
+
+attachQueryClient(runtime, queryClient, {
+  cacheCoeffects: [
+    {
+      id: 'todos/cached-list',
+      read: (cache) => cache.getData<readonly Todo[]>(['todos', 'list']),
+    },
+  ],
+});
+
+runtime.registerModule((registrar) => {
+  registrar.regEvent(
+    'todos/use-cached',
+    ({ coeffects: { cachedTodos } }) => {
+      // A synchronous cache hit, or undefined on a miss.
+      void cachedTodos;
+    },
+    { coeffects: { cachedTodos: 'todos/cached-list' } },
+  );
+});
+```
+
+`attachQueryClient` registers each configured ID through the normal Uklad
+coeffect registry and removes it with the attachment. `QueryCacheReader` is a
+frozen capability with only synchronous `getData()` and `getState()` methods;
+it cannot fetch, mutate, invalidate, remove queries, or access the client.
+Coeffect readers may also use their declared argument and read-only event
+context. A cache miss injects `undefined`, while a thrown reader follows normal
+coeffect error semantics and aborts the event before state commit.
+
+`readQueryData()` and `readQueryState()` remain available for platform code and
+tests. Application events should use attachment-managed cache coeffects so the
+event boundary stays explicit and deterministic.
+
+## Mutations
+
+Keep commands and mutations in Uklad effects. An event returns intent, the
+platform effect invokes a TanStack `MutationObserver`, and successful completion
+invalidates the relevant query key. Active `regQuerySub` observers then publish
+the next mapped value through the ordinary graph.
+
+```text
+event → effect → mutation → invalidate query key → active query subscription
+```
+
+## Parameterized queries
+
+Use scalar parameters as cache coordinates; do not maintain a Uklad result map:
+
+```ts
 regQuerySub(
   registrar,
   queryClient,
   'todos/by-id',
-  {
-    stateKey: 'todoById',
-    update: (todoById, value, id) => ({ ...todoById, [id]: value }),
-  },
   () => [],
   (_signals, id) => ({
     queryKey: ['todos', id],
@@ -136,24 +220,26 @@ regQuerySub(
   }),
   (query) => query.data,
 );
+
+registrar.regSub(
+  'todos/title',
+  (id) => [['todos/by-id', id]],
+  ([todo]) => (todo === undefined ? undefined : todo.title),
+);
 ```
 
-Each `['todos/by-id', id]` instance owns its own QueryObserver lifecycle. Its
-mapped result is merged into the shared root using the latest root value, so
-concurrent parameter instances cannot overwrite each other.
+The vectors `['todos/by-id', 1]` and `['todos/by-id', 2]` own independent
+observers. Releasing one does not dispose the other or leave a mirrored Uklad
+entry that prevents TanStack garbage collection.
 
-`QuerySnapshot` is deliberately read-only. It is the mapper's input and
-exposes data, error, status, and fetch metadata, but not imperative observer
-methods such as `refetch`. Only the mapper's return value is written to Uklad
-state.
+## Migration from the old state-backed call
 
-By default, `regQuerySub` observes only `data` and `error`. TanStack's default
-structural sharing retains the previous `data` reference for a structurally
-equal JSON response, so an unchanged background refetch produces no Uklad
-event or state update. A mapper that exposes lifecycle information must opt in
-to the fields it needs:
+The cache-owned implementation is now the public `regQuerySub`. Remove the
+query result root, state key, initial loading value, update event, and aggregate
+parameterized result map. The old target-bearing call:
 
 ```ts
+// Before: every mapped result was retained in Uklad state as well.
 regQuerySub(
   registrar,
   queryClient,
@@ -161,16 +247,62 @@ regQuerySub(
   { stateKey: 'selectedTodo', update: (_current, value) => value },
   () => [],
   () => ({ queryKey: ['todos', 42], queryFn: () => api.getTodo(42) }),
-  (query) => ({ todo: query.data, refreshing: query.isFetching }),
-  { observe: ['data', 'error', 'isFetching'] },
+  (query) => query.data,
 );
 ```
 
-Use `{ observe: 'all' }` only when the mapper intentionally exposes the full
-lifecycle. Put commands and mutations in effects, then call
-`queryClient.invalidateQueries()` there. For a narrow synchronous cache read in
-an event, register a coeffect around `readQueryData(queryClient, key)` rather
-than passing the QueryClient into event handlers.
+becomes:
 
-Every Query integration uses `regQuerySub`: it follows Uklad state and every
-observer update crosses the common event → state → subscription boundary.
+```ts
+// After: TanStack Query is the sole remote-data owner.
+regQuerySub(
+  registrar,
+  queryClient,
+  'todos/selected',
+  () => [],
+  () => ({ queryKey: ['todos', 42], queryFn: () => api.getTodo(42) }),
+  (query) => query.data,
+);
+```
+
+If a workflow intentionally needs a durable or editable state projection, use
+the separately named compatibility API:
+
+```ts
+import { regQueryProjection } from '@ukladjs/tanstack-query';
+
+registrar.regRootSub('todos/selected-projection', 'selectedTodo');
+regQueryProjection(
+  registrar,
+  queryClient,
+  'todos/selected-projection',
+  { stateKey: 'selectedTodo', update: (_current, value) => value },
+  () => [],
+  () => ({ queryKey: ['todos', 42], queryFn: () => api.getTodo(42) }),
+  (query) => query.data,
+);
+```
+
+`regQueryProjection` deliberately transfers ownership into an explicit Uklad
+state root and retains the old `regSubExt` update lifecycle. It is deprecated
+for ordinary server-state reads and is not an alias or overload of
+`regQuerySub`. Keep it only for the compatibility window or a documented
+ownership transfer.
+
+## API
+
+- `attachQueryClient(runtime, queryClient, options?)` mounts one headless client
+  and optionally registers attachment-owned cache coeffects.
+- `regQuerySub(registrar, queryClient, id, signals, options, mapResult, config?)`
+  registers the default cache-owned external subscription.
+- `regQueryProjection(...)` registers an explicit, deprecated state projection.
+- `QuerySnapshot` is the frozen mapper input.
+- `QueryCacheReader` is the frozen coeffect capability with `getData()` and
+  `getState()`.
+- `readQueryData()` and `readQueryState()` are synchronous cache helpers for
+  platform code and tests.
+
+The lower-level `regExternalSub` primitive is exported by
+`@ukladjs/core/vanilla` for other external sources. See the [architecture
+guide](../../docs/architecture/tanstack-query.md) for SSR, diagnostics,
+testing, and the three supported playground patterns.

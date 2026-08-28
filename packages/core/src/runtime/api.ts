@@ -26,6 +26,7 @@ import type {
 } from '../contracts';
 import type { HandlerRegistry } from './handler-types';
 import type { SubscriptionDiagnostic } from './subscriptions/types';
+import type { ExternalSubscriptionDriver } from './subscriptions/types';
 import type { TraceCallback } from '../core/tracing-types';
 import type {
   CoeffectReadContext,
@@ -38,6 +39,18 @@ import type {
   SubscriptionExtension,
   SubscriptionExtensionContext,
 } from '../types';
+
+/** Driver factory used by `regExternalSub`; one driver belongs to one query vector. */
+export type RuntimeExternalSubscriptionDriverFactory<
+  TContracts extends UkladContracts,
+  TId extends string,
+  TDependencies extends readonly ContractSubscribeVector<TContracts>[],
+> = (
+  ...params: ContractSubscriptionParams<TContracts, TId>
+) => ExternalSubscriptionDriver<
+  ContractSubscriptionDependencyValues<TContracts, TDependencies>,
+  ContractSubscriptionResult<TContracts, TId>
+>;
 
 export type RuntimeEventHandler<
   TContracts extends UkladContracts,
@@ -182,6 +195,33 @@ export interface UkladRegistrar<TContracts extends UkladContracts = PermissiveUk
     id: TId,
     signals: (...params: ContractSubscriptionParams<TContracts, TId>) => readonly [...TSignals],
     createExtension: RuntimeSubscriptionExtensionFactory<TContracts, TId, TSignals>,
+  ): void;
+  /**
+   * Register a subscription whose value is read from an external source.
+   *
+   * `read()` remains synchronous and is used for dormant/render-time pulls;
+   * `activate()` starts observation only after the first consumer commits. The
+   * external source never writes application state, and its invalidation
+   * context is intentionally the only publication capability it receives.
+   *
+   * ```ts
+   * regExternalSub(
+   *   'todos/all',
+   *   () => [],
+   *   () => createTodosQueryDriver(queryClient),
+   * );
+   * ```
+   */
+  regExternalSub<
+    TId extends ContractSubscriptionId<TContracts>,
+    TDependencies extends readonly ContractSubscribeVector<TContracts>[],
+  >(
+    id: TId,
+    dependencies: (
+      ...params: ContractSubscriptionParams<TContracts, TId>
+    ) => readonly [...TDependencies],
+    createDriver: RuntimeExternalSubscriptionDriverFactory<TContracts, TId, TDependencies>,
+    config?: SubConfig,
   ): void;
   /**
    * Register a computed subscription.

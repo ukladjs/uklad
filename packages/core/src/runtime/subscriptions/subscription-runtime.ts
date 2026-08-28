@@ -5,6 +5,7 @@ import { mergeRuntimeProbeSpan, withRuntimeProbeSpan } from '../probe';
 import { isRuntimeDisposed, type RuntimeCore } from '../core';
 import { SubscriptionEngine } from './engine';
 import { SubscriptionExtensionRuntime } from './extension-runtime';
+import { ExternalSubscriptionRegistry } from './external/registry';
 import { getRootSubKey, getSubVectorKey } from './keys';
 import { normalizeSubscriptionConfig } from './validation';
 import { createRegistrationHandle } from '../registrations';
@@ -12,7 +13,12 @@ import { createRegistrationHandle } from '../registrations';
 import type { RuntimeProbeSubscription } from '../probe-types';
 import type { RegistrationHandle } from '../registrations';
 import type { SubscriptionExtensionPlan } from './extension-runtime';
-import type { SubscriptionDiagnostic, SubscriptionListenerKind, SubscriptionNode } from './types';
+import type {
+  ExternalSubscriptionDriver,
+  SubscriptionDiagnostic,
+  SubscriptionListenerKind,
+  SubscriptionNode,
+} from './types';
 import type {
   EqualityCheckFn,
   Id,
@@ -28,7 +34,7 @@ interface SubscriptionBuildFrame {
   subId: Id;
   computeFn: SubHandler;
   params: any[];
-  kind: 'root' | 'computed';
+  kind: 'root' | 'computed' | 'external';
   equalityCheck: EqualityCheckFn;
   dependencyVectors: SubVector[];
   extension: SubscriptionExtensionPlan | undefined;
@@ -51,6 +57,7 @@ export class SubscriptionRuntime {
   readonly subscriptionCache: Map<string, SubscriptionEntry>;
   readonly dependentSubscriptionKeys: Map<string, Set<string>>;
   readonly subConfigById: Map<Id, SubConfig>;
+  private externalRegistry: ExternalSubscriptionRegistry | undefined;
   provisionalCurrent: Map<string, SubscriptionNode<any>>;
   provisionalPrevious: Map<string, SubscriptionNode<any>>;
   provisionalSweepScheduled: boolean;
@@ -76,6 +83,7 @@ export class SubscriptionRuntime {
     this.subscriptionCache = new Map();
     this.dependentSubscriptionKeys = new Map();
     this.subConfigById = new Map();
+    this.externalRegistry = undefined;
     this.provisionalCurrent = new Map();
     this.provisionalPrevious = new Map();
     this.provisionalSweepScheduled = false;
@@ -122,6 +130,41 @@ export class SubscriptionRuntime {
     return this.createSubscriptionRegistration(id, handlers);
   }
 
+  /**
+   * Register an external definition without installing an ordinary state
+   * subscription handler; external definitions are resolved from this registry
+   * directly.
+   */
+  registerExternal(
+    id: Id,
+    dependencies: (...params: any[]) => SubVector[],
+    createDriver: (...params: any[]) => ExternalSubscriptionDriver<readonly unknown[], any>,
+    config?: SubConfig,
+  ): RegistrationHandle | undefined {
+    this.prepareRegistration(id);
+    const externalRegistry = (this.externalRegistry ??= new ExternalSubscriptionRegistry());
+    const definition = externalRegistry.register(id, dependencies, createDriver);
+    if (definition === undefined) return undefined;
+    const normalizedConfig = normalizeSubscriptionConfig(id, config);
+    if (normalizedConfig) this.subConfigById.set(id, normalizedConfig);
+    else this.subConfigById.delete(id);
+
+    const isActive = () => externalRegistry.isActive(definition);
+    const assertReleasable = (): void => {
+      if (isActive()) this.assertDefinitionCanBeCleared(id);
+    };
+    return createRegistrationHandle({
+      isActive,
+      assertReleasable,
+      release: () => {
+        if (!isActive()) return false;
+        this.assertDefinitionCanBeCleared(id);
+        this.clearDefinitions(id);
+        return true;
+      },
+    });
+  }
+
   registerExtension(
     id: Id,
     signalsFn: (...params: any[]) => SubVector[],
@@ -137,7 +180,8 @@ export class SubscriptionRuntime {
 
     const resolve = (query: SubVector): SubscriptionNode<any> | undefined => {
       const subId = query[0];
-      if (!runtime.registry.sub.has(subId)) {
+      const externalDefinition = this.externalRegistry?.get(subId);
+      if (!runtime.registry.sub.has(subId) && externalDefinition === undefined) {
         consoleLog('error', `[uklad] no sub handler registered for: ${subId}`);
         return undefined;
       }
@@ -161,7 +205,8 @@ export class SubscriptionRuntime {
       }
 
       const params = query.length > 1 ? query.slice(1) : [];
-      const depsFn = runtime.registry.subDeps.get(subId) as SubDepsHandler;
+      const depsFn = (externalDefinition?.dependencies ??
+        runtime.registry.subDeps.get(subId)) as SubDepsHandler;
       if (typeof depsFn !== 'function') {
         throw new Error(`[uklad] Subscription '${subId}' has no dependency handler.`);
       }
@@ -186,9 +231,11 @@ export class SubscriptionRuntime {
         subVector: query,
         key,
         subId,
-        computeFn: runtime.registry.sub.get(subId) as SubHandler,
+        computeFn: (externalDefinition
+          ? () => undefined
+          : runtime.registry.sub.get(subId)) as SubHandler,
         params,
-        kind: rootSource === undefined ? 'computed' : 'root',
+        kind: externalDefinition ? 'external' : rootSource === undefined ? 'computed' : 'root',
         equalityCheck:
           this.subConfigById.get(subId)?.equalityCheck ?? runtime.subscriptions.equalityCheck,
         dependencyVectors,
@@ -234,6 +281,10 @@ export class SubscriptionRuntime {
         dependencyKeys,
         subId,
       } = frame;
+      let externalDriver: ExternalSubscriptionDriver<readonly unknown[], any> | undefined;
+      if (kind === 'external') {
+        externalDriver = this.externalRegistry!.createDriver(subId, params);
+      }
       let onActive: () => void;
       let onUnused: () => void;
       if (extension === undefined) {
@@ -267,11 +318,12 @@ export class SubscriptionRuntime {
             : (dependencyValues: any[]) => computeFn(dependencyValues),
         dependencies,
         equalityCheck,
+        ...(externalDriver === undefined ? {} : { external: externalDriver }),
         onActive,
         onUnused,
       });
       this.cache(key, subscription, subId, dependencyKeys);
-      if (kind === 'computed') this.markProvisional(key, subscription);
+      if (kind === 'computed' || kind === 'external') this.markProvisional(key, subscription);
 
       frames.pop();
       buildingKeys.delete(key);
@@ -340,6 +392,10 @@ export class SubscriptionRuntime {
     return false;
   }
 
+  hasDefinition(subId: Id): boolean {
+    return this.getRuntime().registry.sub.has(subId) || this.externalRegistry?.has(subId) === true;
+  }
+
   clearCache(key?: string): void {
     this.engine.assertClearAllowed();
     this.clearCacheEntries(key);
@@ -363,6 +419,7 @@ export class SubscriptionRuntime {
     if (subId === undefined) {
       runtime.registry.sub.clear();
       runtime.registry.subDeps.clear();
+      this.externalRegistry?.clear();
       this.rootSubIdBySource.clear();
       this.rootSubSourceById.clear();
       this.rootSubscriptionKeys.clear();
@@ -373,6 +430,7 @@ export class SubscriptionRuntime {
     }
     runtime.registry.sub.clear(subId);
     runtime.registry.subDeps.clear(subId);
+    this.externalRegistry?.clear(subId);
     this.clearRootSource(subId);
     this.extensionRuntime?.clear(subId);
     const keys: string[] = [];
@@ -454,6 +512,7 @@ export class SubscriptionRuntime {
     const runtime = this.getRuntime();
     runtime.registry.sub.assertAvailable(id);
     runtime.registry.subDeps.assertAvailable(id);
+    this.externalRegistry?.assertAvailable(id);
     if (this.hasCachedId(id)) {
       const message = `[uklad] Cannot register subscription '${id}' while a cached query for that id exists. Clear the subscription before registering it again.`;
       consoleLog('error', message);
@@ -604,10 +663,7 @@ export class SubscriptionRuntime {
 
   private clearCacheEntries(key?: string): void {
     if (key === undefined) {
-      this.subscriptionCache.clear();
-      this.dependentSubscriptionKeys.clear();
-      this.provisionalCurrent.clear();
-      this.provisionalPrevious.clear();
+      this.removeCacheClosure(this.subscriptionCache.keys());
       return;
     }
     this.removeCacheClosure([key]);
@@ -618,6 +674,7 @@ export class SubscriptionRuntime {
     for (const key of keysToRemove) {
       const entry = this.subscriptionCache.get(key);
       if (entry) {
+        this.engine.disposeNode(entry.node);
         this.subscriptionCache.delete(key);
         for (const dependencyKey of new Set(entry.dependencyKeys)) {
           const dependents = this.dependentSubscriptionKeys.get(dependencyKey);

@@ -5,15 +5,21 @@ import type { appIds, stateKeys } from './catalog';
 
 export interface AppState {
   [stateKeys.todosShowing]: TodosShowing;
-  [stateKeys.todosQuery]: TodosQueryResult;
 }
 
 /**
- * `todos/query` is an ordinary root subscription over this clean remote read
- * model. TanStack lifecycle/cache state stays inside the query extension.
+ * `todos/query` is an ordinary external subscription over this clean remote
+ * read model. TanStack lifecycle/cache state stays inside the query adapter.
  */
 export interface AppContracts extends UkladContracts {
   state: AppState;
+
+  coeffects: {
+    [appIds.coeffects.todosCachedList]: {
+      arg: void;
+      value: readonly Todo[] | undefined;
+    };
+  };
 
   events: {
     [appIds.events.todosAdd]: [title: string];

@@ -25,10 +25,10 @@ function ServerPanel() {
     <section className="server-section">
       <div className="server-heading">
         <div>
-          <h2>TanStack Query + Subscription Extensions</h2>
+          <h2>TanStack Query + External Subscriptions</h2>
           <p>
-            Every card is driven by a headless QueryObserver. Results cross an Uklad event and state
-            root before the subscription updates.
+            Every card is driven by a cache-owned QueryObserver. Results stay in TanStack Query and
+            update ordinary Uklad subscriptions without a mirrored server-data root.
           </p>
         </div>
         <div className="server-heading-actions">
@@ -51,7 +51,7 @@ function ServerPanel() {
           <h3>Subscription with a React parameter</h3>
           <p className="server-description">
             The selected id lives only in React. Changing it changes the subscription vector and
-            starts the matching query-extension instance.
+            starts the matching external subscription instance.
           </p>
           <code>
             [&apos;{appIds.subscriptions.serverItemById}&apos;, {itemId}]
@@ -86,7 +86,7 @@ function ServerPanel() {
           <div className="server-card-number">3</div>
           <h3>Query controlled by another subscription</h3>
           <p className="server-description">
-            Region is an Uklad state root. The query extension observes that subscription and
+            Region is an Uklad state root. The external subscription declares it as a dependency and
             switch-maps its TanStack query key when the event changes it.
           </p>
           <code>
@@ -125,7 +125,7 @@ function ServerClockCard() {
       <h3>Subscription without parameters</h3>
       <p className="server-description">
         The server clock advances independently. TanStack refetches it every second while this
-        subscription has a consumer.
+        external subscription has a consumer.
       </p>
       <code>[&apos;{appIds.subscriptions.serverClock}&apos;]</code>
       <QueryResult result={clock}>

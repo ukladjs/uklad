@@ -13,7 +13,11 @@ For application-authored Uklad work:
 - Treat initial/hydrated state, accepted event values, snapshots, and subscription results as runtime-owned. Mutate state only through an event handler's Immer `draftState`; never mutate a dispatched value afterward.
 - Keep handlers, coeffects, interceptors, and subscription functions synchronous. Return declarative effects; never dispatch or schedule host work inside an event turn.
 - Use only bounded scalar subscription parameters (`string`, finite `number`, `boolean`, or `null`) and choose a deliberate equality policy for every computed result.
-- Keep effects, coeffects, and external query lifecycles in target-specific platform adapters under stable application IDs. Views subscribe and dispatch intent; they do not own application derivation or a second server-state provider.
+- Keep effects, coeffects, and external query lifecycles in target-specific platform adapters under stable application IDs. For TanStack Query, use cache-owned `regQuerySub` with `attachQueryClient`; do not add a result root or mirror query data in Uklad state. Configure event-time cache reads through attachment-owned `cacheCoeffects`, and use `regQueryProjection` only for an intentional, explicit state-ownership transfer. Views subscribe and dispatch intent; they do not own application derivation or a second server-state provider.
+
+For the full server-state boundary, lifecycle, migration, and testing rules,
+read the repository's [TanStack Query integration guide](../../../../docs/architecture/tanstack-query.md)
+when working in this repository.
 
 For live verification:
 

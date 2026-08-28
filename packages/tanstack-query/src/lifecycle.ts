@@ -1,5 +1,60 @@
 import type { QueryClient } from '@tanstack/query-core';
-import type { UkladContracts, UkladDisposer, UkladRuntime } from '@ukladjs/core/vanilla';
+import type {
+  ContractCoeffectPayloads,
+  CoeffectReadContext,
+  UkladContracts,
+  UkladDisposer,
+  UkladRuntime,
+} from '@ukladjs/core/vanilla';
+
+import { createQueryCacheReader, type QueryCacheReader } from './read';
+
+type QueryCacheCoeffectPayloads<TContracts extends UkladContracts> =
+  ContractCoeffectPayloads<TContracts>;
+
+type QueryCacheCoeffectId<TContracts extends UkladContracts> = Exclude<
+  Extract<keyof QueryCacheCoeffectPayloads<TContracts>, string>,
+  'event' | 'draftState' | '__proto__'
+>;
+
+type QueryCacheCoeffectArg<
+  TContracts extends UkladContracts,
+  TId extends string,
+> = TId extends keyof QueryCacheCoeffectPayloads<TContracts>
+  ? QueryCacheCoeffectPayloads<TContracts>[TId] extends { readonly arg: infer TArg }
+    ? TArg
+    : void
+  : any;
+
+type QueryCacheCoeffectValue<
+  TContracts extends UkladContracts,
+  TId extends string,
+> = TId extends keyof QueryCacheCoeffectPayloads<TContracts>
+  ? QueryCacheCoeffectPayloads<TContracts>[TId] extends { readonly value: infer TValue }
+    ? TValue
+    : any
+  : any;
+
+/** One package-owned cache reader registration for an application coeffect id. */
+export type QueryCacheCoeffectDefinition<
+  TContracts extends UkladContracts,
+  TId extends QueryCacheCoeffectId<TContracts> = QueryCacheCoeffectId<TContracts>,
+> =
+  TId extends QueryCacheCoeffectId<TContracts>
+    ? {
+        readonly id: TId;
+        readonly read: (
+          cache: QueryCacheReader,
+          arg: QueryCacheCoeffectArg<TContracts, TId>,
+          context: CoeffectReadContext,
+        ) => QueryCacheCoeffectValue<TContracts, TId>;
+      }
+    : never;
+
+/** Options applied to one runtime/QueryClient attachment. */
+export interface AttachQueryClientOptions<TContracts extends UkladContracts> {
+  readonly cacheCoeffects?: readonly QueryCacheCoeffectDefinition<TContracts>[];
+}
 
 const attachedClientByRuntime = new WeakMap<object, QueryClient>();
 const attachedRuntimeByClient = new WeakMap<object, object>();
@@ -13,6 +68,7 @@ const attachedRuntimeByClient = new WeakMap<object, object>();
 export function attachQueryClient<TContracts extends UkladContracts>(
   runtime: UkladRuntime<TContracts>,
   queryClient: QueryClient,
+  options: AttachQueryClientOptions<TContracts> = {},
 ): UkladDisposer {
   if (typeof runtime !== 'object' || runtime === null) {
     throw new Error('[uklad-tanstack-query] attachQueryClient() requires a Uklad runtime.');
@@ -38,7 +94,15 @@ export function attachQueryClient<TContracts extends UkladContracts>(
     );
   }
 
-  return runtime.registerModule(() => {
+  assertAttachOptions(options);
+
+  const cache = createQueryCacheReader(queryClient);
+
+  return runtime.registerModule((registrar) => {
+    for (const definition of options.cacheCoeffects ?? []) {
+      registrar.regCoeffect(definition.id, (arg, context) => definition.read(cache, arg, context));
+    }
+
     queryClient.mount();
     attachedClientByRuntime.set(runtimeIdentity, queryClient);
     attachedRuntimeByClient.set(queryClient, runtimeIdentity);
@@ -55,6 +119,33 @@ export function attachQueryClient<TContracts extends UkladContracts>(
       }
     };
   });
+}
+
+function assertAttachOptions<TContracts extends UkladContracts>(
+  options: AttachQueryClientOptions<TContracts>,
+): void {
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('[uklad-tanstack-query] attachQueryClient() options must be an object.');
+  }
+
+  const definitions = options.cacheCoeffects;
+  if (definitions !== undefined && !Array.isArray(definitions)) {
+    throw new TypeError(
+      '[uklad-tanstack-query] attachQueryClient() cacheCoeffects must be an array.',
+    );
+  }
+  for (const definition of definitions ?? []) {
+    if (
+      typeof definition !== 'object' ||
+      definition === null ||
+      typeof definition.id !== 'string' ||
+      typeof definition.read !== 'function'
+    ) {
+      throw new TypeError(
+        '[uklad-tanstack-query] Each cacheCoeffects entry must include an id and read function.',
+      );
+    }
+  }
 }
 
 /** @internal Guard registration order without exposing a runtime bridge. */

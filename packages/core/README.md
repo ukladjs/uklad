@@ -9,7 +9,7 @@ Pure event handlers over an instance-owned state, derived subscriptions, isolate
 
 ## ✅ Production ready, compatibility protected
 
-`@ukladjs/core@0.2.3` is production-ready. Its documented public API is the
+`@ukladjs/core@0.2.4` is production-ready. Its documented public API is the
 stable application boundary and the compatibility baseline for 1.0. Routine
 releases are additive or corrective and do not require application rewrites.
 
@@ -113,7 +113,7 @@ mkdir -p .cursor && cp node_modules/@ukladjs/core/templates/agent/mcp.json .curs
 ## ✨ The architecture in 30 seconds
 
 ```bash
-npm install @ukladjs/core@0.2.3
+npm install @ukladjs/core@0.2.4
 ```
 
 Declare application names once, beside one complete contract:

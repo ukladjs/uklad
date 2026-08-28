@@ -55,7 +55,7 @@ export interface RuntimeProbeEffect {
 export interface RuntimeProbeSubscription {
   readonly key: string;
   readonly query: Readonly<SubVector>;
-  readonly kind: 'root' | 'computed';
+  readonly kind: 'root' | 'computed' | 'external';
   readonly active: boolean;
   readonly version: number;
   readonly status: 'value' | 'error';

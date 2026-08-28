@@ -87,9 +87,9 @@ export function assertRegisteredSubscription(runtime: RuntimeCore, query: unknow
       '[uklad] Subscription queries must be non-empty vectors starting with a subscription id string.',
     );
   }
-  if (!runtime.registry.sub.has(query[0])) {
+  if (!runtime.registry.sub.has(query[0]) && !runtime.subscriptions.hasDefinition(query[0])) {
     throw new Error(
-      `[uklad] No subscription registered for '${query[0]}' in runtime '${runtime.identity.runtimeId}'. Register it with regRootSub() or regSub() before use.`,
+      `[uklad] No subscription registered for '${query[0]}' in runtime '${runtime.identity.runtimeId}'. Register it with regRootSub(), regSub(), or regExternalSub() before use.`,
     );
   }
 }

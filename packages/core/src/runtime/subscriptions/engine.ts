@@ -1,5 +1,6 @@
 import { consoleLog } from '../../core/logging';
 import { SubscriptionCell } from './cell';
+import { ExternalSubscriptionCoordinator } from './external/coordinator';
 import { type RuntimeCore } from '../core';
 
 import type { SubVector } from '../../types';
@@ -13,6 +14,8 @@ import type {
 } from './types';
 
 export type {
+  ExternalSubscriptionContext,
+  ExternalSubscriptionDriver,
   SubscriptionDiagnostic,
   SubscriptionKind,
   SubscriptionListenerKind,
@@ -27,7 +30,7 @@ const NO_RECALCULATED_SUBSCRIPTIONS: readonly RuntimeProbeSubscription[] = Objec
  *
  * Active graphs settle in topological order when STATE roots are published. Dormant
  * graphs are validated lazily by a memoized pull. STATE publication is already the
- * scheduler, so this engine deliberately owns no node tasks or notification debt.
+ * scheduler for state-backed graphs; external coordination is delegated to a lazy companion.
  */
 export class SubscriptionEngine {
   private readonly getRuntime: () => RuntimeCore;
@@ -53,6 +56,8 @@ export class SubscriptionEngine {
   private deferredReleases = new Set<SubscriptionCell<any>>();
   /** Makes destructive registry clears fail while any graph is live. */
   private activeNodes = 0;
+  /** Created only when the runtime actually constructs an external graph. */
+  private external: ExternalSubscriptionCoordinator | undefined;
 
   create<T>(spec: SubscriptionSpec<T>): SubscriptionNode<T> {
     if (this.phase === 'settling') {
@@ -63,7 +68,16 @@ export class SubscriptionEngine {
     if (spec.kind === 'root' && spec.dependencies.length !== 0) {
       throw new Error(`[uklad] Root subscription ${spec.key} cannot have dependencies.`);
     }
-    return new SubscriptionCell(this, spec) as unknown as SubscriptionNode<T>;
+    if (spec.kind === 'external' && spec.external === undefined) {
+      throw new Error(`[uklad] External subscription ${spec.key} must provide a driver.`);
+    }
+    if (spec.kind !== 'external' && spec.external !== undefined) {
+      throw new Error(`[uklad] Only external subscriptions may provide a driver.`);
+    }
+    const cell = new SubscriptionCell(this, spec) as unknown as SubscriptionCell<T>;
+    if (spec.kind === 'external' || this.external !== undefined)
+      this.getExternalCoordinator().track(cell as SubscriptionCell<any>);
+    return cell as unknown as SubscriptionNode<T>;
   }
 
   read<T>(node: SubscriptionNode<T>): T {
@@ -108,9 +122,18 @@ export class SubscriptionEngine {
     const firstListener = subscription.listeners.length === 0;
     const registration: SubscriptionListenerRegistration = [listener, componentName, listenerKind];
     subscription.listeners.push(registration);
+    const hasExternalGraph = firstListener && this.external?.hasGraph(subscription) === true;
     try {
+      // External sources need their dependency tuple before activation. Keep
+      // ordinary subscriptions on the original activate-then-pull path.
+      if (hasExternalGraph) this.pull(subscription, false);
       this.activate(subscription);
-      if (firstListener) this.pull(subscription, false);
+      if (firstListener) {
+        // A dormant render may have read an external snapshot before commit.
+        // Re-read only the external subgraph after `activate()` so a cache
+        // change between render and commit is visible to getSnapshot().
+        this.pull(subscription, false, hasExternalGraph);
+      }
     } catch (error) {
       const listenerIndex = subscription.listeners.indexOf(registration);
       if (listenerIndex !== -1) subscription.listeners.splice(listenerIndex, 1);
@@ -135,7 +158,9 @@ export class SubscriptionEngine {
     const nonRoot = subscriptions.find((subscription) => subscription.spec.kind !== 'root');
     if (nonRoot)
       throw new Error(`[uklad] Cannot publish non-root subscription ${nonRoot.spec.key}.`);
-    return this.publishWave(Array.from(new Set(subscriptions)), includeDiagnostics);
+    const recalculated = this.publishWave(Array.from(new Set(subscriptions)), includeDiagnostics);
+    this.external?.drain();
+    return recalculated;
   }
 
   assertPublicationAllowed(): void {
@@ -178,8 +203,20 @@ export class SubscriptionEngine {
     return node;
   }
 
+  /** @internal Terminalize external resources for a node removed from the cache. */
+  disposeNode(node: SubscriptionNode<any>): void {
+    const subscription = this.unwrap(node);
+    // HMR may remove a cached node before its old consumer unsubscribes. The
+    // coordinator terminalizes external resources while graph bookkeeping stays intact.
+    this.external?.disposeNode(subscription);
+  }
+
   /** Validate a dormant graph dependency-first without recursive call depth. */
-  private pull(target: SubscriptionCell<any>, retryErrors: boolean): void {
+  private pull(
+    target: SubscriptionCell<any>,
+    retryErrors: boolean,
+    forceExternalSources: boolean = false,
+  ): void {
     const epoch = ++this.pullEpoch;
     const stack: Array<[SubscriptionCell<any>, boolean]> = [[target, false]];
     const previousPhase = this.phase;
@@ -188,16 +225,23 @@ export class SubscriptionEngine {
     try {
       while (stack.length > 0) {
         const [subscription, expanded] = stack.pop()!;
+        const visitExternalGraph =
+          forceExternalSources && this.external?.hasGraph(subscription) === true;
+        const forceExternalRead = forceExternalSources && subscription.spec.kind === 'external';
         if (!expanded) {
           if (subscription.lastPullEpoch === epoch) continue;
+          if (subscription.disposed) {
+            throw new Error(
+              `[uklad] Dependency ${subscription.spec.key} was disposed; reacquire the graph by key.`,
+            );
+          }
           subscription.lastPullEpoch = epoch;
-          if (
+          const canSkip =
             subscription.active &&
             subscription.initialized &&
             subscription.validatedEpoch === this.publicationEpoch &&
-            !(retryErrors && subscription.hasError)
-          )
-            continue;
+            !(retryErrors && subscription.hasError);
+          if (canSkip && !visitExternalGraph) continue;
           stack.push([subscription, true]);
           for (let index = subscription.dependencies.length - 1; index >= 0; index--) {
             stack.push([subscription.dependencies[index]!, false]);
@@ -209,12 +253,14 @@ export class SubscriptionEngine {
           if (!subscription.initialized || (retryErrors && subscription.hasError))
             subscription.refreshRoot();
         } else {
-          subscription.refreshComputed(retryErrors && subscription.hasError);
+          subscription.refreshComputed(forceExternalRead || (retryErrors && subscription.hasError));
+          this.external?.syncIfNeeded(subscription);
         }
         subscription.validatedEpoch = this.publicationEpoch;
       }
     } finally {
       this.phase = previousPhase;
+      if (previousPhase === 'idle') this.external?.drain();
     }
   }
 
@@ -222,6 +268,7 @@ export class SubscriptionEngine {
   private publishWave(
     roots: SubscriptionCell<any>[],
     includeDiagnostics: boolean,
+    forceExternalRoots: boolean = false,
   ): readonly RuntimeProbeSubscription[] {
     const wave = ++this.wave;
     this.publicationEpoch++;
@@ -230,9 +277,11 @@ export class SubscriptionEngine {
     let rankIndex = -1;
     const changed: SubscriptionCell<any>[] = [];
     const recalculated = includeDiagnostics ? ([] as SubscriptionCell<any>[]) : undefined;
+    const externalWave = this.external?.beginWave();
+    const forcedExternalRoots = forceExternalRoots ? new Set(roots) : undefined;
 
     const enqueue = (subscription: SubscriptionCell<any>) => {
-      if (!subscription.active || subscription.queuedWave === wave) return;
+      if (!subscription.active || subscription.disposed || subscription.queuedWave === wave) return;
       subscription.queuedWave = wave;
       const rank = subscription.rank;
       const bucket = buckets.get(rank);
@@ -257,13 +306,20 @@ export class SubscriptionEngine {
 
     this.phase = 'settling';
     try {
-      for (const root of roots) {
-        root.validatedEpoch = this.publicationEpoch;
-        const changedRoot = root.refreshRoot();
-        recalculated?.push(root);
-        if (changedRoot) {
-          if (root.listeners.length > 0) changed.push(root);
-          for (const dependent of root.dependents) enqueue(dependent);
+      if (forcedExternalRoots !== undefined) {
+        // Invalidated external sources may depend on graph work triggered by
+        // another source in the same batch. Queue all of them by rank so any
+        // intervening computed nodes settle before their external dependents.
+        for (const root of roots) enqueue(root);
+      } else {
+        for (const root of roots) {
+          root.validatedEpoch = this.publicationEpoch;
+          const changedRoot = root.refreshRoot();
+          recalculated?.push(root);
+          if (changedRoot) {
+            if (root.listeners.length > 0) changed.push(root);
+            for (const dependent of root.dependents) enqueue(dependent);
+          }
         }
       }
 
@@ -274,14 +330,55 @@ export class SubscriptionEngine {
         for (const subscription of bucket) {
           subscription.validatedEpoch = this.publicationEpoch;
           if (!subscription.active) continue;
-          const changedSubscription = subscription.refreshComputed(false);
+          const changedSubscription = subscription.refreshComputed(
+            forcedExternalRoots?.has(subscription) === true,
+          );
           // A cell enters a publication bucket only after an upstream
           // observable change, so this refresh evaluates (or propagates an
           // upstream error) even if its own result compares equal.
+          externalWave?.record(subscription);
           recalculated?.push(subscription);
           if (!changedSubscription) continue;
           if (subscription.listeners.length > 0) changed.push(subscription);
           for (const dependent of subscription.dependents) enqueue(dependent);
+        }
+      }
+
+      // Driver synchronization is an imperative reconciliation step. Run it
+      // only after every ordinary graph computation has settled, but before
+      // listener plans are frozen. A sync failure becomes a source error and
+      // is propagated through active dependents before any callback runs.
+      const syncFailures = externalWave?.finish();
+
+      if (syncFailures !== undefined && syncFailures.length > 0) {
+        // The main wave is single-visit. Only the exceptional second pass can
+        // revisit cells, so allocate the dedupe sets on that rare path.
+        const changedSet = new Set(changed);
+        const recalculatedSet = recalculated === undefined ? undefined : new Set(recalculated);
+        const recordChanged = (subscription: SubscriptionCell<any>): void => {
+          if (subscription.listeners.length === 0 || changedSet.has(subscription)) return;
+          changedSet.add(subscription);
+          changed.push(subscription);
+        };
+        const recordRecalculated = (subscription: SubscriptionCell<any>): void => {
+          if (recalculated === undefined || recalculatedSet?.has(subscription)) return;
+          recalculatedSet?.add(subscription);
+          recalculated.push(subscription);
+        };
+        for (const failed of syncFailures) recordChanged(failed);
+        const pending = new Set<SubscriptionCell<any>>();
+        for (const failed of syncFailures) {
+          for (const dependent of failed.dependents) pending.add(dependent);
+        }
+        while (pending.size > 0) {
+          const [subscription] = Array.from(pending).sort((left, right) => left.rank - right.rank);
+          pending.delete(subscription!);
+          if (!subscription!.active) continue;
+          const settled = subscription!.refreshComputed(false);
+          recordRecalculated(subscription!);
+          if (!settled) continue;
+          recordChanged(subscription!);
+          for (const dependent of subscription!.dependents) pending.add(dependent);
         }
       }
 
@@ -343,6 +440,7 @@ export class SubscriptionEngine {
           dependency.dependents.add(subscription);
         }
         activated.push(subscription);
+        this.external?.activate(subscription);
         subscription.spec.onActive();
       }
     } catch (error) {
@@ -353,6 +451,8 @@ export class SubscriptionEngine {
         for (const dependency of subscription.uniqueDependencies) {
           dependency.dependents.delete(subscription);
         }
+        this.external?.removePending(subscription);
+        this.external?.dispose(subscription);
         this.callOnUnused(subscription);
       }
       throw error;
@@ -387,12 +487,16 @@ export class SubscriptionEngine {
 
       subscription.active = false;
       this.activeNodes--;
+      this.external?.removePending(subscription);
       subscription.traceDispose();
       for (const dependency of subscription.uniqueDependencies) {
         dependency.dependents.delete(subscription);
         stack.push(dependency);
       }
-      if (subscription.spec.kind === 'computed') subscription.disposed = true;
+      if (subscription.spec.kind === 'computed' || subscription.spec.kind === 'external') {
+        subscription.disposed = true;
+      }
+      this.external?.dispose(subscription);
       this.callOnUnused(subscription);
     }
   }
@@ -409,6 +513,28 @@ export class SubscriptionEngine {
       subscription.spec.onUnused();
     } catch (error) {
       consoleLog('error', '[uklad] Error releasing subscription:', error);
+    }
+  }
+
+  private getExternalCoordinator(): ExternalSubscriptionCoordinator {
+    if (this.external !== undefined) return this.external;
+    const external = new ExternalSubscriptionCoordinator({
+      getRuntime: this.getRuntime,
+      getPhase: () => this.phase,
+      withSettling: (callback) => this.withSettling(callback),
+      publishExternalWave: (roots) => this.publishWave(roots, false, true),
+    });
+    this.external = external;
+    return external;
+  }
+
+  private withSettling<T>(callback: () => T): T {
+    const previousPhase = this.phase;
+    this.phase = 'settling';
+    try {
+      return callback();
+    } finally {
+      this.phase = previousPhase;
     }
   }
 }

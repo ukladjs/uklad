@@ -1,4 +1,7 @@
 import type { EqualityCheckFn, SubVector } from '../../types';
+import type { ExternalSubscriptionDriver } from './external/types';
+
+export type { ExternalSubscriptionContext, ExternalSubscriptionDriver } from './external/types';
 
 declare const subscriptionNodeType: unique symbol;
 
@@ -7,7 +10,7 @@ export interface SubscriptionNode<T> {
   readonly [subscriptionNodeType]: T;
 }
 
-export type SubscriptionKind = 'root' | 'computed';
+export type SubscriptionKind = 'root' | 'computed' | 'external';
 
 export interface SubscriptionSpec<T> {
   key: string;
@@ -17,6 +20,8 @@ export interface SubscriptionSpec<T> {
   compute: (dependencyValues: any[]) => T;
   dependencies: SubscriptionNode<any>[];
   equalityCheck: EqualityCheckFn;
+  /** Present only for the external node kind; absent for ordinary nodes. */
+  external?: ExternalSubscriptionDriver<readonly unknown[], T>;
   onActive: () => void;
   onUnused: () => void;
 }

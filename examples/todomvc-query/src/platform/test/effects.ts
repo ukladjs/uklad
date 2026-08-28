@@ -5,7 +5,7 @@ import type { AppContracts } from '../../app/uklad/contracts';
 import { installWebEffects } from '../web/effects';
 import type { TodosApi } from '../web/todos-api';
 
-/** The test target uses the same Query bridge with an injected in-memory API. */
+/** The test target uses the same external Query adapter with an injected API. */
 export function installTestEffects(
   runtime: UkladRuntime<AppContracts>,
   queryClient: QueryClient,

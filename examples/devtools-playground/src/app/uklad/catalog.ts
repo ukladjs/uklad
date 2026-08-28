@@ -22,10 +22,7 @@ export const stateKeys = {
   usersList: 'usersList',
   usersLoading: 'usersLoading',
 
-  serverClock: 'serverClock',
-  serverItems: 'serverItems',
   serverRegion: 'serverRegion',
-  serverRegionSummary: 'serverRegionSummary',
 
   collectionsUsers: 'collectionsUsers',
   collectionsPermissions: 'collectionsPermissions',
@@ -76,7 +73,6 @@ export const appIds = {
     usersById: 'users/by-id',
 
     serverClock: 'server/clock',
-    serverItems: 'server/items',
     serverItemById: 'server/item-by-id',
     serverRegion: 'server/region',
     serverRegionSummary: 'server/region-summary',

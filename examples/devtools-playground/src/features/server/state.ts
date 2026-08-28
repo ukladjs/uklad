@@ -27,17 +27,6 @@ export interface ServerRegionSummary {
   readonly serverTime: string;
 }
 
-/** Backing results for parameterized `server/item-by-id` instances. */
-export type ServerItems = Partial<Record<number, ServerQueryResult<ServerItem>>>;
-
-export function createLoadingServerQuery<TData>(): ServerQueryResult<TData> {
-  return { kind: 'loading' };
-}
-
-export function createServerItems(): ServerItems {
-  return {};
-}
-
 export function createServerRegion(): ServerRegion {
   return 'eu';
 }

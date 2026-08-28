@@ -1,6 +1,6 @@
 # Production readiness
 
-`@ukladjs/core@0.2.3` is production-ready for application state. Its documented
+`@ukladjs/core@0.2.4` is production-ready for application state. Its documented
 public API is the stable application boundary for current and future releases.
 
 This document is the canonical answer to three questions:

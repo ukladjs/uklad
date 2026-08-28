@@ -9,7 +9,7 @@ import type {
   UkladRuntime,
 } from '@ukladjs/core/vanilla';
 
-import { appIds, stateKeys } from '../../app/uklad/catalog';
+import { appIds } from '../../app/uklad/catalog';
 import type { AppContracts } from '../../app/uklad/contracts';
 import type { Todo, TodosQueryResult } from '../../features/todos/state';
 import type { TodosApi } from './todos-api';
@@ -43,9 +43,9 @@ export function createWebQueryClient(): QueryClient {
 /**
  * Register browser-backed external work for the Todo feature.
  *
- * `regQuerySub` belongs here with the mutations: both bind Uklad to the
- * selected platform's QueryClient and TodosApi, while the feature retains only
- * pure commands and derived subscriptions.
+ * `regQuerySub` belongs here with the mutations: both bind Uklad to
+ * the selected platform's QueryClient and TodosApi, while the feature retains
+ * only pure commands and derived subscriptions.
  */
 export function createWebEffects(
   queryClient: QueryClient,
@@ -56,10 +56,6 @@ export function createWebEffects(
       registrar,
       queryClient,
       appIds.subscriptions.todosQuery,
-      {
-        stateKey: stateKeys.todosQuery,
-        update: (_current, value) => value,
-      },
       () => [],
       () => ({
         queryKey: todoKeys.list(),
@@ -112,7 +108,14 @@ export function installWebEffects(
   queryClient: QueryClient,
   api: TodosApi,
 ): UkladDisposer {
-  const detachQueryClient = attachQueryClient(runtime, queryClient);
+  const detachQueryClient = attachQueryClient(runtime, queryClient, {
+    cacheCoeffects: [
+      {
+        id: appIds.coeffects.todosCachedList,
+        read: (cache) => cache.getData<readonly Todo[]>(todoKeys.list()),
+      },
+    ],
+  });
   const disposeModule = runtime.registerModule(createWebEffects(queryClient, api));
   return () => {
     disposeModule();

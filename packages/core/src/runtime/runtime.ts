@@ -39,6 +39,7 @@ import type { TraceCallback } from '../core/tracing-types';
 import type { HandlerRegistry } from './handler-types';
 import type { RegistrationHandle } from './registrations';
 import type { SubscriptionDiagnostic } from './subscriptions/types';
+import type { ExternalSubscriptionDriver } from './subscriptions/types';
 import type {
   UkladRuntime,
   UkladRuntimeAdmin,
@@ -68,6 +69,7 @@ export type {
   UkladRuntimeClient,
   RuntimeEventHandler,
   RuntimeStateRevisions,
+  RuntimeExternalSubscriptionDriverFactory,
   RuntimeSubscriptionExtensionFactory,
   RuntimeSubscriptionHandler,
 } from './api';
@@ -260,6 +262,22 @@ class UkladRuntimeImplementation<TContracts extends UkladContracts> {
     if (registration) this.recordRegistration(registration);
   }
 
+  regExternalSub(
+    id: Id,
+    dependencies: (...params: any[]) => readonly SubVector[],
+    createDriver: (...params: any[]) => ExternalSubscriptionDriver<readonly unknown[], any>,
+    config?: SubConfig,
+  ): void {
+    this.assertUsable();
+    const registration = this.#core.subscriptions.registerExternal(
+      id,
+      dependencies as (...params: any[]) => SubVector[],
+      createDriver,
+      config,
+    );
+    if (registration) this.recordRegistration(registration);
+  }
+
   regSubExt(
     id: Id,
     signals: (...params: any[]) => readonly SubVector[],
@@ -298,17 +316,29 @@ class UkladRuntimeImplementation<TContracts extends UkladContracts> {
     }
 
     let previousValue = this.#core.subscriptions.getSnapshot(subscription);
+    let initializing = true;
     const unsubscribe = this.#core.subscriptions.subscribe(
       subscription,
       () => {
         const nextValue = this.#core.subscriptions.getSnapshot(subscription);
         const oldValue = previousValue;
         previousValue = nextValue;
+        if (initializing) return;
         listener(nextValue, oldValue);
       },
       options.label ?? 'subscription watcher',
       'watch',
     );
+    try {
+      // Activation may catch up an external source that changed between the
+      // initial read and commit. Emit the watcher's initial value from the
+      // settled snapshot rather than the pre-activation one.
+      previousValue = this.#core.subscriptions.getSnapshot(subscription);
+    } catch (error) {
+      unsubscribe();
+      throw error;
+    }
+    initializing = false;
 
     let subscribed = true;
     const dispose = () => {
@@ -500,6 +530,9 @@ class UkladRuntimeImplementation<TContracts extends UkladContracts> {
       regCoeffect: this.regCoeffect.bind(this),
       regRootSub: this.regRootSub.bind(this),
       regSubExt: this.regSubExt.bind(this) as unknown as UkladRegistrar<TContracts>['regSubExt'],
+      regExternalSub: this.regExternalSub.bind(
+        this,
+      ) as UkladRegistrar<TContracts>['regExternalSub'],
       regSub: this.regSub.bind(this),
     });
   }

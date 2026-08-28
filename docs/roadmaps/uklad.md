@@ -169,7 +169,7 @@ Code alone does not move adoption. Every phase above should produce a publishabl
 
 ## Explicit non-goals
 
-- **No RTK Query clone.** `@ukladjs/tanstack-query` pairs headless TanStack Query with Uklad's state-backed subscription extensions instead. Redux Toolkit's async/caching ecosystem is mature; Uklad should concentrate on deterministic workflows, local domain state, and observability.
+- **No RTK Query clone.** `@ukladjs/tanstack-query` pairs headless TanStack Query with Uklad's cache-owned external subscriptions instead. Redux Toolkit's async/caching ecosystem is mature; Uklad should concentrate on deterministic workflows, local domain state, and observability.
 - **No tiny-bundle competition with Zustand.** Uklad sells architecture, observability, and verifiability, not minimum bytes.
 - **No undo/redo promise until history semantics are specified.** Patches make a prototype easy, but production history requires limits, transactions, effect policy, persistence interaction, sensitive-data handling, and migration semantics.
 - **Entity/normalization helpers, per-call-site equality options, and further unmeasured MCP tools** remain backlog until the eval harness or real users demonstrate need.

@@ -18,7 +18,6 @@ import type {
 import type {
   ServerClock,
   ServerItem,
-  ServerItems,
   ServerQueryResult,
   ServerRegion,
   ServerRegionSummary,
@@ -41,10 +40,7 @@ export interface AppState {
   [stateKeys.usersList]: UsersList;
   [stateKeys.usersLoading]: UsersLoading;
 
-  [stateKeys.serverClock]: ServerQueryResult<ServerClock>;
-  [stateKeys.serverItems]: ServerItems;
   [stateKeys.serverRegion]: ServerRegion;
-  [stateKeys.serverRegionSummary]: ServerQueryResult<ServerRegionSummary>;
 
   [stateKeys.collectionsUsers]: CollectionsUsers;
   [stateKeys.collectionsPermissions]: CollectionsPermissions;
@@ -128,7 +124,7 @@ export interface AppContracts extends UkladContracts {
   };
 
   readonly subscriptions: {
-    // Root subscriptions: no parameters, result matches the backing state root.
+    // Ordinary application-state roots.
     [appIds.subscriptions.counterValue]: { params: []; result: CounterValue };
     [appIds.subscriptions.counterEffectDispatches]: {
       params: [];
@@ -136,12 +132,13 @@ export interface AppContracts extends UkladContracts {
     };
     [appIds.subscriptions.usersList]: { params: []; result: UsersList };
     [appIds.subscriptions.usersLoading]: { params: []; result: UsersLoading };
+    [appIds.subscriptions.serverRegion]: { params: []; result: ServerRegion };
+
+    // External TanStack Query subscriptions: no query result is mirrored in state.
     [appIds.subscriptions.serverClock]: {
       params: [];
       result: ServerQueryResult<ServerClock>;
     };
-    [appIds.subscriptions.serverItems]: { params: []; result: ServerItems };
-    [appIds.subscriptions.serverRegion]: { params: []; result: ServerRegion };
     [appIds.subscriptions.serverRegionSummary]: {
       params: [];
       result: ServerQueryResult<ServerRegionSummary>;

@@ -87,6 +87,39 @@ jobs:
             --platform android \
             --output-dir "$RUNNER_TEMP/expo-persist"
 
+  tanstack-query-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Uklad peer
+        run: pnpm run build:core
+
+      - name: Check TanStack adapter
+        run: pnpm --filter @ukladjs/tanstack-query run check
+
+      - name: Run TanStack coverage
+        run: pnpm --filter @ukladjs/tanstack-query run test:ci
+
+      - name: Check packed TanStack consumer
+        run: pnpm --filter @ukladjs/tanstack-query run check:package
+
   typescript-compatibility:
     runs-on: ubuntu-latest
     steps:
@@ -292,6 +325,9 @@ jobs:
       - name: Build DevTools playground
         run: pnpm --filter @ukladjs/devtools-playground run build
 
+      - name: Run DevTools playground tests
+        run: pnpm --filter @ukladjs/devtools-playground run test
+
   example-todomvc:
     runs-on: ubuntu-latest
     steps:
@@ -324,6 +360,36 @@ jobs:
 
       - name: Run TodoMVC tests
         run: pnpm --filter todomvc run test
+
+  example-todomvc-query:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build query integration dependencies
+        run: pnpm run build:core && pnpm run build:tanstack-query
+
+      - name: Check TodoMVC Query example
+        run: pnpm --filter todomvc-query run check
+
+      - name: Build TodoMVC Query example
+        run: pnpm --filter todomvc-query run build
 
   publish-dry-run:
     runs-on: ubuntu-latest

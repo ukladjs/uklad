@@ -1,7 +1,6 @@
 /** The small catalog for the query-owned TodoMVC example. */
 export const stateKeys = {
   todosShowing: 'todosShowing',
-  todosQuery: 'todosQuery',
 } as const;
 
 /**
@@ -26,6 +25,9 @@ export const appIds = {
     todosCompleteAll: 'todos-api/complete-all',
     todosClearCompleted: 'todos-api/clear-completed',
     todosRefresh: 'todos-api/refresh',
+  },
+  coeffects: {
+    todosCachedList: 'todos/cached-list',
   },
   subscriptions: {
     todosQuery: 'todos/query',

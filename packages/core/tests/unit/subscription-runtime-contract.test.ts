@@ -85,6 +85,58 @@ describe('subscription runtime contract', () => {
     unsubscribe();
   });
 
+  it('keeps ordinary activation before the initial pull', () => {
+    const order: string[] = [];
+    const sourceNode = root(
+      () => {
+        order.push('pull');
+        return 1;
+      },
+      { onActive: () => order.push('active') },
+    );
+
+    const unsubscribe = subscribeToSubscription(sourceNode, () => {});
+
+    expect(order).toEqual(['active', 'pull']);
+    unsubscribe();
+  });
+
+  it('keeps unrelated ordinary activation before pull after an external graph existed', () => {
+    const externalKey = `contract-external-${++nextKey}`;
+    const externalNode = createSubscription({
+      key: externalKey,
+      query: [externalKey],
+      kind: 'external',
+      compute: () => undefined,
+      dependencies: [],
+      equalityCheck: Object.is,
+      external: {
+        read: () => 1,
+        activate: () => {},
+        sync: () => {},
+        dispose: () => {},
+      },
+      onActive: () => {},
+      onUnused: () => {},
+    });
+    const unsubscribeExternal = subscribeToSubscription(externalNode, () => {});
+    unsubscribeExternal();
+
+    const order: string[] = [];
+    const sourceNode = root(
+      () => {
+        order.push('pull');
+        return 1;
+      },
+      { onActive: () => order.push('active') },
+    );
+
+    const unsubscribe = subscribeToSubscription(sourceNode, () => {});
+
+    expect(order).toEqual(['active', 'pull']);
+    unsubscribe();
+  });
+
   it('catches up a dormant render snapshot before the first subscription', () => {
     let source = 1;
     const sourceNode = root(() => source);

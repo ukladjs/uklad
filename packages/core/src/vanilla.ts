@@ -46,9 +46,14 @@ export type {
   UkladRuntime,
   UkladRuntimeClient,
   RuntimeEventHandler,
+  RuntimeExternalSubscriptionDriverFactory,
   RuntimeSubscriptionExtensionFactory,
   RuntimeSubscriptionHandler,
 } from './runtime/api';
+export type {
+  ExternalSubscriptionContext,
+  ExternalSubscriptionDriver,
+} from './runtime/subscriptions/types';
 /** Structural diagnostic data retained as a type-only compatibility export. */
 export type { SubscriptionDiagnostic } from './runtime/subscriptions/types';
 export type {

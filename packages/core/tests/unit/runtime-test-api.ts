@@ -43,10 +43,11 @@ import type {
 } from '../../src/types';
 import type { HandlerRegistry } from '../../src/runtime/handler-types';
 import type {
+  ExternalSubscriptionDriver,
   SubscriptionListenerKind,
   SubscriptionNode,
   SubscriptionSpec,
-} from '../../src/runtime/subscriptions/engine';
+} from '../../src/runtime/subscriptions/types';
 
 export const testRuntime = createUkladRuntime({
   initialState: {},
@@ -127,6 +128,16 @@ export function regSub<R = any, K extends Id = Id>(
 
 export function regRootSub<K extends Id = Id>(id: K, sourceKey: string): void {
   core.subscriptions.registerRoot(id, sourceKey);
+}
+
+/** Test-only helper for constructing external source definitions in core tests. */
+export function regExternalSub<K extends Id = Id>(
+  id: K,
+  dependencies: (...params: any[]) => SubVector[],
+  createDriver: (...params: any[]) => ExternalSubscriptionDriver,
+  config?: SubConfig,
+): void {
+  core.subscriptions.registerExternal(id, dependencies, createDriver, config);
 }
 
 export function getSubscriptionValue<T>(subVector: SubVector): T {

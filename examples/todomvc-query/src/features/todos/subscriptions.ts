@@ -8,7 +8,6 @@ export const registerTodosSubscriptions: UkladModule<UkladRegistrar<AppContracts
   registrar,
 ) => {
   registrar.regRootSub(appIds.subscriptions.todosShowing, stateKeys.todosShowing);
-  registrar.regRootSub(appIds.subscriptions.todosQuery, stateKeys.todosQuery);
 
   registrar.regSub(
     appIds.subscriptions.todosVisible,

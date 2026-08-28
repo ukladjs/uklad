@@ -25,6 +25,8 @@ const getOpTypeBadgeVariant = (opType: string | undefined): BadgeOpType => {
             return 'primary';
         case 'sub/create':
             return 'warning';
+        case 'sub/ext':
+            return 'accent';
         case 'watch':
             return 'accent';
         case 'fx':

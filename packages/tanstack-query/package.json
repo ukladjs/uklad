@@ -1,6 +1,6 @@
 {
   "name": "@ukladjs/tanstack-query",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Headless TanStack Query subscriptions for Uklad.",
   "author": "flexsurfer",
   "license": "MIT",
@@ -86,7 +86,7 @@
   },
   "peerDependencies": {
     "@tanstack/query-core": "^5.0.0",
-    "@ukladjs/core": "^0.2.0"
+    "@ukladjs/core": "^0.2.4"
   },
   "keywords": [
     "uklad",

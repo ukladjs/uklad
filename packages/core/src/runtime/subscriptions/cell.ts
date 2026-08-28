@@ -1,5 +1,6 @@
 import { consoleLog } from '../../core/logging';
 import { mergeRuntimeProbeSpan, withRuntimeProbeSpan } from '../probe';
+import { ExternalSubscriptionController } from './external/controller';
 
 import type { SubscriptionEngine } from './engine';
 import type { SubscriptionListenerRegistration, SubscriptionSpec } from './types';
@@ -36,6 +37,9 @@ export class SubscriptionCell<T> {
   active: boolean = false;
   disposed: boolean = false;
 
+  /** External-only state is isolated from the ordinary subscription cell. */
+  private readonly externalController: ExternalSubscriptionController<T> | undefined;
+
   // Per-operation marks avoid allocation-heavy visited sets during pull/push.
   lastPullEpoch: number = 0;
   queuedWave: number = 0;
@@ -46,8 +50,11 @@ export class SubscriptionCell<T> {
     this.spec = spec;
     this.dependencies = spec.dependencies.map((node) => engine.unwrap(node));
     this.uniqueDependencies = Array.from(new Set(this.dependencies));
+    this.externalController = spec.external
+      ? new ExternalSubscriptionController(spec.external)
+      : undefined;
     this.rank =
-      spec.kind === 'root'
+      spec.kind === 'root' || (spec.kind === 'external' && this.dependencies.length === 0)
         ? 0
         : 1 + this.dependencies.reduce((rank, dependency) => Math.max(rank, dependency.rank), 0);
   }
@@ -62,15 +69,33 @@ export class SubscriptionCell<T> {
   }
 
   refreshComputed(force: boolean = false): boolean {
-    let stale =
-      force || !this.initialized || this.dependencies.length !== this.dependencyStamps.length;
+    const externalController = this.externalController;
+    const dependencyCountChanged = this.dependencies.length !== this.dependencyStamps.length;
+    let stale = force || !this.initialized || dependencyCountChanged;
+    let externalInputsChanged = false;
     let failedDependency: SubscriptionCell<any> | undefined;
     for (let index = 0; index < this.dependencies.length; index++) {
       const dependency = this.dependencies[index]!;
-      if (dependency.outputStamp !== this.dependencyStamps[index]) stale = true;
+      if (dependency.outputStamp !== this.dependencyStamps[index]) {
+        stale = true;
+        if (externalController !== undefined) externalInputsChanged = true;
+      }
       if (!failedDependency && dependency.hasError) failedDependency = dependency;
     }
-    if (!stale) return false;
+
+    let dependencyValues: any[] | undefined;
+    if (externalController !== undefined) {
+      dependencyValues = this.dependencies.map((dependency) => dependency.value);
+      externalController.updateInputs(
+        dependencyValues,
+        this.initialized && (dependencyCountChanged || externalInputsChanged),
+        failedDependency === undefined,
+      );
+    }
+    // External nodes keep propagating a retained dependency error even when
+    // its output stamp did not move between refresh attempts.
+    if (!stale && (externalController === undefined || failedDependency === undefined))
+      return false;
 
     this.dependencyStamps.length = this.dependencies.length;
     for (let index = 0; index < this.dependencies.length; index++) {
@@ -78,9 +103,35 @@ export class SubscriptionCell<T> {
     }
     if (failedDependency) return this.setError(failedDependency.error);
 
-    return this.runComputation(() =>
-      this.spec.compute(this.dependencies.map((dependency) => dependency.value)),
-    );
+    return this.runComputation(() => {
+      if (externalController !== undefined) return externalController.read();
+      return this.spec.compute(
+        dependencyValues ?? this.dependencies.map((dependency) => dependency.value),
+      );
+    });
+  }
+
+  /** Whether this active source still owes its driver a dependency reconciliation. */
+  needsExternalSync(): boolean {
+    return this.externalController?.needsSync === true;
+  }
+
+  syncExternal(): void {
+    this.externalController?.sync();
+  }
+
+  retainExternalError(error: unknown): boolean {
+    return this.setError(error);
+  }
+
+  /** Start the external source after the node has acquired its first consumer. */
+  activateExternal(invalidate: () => void): void {
+    this.externalController?.activate(invalidate);
+  }
+
+  /** Dispose an external source exactly once, including a dormant provisional node. */
+  disposeExternal(): void {
+    this.externalController?.dispose();
   }
 
   publishTo(listeners: readonly SubscriptionListenerRegistration[]): void {

@@ -49,6 +49,7 @@ back here for the deeper material.
 - [Authoritative agent operations](rfcs/agent-operations.md)
 - [Instance-scoped runtime](rfcs/instance-scoped-runtime.md)
 - [Persistence](rfcs/persistence.md)
+- [Cache-owned TanStack Query subscriptions](rfcs/tanstack-query-external-subscriptions.md)
 
 ## Agent development
 

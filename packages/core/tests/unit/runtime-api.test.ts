@@ -13,6 +13,10 @@ import { createUkladInspector } from '../../src/devtools';
 import { waitForScheduled } from './test-utils';
 
 import type { Interceptor } from '../../src/types';
+import type {
+  ExternalSubscriptionContext,
+  ExternalSubscriptionDriver,
+} from '../../src/runtime/subscriptions/types';
 
 interface CounterContracts extends UkladContracts {
   state: { count: number; label: string };
@@ -52,6 +56,137 @@ function admin<TContracts extends UkladContracts>(runtime: UkladRuntime<TContrac
 }
 
 describe('instance-scoped runtime', () => {
+  it('registers external subscriptions through the typed module registrar', () => {
+    interface ExternalContracts extends UkladContracts {
+      state: { count: number };
+      subscriptions: {
+        external: { params: []; result: number };
+      };
+    }
+
+    let invalidated: (() => void) | undefined;
+    let externalValue = 1;
+    let updateDuringActivation = false;
+    const driver: ExternalSubscriptionDriver<readonly [], number> = {
+      read: jest.fn(() => externalValue),
+      activate: jest.fn((_inputs: readonly [], context: ExternalSubscriptionContext) => {
+        invalidated = context.invalidate;
+        if (updateDuringActivation) {
+          externalValue = 2;
+          context.invalidate();
+        }
+      }),
+      sync: jest.fn(),
+      dispose: jest.fn(),
+    };
+    const runtime = createUkladRuntime<ExternalContracts>({
+      initialState: { count: 0 },
+      runtimeId: 'external-registrar',
+    });
+
+    runtime.registerModule((registrar) => {
+      registrar.regExternalSub(
+        'external',
+        () => [],
+        () => driver,
+      );
+    });
+
+    const runtimeAdmin = admin(runtime);
+    expect(runtimeAdmin.getHandlers().sub.external).toBeUndefined();
+    expect(runtimeAdmin.getSubscriptionValue(['external'])).toBe(1);
+    updateDuringActivation = true;
+    const listener = jest.fn();
+    const dispose = runtimeAdmin.watchSubscription(['external'], listener);
+    expect(driver.activate).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(2, undefined);
+    invalidated?.();
+    expect(driver.read).toHaveBeenCalledTimes(4);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    dispose();
+    expect(driver.dispose).toHaveBeenCalledTimes(1);
+    runtime.dispose();
+  });
+
+  it('releases an external watcher when activation catch-up cannot be read', () => {
+    interface ExternalContracts extends UkladContracts {
+      state: Record<string, never>;
+      subscriptions: {
+        external: { params: []; result: number };
+      };
+    }
+
+    let activated = false;
+    const driver: ExternalSubscriptionDriver<readonly [], number> = {
+      read: jest.fn(() => {
+        if (activated) throw new Error('activation catch-up failed');
+        return 1;
+      }),
+      activate: jest.fn(() => {
+        activated = true;
+      }),
+      sync: jest.fn(),
+      dispose: jest.fn(),
+    };
+    const runtime = createUkladRuntime<ExternalContracts>({
+      initialState: {},
+      runtimeId: 'external-catch-up-error',
+    });
+    runtime.registerModule((registrar) => {
+      registrar.regExternalSub(
+        'external',
+        () => [],
+        () => driver,
+      );
+    });
+
+    expect(() => admin(runtime).watchSubscription(['external'], () => {})).toThrow(
+      'activation catch-up failed',
+    );
+    expect(driver.dispose).toHaveBeenCalledTimes(1);
+    expect(() => admin(runtime).clearSubs()).not.toThrow();
+    runtime.dispose();
+  });
+
+  it('releases an active external graph after its definition is cleared for HMR', () => {
+    interface ExternalContracts extends UkladContracts {
+      state: { count: number };
+      subscriptions: {
+        count: { params: []; result: number };
+        external: { params: []; result: number };
+      };
+    }
+
+    const driver: ExternalSubscriptionDriver<readonly [number], number> = {
+      read: jest.fn(([count]) => count),
+      activate: jest.fn(),
+      sync: jest.fn(),
+      dispose: jest.fn(),
+    };
+    const runtime = createUkladRuntime<ExternalContracts>({
+      initialState: { count: 1 },
+      runtimeId: 'external-hmr-release',
+    });
+    runtime.registerModule((registrar) => {
+      registrar.regRootSub('count', 'count');
+      registrar.regExternalSub(
+        'external',
+        () => [['count']],
+        () => driver,
+      );
+    });
+    const unwatch = admin(runtime).watchSubscription(['external'], () => {});
+
+    clearRuntimeSubsForHotReload(runtime, ['external']);
+    expect(driver.dispose).toHaveBeenCalledTimes(1);
+    admin(runtime).restoreState({ count: 2 });
+    expect(driver.read).toHaveBeenCalledTimes(2);
+
+    unwatch();
+    expect(() => runtime.dispose()).not.toThrow();
+  });
+
   it('eagerly owns one stable set of typed core services', () => {
     const runtime = createCounterRuntime('stable-core', 0);
     const core = getRuntimeCoreForTests(runtime);
@@ -99,6 +234,7 @@ describe('instance-scoped runtime', () => {
       'regCoeffect',
       'setEventErrorHandler',
       'regRootSub',
+      'regExternalSub',
       'regSub',
       'addInterceptor',
       'removeInterceptor',
@@ -124,6 +260,7 @@ describe('instance-scoped runtime', () => {
       'regEffect',
       'regCoeffect',
       'regRootSub',
+      'regExternalSub',
       'regSubExt',
       'regSub',
     ]) {

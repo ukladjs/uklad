@@ -4,6 +4,18 @@ All notable public package changes are recorded here. Packages version independe
 
 ## Unreleased
 
+## `@ukladjs/core@0.2.4` and `@ukladjs/tanstack-query@0.2.0`
+
+- Add cache-owned external subscriptions to core and make TanStack Query's
+  `regQuerySub` expose mapped query results directly from the Query cache,
+  without mirroring server data into Uklad state.
+- Add explicit `regQueryProjection` for workflows that intentionally materialize
+  query results in Uklad state, plus attachment-managed synchronous Query cache
+  coeffects through a frozen read-only capability.
+- `@ukladjs/tanstack-query@0.2.0` changes the `regQuerySub` ownership boundary;
+  migrate the old target-bearing call to `regQueryProjection` when state
+  materialization is intentional, or remove the target for cache-owned data.
+
 ## `@ukladjs/core@0.2.3` and `@ukladjs/persist@0.2.0`
 
 - Add the narrow public `getRuntimeIntegration()` capability to core's root and

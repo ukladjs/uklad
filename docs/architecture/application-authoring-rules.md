@@ -205,15 +205,18 @@ input before they dispatch.
 - Use a root subscription for a direct state-root read and `regSub` only for a
   derived value.
 
-`regSubExt` is the narrow exception for an external lifecycle such as a
-headless TanStack Query observer. It attaches to an already-registered
-subscription without changing that subscription's pure data dependencies.
-Declare any external inputs as its passive signals, keep the lifecycle in a
-platform adapter, and use its `updateRoot` capability only to map a read-only
-external result into an explicitly named root. Do not use an extension to hide
-application state reads, mutate state directly, or run application commands;
-those remain ordinary subscriptions and effects. See [TanStack Query
-integration](tanstack-query.md).
+`regSubExt` is the narrow generic exception for an external lifecycle attached
+to an already-registered subscription. It does not change that subscription's
+pure data dependencies; its signals are passive inputs and its `updateRoot`
+capability exists only for an explicitly named state projection.
+
+For TanStack Query, use the cache-owned `regQuerySub` adapter instead. Its
+declared query signals are real graph dependencies and its mapped result is
+read directly from TanStack's cache, without a result root or state mirror.
+Use `regQueryProjection` only when a workflow intentionally transfers remote
+data into Uklad state. Do not use an extension to hide application state reads,
+mutate state directly, or run application commands; those remain ordinary
+subscriptions and effects. See [TanStack Query integration](tanstack-query.md).
 
 ### 8. Use bounded scalar subscription parameters
 
@@ -308,7 +311,7 @@ work. An asynchronous read is an effect followed by a result event.
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Independently reactive data          | `stateKeys`, `AppContracts.state`, feature initial state, and a root subscription if it is queried                                                        |
 | Initial, restored, or hydrated state | Validate and normalize it at the input boundary, transfer ownership to the runtime, and never mutate it after handoff                                     |
-| Runtime-wide policy                  | Pass the default `equalityCheck` and ordered global `interceptors` to `createUkladRuntime`; feature modules do not alter either policy                   |
+| Runtime-wide policy                  | Pass the default `equalityCheck` and ordered global `interceptors` to `createUkladRuntime`; feature modules do not alter either policy                    |
 | Event                                | `appIds.events`, `AppContracts.events`, and its feature registration                                                                                      |
 | Derived subscription                 | `appIds.subscriptions`, `AppContracts.subscriptions`, complete dependencies, bounded scalar query parameters if any, and an equality override when needed |
 | Environment write                    | `appIds.effects`, `AppContracts.effects`, platform handlers for every supported target                                                                    |

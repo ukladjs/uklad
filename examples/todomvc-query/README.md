@@ -27,20 +27,23 @@ port, set `VITE_UKLAD_DEVTOOLS_SERVER_URL`, for example
 ## Data ownership
 
 - TanStack Query owns one canonical `['todos', 'list']` cache entry.
-- `todos/query` is an ordinary Uklad root subscription over the `todosQuery`
-  state field. The selected platform's `effects.ts` registers `regQuerySub`,
-  attaches its lifecycle-managed TanStack `QueryObserver`, and projects it into
-  the feature's clean `loading | ready | error` read model.
-- `todosQuery` stores only that projected result, never the complete TanStack
-  observer snapshot. `todosShowing` remains the local UI filter.
+- `todos/query` is an ordinary Uklad external subscription whose source is the
+  selected platform's TanStack cache. `effects.ts` registers `regQuerySub`,
+  attaches its lifecycle-managed `QueryObserver`, and
+  maps it into the feature's clean `loading | ready | error` read model.
+- No query result is stored in Uklad application state. `todosShowing` remains
+  the local UI filter.
 - Its `visible`, `all-complete`, and footer-count subscriptions derive from
   the clean `todos/query` result.
 - Views use `useSubscription`, not `QueryClientProvider` or `useQuery`.
 - Uklad events route user intent to effects. The effects execute TanStack
   `MutationObserver`s; successful mutations invalidate the canonical list key.
+- The attachment registers a read-only `todos/cached-list` coeffect. The
+  clear-completed event uses its synchronous cache snapshot as a no-op hint
+  without exposing `QueryClient` to event code.
 
-The bridge observes `data` and `error` by default. An invalidation therefore
-does not create Uklad updates for TanStack's intermediate `stale` and
+The cache-owned `regQuerySub` adapter observes `data` and `error` by default. An invalidation
+therefore does not create Uklad updates for TanStack's intermediate `stale` and
 `fetching` states, and a structurally equal server response produces no Uklad
 update at all. A query that wants to expose `isFetching` can opt into it in its
 `regQuerySub` configuration.

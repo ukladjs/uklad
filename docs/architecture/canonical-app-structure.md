@@ -555,21 +555,21 @@ TanStack Query and similar server-state clients belong beside platform adapters,
 not in event handlers, subscription computations, or views. The application
 still declares normal state roots and root or derived subscriptions in its
 feature. The platform adapter attaches the external client and uses
-`regQuerySub` from `@ukladjs/tanstack-query` to attach an external lifecycle to
-one of those ordinary subscriptions.
+`regQuerySub` from `@ukladjs/tanstack-query` to register a cache-owned external
+subscription. A selected local state root may be declared as a dependency when
+the query key or options depend on application input.
 
 ```text
 feature state + subscriptions  →  platform query adapter  →  external client
-                                      ↓ observer result
-                              Uklad event → backing state root → subscriptions
+                                      ↓ cache snapshot/invalidation
+                              external subscription → subscriptions → views
 ```
 
 The adapter owns query keys, query functions, client defaults, and mapping the
 read-only observer snapshot to the feature's domain-level `loading | ready |
-error` value. The target storage root is explicit and may differ from the
-lifecycle subscription, which allows parameterized derived subscriptions to
-merge each observer's result into a shared keyed root. Views consume Uklad
-subscriptions only; they do not install `QueryClientProvider` or call
+error` value. Query data remains in TanStack's cache, and parameterized vectors
+own independent external nodes without an aggregate Uklad mirror. Views consume
+Uklad subscriptions only; they do not install `QueryClientProvider` or call
 `useQuery`.
 
 Mutations remain effects: an event declares intent, the platform effect invokes

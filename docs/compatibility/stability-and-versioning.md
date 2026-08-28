@@ -3,8 +3,8 @@
 Uklad is a rebrand of Reflex. The previously published
 `@flexsurfer/reflex*` packages remain available; the package set below tracks
 the current `@ukladjs` release line. Packages version independently; core,
-DevTools, MCP, and persistence currently use `0.2` lines while the TanStack
-Query integration remains on its `0.1` line.
+DevTools, MCP, persistence, and the TanStack Query integration currently use
+`0.2` lines.
 
 `@ukladjs/core` is production-ready. Pre-1.0 identifies the current version
 line; the documented public API is the stable application boundary. The full
@@ -14,11 +14,11 @@ decision guide is in [production readiness](../production-readiness.md).
 
 | Package                   | Version | npm tag  | Status                                    |
 | ------------------------- | ------- | -------- | ----------------------------------------- |
-| `@ukladjs/core`           | `0.2.3` | `latest` | Production-ready, compatibility protected |
+| `@ukladjs/core`           | `0.2.4` | `latest` | Production-ready, compatibility protected |
 | `@ukladjs/devtools`       | `0.2.0` | `latest` | Supported development/CI tooling          |
 | `@ukladjs/devtools-mcp`   | `0.2.0` | `latest` | Supported development/CI agent bridge     |
 | `@ukladjs/persist`        | `0.2.0` | `latest` | Supported sync and async persistence       |
-| `@ukladjs/tanstack-query` | `0.1.0` | `latest` | Supported TanStack Query v5 integration   |
+| `@ukladjs/tanstack-query` | `0.2.0` | `latest` | Supported TanStack Query v5 integration   |
 
 [`release.json`](../../release.json) is the machine-readable source for this
 set. Packages version independently; a coordinated release does not require
@@ -32,8 +32,8 @@ matching numbers.
   core so vanilla/headless consumers do not install it.
 - TypeScript: declaration and consumer checks cover 4.9, 5.3, 6, and 7.
 - Module systems: packed-package consumers exercise ESM and CommonJS entry points.
-- TanStack Query: `@tanstack/query-core@^5.0.0` is the required application-owned
-  peer for `@ukladjs/tanstack-query`.
+- TanStack Query: `@tanstack/query-core@^5.0.0` and `@ukladjs/core@^0.2.4` are
+  the required application-owned peers for `@ukladjs/tanstack-query`.
 - Persistence: synchronous browser/Expo storage and ordered asynchronous native
   storage, migrations, transforms, hydration barriers, durability flushes, and
   runtime attachment are supported through `@ukladjs/persist`.

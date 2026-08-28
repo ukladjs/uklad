@@ -23,8 +23,15 @@ export const registerTodosEvents: UkladModule<UkladRegistrar<AppContracts>> = (r
   registrar.regEvent(appIds.events.todosCompleteAll, (_context, done) => [
     [appIds.effects.todosCompleteAll, { done }],
   ]);
-  registrar.regEvent(appIds.events.todosClearCompleted, () => [
-    [appIds.effects.todosClearCompleted],
-  ]);
+  registrar.regEvent(
+    appIds.events.todosClearCompleted,
+    ({ coeffects: { cachedTodos } }) => {
+      // The cache is a synchronous hint for a no-op command. A cache miss
+      // still reaches the server effect, which remains the authority.
+      if (cachedTodos !== undefined && !cachedTodos.some((todo) => todo.done)) return;
+      return [[appIds.effects.todosClearCompleted]];
+    },
+    { coeffects: { cachedTodos: appIds.coeffects.todosCachedList } },
+  );
   registrar.regEvent(appIds.events.todosRefresh, () => [[appIds.effects.todosRefresh]]);
 };

@@ -7,12 +7,11 @@ import type {
   UkladRuntime,
 } from '@ukladjs/core/vanilla';
 
-import { appIds, stateKeys } from '../../app/uklad/catalog';
+import { appIds } from '../../app/uklad/catalog';
 import type { AppContracts } from '../../app/uklad/contracts';
 import type {
   ServerClock,
   ServerItem,
-  ServerItems,
   ServerQueryResult,
   ServerRegionSummary,
 } from '../../features/server/state';
@@ -36,7 +35,7 @@ export function createPlaygroundQueryClient(): QueryClient {
   });
 }
 
-/** Install all three browser-backed query extensions on their ordinary subscriptions. */
+/** Install all three browser-backed cache-owned query subscriptions. */
 export function installServerQueries(
   runtime: UkladRuntime<AppContracts>,
   queryClient: QueryClient,
@@ -60,51 +59,42 @@ function createServerQueries(
       registrar,
       queryClient,
       appIds.subscriptions.serverClock,
-      {
-        stateKey: stateKeys.serverClock,
-        update: (_current, value) => value,
-      },
       () => [],
       () => ({
         queryKey: playgroundServerKeys.clock(),
         queryFn: ({ signal }) => api.clock(signal),
         refetchInterval: 1_000,
+        staleTime: 30_000,
       }),
       (query) => toServerResult<ServerClock>(query),
     );
 
-    // 2. The parameterized subscription owns the observer lifecycle while
-    // each mapped result is merged into its explicit backing root.
+    // 2. The subscription parameter is the query coordinate. Each vector owns
+    // one external node and one matching TanStack observer while active.
     regQuerySub(
       registrar,
       queryClient,
       appIds.subscriptions.serverItemById,
-      {
-        stateKey: stateKeys.serverItems,
-        update: (items, value, itemId) => updateServerItem(items, itemId, value),
-      },
       () => [],
       (_signals, itemId) => ({
         queryKey: playgroundServerKeys.item(itemId),
         queryFn: ({ signal }) => api.item(itemId, signal),
+        staleTime: 30_000,
       }),
       (query) => toServerResult<ServerItem>(query),
     );
 
-    // 3. The region subscription is sampled as a passive signal. Changing it
-    // makes the query extension switch to a different TanStack key and observer.
+    // 3. Region is a real graph dependency. Changing it rebinds the active
+    // observer while a cached destination remains synchronously readable.
     regQuerySub(
       registrar,
       queryClient,
       appIds.subscriptions.serverRegionSummary,
-      {
-        stateKey: stateKeys.serverRegionSummary,
-        update: (_current, value) => value,
-      },
       () => [[appIds.subscriptions.serverRegion]],
       ([region]) => ({
         queryKey: playgroundServerKeys.region(region),
         queryFn: ({ signal }) => api.region(region, signal),
+        staleTime: 30_000,
       }),
       (query) => toServerResult<ServerRegionSummary>(query),
     );
@@ -117,25 +107,4 @@ function toServerResult<TData>(
   if (query.error !== null) return { kind: 'error', message: query.error.message };
   if (query.data === undefined) return { kind: 'loading' };
   return { kind: 'ready', data: query.data };
-}
-
-function serverResultsEqual<TData>(
-  previous: ServerQueryResult<TData> | undefined,
-  next: ServerQueryResult<TData>,
-): boolean {
-  if (previous === undefined || previous.kind !== next.kind) return false;
-  if (previous.kind === 'loading') return true;
-  if (previous.kind === 'error' && next.kind === 'error') {
-    return previous.message === next.message;
-  }
-  return previous.kind === 'ready' && next.kind === 'ready' && Object.is(previous.data, next.data);
-}
-
-function updateServerItem(
-  items: ServerItems,
-  itemId: number,
-  value: ServerQueryResult<ServerItem>,
-): ServerItems {
-  if (serverResultsEqual(items[itemId], value)) return items;
-  return { ...items, [itemId]: value };
 }

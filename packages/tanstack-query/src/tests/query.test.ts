@@ -1,6 +1,6 @@
 import { createUkladRuntimeForTests as createUkladRuntime } from '@ukladjs/core/internal';
 
-import { QueryClient, attachQueryClient, readQueryData, regQuerySub } from '../index';
+import { QueryClient, attachQueryClient, readQueryData, regQueryProjection } from '../index';
 
 interface Todo {
   readonly id: number;
@@ -27,7 +27,7 @@ async function waitForExtensionPublication(): Promise<void> {
 }
 
 async function waitForQueryState(runtime: { flush(): Promise<void> }): Promise<void> {
-  // A state-backed query crosses two normal runtime boundaries:
+  // A compatibility projection crosses two normal runtime boundaries:
   // extension lifecycle → internal event → state publication.
   for (let index = 0; index < 4; index++) {
     await waitForExtensionPublication();
@@ -41,7 +41,7 @@ describe('@ukladjs/tanstack-query', () => {
     const queryFns = new Map<number, jest.Mock<Promise<Todo>, []>>();
     const runtime = createUkladRuntime({
       initialState: { selectedId: 1, selectedTodo: undefined as Todo | undefined },
-      runtimeId: `query-state-bridge-${++runtimeSequence}`,
+      runtimeId: `query-projection-${++runtimeSequence}`,
     });
     const detachClient = attachQueryClient(runtime, queryClient);
     runtime.registerModule((registrar) => {
@@ -50,7 +50,7 @@ describe('@ukladjs/tanstack-query', () => {
       });
       registrar.regRootSub('todos/selected-id', 'selectedId');
       registrar.regRootSub('todos/selected', 'selectedTodo');
-      regQuerySub(
+      regQueryProjection(
         registrar,
         queryClient,
         'todos/selected',
@@ -138,7 +138,7 @@ describe('@ukladjs/tanstack-query', () => {
         () => [['todos/by-id-state']],
         ([todoById], id: number) => todoById[id],
       );
-      regQuerySub(
+      regQueryProjection(
         registrar,
         queryClient,
         'todos/by-id',
@@ -213,7 +213,7 @@ describe('@ukladjs/tanstack-query', () => {
     const detachClient = attachQueryClient(runtime, queryClient);
     runtime.registerModule((registrar) => {
       registrar.regRootSub('todos/list', 'todosList');
-      regQuerySub(
+      regQueryProjection(
         registrar,
         queryClient,
         'todos/list',
@@ -275,7 +275,7 @@ describe('@ukladjs/tanstack-query', () => {
     const detachClient = attachQueryClient(runtime, queryClient);
     runtime.registerModule((registrar) => {
       registrar.regRootSub('todos/detail', 'todoDetail');
-      regQuerySub(
+      regQueryProjection(
         registrar,
         queryClient,
         'todos/detail',
@@ -351,6 +351,29 @@ describe('@ukladjs/tanstack-query', () => {
     expect(unmount).toHaveBeenCalledTimes(2);
     runtime.dispose();
     queryClient.clear();
+  });
+
+  it('keeps repeated QueryClient attachments balanced', () => {
+    const queryClient = createQueryClient();
+    const mount = jest.spyOn(queryClient, 'mount');
+    const unmount = jest.spyOn(queryClient, 'unmount');
+    const runtime = createUkladRuntime({
+      initialState: {},
+      runtimeId: `query-client-reattach-${++runtimeSequence}`,
+    });
+
+    try {
+      for (let attempt = 0; attempt < 16; attempt++) {
+        const detach = attachQueryClient(runtime, queryClient);
+        expect(mount).toHaveBeenCalledTimes(attempt + 1);
+        detach();
+        expect(unmount).toHaveBeenCalledTimes(attempt + 1);
+      }
+      expect(runtime.getSubscriptionDiagnostics()).toEqual([]);
+    } finally {
+      runtime.dispose();
+      queryClient.clear();
+    }
   });
 
   it('provides a narrow synchronous cache read for coeffects', () => {

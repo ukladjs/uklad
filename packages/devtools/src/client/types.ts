@@ -3,7 +3,7 @@ import type { DevtoolsOperationRuntime } from './operations/runtime.js';
 export interface UkladSubscriptionDiagnostic {
   readonly key: string;
   readonly query: readonly [string, ...any[]];
-  readonly kind: 'root' | 'computed';
+  readonly kind: 'root' | 'computed' | 'external';
   readonly active: boolean;
   readonly version: number;
   readonly status: 'empty' | 'value' | 'error';

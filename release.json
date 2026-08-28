@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "id": "core-persist-async-0.2.3-0.2.0",
+  "id": "core-query-0.2.4-0.2.0",
   "packages": [
     {
       "name": "@ukladjs/core",
       "path": "packages/core",
-      "version": "0.2.3",
+      "version": "0.2.4",
       "tag": "latest",
       "publish": true
     },
@@ -28,14 +28,14 @@
       "path": "packages/persist",
       "version": "0.2.0",
       "tag": "latest",
-      "publish": true
+      "publish": false
     },
     {
       "name": "@ukladjs/tanstack-query",
       "path": "packages/tanstack-query",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "tag": "latest",
-      "publish": false
+      "publish": true
     }
   ]
 }

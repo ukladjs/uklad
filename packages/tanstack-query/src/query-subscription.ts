@@ -1,10 +1,16 @@
 import { QueryObserver } from '@tanstack/query-core';
 
-import type { QueryClient, QueryKey, QueryObserverOptions } from '@tanstack/query-core';
+import type {
+  DefaultedQueryObserverOptions,
+  QueryClient,
+  QueryKey,
+  QueryObserverOptions,
+} from '@tanstack/query-core';
 import type {
   ContractSubscribeVector,
   ContractStateKey,
   ContractStateValue,
+  ContractSubscriptionDependencyValues,
   ContractSubscriptionId,
   ContractSubscriptionParams,
   ContractSubscriptionResult,
@@ -15,6 +21,10 @@ import type {
   UkladContracts,
   UkladRegistrar,
 } from '@ukladjs/core/vanilla';
+import type {
+  ExternalSubscriptionContext,
+  ExternalSubscriptionDriver,
+} from '@ukladjs/core/vanilla';
 
 import { assertAttachedQueryClient } from './lifecycle';
 import { toQuerySnapshot } from './query-snapshot';
@@ -23,8 +33,9 @@ import type { QuerySnapshot } from './query-snapshot';
 
 /**
  * Pure boundary from TanStack's read-only observer snapshot to the value an
- * Uklad subscription exposes. Only this return value enters Uklad STATE; the
- * full TanStack observer result remains inside the adapter.
+ * Uklad subscription exposes. The full TanStack observer result remains
+ * inside the adapter; only the mapped value crosses into Uklad (and a
+ * compatibility projection may explicitly materialize it in state).
  */
 export type QueryResultMapper<TData, TError, TResult> = (
   snapshot: QuerySnapshot<TData, TError>,
@@ -37,26 +48,29 @@ export type QuerySubscriptionObservedProperty = keyof QuerySnapshot<unknown, unk
  * Fields observed by the headless QueryObserver after its initial bind.
  *
  * The default is `['data', 'error']`: a background refetch with structurally
- * equal data never reaches Uklad's event/state boundary. Opt into a field such
- * as `isFetching`, or use `'all'`, only when the mapper exposes that lifecycle
+ * equal data never invalidates the Uklad graph. Opt into a field such as
+ * `isFetching`, or use `'all'`, only when the mapper exposes that lifecycle
  * detail.
  */
 export type QuerySubscriptionObserve = 'all' | readonly QuerySubscriptionObservedProperty[];
 
-/** Options owned by Uklad's state-backed Query subscription extension. */
+/** Options shared by cache-owned Query subscriptions and projections. */
 export interface QuerySubscriptionConfig extends SubConfig {
   readonly observe?: QuerySubscriptionObserve;
 }
 
 /**
- * Explicit state destination for a Query-backed subscription.
+ * Explicit state destination for a Query projection.
  *
  * `stateKey` names the top-level state root that stores results. `update`
  * receives its latest value, the mapped value for this query instance, and the
  * lifecycle subscription's parameters. This supports both direct replacement
  * and keyed writes from parameterized derived subscriptions.
+ *
+ * @deprecated Use only with `regQueryProjection` when remote data is
+ * intentionally materialized in Uklad state.
  */
-export interface QuerySubscriptionTarget<
+export interface QueryProjectionTarget<
   TContracts extends UkladContracts,
   TStateKey extends ContractStateKey<TContracts>,
   TId extends ContractSubscriptionId<TContracts>,
@@ -92,16 +106,23 @@ const QUERY_SNAPSHOT_PROPERTIES: ReadonlySet<QuerySubscriptionObservedProperty> 
 ]);
 
 /**
- * Attach a TanStack Query driver to an already-registered Uklad subscription.
+ * Register an explicit state-backed TanStack Query projection.
+ *
+ * This compatibility API deliberately transfers the mapped result into an
+ * explicit Uklad state root. Prefer cache-owned `regQuerySub` for server data;
+ * use this only when a workflow intentionally materializes a projection in
+ * application state.
  *
  * The lifecycle subscription remains ordinary, whether root or derived.
  * `signals` are passive inputs only; Uklad samples them while the lifecycle
  * target has consumers and switch-maps the observer when they change. The
- * driver maps each QueryObserver result and applies `target`
- * to its explicit backing root through Uklad's private event → state → normal
- * subscription path.
+ * driver maps each QueryObserver result and applies `target` to its explicit
+ * backing root through Uklad's private event → state → normal subscription
+ * path.
+ *
+ * @deprecated Prefer cache-owned `regQuerySub` for server-state reads.
  */
-export function regQuerySub<
+export function regQueryProjection<
   TContracts extends UkladContracts,
   TId extends ContractSubscriptionId<TContracts>,
   TStateKey extends ContractStateKey<TContracts>,
@@ -115,7 +136,7 @@ export function regQuerySub<
   registrar: UkladRegistrar<TContracts>,
   queryClient: QueryClient,
   id: TId,
-  target: QuerySubscriptionTarget<TContracts, TStateKey, TId>,
+  target: QueryProjectionTarget<TContracts, TStateKey, TId>,
   signals: (...params: ContractSubscriptionParams<TContracts, TId>) => readonly [...TSignals],
   options: (
     signals: ContractSubscriptionSignalValues<TContracts, TSignals>,
@@ -132,11 +153,11 @@ export function regQuerySub<
     typeof target.update !== 'function'
   ) {
     throw new TypeError(
-      `[uklad-tanstack-query] Query subscription '${id}' requires a state target with an update function.`,
+      `[uklad-tanstack-query] Query projection '${id}' requires a state target with an update function.`,
     );
   }
   registrar.regSubExt(id, signals, (context, ...params) => {
-    return new StateBackedQueryExtension(
+    return new QueryProjectionExtension(
       queryClient,
       (value) =>
         context.updateRoot(target.stateKey, (current) =>
@@ -158,8 +179,64 @@ export function regQuerySub<
   });
 }
 
+/**
+ * Register a cache-owned Query subscription on top of Uklad's external-source
+ * primitive.
+ *
+ * This is the default Query integration. It does not require a state root or
+ * write Query results into Uklad state: the Query cache is the source of truth,
+ * and the mapped value is exposed directly by the external subscription.
+ */
+export function regQuerySub<
+  TContracts extends UkladContracts,
+  TId extends ContractSubscriptionId<TContracts>,
+  TSignals extends readonly ContractSubscribeVector<TContracts>[],
+  TQueryFnData = unknown,
+  TError = Error,
+  TData = TQueryFnData,
+  TQueryData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  registrar: UkladRegistrar<TContracts>,
+  queryClient: QueryClient,
+  id: TId,
+  signals: (...params: ContractSubscriptionParams<TContracts, TId>) => readonly [...TSignals],
+  options: (
+    signals: ContractSubscriptionSignalValues<TContracts, TSignals>,
+    ...params: ContractSubscriptionParams<TContracts, TId>
+  ) => QueryObserverOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey>,
+  mapResult: QueryResultMapper<TData, TError, ContractSubscriptionResult<TContracts, TId>>,
+  config?: QuerySubscriptionConfig,
+): void {
+  assertAttachedQueryClient(queryClient);
+  registrar.regExternalSub(
+    id,
+    signals,
+    (...params) =>
+      new QueryExternalSubscriptionDriver<
+        ContractSubscriptionDependencyValues<TContracts, TSignals>,
+        ContractSubscriptionResult<TContracts, TId>,
+        TQueryFnData,
+        TError,
+        TData,
+        TQueryData,
+        TQueryKey
+      >(
+        queryClient,
+        (signalValues) =>
+          options(
+            signalValues as ContractSubscriptionSignalValues<TContracts, TSignals>,
+            ...(params as ContractSubscriptionParams<TContracts, TId>),
+          ),
+        mapResult,
+        config?.observe,
+      ),
+    config,
+  );
+}
+
 /** One active Uklad extension instance owns one headless QueryObserver. */
-class StateBackedQueryExtension implements SubscriptionExtension<readonly unknown[]> {
+class QueryProjectionExtension implements SubscriptionExtension<readonly unknown[]> {
   private readonly queryClient: QueryClient;
   private readonly publishResult: (value: unknown) => void;
   private readonly createOptions: (
@@ -234,6 +311,119 @@ class StateBackedQueryExtension implements SubscriptionExtension<readonly unknow
     this.queryHash = undefined;
     this.hasPublishedValue = false;
     this.publishedValue = undefined;
+  }
+}
+
+/** One cache-owned external subscription instance owns one QueryObserver. */
+class QueryExternalSubscriptionDriver<
+  TInputs extends readonly unknown[],
+  TResult,
+  TQueryFnData,
+  TError,
+  TData,
+  TQueryData,
+  TQueryKey extends QueryKey,
+> implements ExternalSubscriptionDriver<TInputs, TResult> {
+  private readonly queryClient: QueryClient;
+  private readonly createOptions: (
+    inputs: TInputs,
+  ) => QueryObserverOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey>;
+  private readonly mapResult: QueryResultMapper<TData, TError, TResult>;
+  private readonly observe: QuerySubscriptionObserve | undefined;
+  private observer: QueryObserver<TQueryFnData, TError, TData, TQueryData, TQueryKey> | undefined;
+  private latestOptions:
+    DefaultedQueryObserverOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey> | undefined;
+  private unsubscribe: (() => void) | undefined;
+  private activationVersion = 0;
+  private disposed = false;
+
+  constructor(
+    queryClient: QueryClient,
+    createOptions: (
+      inputs: TInputs,
+    ) => QueryObserverOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey>,
+    mapResult: QueryResultMapper<TData, TError, TResult>,
+    observe: QuerySubscriptionObserve | undefined,
+  ) {
+    this.queryClient = queryClient;
+    this.createOptions = createOptions;
+    this.mapResult = mapResult;
+    this.observe = observe;
+  }
+
+  read(inputs: TInputs): TResult {
+    if (this.disposed) {
+      throw new Error('[uklad-tanstack-query] Cannot read a disposed Query subscription.');
+    }
+    const defaultedOptions = this.defaultOptions(inputs);
+    this.latestOptions = defaultedOptions;
+    const observer = this.ensureObserver(defaultedOptions);
+    return this.mapResult(toQuerySnapshot(observer.getOptimisticResult(defaultedOptions)));
+  }
+
+  activate(inputs: TInputs, context: ExternalSubscriptionContext): void {
+    if (this.disposed || this.unsubscribe !== undefined) return;
+    const defaultedOptions = this.latestOptions ?? this.defaultOptions(inputs);
+    this.latestOptions = defaultedOptions;
+    const observer = this.ensureObserver(defaultedOptions);
+    // A dormant dependency pull may have updated the options after the
+    // observer was constructed. Apply that latest dormant configuration before
+    // attaching the first listener; this is still pre-fetch because the
+    // observer has no listeners yet.
+    observer.setOptions(defaultedOptions);
+
+    const activationVersion = ++this.activationVersion;
+    this.unsubscribe = observer.subscribe(() => {
+      // QueryObserver callbacks carry a mutable result. Core owns the read and
+      // mapping step, so the callback only marks this activation dirty.
+      if (
+        this.disposed ||
+        this.activationVersion !== activationVersion ||
+        this.observer !== observer
+      ) {
+        return;
+      }
+      context.invalidate();
+    });
+  }
+
+  sync(inputs: TInputs): void {
+    if (this.disposed) return;
+    const defaultedOptions = this.defaultOptions(inputs);
+    this.latestOptions = defaultedOptions;
+    const observer = this.ensureObserver(defaultedOptions);
+    // Do not compare queryHash here. QueryObserver owns same-key option
+    // changes (enabled, staleTime, callbacks, and so on) as well as key
+    // switching, and every changed Uklad dependency tuple must reach it.
+    observer.setOptions(defaultedOptions);
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.activationVersion++;
+    const observer = this.observer;
+    this.unsubscribe?.();
+    this.unsubscribe = undefined;
+    observer?.destroy();
+    this.observer = undefined;
+    this.latestOptions = undefined;
+  }
+
+  private defaultOptions(
+    inputs: TInputs,
+  ): DefaultedQueryObserverOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey> {
+    const observerOptions = withObservedProperties(this.createOptions(inputs), this.observe);
+    return this.queryClient.defaultQueryOptions(observerOptions);
+  }
+
+  private ensureObserver(
+    options: DefaultedQueryObserverOptions<TQueryFnData, TError, TData, TQueryData, TQueryKey>,
+  ): QueryObserver<TQueryFnData, TError, TData, TQueryData, TQueryKey> {
+    if (this.observer === undefined) {
+      this.observer = new QueryObserver(this.queryClient, options);
+    }
+    return this.observer;
   }
 }
 

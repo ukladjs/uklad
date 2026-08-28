@@ -1,4 +1,4 @@
-/** Domain types and initial values for the roots owned by the todos feature. */
+/** Domain types and local initial values for the todos feature. */
 export type TodoId = number;
 
 export interface Todo {
@@ -7,7 +7,7 @@ export interface Todo {
   readonly done: boolean;
 }
 
-/** The clean remote read model exposed through the todos/query root. */
+/** The clean remote read model exposed through the todos/query subscription. */
 export type TodosQueryResult =
   | { readonly kind: 'loading' }
   | { readonly kind: 'ready'; readonly todos: readonly Todo[] }
@@ -21,12 +21,6 @@ export interface UpdateTodoRequest {
   readonly done?: boolean;
 }
 
-const INITIAL_TODOS_QUERY: TodosQueryResult = Object.freeze({ kind: 'loading' });
-
 export function createTodosShowing(): TodosShowing {
   return 'all';
-}
-
-export function createTodosQuery(): TodosQueryResult {
-  return INITIAL_TODOS_QUERY;
 }

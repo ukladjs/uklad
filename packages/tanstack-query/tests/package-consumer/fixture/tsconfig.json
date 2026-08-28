@@ -9,5 +9,5 @@
     "noEmit": true,
     "types": []
   },
-  "include": ["./consumer.mts", "./consumer.cts"]
+  "include": ["./consumer.mts", "./consumer.cts", "./docs-example.mts"]
 }

@@ -1,20 +1,20 @@
 {
   "schemaVersion": 2,
-  "id": "core-query-0.2.4-0.2.0",
+  "id": "devtools-0.2.1",
   "packages": [
     {
       "name": "@ukladjs/core",
       "path": "packages/core",
       "version": "0.2.4",
       "tag": "latest",
-      "publish": true
+      "publish": false
     },
     {
       "name": "@ukladjs/devtools",
       "path": "packages/devtools",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "tag": "latest",
-      "publish": false
+      "publish": true
     },
     {
       "name": "@ukladjs/devtools-mcp",
@@ -35,7 +35,7 @@
       "path": "packages/tanstack-query",
       "version": "0.2.0",
       "tag": "latest",
-      "publish": true
+      "publish": false
     }
   ]
 }

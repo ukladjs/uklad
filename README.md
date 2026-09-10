@@ -163,7 +163,7 @@ structured runtime evidence instead of guessing from source text or logs.
   asynchronous persistence built on the public runtime APIs.
 - [`@ukladjs/tanstack-query@0.2.0`](packages/tanstack-query) — headless TanStack Query integration
   with cache-owned external subscriptions and explicit state projections.
-- [`@ukladjs/devtools@0.2.0`](packages/devtools) — DevTools SDK, server,
+- [`@ukladjs/devtools@0.2.1`](packages/devtools) — DevTools SDK, server,
   CLI, security boundaries, and package assembly.
 - [`@ukladjs/devtools-mcp@0.2.0`](packages/devtools-mcp) — the
   MCP bridge for inspection and controlled development actions.

@@ -11,5 +11,5 @@
     "noUncheckedIndexedAccess": true,
     "types": []
   },
-  "include": ["inspector-contract.ts"]
+  "include": ["inspector-contract.ts", "published-inspector-contract.ts"]
 }

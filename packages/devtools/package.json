@@ -1,6 +1,6 @@
 {
   "name": "@ukladjs/devtools",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Production-confidence DevTools for Uklad: traces, state, subscriptions, secure runtime inspection, and capability-gated agent verification.",
   "author": "flexsurfer",
   "license": "MIT",

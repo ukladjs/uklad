@@ -121,7 +121,7 @@ The bridge needs a DevTools server with a connected app to talk to. In the proje
 1. **Install DevTools:**
 
 ```bash
- npm install --save-dev @ukladjs/devtools@0.2.0
+ npm install --save-dev @ukladjs/devtools@0.2.1
 ```
 
 2. **Enable it in development** (app entry point):

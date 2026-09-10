@@ -4,6 +4,17 @@ All notable public package changes are recorded here. Packages version independe
 
 ## Unreleased
 
+## `@ukladjs/devtools@0.2.1`
+
+- Publish the inspector diagnostic type update that accepts the `external`
+  subscription kind introduced in `@ukladjs/core@0.2.4`. Applications can pass
+  `createUkladInspector(runtime)` directly to `enableDevtools` without a cast.
+- Check the built public declarations for both DevTools client entry points
+  against Core's public inspector factory to guard the consumer-facing types.
+- Release DevTools independently; the coordinated set retains
+  `@ukladjs/core@0.2.4`, `@ukladjs/devtools-mcp@0.2.0`,
+  `@ukladjs/persist@0.2.0`, and `@ukladjs/tanstack-query@0.2.0`.
+
 ## `@ukladjs/core@0.2.4` and `@ukladjs/tanstack-query@0.2.0`
 
 - Add cache-owned external subscriptions to core and make TanStack Query's

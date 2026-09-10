@@ -93,7 +93,7 @@ If you're not using the agent toolkit plugin, the setup the skill automates is f
 1. **Install DevTools in your project:**
 
    ```bash
-   npm install --save-dev @ukladjs/devtools@0.2.0
+   npm install --save-dev @ukladjs/devtools@0.2.1
    ```
 
 2. **Enable it in development** (app entry point; adjust the env guard for non-Vite apps):
@@ -269,7 +269,7 @@ If your project is already set up for agents (above), the dashboard is already t
 Starting from scratch, without the MCP parts:
 
 ```bash
-npm install --save-dev @ukladjs/devtools@0.2.0
+npm install --save-dev @ukladjs/devtools@0.2.1
 ```
 
 ```typescript
